@@ -29,15 +29,17 @@ CUPSD=${CUPSD:-OFF}
 CLOUDFLARE_STATUS=${CLOUDFLARE_STATUS:-OFF}
 SSL_TUNNEL=${SSL_TUNNEL:-OFF}
 PROXY_STATUS=${PROXY_STATUS:-UNKNOWN}
+OPTIMIZAR=${OPTIMIZAR:-OFF}
 #==============================
 # COLORES
 #==============================
-RED="\e[1;31m"
-GREEN="\e[1;32m"
-YELLOW="\e[1;33m"
-BLUE="\e[1;34m"
-CYAN="\e[1;36m"
-WHITE="\e[1;37m"
+RED="\e[1;91m"
+BLUE="\e[1;94m"
+CYAN="\e[1;96m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
 RESET="\e[0m"
 
 animacion() {
@@ -98,7 +100,9 @@ clear
 animacion
 clear
 
-echo "      =====>>►► 🛡️ kevintech ⚔️ multi script 🛡️ ◄◄<<====="
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${MAGENTA}        🛡️ KevinTech Multi Script 🛡️${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " ∘ S.O: $OS"
 echo " ∘ Base:$ARCH"
@@ -132,11 +136,11 @@ echo " ∘ U/RAM: ${RAM_USE}%  ∘ U/CPU: ${CPU_USE}%  ∘ BUFFER: $BUFFER"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-echo " [01] ➮ CONTROL USUARIOS (SSH/SSL/VMESS)"
-echo " [02] ➮ [!] OPTIMIZAR VPS  [OFF]"
-echo " [03] ➮ CONTADOR ONLINE USERS  [OFF]"
-echo " [04] ➮ AUTOINICIAR SCRIPT  [$AUTO_START]"
-echo " [05] ➮ INSTALADOR DE PROTOCOLOS"
+echo -e "${YELLOW} [01]${WHITE} ➮ CONTROL USUARIOS (SSH/SSL/VMESS)"
+echo -e "${YELLOW} [02]${WHITE} ➮ OPTIMIZAR VPS ${CYAN}[$OPTIMIZAR]${RESET}"
+echo -e "${YELLOW} [03]${WHITE} ➮ CONTADOR ONLINE USERS [OFF]"
+echo -e "${YELLOW} [04]${WHITE} ➮ AUTOINICIAR SCRIPT ${CYAN}[$AUTO_START]${RESET}"
+echo -e "${YELLOW} [05]${WHITE} ➮ INSTALADOR DE PROTOCOLOS"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
