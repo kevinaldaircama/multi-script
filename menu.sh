@@ -324,21 +324,6 @@ echo ""
 sleep 2
 
 exec menu
-    fi
-
-    cp -rf "$TMP"/* /etc/kevintech/
-
-    chmod -R +x /etc/kevintech
-
-    rm -rf "$TMP"
-
-    echo ""
-    echo "✅ KevinTech actualizado correctamente."
-
-    sleep 2
-
-    exec menu
-;;
 
 *)
     echo "❌ Opción inválida."
