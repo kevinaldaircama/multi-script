@@ -286,13 +286,44 @@ case "$OP6" in
 
     rm -rf "$TMP"
 
-    git clone https://github.com/kevinaldaircama/multi-script.git "$TMP"
+    echo "📥 Descargando actualización..."
+sleep 1
 
-    if [[ $? -ne 0 ]]; then
-        echo ""
-        echo "❌ Error al descargar la actualización."
-        sleep 3
-        exec menu
+git clone https://github.com/kevinaldaircama/multi-script.git "$TMP" >/dev/null 2>&1
+
+if [[ $? -ne 0 ]]; then
+    echo ""
+    echo "❌ No se pudo descargar la actualización."
+    sleep 3
+    exec menu
+fi
+
+echo "📦 Instalando archivos..."
+sleep 1
+
+cp -rf "$TMP"/* /etc/kevintech/
+
+chmod -R +x /etc/kevintech
+
+echo "🧹 Limpiando archivos temporales..."
+sleep 1
+
+rm -rf "$TMP"
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        ✅ ACTUALIZACIÓN COMPLETADA"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "✔️ KevinTech se actualizó correctamente."
+echo ""
+echo "🚀 Reiniciando el panel..."
+echo ""
+
+sleep 2
+
+exec menu
     fi
 
     cp -rf "$TMP"/* /etc/kevintech/
