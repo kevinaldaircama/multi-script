@@ -109,16 +109,27 @@ BBR=OFF
 EOF
 
 #==============================
-# Crear Archivo de Menú
+# Copiar menu.sh al sistema
 #==============================
 
-touch $BASE/menu.sh
-
-chmod +x $BASE/menu.sh
+if [[ -f "menu.sh" ]]; then
+    cp menu.sh $BASE/menu.sh
+    chmod +x $BASE/menu.sh
+else
+    echo "❌ No se encontró el archivo menu.sh"
+    exit 1
+fi
 
 #==============================
-# Finalizado
+# Crear comando "menu"
 #==============================
+
+cat > /usr/local/bin/menu <<EOF
+#!/bin/bash
+exec bash $BASE/menu.sh
+EOF
+
+chmod +x /usr/local/bin/menu
 
 clear
 
@@ -131,7 +142,11 @@ echo "Dominio: ${SERVER_DOMAIN:-Sin definir}"
 echo ""
 echo "Todos los protocolos fueron creados en estado OFF."
 echo ""
-echo "Ahora puedes continuar creando el archivo menu.sh"
+echo "Ahora puedes abrir el panel escribiendo:"
+echo ""
+echo "menu"
 echo ""
 
-sleep 3
+sleep 2
+
+menu
