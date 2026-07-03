@@ -212,11 +212,21 @@ EOF
 # Copiar menu.sh al sistema
 #==============================
 
-if [[ -f "menu.sh" ]]; then
-    cp menu.sh $BASE/menu.sh
-    chmod +x $BASE/menu.sh
+MENU_SOURCE=""
+
+if [[ -f "./menu.sh" ]]; then
+    MENU_SOURCE="./menu.sh"
+elif [[ -f "$(dirname "$0")/menu.sh" ]]; then
+    MENU_SOURCE="$(dirname "$0")/menu.sh"
+elif [[ -f "/root/multi-script/menu.sh" ]]; then
+    MENU_SOURCE="/root/multi-script/menu.sh"
+fi
+
+if [[ -n "$MENU_SOURCE" ]]; then
+    cp "$MENU_SOURCE" "$BASE/menu.sh"
+    chmod +x "$BASE/menu.sh"
 else
-    echo "❌ No se encontró el archivo menu.sh"
+    echo "❌ ERROR: No se encontró menu.sh en ninguna ruta"
     exit 1
 fi
 
