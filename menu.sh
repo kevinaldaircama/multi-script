@@ -322,9 +322,8 @@ echo "🚀 Reiniciando el panel..."
 echo ""
 
 sleep 2
-
 exec menu
-
+;;
 *)
     echo "❌ Opción inválida."
     sleep 2
