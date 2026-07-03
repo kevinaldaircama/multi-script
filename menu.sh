@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #==================================================
@@ -261,24 +260,6 @@ read -rp " ► Opción: " OP6
 case "$OP6" in
 
 1)
-clear
-echo "Eliminando KevinTech..."
-
-rm -rf /etc/kevintech
-rm -f /usr/local/bin/menu
-rm -f /etc/profile.d/kevintech.sh
-
-echo ""
-echo "✅ Script eliminado correctamente."
-echo "🧹 Sistema limpiado."
-
-sleep 3
-exit
-;;
-
-case "$OP6" in
-
-1)
     clear
     echo "Eliminando KevinTech..."
 
@@ -336,3 +317,19 @@ case "$OP6" in
 
 esac
 ;;
+0)
+    clear
+    echo ""
+    echo "👋 Gracias por usar KevinTech Multi Script."
+    echo ""
+    exit
+;;
+
+*)
+    echo ""
+    echo "❌ Opción inválida."
+    sleep 1
+    exec bash "$BASE/menu.sh"
+;;
+
+esac
