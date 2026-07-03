@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #==================================================
-# KevinTech Multi Script
+# Multi Script
 # Menú Principal
 #==================================================
 
@@ -264,7 +264,7 @@ case "$OP6" in
 
 1)
     clear
-    echo "Eliminando KevinTech..."
+    echo "Eliminando script de kevinTech..."
 
     rm -rf /etc/kevintech
     rm -f /usr/local/bin/menu
@@ -272,7 +272,7 @@ case "$OP6" in
 
     echo ""
     echo "✅ Script eliminado correctamente."
-    echo "🧹 Sistema limpiado."
+    echo "🧹 Sistema limpiado correctamente."
 
     sleep 3
     exit
@@ -281,7 +281,7 @@ case "$OP6" in
 2)
     clear
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "        ACTUALIZANDO KEVINTECH..."
+    echo "        ACTUALIZANDO SCRIPT..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
@@ -289,26 +289,26 @@ case "$OP6" in
 
     rm -rf "$TMP"
 
-    echo "📥 Descargando actualización..."
+    echo "📥 Descargando actualización si existe..."
 sleep 1
 
 git clone https://github.com/kevinaldaircama/multi-script.git "$TMP" >/dev/null 2>&1
 
 if [[ $? -ne 0 ]]; then
     echo ""
-    echo "❌ No se pudo descargar la actualización."
+    echo "❌ No se pudo descargar la actualización ya estás en la última versión."
     sleep 3
     exec menu
 fi
 
-echo "📦 Instalando archivos..."
+echo "📦 Instalando y copiando archivos..."
 sleep 1
 
 cp -rf "$TMP"/* /etc/kevintech/
 
 chmod -R +x /etc/kevintech
 
-echo "🧹 Limpiando archivos temporales..."
+echo "🧹 Limpiando y eliminando archivos temporales..."
 sleep 1
 
 rm -rf "$TMP"
@@ -319,16 +319,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "        ✅ ACTUALIZACIÓN COMPLETADA"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "✔️ KevinTech se actualizó correctamente."
+echo "✔️ la script de "kevin tech tutorials" se actualizó correctamente."
 echo ""
-echo "🚀 Reiniciando el panel..."
+echo "🚀 Reiniciando el panel espere un momento..."
 echo ""
 
 sleep 2
 exec menu
 ;;
 *)
-    echo "❌ Opción inválida."
+    echo "❌ Opción invalida intente de nuevo."
     sleep 2
     exec menu
 ;;
@@ -338,14 +338,14 @@ esac
 0)
     clear
     echo ""
-    echo "👋 Gracias por usar KevinTech Multi Script."
+    echo "👋 Gracias por usar Multi Script de Kevin tech tutorials."
     echo ""
     exit
 ;;
 
 *)
     echo ""
-    echo "❌ Opción inválida."
+    echo "❌ Opción inválida verifica de nuevo."
     sleep 1
     exec bash "$BASE/menu.sh"
 ;;
