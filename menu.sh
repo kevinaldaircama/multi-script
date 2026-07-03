@@ -241,9 +241,16 @@ EOF
 5)
     if [[ -f "$BASE/protocolos/menu.sh" ]]; then
         bash "$BASE/protocolos/menu.sh"
+
+    elif [[ -f "$HOME/multi-script/protocolos/menu.sh" ]]; then
+        mkdir -p "$BASE/protocolos"
+        cp -rf "$HOME/multi-script/protocolos/menu.sh" "$BASE/protocolos/menu.sh"
+        chmod +x "$BASE/protocolos/menu.sh"
+        bash "$BASE/protocolos/menu.sh"
+
     else
         echo ""
-        echo "❌ No existe el menú de protocolos."
+        echo "❌ No se encontró el menú de protocolos."
         sleep 2
         exec bash "$BASE/menu.sh"
     fi
