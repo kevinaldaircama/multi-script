@@ -41,9 +41,11 @@ OPTIMIZAR=${OPTIMIZAR:-OFF}
 #==============================
 # COLORES
 #==============================
-PURPLE="\e[1;35m"
+RED2="\e[1;31m"
+BLUE2="\e[1;34m"
 CYAN2="\e[1;36m"
-GRAY2="\e[1;90m"
+WHITE="\e[1;97m"
+RESET="\e[0m"
 INFO_COLOR="\e[1;35m"   # morado (puedes cambiarlo)
 INFO2="\e[1;36m"        # cyan suave
 RESET="\e[0m"
@@ -132,18 +134,18 @@ echo -e "${CYAN} 🟠 PROXY CF: ${WHITE}$PROXY_STATUS${RESET}"
 else
     echo " 🌐 DOMINIO: NO CONFIGURADO"
 fi
-echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${PURPLE} Verified【 Kevin Tech Tutorials © 】 by (Privanox VPN)${RESET}"
-echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${RED2} Verified【 Kevin Tech Tutorials © 】 by (Privanox VPN)${RESET}"
+echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e "${CYAN2} ∘ SSL/TUNNEL: ${WHITE}443${RESET}"
+echo -e "${RED2} ∘ SSL/TUNNEL: ${WHITE}443${RESET}"
 
-echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo -e "${CYAN2} ∘ TOTAL: ${WHITE}$TOTAL_RAM  ∘ M|LIBRE: $FREE_RAM  ∘ EN USO: $USED_RAM${RESET}"
 echo -e "${CYAN2} ∘ U/RAM: ${WHITE}${RAM_USE}%  ∘ U/CPU: ${WHITE}${CPU_USE}%  ∘ BUFFER: ${WHITE}$BUFFER${RESET}"
 
-echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo -e "${YELLOW} [01]${WHITE} ➮ CONTROL USUARIOS (SSH/SSL/VMESS)"
 echo -e "${YELLOW} [02]${WHITE} ➮ OPTIMIZAR VPS ${CYAN}[$OPTIMIZAR]${RESET}"
