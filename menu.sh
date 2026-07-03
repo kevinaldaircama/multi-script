@@ -278,26 +278,36 @@ exit
 
 2)
 clear
-echo "Actualizando desde GitHub..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        ACTUALIZANDO KEVINTECH..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
-cd /etc/kevintech || exit
+TMP="/tmp/kevintech_update"
 
-git pull
+rm -rf "$TMP"
+
+git clone https://github.com/kevinaldaircama/multi-script.git "$TMP"
+
+if [[ $? -ne 0 ]]; then
+    echo ""
+    echo "❌ Error al descargar la actualización."
+    sleep 3
+    exec menu
+fi
+
+cp -rf "$TMP"/* /etc/kevintech/
+
+chmod -R +x /etc/kevintech
+
+rm -rf "$TMP"
 
 echo ""
-echo "✅ Script actualizado."
+echo "✅ KevinTech actualizado correctamente."
 
 sleep 2
-exec menu
-;;
 
-*)
-echo "Opción inválida."
-sleep 2
 exec menu
-;;
-
-esac
 ;;
 
 0)
