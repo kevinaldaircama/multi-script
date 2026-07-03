@@ -103,3 +103,93 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " [06] ➮ [!] UPDATE / REMOVE  |  [0] ⇦ [ SALIR ]"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+#==============================
+# Esperar Opción
+#==============================
+
+echo ""
+read -rp " ► Opcion : " OPCION
+
+case "$OPCION" in
+
+1)
+    if [[ -f "$BASE/usuarios/menu.sh" ]]; then
+        bash "$BASE/usuarios/menu.sh"
+    else
+        echo ""
+        echo "❌ Módulo no instalado."
+        sleep 2
+        bash "$BASE/menu.sh"
+    fi
+;;
+
+2)
+    if [[ -f "$BASE/sistema/optimizar.sh" ]]; then
+        bash "$BASE/sistema/optimizar.sh"
+    else
+        echo ""
+        echo "🚧 Función en desarrollo."
+        sleep 2
+        bash "$BASE/menu.sh"
+    fi
+;;
+
+3)
+    if [[ -f "$BASE/sistema/contador.sh" ]]; then
+        bash "$BASE/sistema/contador.sh"
+    else
+        echo ""
+        echo "🚧 Función en desarrollo."
+        sleep 2
+        bash "$BASE/menu.sh"
+    fi
+;;
+
+4)
+    if [[ "$AUTO_START" == "OFF" ]]; then
+        sed -i 's/AUTO_START=OFF/AUTO_START=ON/' "$CONFIG"
+    else
+        sed -i 's/AUTO_START=ON/AUTO_START=OFF/' "$CONFIG"
+    fi
+
+    exec bash "$BASE/menu.sh"
+;;
+
+5)
+    if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+        bash "$BASE/protocolos/menu.sh"
+    else
+        echo ""
+        echo "❌ No existe el menú de protocolos."
+        sleep 2
+        exec bash "$BASE/menu.sh"
+    fi
+;;
+
+6)
+    if [[ -f "$BASE/sistema/update.sh" ]]; then
+        bash "$BASE/sistema/update.sh"
+    else
+        echo ""
+        echo "🚧 Función en desarrollo."
+        sleep 2
+        exec bash "$BASE/menu.sh"
+    fi
+;;
+
+0)
+    clear
+    echo ""
+    echo "👋 Gracias por usar KevinTech Multi Script."
+    echo ""
+    exit
+;;
+
+*)
+    echo ""
+    echo "❌ Opción inválida."
+    sleep 1
+    exec bash "$BASE/menu.sh"
+;;
+
+esac
