@@ -82,7 +82,85 @@ echo ""
 
 read -p "📝 Nombre del servidor (Opcional): " SERVER_NAME
 read -p "🌐 Dominio (Opcional): " SERVER_DOMAIN
+#==============================
+# VALIDACIÓN DE DOMINIO + CLOUDFLARE
+#==============================
 
+CLOUDFLARE_STATUS="OFF"
+SSL_TUNNEL="OFF"
+DOMAIN_IP_MATCH="NO"
+PROXY_STATUS="UNKNOWN"
+
+SERVER_IP=$(curl -s ifconfig.me)
+
+if [[ -n "$SERVER_DOMAIN" ]]; then
+
+    echo ""
+    echo "🔍 Verificando dominio: $SERVER_DOMAIN ..."
+    
+    DOMAIN_IP=$(dig +short "$SERVER_DOMAIN" | head -n1)
+
+    if [[ -z "$DOMAIN_IP" ]]; then
+        echo "⚠️ No se pudo resolver el dominio."
+    else
+        echo "🌐 IP del dominio: $DOMAIN_IP"
+        echo "🖥️ IP del servidor: $SERVER_IP"
+
+        if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+            DOMAIN_IP_MATCH="YES"
+            echo "✅ El dominio apunta correctamente al servidor."
+        else
+            echo "❌ El dominio NO apunta a este servidor."
+        fi
+    fi
+
+    #==============================
+    # DETECTAR CLOUDFLARE
+    #==============================
+
+    CF_CHECK=$(dig +short "$SERVER_DOMAIN" NS | grep -i cloudflare)
+
+    if [[ -n "$CF_CHECK" ]]; then
+        CLOUDFLARE_STATUS="ON"
+        echo "☁️ Cloudflare detectado en el dominio."
+
+        #==============================
+        # DETECTAR PROXY (IP CLOUDFLARE)
+        #==============================
+
+        CF_IPS=$(dig +short "$SERVER_DOMAIN")
+
+        for ip in $CF_IPS; do
+            if [[ "$ip" =~ ^104\.|^172\.|^188\.|^190\. ]]; then
+                PROXY_STATUS="ACTIVE"
+            fi
+        done
+
+        if [[ "$PROXY_STATUS" == "ACTIVE" ]]; then
+            echo "🟠 Proxy de Cloudflare ACTIVO (nube naranja)."
+        else
+            echo "⚪ Proxy de Cloudflare DESACTIVADO (DNS only)."
+        fi
+
+    else
+        echo "❌ Cloudflare NO detectado."
+    fi
+
+    #==============================
+    # DECISIÓN SSL TÚNEL
+    #==============================
+
+    if [[ "$DOMAIN_IP_MATCH" == "YES" ]]; then
+        SSL_TUNNEL="ON"
+        echo "🔐 SSL Túnel habilitado en puerto 443."
+    else
+        echo "⚠️ SSL Túnel NO habilitado (dominio no apunta)."
+    fi
+
+else
+    echo ""
+    echo "ℹ️ No se ingresó dominio, se omitirá SSL túnel."
+fi
 #==============================
 # Crear Directorios
 #==============================
