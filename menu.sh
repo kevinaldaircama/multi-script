@@ -20,6 +20,16 @@ fi
 
 source "$CONFIG"
 #==============================
+# FIX VARIABLES FALTANTES
+#==============================
+
+SYSTEMDNS=${SYSTEMDNS:-OFF}
+CUPSD=${CUPSD:-OFF}
+
+CLOUDFLARE_STATUS=${CLOUDFLARE_STATUS:-OFF}
+SSL_TUNNEL=${SSL_TUNNEL:-OFF}
+PROXY_STATUS=${PROXY_STATUS:-UNKNOWN}
+#==============================
 # COLORES
 #==============================
 RED="\e[1;31m"
@@ -76,7 +86,7 @@ PROTO5=""
 [[ "$NGINX" == "ON" ]]     && PROTO2+="         ∘ WEB-NGinx: 81"
 
 [[ "$DROPBEAR" == "ON" ]]  && PROTO3+=" ∘ DROPBEAR: 90"
-[[ "$SSL" == "ON" ]]       && PROTO3+="        ∘ SSL: 443"
+[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && PROTO3+=" ∘ SSL/TUNNEL: 443"
 
 [[ "$CUPSD" == "ON" ]]     && PROTO4+=" ∘ cupsd: 631"
 [[ "$BADVPN" == "ON" ]]    && PROTO4+="          ∘ BadVPN: 7200"
@@ -95,6 +105,16 @@ echo " ∘ Base:$ARCH"
 echo " ∘ CPU's:$CPU"
 echo " ∘ IP: $IP"
 echo " ∘ FECHA: $FECHA"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [[ -n "$SERVER_DOMAIN" ]]; then
+    echo " 🌐 DOMINIO: $SERVER_DOMAIN"
+    echo " 🔐 SSL TÚNEL: $SSL_TUNNEL"
+    echo " ☁️ CLOUDFLARE: $CLOUDFLARE_STATUS"
+    echo " 🟠 PROXY CF: $PROXY_STATUS"
+else
+    echo " 🌐 DOMINIO: NO CONFIGURADO"
+fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Verified【 Kevin Tech Tutorials © 】by (Privanox VPN)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
