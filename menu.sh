@@ -41,6 +41,9 @@ OPTIMIZAR=${OPTIMIZAR:-OFF}
 #==============================
 # COLORES
 #==============================
+INFO_COLOR="\e[1;35m"   # morado (puedes cambiarlo)
+INFO2="\e[1;36m"        # cyan suave
+RESET="\e[0m"
 RED="\e[1;91m"
 BLUE="\e[1;94m"
 CYAN="\e[1;96m"
@@ -111,19 +114,18 @@ clear
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${MAGENTA}        🛡️ KevinTech Multi Script 🛡️${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " ∘ S.O: $OS"
-echo " ∘ Base:$ARCH"
-echo " ∘ CPU's:$CPU"
-echo " ∘ IP: $IP"
-echo " ∘ FECHA: $FECHA"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
+echo -e "${INFO_COLOR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${INFO_COLOR} ∘ S.O: ${INFO2}$OS${INFO_COLOR}"
+echo -e "${INFO_COLOR} ∘ Base: ${INFO2}$ARCH${INFO_COLOR}"
+echo -e "${INFO_COLOR} ∘ CPU's: ${INFO2}$CPU${INFO_COLOR}"
+echo -e "${INFO_COLOR} ∘ IP: ${INFO2}$IP${INFO_COLOR}"
+echo -e "${INFO_COLOR} ∘ FECHA: ${INFO2}$FECHA${INFO_COLOR}"
+echo -e "${INFO_COLOR}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 if [[ -n "$SERVER_DOMAIN" ]]; then
-    echo " 🌐 DOMINIO: $SERVER_DOMAIN"
-    echo " 🔐 SSL TÚNEL: $SSL_TUNNEL"
-    echo " ☁️ CLOUDFLARE: $CLOUDFLARE_STATUS"
-    echo " 🟠 PROXY CF: $PROXY_STATUS"
+    echo -e "${CYAN} 🌐 DOMINIO: ${WHITE}$SERVER_DOMAIN${RESET}"
+echo -e "${CYAN} 🔐 SSL TÚNEL: ${WHITE}$SSL_TUNNEL${RESET}"
+echo -e "${CYAN} ☁️ CLOUDFLARE: ${WHITE}$CLOUDFLARE_STATUS${RESET}"
+echo -e "${CYAN} 🟠 PROXY CF: ${WHITE}$PROXY_STATUS${RESET}"
 else
     echo " 🌐 DOMINIO: NO CONFIGURADO"
 fi
