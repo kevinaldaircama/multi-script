@@ -19,7 +19,25 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 source "$CONFIG"
+#==============================
+# COLORES
+#==============================
+RED="\e[1;31m"
+GREEN="\e[1;32m"
+YELLOW="\e[1;33m"
+BLUE="\e[1;34m"
+CYAN="\e[1;36m"
+WHITE="\e[1;37m"
+RESET="\e[0m"
 
+animacion() {
+    echo -ne "${CYAN}Cargando KevinTech"
+    for i in {1..3}; do
+        echo -n "."
+        sleep 0.3
+    done
+    echo -e "${RESET}"
+}
 #==============================
 # Obtener Información del VPS
 #==============================
@@ -66,6 +84,8 @@ PROTO5=""
 [[ "$BADVPN" == "ON" ]]    && PROTO5+=" ∘ BadVPN: 7300"
 [[ "$UDP_CUSTOM" == "ON" ]]&& PROTO5+="      ∘ UDP-Custom: 36712"
 
+clear
+animacion
 clear
 
 echo "      =====>>►► 🛡️ kevintech ⚔️ multi script 🛡️ ◄◄<<====="
@@ -178,14 +198,56 @@ EOF
 ;;
 
 6)
-    if [[ -f "$BASE/sistema/update.sh" ]]; then
-        bash "$BASE/sistema/update.sh"
-    else
-        echo ""
-        echo "🚧 Función en desarrollo."
-        sleep 2
-        exec bash "$BASE/menu.sh"
-    fi
+clear
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "         UPDATE / REMOVE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo " [1] ➮ Remover Script"
+echo " [2] ➮ Actualizar Script"
+echo ""
+read -rp " ► Opción: " OP6
+
+case "$OP6" in
+
+1)
+clear
+echo "Eliminando KevinTech..."
+
+rm -rf /etc/kevintech
+rm -f /usr/local/bin/menu
+rm -f /etc/profile.d/kevintech.sh
+
+echo ""
+echo "✅ Script eliminado correctamente."
+echo "🧹 Sistema limpiado."
+
+sleep 3
+exit
+;;
+
+2)
+clear
+echo "Actualizando desde GitHub..."
+
+cd /etc/kevintech || exit
+
+git pull
+
+echo ""
+echo "✅ Script actualizado."
+
+sleep 2
+exec menu
+;;
+
+*)
+echo "Opción inválida."
+sleep 2
+exec menu
+;;
+
+esac
 ;;
 
 0)
