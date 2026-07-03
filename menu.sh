@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 #==================================================
@@ -19,6 +20,14 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 source "$CONFIG"
+# Crear variable si no existe
+if ! grep -q "^OPTIMIZAR=" "$CONFIG"; then
+    echo "OPTIMIZAR=OFF" >> "$CONFIG"
+fi
+
+source "$CONFIG"
+
+OPTIMIZAR=${OPTIMIZAR:-OFF}
 #==============================
 # FIX VARIABLES FALTANTES
 #==============================
@@ -168,16 +177,33 @@ case "$OPCION" in
 ;;
 
 2)
-    if [[ -f "$BASE/sistema/optimizar.sh" ]]; then
-        bash "$BASE/sistema/optimizar.sh"
-    else
-        echo ""
-        echo "🚧 Función en desarrollo."
-        sleep 2
-        bash "$BASE/menu.sh"
-    fi
-;;
 
+# Si existe en la instalación
+if [[ -f "$BASE/sistema/optimizar.sh" ]]; then
+    bash "$BASE/sistema/optimizar.sh"
+
+# Si existe en la carpeta del proyecto
+elif [[ -f "$HOME/multi-script/sistema/optimizar.sh" ]]; then
+
+    mkdir -p "$BASE/sistema"
+
+    cp "$HOME/multi-script/sistema/optimizar.sh" "$BASE/sistema/optimizar.sh"
+
+    chmod +x "$BASE/sistema/optimizar.sh"
+
+    bash "$BASE/sistema/optimizar.sh"
+
+else
+
+    echo ""
+    echo "❌ No se encontró optimizar.sh"
+
+    sleep 2
+
+    exec bash "$BASE/menu.sh"
+
+fi
+;;
 3)
     if [[ -f "$BASE/sistema/contador.sh" ]]; then
         bash "$BASE/sistema/contador.sh"
