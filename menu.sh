@@ -276,53 +276,63 @@ sleep 3
 exit
 ;;
 
-2)
-clear
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "        ACTUALIZANDO KEVINTECH..."
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+case "$OP6" in
 
-TMP="/tmp/kevintech_update"
-
-rm -rf "$TMP"
-
-git clone https://github.com/kevinaldaircama/multi-script.git "$TMP"
-
-if [[ $? -ne 0 ]]; then
-    echo ""
-    echo "❌ Error al descargar la actualización."
-    sleep 3
-    exec menu
-fi
-
-cp -rf "$TMP"/* /etc/kevintech/
-
-chmod -R +x /etc/kevintech
-
-rm -rf "$TMP"
-
-echo ""
-echo "✅ KevinTech actualizado correctamente."
-
-sleep 2
-
-exec menu
-;;
-
-0)
+1)
     clear
+    echo "Eliminando KevinTech..."
+
+    rm -rf /etc/kevintech
+    rm -f /usr/local/bin/menu
+    rm -f /etc/profile.d/kevintech.sh
+
     echo ""
-    echo "👋 Gracias por usar KevinTech Multi Script."
-    echo ""
+    echo "✅ Script eliminado correctamente."
+    echo "🧹 Sistema limpiado."
+
+    sleep 3
     exit
 ;;
 
-*)
+2)
+    clear
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "        ACTUALIZANDO KEVINTECH..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+
+    TMP="/tmp/kevintech_update"
+
+    rm -rf "$TMP"
+
+    git clone https://github.com/kevinaldaircama/multi-script.git "$TMP"
+
+    if [[ $? -ne 0 ]]; then
+        echo ""
+        echo "❌ Error al descargar la actualización."
+        sleep 3
+        exec menu
+    fi
+
+    cp -rf "$TMP"/* /etc/kevintech/
+
+    chmod -R +x /etc/kevintech
+
+    rm -rf "$TMP"
+
+    echo ""
+    echo "✅ KevinTech actualizado correctamente."
+
+    sleep 2
+
+    exec menu
+;;
+
+*)
     echo "❌ Opción inválida."
-    sleep 1
-    exec bash "$BASE/menu.sh"
+    sleep 2
+    exec menu
 ;;
 
 esac
+;;
