@@ -146,15 +146,26 @@ case "$OPCION" in
 ;;
 
 4)
+    FILE="/etc/profile.d/kevintech.sh"
+
     if [[ "$AUTO_START" == "OFF" ]]; then
         sed -i 's/AUTO_START=OFF/AUTO_START=ON/' "$CONFIG"
+
+        cat > "$FILE" <<EOF
+#!/bin/bash
+if [[ \$- == *i* ]]; then
+    menu
+fi
+EOF
+
+        chmod +x "$FILE"
     else
         sed -i 's/AUTO_START=ON/AUTO_START=OFF/' "$CONFIG"
+        rm -f "$FILE"
     fi
 
     exec bash "$BASE/menu.sh"
 ;;
-
 5)
     if [[ -f "$BASE/protocolos/menu.sh" ]]; then
         bash "$BASE/protocolos/menu.sh"
