@@ -265,22 +265,29 @@ fi
 
 echo ""
 echo "💻 Abriendo menú..."
-echo ""
+
+# 👇 AQUÍ VA TU BLOQUE
 echo "📦 Instalando módulos de protocolos..."
 
 mkdir -p /etc/kevintech/protocolos
 
-# copiar scripts reales al sistema
 cp -f ssl.sh /etc/kevintech/protocolos/ssl.sh 2>/dev/null
 cp -f websocket.sh /etc/kevintech/protocolos/websocket.sh 2>/dev/null
 cp -f dropbear.sh /etc/kevintech/protocolos/dropbear.sh 2>/dev/null
 cp -f slowdns.sh /etc/kevintech/protocolos/slowdns.sh 2>/dev/null
 
-# permisos
 chmod +x /etc/kevintech/protocolos/*.sh
 
-echo "✅ Protocolos instalados correctamente"
+# VALIDACIÓN (IMPORTANTE)
+for i in ssl websocket dropbear slowdns; do
+    if [[ -f /etc/kevintech/protocolos/$i.sh ]]; then
+        echo "✅ $i listo"
+    else
+        echo "❌ Falta: $i.sh"
+    fi
+done
 
+echo "✅ Protocolos instalados correctamente"
 sleep 2
 
 exec /etc/kevintech/menu.sh
