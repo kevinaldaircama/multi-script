@@ -59,7 +59,7 @@ GRAY="\e[1;90m"
 RESET="\e[0m"
 
 animacion() {
-    echo -ne "${CYAN}Cargando KevinTech"
+    echo -ne "${CYAN}Cargando script espera unos segundos..."
     for i in {1..3}; do
         echo -n "."
         sleep 0.3
@@ -138,7 +138,15 @@ echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${RED2} Verified【 Kevin Tech Tutorials © 】 by (Privanox VPN)${RESET}"
 echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e "${RED2} ∘ SSL/TUNNEL: ${WHITE}443${RESET}"
+echo -e "${RED2} Protocolos Instalados:${RESET}"
+
+[[ -n "$PROTO1" ]] && echo -e "${WHITE}${PROTO1}${RESET}"
+[[ -n "$PROTO2" ]] && echo -e "${WHITE}${PROTO2}${RESET}"
+[[ -n "$PROTO3" ]] && echo -e "${WHITE}${PROTO3}${RESET}"
+[[ -n "$PROTO4" ]] && echo -e "${WHITE}${PROTO4}${RESET}"
+[[ -n "$PROTO5" ]] && echo -e "${WHITE}${PROTO5}${RESET}"
+
+echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
