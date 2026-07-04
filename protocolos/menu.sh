@@ -117,80 +117,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 read -rp " ► Opción: " SSHOP
 
-case "$SSHOP" in
-
 1)
-read -rp "Nuevo puerto: " PUERTO
-
-if grep -q "^Port $PUERTO" /etc/ssh/sshd_config; then
-    echo ""
-    echo "❌ Ese puerto ya existe."
-    sleep 2
-    continue
-fi
-
-echo "Port $PUERTO" >> /etc/ssh/sshd_config
-
-systemctl restart ssh 2>/dev/null || systemctl restart sshd
-
-echo ""
-echo "✅ Puerto $PUERTO agregado correctamente."
-sleep 2
-;;
-
-2)
-echo ""
-echo "Puertos actuales:"
-grep "^Port" /etc/ssh/sshd_config
-
-echo ""
-read -rp "Puerto a eliminar: " PUERTO
-
-if [[ "$PUERTO" == "22" ]]; then
-    echo ""
-    echo "❌ No puedes eliminar el puerto 22."
-    sleep 2
-    continue
-fi
-
-sed -i "/^Port $PUERTO$/d" /etc/ssh/sshd_config
-
-systemctl restart ssh 2>/dev/null || systemctl restart sshd
-
-echo ""
-echo "✅ Puerto eliminado."
-sleep 2
-;;
-
-3)
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-grep "^Port" /etc/ssh/sshd_config
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-read -rp "Presione Enter para continuar..."
-;;
-
-4)
-systemctl restart ssh 2>/dev/null || systemctl restart sshd
-
-echo ""
-echo "✅ Servicio SSH reiniciado."
-sleep 2
-;;
-
-0)
-exec bash "$BASE/protocolos/menu.sh"
-;;
-
-*)
-echo ""
-echo "❌ Opción inválida."
-sleep 2
-;;
-
-esac
-
-done
+    bash "$BASE/protocolos/openssh.sh"
 ;;
 2)
     bash "$BASE/protocolos/dropbear.sh"
