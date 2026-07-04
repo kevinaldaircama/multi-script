@@ -128,3 +128,117 @@ fi
 
 sleep 4
 ;;
+2)
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      RENOVANDO CERTIFICADO SSL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+certbot renew
+
+echo ""
+echo "✅ Proceso finalizado."
+
+sleep 4
+;;
+
+3)
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "       INFORMACIÓN DEL SSL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+if [[ -f "/etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem" ]]; then
+
+openssl x509 \
+-in /etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem \
+-noout \
+-subject \
+-issuer \
+-startdate \
+-enddate
+
+else
+
+echo "❌ No existe certificado SSL."
+
+fi
+
+echo ""
+read -n1 -r -p "Presione una tecla para continuar..."
+;;
+
+4)
+
+clear
+
+echo "Reiniciando Nginx..."
+
+systemctl restart nginx
+
+echo ""
+echo "✅ Nginx reiniciado correctamente."
+
+sleep 3
+;;
+5)
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        DESINSTALAR SSL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+read -rp "¿Seguro que deseas eliminar el certificado SSL? (s/n): " RESP
+
+if [[ "$RESP" =~ ^[Ss]$ ]]; then
+
+    certbot delete \
+    --cert-name "$SERVER_DOMAIN" \
+    --non-interactive >/dev/null 2>&1
+
+    sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
+    sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=OFF/' "$CONFIG"
+
+    SSL="OFF"
+    SSL_TUNNEL="OFF"
+
+    systemctl restart nginx
+
+    echo ""
+    echo "✅ Certificado SSL eliminado."
+    echo "🌐 Dominio : $SERVER_DOMAIN"
+    echo "🔓 Estado  : OFF"
+
+else
+
+    echo ""
+    echo "❌ Operación cancelada."
+
+fi
+
+sleep 3
+;;
+
+0)
+
+exec bash "$BASE/protocolos/menu.sh"
+;;
+
+*)
+
+echo ""
+echo "❌ Opción inválida."
+sleep 2
+;;
+
+esac
+
+done
