@@ -267,25 +267,27 @@ echo ""
 echo "💻 Abriendo menú..."
 
 # 👇 AQUÍ VA TU BLOQUE
-echo "📦 Instalando módulos de protocolos..."
-
-BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "📦 Descargando módulos desde GitHub..."
 
 mkdir -p /etc/kevintech/protocolos
+
+REPO="https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/Protocolos"
 
 FILES=("ssl.sh" "websocket.sh" "dropbear.sh" "slowdns.sh")
 
 for f in "${FILES[@]}"; do
-    if [[ -f "$BASE_DIR/$f" ]]; then
-        cp -f "$BASE_DIR/$f" /etc/kevintech/protocolos/
+    wget -q "$REPO/$f" -O /etc/kevintech/protocolos/$f
+
+    if [[ -f "/etc/kevintech/protocolos/$f" ]]; then
         chmod +x /etc/kevintech/protocolos/$f
-        echo "✅ $f instalado"
+        echo "✅ $f descargado"
     else
-        echo "❌ No existe: $f en $BASE_DIR"
+        echo "❌ Error descargando $f"
     fi
 done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━"
+echo "📌 Archivos instalados:"
 ls -l /etc/kevintech/protocolos
 echo "━━━━━━━━━━━━━━━━━━━━━━"
 sleep 2
