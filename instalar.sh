@@ -265,6 +265,21 @@ fi
 
 echo ""
 echo "💻 Abriendo menú..."
+echo ""
+echo "📦 Instalando módulos de protocolos..."
+
+mkdir -p /etc/kevintech/protocolos
+
+# copiar scripts reales al sistema
+cp -f ssl.sh /etc/kevintech/protocolos/ssl.sh 2>/dev/null
+cp -f websocket.sh /etc/kevintech/protocolos/websocket.sh 2>/dev/null
+cp -f dropbear.sh /etc/kevintech/protocolos/dropbear.sh 2>/dev/null
+cp -f slowdns.sh /etc/kevintech/protocolos/slowdns.sh 2>/dev/null
+
+# permisos
+chmod +x /etc/kevintech/protocolos/*.sh
+
+echo "✅ Protocolos instalados correctamente"
 
 sleep 2
 
