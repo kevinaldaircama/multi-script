@@ -1,0 +1,130 @@
+#!/bin/bash
+
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
+
+[[ -f "$CONFIG" ]] || exit 1
+
+source "$CONFIG"
+
+CYAN="\e[1;96m"
+GREEN="\e[1;92m"
+RED="\e[1;91m"
+YELLOW="\e[1;93m"
+WHITE="\e[1;97m"
+RESET="\e[0m"
+
+while true; do
+
+clear
+
+source "$CONFIG"
+
+if [[ "$SSL" == "ON" ]]; then
+    STATUS="${GREEN}🟢 ACTIVO${RESET}"
+else
+    STATUS="${RED}🔴 DESINSTALADO${RESET}"
+fi
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}            🔐 SSL/TLS MANAGER${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e " Estado      : $STATUS"
+echo -e " Dominio     : ${SERVER_DOMAIN:-NO CONFIGURADO}"
+echo -e " Puerto      : 443"
+echo -e " Servidor    : Nginx"
+echo -e " Certificado : Let's Encrypt"
+
+echo
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+if [[ "$SSL" == "ON" ]]; then
+
+echo " [1] ➮ Reinstalar SSL"
+echo " [2] ➮ Renovar Certificado"
+echo " [3] ➮ Ver Información SSL"
+echo " [4] ➮ Reiniciar Nginx"
+echo " [5] ➮ Desinstalar SSL"
+echo
+echo " [0] ➮ Regresar"
+
+else
+
+echo " [1] ➮ Instalar SSL"
+echo
+echo " [0] ➮ Regresar"
+
+fi
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+read -rp " ► Opción: " OP
+
+case "$OP" in
+1)
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        INSTALANDO SSL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+if [[ -z "$SERVER_DOMAIN" ]]; then
+    echo "❌ No hay dominio configurado."
+    sleep 3
+    continue
+fi
+
+echo "📦 Actualizando paquetes..."
+apt update -y >/dev/null 2>&1
+
+echo "📦 Instalando dependencias..."
+apt install -y nginx certbot python3-certbot-nginx >/dev/null 2>&1
+
+systemctl enable nginx >/dev/null 2>&1
+systemctl restart nginx >/dev/null 2>&1
+
+echo ""
+echo "🔐 Generando certificado SSL..."
+echo ""
+
+certbot --nginx \
+-d "$SERVER_DOMAIN" \
+--non-interactive \
+--agree-tos \
+-m admin@"$SERVER_DOMAIN" \
+--redirect
+
+if [[ $? -eq 0 ]]; then
+
+sed -i 's/^SSL=.*/SSL=ON/' "$CONFIG"
+sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=ON/' "$CONFIG"
+
+SSL="ON"
+SSL_TUNNEL="ON"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      ✅ SSL INSTALADO"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "🌐 Dominio : $SERVER_DOMAIN"
+echo "🔒 Puerto  : 443"
+echo "📜 Certificado generado correctamente."
+
+else
+
+sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
+sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=OFF/' "$CONFIG"
+
+SSL="OFF"
+SSL_TUNNEL="OFF"
+
+echo ""
+echo "❌ No fue posible generar el certificado SSL."
+fi
+
+sleep 4
+;;
