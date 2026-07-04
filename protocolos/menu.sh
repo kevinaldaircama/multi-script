@@ -100,111 +100,39 @@ case "$OP" in
 ;;
 
 10)
-    bash "$BASE/protocolos/trojan.sh"
-;;
-
-11)
-    bash "$BASE/protocolos/psiphon.sh"
-;;
-
-12)
-    bash "$BASE/protocolos/tcpdns.sh"
-;;
-
-13)
-    bash "$BASE/protocolos/webmin.sh"
-;;
-
-14)
-    bash "$BASE/protocolos/slowdns.sh"
-;;
-
-15)
-    bash "$BASE/protocolos/sslpython.sh"
-;;
-
-16)
-    bash "$BASE/protocolos/sslh.sh"
-;;
-
-17)
-    bash "$BASE/protocolos/websocket.sh"
-;;
-
-18)
-    bash "$BASE/protocolos/socks5.sh"
-;;
-
-19)
-    bash "$BASE/protocolos/udpcustom.sh"
-;;
-
-20)
-    clear
-    echo ""
-    echo "🚧 Esta función aún está en desarrollo."
-    sleep 2
-    exec bash "$BASE/protocolos/menu.sh"
-;;
-
-21)
     bash "$BASE/protocolos/blocktorrent.sh"
 ;;
 
-22)
-    bash "$BASE/protocolos/badvpn.sh"
-;;
-
-23)
-    bash "$BASE/protocolos/bbr.sh"
-;;
-
-24)
-    bash "$BASE/protocolos/fail2ban.sh"
-;;
-
-25)
+11)
     bash "$BASE/protocolos/onlinefile.sh"
 ;;
 
-26)
+12)
     bash "$BASE/protocolos/speedtest.sh"
 ;;
 
-27)
+13)
     bash "$BASE/protocolos/detalles.sh"
 ;;
 
-28)
+14)
     bash "$BASE/protocolos/blockads.sh"
 ;;
 
-29)
-    bash "$BASE/protocolos/dnscustom.sh"
-;;
-
-30)
+15)
     bash "$BASE/protocolos/herramientas.sh"
 ;;
 
-31)
+16)
     bash "$BASE/protocolos/reiniciar.sh"
 ;;
 
-32)
-    bash "$BASE/protocolos/brook.sh"
-;;
-
-33)
+17)
     bash "$BASE/protocolos/firewall.sh"
 ;;
 
-34)
+18)
     bash "$BASE/protocolos/rootpass.sh"
-;;
-
-35)
-    bash "$BASE/protocolos/atoken.sh"
 ;;
 
 0)
