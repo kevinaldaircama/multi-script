@@ -269,25 +269,23 @@ echo "💻 Abriendo menú..."
 # 👇 AQUÍ VA TU BLOQUE
 echo "📦 Instalando módulos de protocolos..."
 
-mkdir -p /etc/kevintech/protocolos
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ruta base del instalador (IMPORTANTE)
-SCRIPT_DIR="$(pwd)"
+mkdir -p /etc/kevintech/protocolos
 
 FILES=("ssl.sh" "websocket.sh" "dropbear.sh" "slowdns.sh")
 
 for f in "${FILES[@]}"; do
-    if [[ -f "$SCRIPT_DIR/$f" ]]; then
-        cp -f "$SCRIPT_DIR/$f" /etc/kevintech/protocolos/$f
+    if [[ -f "$BASE_DIR/$f" ]]; then
+        cp -f "$BASE_DIR/$f" /etc/kevintech/protocolos/
         chmod +x /etc/kevintech/protocolos/$f
         echo "✅ $f instalado"
     else
-        echo "❌ No encontrado: $f"
+        echo "❌ No existe: $f en $BASE_DIR"
     fi
 done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━"
-echo "📌 Estado final:"
 ls -l /etc/kevintech/protocolos
 echo "━━━━━━━━━━━━━━━━━━━━━━"
 sleep 2
