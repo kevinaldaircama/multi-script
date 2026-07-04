@@ -271,23 +271,25 @@ echo "📦 Instalando módulos de protocolos..."
 
 mkdir -p /etc/kevintech/protocolos
 
-cp -f ssl.sh /etc/kevintech/protocolos/ssl.sh 2>/dev/null
-cp -f websocket.sh /etc/kevintech/protocolos/websocket.sh 2>/dev/null
-cp -f dropbear.sh /etc/kevintech/protocolos/dropbear.sh 2>/dev/null
-cp -f slowdns.sh /etc/kevintech/protocolos/slowdns.sh 2>/dev/null
+# ruta base del instalador (IMPORTANTE)
+SCRIPT_DIR="$(pwd)"
 
-chmod +x /etc/kevintech/protocolos/*.sh
+FILES=("ssl.sh" "websocket.sh" "dropbear.sh" "slowdns.sh")
 
-# VALIDACIÓN (IMPORTANTE)
-for i in ssl websocket dropbear slowdns; do
-    if [[ -f /etc/kevintech/protocolos/$i.sh ]]; then
-        echo "✅ $i listo"
+for f in "${FILES[@]}"; do
+    if [[ -f "$SCRIPT_DIR/$f" ]]; then
+        cp -f "$SCRIPT_DIR/$f" /etc/kevintech/protocolos/$f
+        chmod +x /etc/kevintech/protocolos/$f
+        echo "✅ $f instalado"
     else
-        echo "❌ Falta: $i.sh"
+        echo "❌ No encontrado: $f"
     fi
 done
 
-echo "✅ Protocolos instalados correctamente"
+echo "━━━━━━━━━━━━━━━━━━━━━━"
+echo "📌 Estado final:"
+ls -l /etc/kevintech/protocolos
+echo "━━━━━━━━━━━━━━━━━━━━━━"
 sleep 2
 
 exec /etc/kevintech/menu.sh
