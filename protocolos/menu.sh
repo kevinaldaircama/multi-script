@@ -76,7 +76,7 @@ case "$OP" in
 ;;
 
 4)
-    bash "$BASE/protocolos/ssl.sh"
+    bash "$BASE/ssl.sh"
 ;;
 
 5)
