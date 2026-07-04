@@ -191,7 +191,8 @@ sleep 2
 esac
 
 done
-;;2)
+;;
+2)
     bash "$BASE/protocolos/dropbear.sh"
 ;;
 
