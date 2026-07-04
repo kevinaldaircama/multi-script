@@ -243,21 +243,23 @@ echo "   ✔ UDP 36712"
 echo "   ✔ SLOWDNS $([[ "$INSTALL_SLOWDNS" == "s" ]] && echo ON || echo OFF)"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "💻 Ejecuta: menu"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-sleep 2
-
-menu
 echo "📦 Copiando menú principal..."
-
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 mkdir -p /etc/kevintech
 
 cp -f ./menu.sh /etc/kevintech/menu.sh 2>/dev/null \
 || cp -f /root/multi-script/menu.sh /etc/kevintech/menu.sh 2>/dev/null
 
 chmod +x /etc/kevintech/menu.sh
+
 if [[ ! -f /etc/kevintech/menu.sh ]]; then
     echo "❌ ERROR: menu.sh no fue instalado"
     exit 1
 fi
+
+echo ""
+echo "💻 Abriendo menú..."
+
+sleep 2
+
+exec /etc/kevintech/menu.sh
