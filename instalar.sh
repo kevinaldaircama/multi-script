@@ -210,7 +210,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
   
 sleep 2  
   
-permisos  
+# permisos  
   
 chmod -R 777 $BASE  
 chmod +x $BASE/menu.sh  
