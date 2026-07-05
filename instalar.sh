@@ -2,13 +2,13 @@
   
 #==================================================  
   
-KevinTech Multi Script Installer  
+# KevinTech Multi Script Installer  
   
 #==================================================  
   
 #==============================  
   
-AUTO UPDATE SYSTEM  
+# AUTO UPDATE SYSTEM  
   
 #==============================  
   
@@ -37,7 +37,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
   
 #==============================  
   
-ROOT  
+# ROOT  
   
 #==============================  
   
@@ -48,7 +48,7 @@ fi
   
 #==============================  
   
-UBUNTU CHECK  
+# UBUNTU CHECK  
   
 #==============================  
   
@@ -95,7 +95,7 @@ echo "✅ Paquetes instalados."
 sleep 2
 #==============================  
   
-CONFIG SERVER  
+# CONFIG SERVER  
   
 #==============================  
   
@@ -145,28 +145,21 @@ mkdir -p $BASE/{protocolos,usuarios,sistema,logs}
   
 #==============================  
   
-CONFIG FINAL  
+# CONFIG FINAL  
   
 #==============================  
   
-cat > $BASE/config.conf <<EOF  
-SERVER_NAME="$SERVER_NAME"  
-SERVER_DOMAIN="$SERVER_DOMAIN"  
-  
-CLOUDFLARE_STATUS="$CLOUDFLARE_STATUS"  
-SSL_TUNNEL="$SSL_TUNNEL"  
-DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"  
-PROXY_STATUS="$PROXY_STATUS"  
-  
-AUTO_START=OFF  
-  
-#==============================  
-  
-PROTOCOLOS (FORZADOS)  
-  
-#==============================  
-  
-OPENSSH=ON  
+cat > "$BASE/config.conf" <<EOF
+SERVER_NAME="$SERVER_NAME"
+SERVER_DOMAIN="$SERVER_DOMAIN"
+
+CLOUDFLARE_STATUS="$CLOUDFLARE_STATUS"
+SSL_TUNNEL="$SSL_TUNNEL"
+DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"
+PROXY_STATUS="$PROXY_STATUS"
+
+AUTO_START=OFF
+
 #==============================
 # PROTOCOLOS
 #==============================
@@ -192,7 +185,7 @@ SOCKS5=OFF
 WEBMIN=OFF
 FAIL2BAN=OFF
 BBR=OFF
-EOF  
+EOF
 #==============================
 # SLOWDNS
 #==============================
@@ -206,7 +199,7 @@ echo ""
   
 #==============================  
   
-INSTALACIÓN FINAL  
+# INSTALACIÓN FINAL  
   
 #==============================  
   
@@ -233,7 +226,7 @@ chmod +x /usr/local/bin/menu
   
 #==============================  
   
-RESUMEN FINAL  
+# RESUMEN FINAL  
   
 #==============================  
   
