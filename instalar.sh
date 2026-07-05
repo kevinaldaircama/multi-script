@@ -92,6 +92,19 @@ openssl \
 ca-certificates
 
 echo "✅ Paquetes instalados."
+
+#==============================
+# INSTALAR OPENSSH
+#==============================
+
+echo "🔐 Instalando OpenSSH..."
+
+apt install -y openssh-server
+
+systemctl enable ssh
+systemctl restart ssh
+
+echo "✅ OpenSSH instalado y activo en el puerto 22."
 sleep 2
 #==============================  
   
@@ -164,7 +177,7 @@ AUTO_START=OFF
 # PROTOCOLOS
 #==============================
 
-OPENSSH=OFF
+OPENSSH=ON
 SYSTEMDNS=OFF
 WEBSOCKET=OFF
 NGINX=OFF
