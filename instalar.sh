@@ -215,7 +215,7 @@ sleep 2
 chmod -R 777 $BASE  
 chmod +x $BASE/menu.sh  
   
-comando menu  
+# comando menu  
   
 cat > /usr/local/bin/menu <<EOF  
 #!/bin/bash  
