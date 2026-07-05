@@ -121,37 +121,17 @@ echo "🔍 Verificando dominio..."
     
 DOMAIN_IP=$(dig +short "$SERVER_DOMAIN" | head -n1)        
     
-if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then        
-    DOMAIN_IP_MATCH="YES"        
-    echo "✅ Dominio apunta al VPS"        
-    
-    #==============================        
-    # ACTIVAR SSL REAL        
-    #==============================        
-    
-    echo "🔐 Generando certificado SSL real..."        
-    
-    apt update -y >/dev/null 2>&1        
-    apt install -y nginx certbot python3-certbot-nginx >/dev/null 2>&1        
-    
-    systemctl enable nginx        
-    systemctl restart nginx        
-    
-    # generar certificado        
-    certbot --nginx -d "$SERVER_DOMAIN" --non-interactive --agree-tos -m admin@$SERVER_DOMAIN        
-    
-    if [[ $? -eq 0 ]]; then        
-        SSL_TUNNEL="ON"        
-        echo "✅ SSL real instalado correctamente"        
-    else        
-        SSL_TUNNEL="OFF"        
-        echo "❌ Error generando SSL"        
-    fi        
-    
-else        
-    echo "❌ Dominio no apunta al VPS"        
-    SSL_TUNNEL="OFF"        
-fi        
+if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+    DOMAIN_IP_MATCH="YES"
+    echo "✅ Dominio apunta al VPS"
+    echo "ℹ️ El certificado SSL se podrá instalar desde el menú."
+
+    SSL_TUNNEL="OFF"
+
+else
+    echo "❌ Dominio no apunta al VPS"
+    SSL_TUNNEL="OFF"
+fi
     
 # Cloudflare detect        
 CF=$(dig +short NS "$SERVER_DOMAIN" | grep cloudflare)        
@@ -288,17 +268,13 @@ echo "🌐 Domain : $SERVER_DOMAIN"
 echo "🔐 SSL    : $SSL_TUNNEL"  
 echo "☁️ CF     : $CLOUDFLARE_STATUS"  
 echo ""  
-echo "📦 Protocolos instalados:"  
-echo "   ✔ SSH 22 (OBLIGATORIO)"  
-echo "   ✔ DNS 53"  
-echo "   ✔ WS 80"  
-echo "   ✔ NGINX 81"  
-echo "   ✔ DROPBEAR 90"  
-echo "   ✔ SSL 443 (REAL CERT)"  
-echo "   ✔ BADVPN 7200/7300"  
-echo "   ✔ UDP 36712"  
-echo "   ✔ SLOWDNS $([[ "$INSTALL_SLOWDNS" == "s" ]] && echo ON || echo OFF)"  
-echo ""  
+echo ""
+echo "📦 Estado de la instalación:"
+echo "   ✅ Paquetes básicos instalados"
+echo "   ✅ Sistema preparado correctamente"
+echo "   ⚙️ Ningún protocolo fue instalado automáticamente"
+echo "   💡 Instala los protocolos desde el menú principal"
+echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
 echo "📦 Copiando menú principal..."  
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
