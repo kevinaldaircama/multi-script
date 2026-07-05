@@ -63,7 +63,36 @@ clear
   
 echo "✔ Sistema Ubuntu detectado"  
 sleep 1  
-  
+  #==============================
+# INSTALAR PAQUETES BÁSICOS
+#==============================
+
+echo "📦 Instalando paquetes básicos..."
+
+apt update -y
+
+apt install -y \
+curl \
+wget \
+git \
+unzip \
+zip \
+tar \
+sudo \
+nano \
+cron \
+net-tools \
+dnsutils \
+lsof \
+screen \
+jq \
+bc \
+socat \
+openssl \
+ca-certificates
+
+echo "✅ Paquetes instalados."
+sleep 2
 #==============================  
   
 CONFIG SERVER  
