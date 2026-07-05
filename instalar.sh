@@ -193,36 +193,16 @@ WEBMIN=OFF
 FAIL2BAN=OFF
 BBR=OFF
 EOF  
-#==============================  
-  
-SLOWDNS OPCIONAL  
-  
-#==============================  
-  
-echo ""  
-read -rp "🚀 ¿Instalar SlowDNS? (s/n): " INSTALL_SLOWDNS  
-  
-if [[ "$INSTALL_SLOWDNS" == "s" || "$INSTALL_SLOWDNS" == "S" ]]; then  
-  
-echo ""        
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"        
-echo "      🔐 CONFIGURACIÓN SLOWDNS"        
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"        
-    
-read -rp "🌐 Dominio NS Cloudflare: " SLOW_DOMAIN        
-read -rp "🔑 Token / Key (o Enter para generar): " SLOW_KEY        
-    
-if [[ -z "$SLOW_KEY" ]]; then        
-    SLOW_KEY=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)        
-    echo "🔑 Key generada: $SLOW_KEY"        
-fi        
-    
-# activar en config        
-sed -i "s/SLOWDNS=OFF/SLOWDNS=ON/" $BASE/config.conf        
-    
-echo "✅ SlowDNS configurado"  
-  
-fi  
+#==============================
+# SLOWDNS
+#==============================
+
+INSTALL_SLOWDNS="n"
+
+echo ""
+echo "ℹ️ SlowDNS no se instala durante la instalación inicial."
+echo "💡 Puedes instalarlo y configurarlo más tarde desde el menú."
+echo ""
   
 #==============================  
   
