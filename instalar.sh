@@ -217,10 +217,10 @@ chmod +x $BASE/menu.sh
   
 # comando menu  
   
-cat > /usr/local/bin/menu <<EOF  
-#!/bin/bash  
-exec bash /etc/kevintech/menu.sh  
-EOF  
+cat > /usr/local/bin/menu <<EOF
+#!/bin/bash
+exec bash /etc/kevintech/menu.sh
+EOF
   
 chmod +x /usr/local/bin/menu  
   
@@ -253,10 +253,13 @@ echo "📦 Copiando menú principal..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
 mkdir -p /etc/kevintech  
   
-cp -f ./menu.sh /etc/kevintech/menu.sh 2>/dev/null \  
-|| cp -f /root/multi-script/menu.sh /etc/kevintech/menu.sh 2>/dev/null  
-  
-chmod +x /etc/kevintech/menu.sh  
+if [[ -f "./menu.sh" ]]; then
+    cp -f "./menu.sh" /etc/kevintech/menu.sh
+elif [[ -f "/root/multi-script/menu.sh" ]]; then
+    cp -f "/root/multi-script/menu.sh" /etc/kevintech/menu.sh
+fi
+
+chmod +x /etc/kevintech/menu.sh
   
 if [[ ! -f /etc/kevintech/menu.sh ]]; then  
 echo "❌ ERROR: menu.sh no fue instalado"  
