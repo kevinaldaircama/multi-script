@@ -217,30 +217,46 @@ sleep 3
 clear
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "        DESINSTALAR SSL"
+echo "     DESINSTALAR SSL TUNNEL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-read -rp "¿Seguro que deseas eliminar el certificado SSL? (s/n): " RESP
+read -rp "¿Seguro que deseas desinstalar SSL Tunnel? (s/n): " RESP
 
 if [[ "$RESP" =~ ^[Ss]$ ]]; then
 
+    # Eliminar certificado
     certbot delete \
     --cert-name "$SERVER_DOMAIN" \
     --non-interactive >/dev/null 2>&1
 
+    # Detener servicio
+    systemctl stop stunnel4 >/dev/null 2>&1
+
+    # Eliminar configuración
+    rm -f /etc/stunnel/stunnel.conf
+
+    # Deshabilitar servicio
+    sed -i 's/ENABLED=1/ENABLED=0/' /etc/default/stunnel4 2>/dev/null
+
+    # Desinstalar Stunnel4
+    apt purge -y stunnel4 >/dev/null 2>&1
+    apt autoremove -y >/dev/null 2>&1
+
+    # Actualizar configuración
     sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
     sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=OFF/' "$CONFIG"
 
     SSL="OFF"
     SSL_TUNNEL="OFF"
 
-    systemctl restart nginx
-
     echo ""
-    echo "✅ Certificado SSL eliminado."
-    echo "🌐 Dominio : $SERVER_DOMAIN"
-    echo "🔓 Estado  : OFF"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "     ✅ SSL TUNNEL ELIMINADO"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "🔓 Puerto 443 liberado."
+    echo "🔐 OpenSSH (22) continúa funcionando."
 
 else
 
