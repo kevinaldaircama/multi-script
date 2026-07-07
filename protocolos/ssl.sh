@@ -32,8 +32,9 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 echo -e " Estado      : $STATUS"
 echo -e " Dominio     : ${SERVER_DOMAIN:-NO CONFIGURADO}"
-echo -e " Puerto      : 443"
-echo -e " Servidor    : Nginx"
+echo -e " Puerto      : 443 ➜ SSH 22"
+echo -e " Servicio    : Stunnel4"
+echo -e " Destino     : 127.0.0.1:22"
 echo -e " Certificado : Let's Encrypt"
 
 echo
@@ -41,11 +42,11 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 if [[ "$SSL" == "ON" ]]; then
 
-echo " [1] ➮ Reinstalar SSL"
+echo " [1] ➮ Reinstalar SSL Tunnel"
 echo " [2] ➮ Renovar Certificado"
 echo " [3] ➮ Ver Información SSL"
-echo " [4] ➮ Reiniciar Nginx"
-echo " [5] ➮ Desinstalar SSL"
+echo " [4] ➮ Reiniciar Stunnel"
+echo " [5] ➮ Desinstalar SSL Tunnel"
 echo
 echo " [0] ➮ Regresar"
 
@@ -78,24 +79,46 @@ if [[ -z "$SERVER_DOMAIN" ]]; then
 fi
 
 echo "📦 Actualizando paquetes..."
+echo "📦 Actualizando paquetes..."
 apt update -y >/dev/null 2>&1
 
-echo "📦 Instalando dependencias..."
-apt install -y nginx certbot python3-certbot-nginx >/dev/null 2>&1
+echo "📦 Instalando Stunnel..."
 
-systemctl enable nginx >/dev/null 2>&1
-systemctl restart nginx >/dev/null 2>&1
+apt install -y stunnel4 certbot >/dev/null 2>&1
 
 echo ""
 echo "🔐 Generando certificado SSL..."
 echo ""
 
-certbot --nginx \
+certbot certonly \
+--standalone \
 -d "$SERVER_DOMAIN" \
 --non-interactive \
 --agree-tos \
--m admin@"$SERVER_DOMAIN" \
---redirect
+-m admin@"$SERVER_DOMAIN"
+
+if [[ $? -ne 0 ]]; then
+    echo "❌ Error al generar el certificado."
+    sleep 4
+    continue
+fi
+
+cat >/etc/stunnel/stunnel.conf <<EOF
+pid=/var/run/stunnel.pid
+
+[openssh]
+client = no
+accept = 443
+connect = 127.0.0.1:22
+
+cert=/etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem
+key=/etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem
+EOF
+
+sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4
+
+systemctl enable stunnel4
+systemctl restart stunnel4
 
 if [[ $? -eq 0 ]]; then
 
@@ -178,12 +201,14 @@ read -n1 -r -p "Presione una tecla para continuar..."
 
 clear
 
-echo "Reiniciando Nginx..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      REINICIANDO STUNNEL4"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-systemctl restart nginx
+systemctl restart stunnel4
 
 echo ""
-echo "✅ Nginx reiniciado correctamente."
+echo "✅ Stunnel4 reiniciado correctamente."
 
 sleep 3
 ;;
