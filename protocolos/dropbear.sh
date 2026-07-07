@@ -12,7 +12,7 @@ WHITE="\e[1;97m"
 RESET="\e[0m"
 
 SERVICE="dropbear"
-PORT="90"
+PORT=""
 
 while true; do
 
@@ -75,17 +75,66 @@ echo "✅ Dropbear desinstalado."
 
 else
 
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "       INSTALAR DROPBEAR"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+echo "PUERTOS RECOMENDADOS:"
+echo " [1] Puerto 90"
+echo " [2] Puerto 143"
+echo ""
+
+read -rp "Selecciona puerto: " DP
+
+case "$DP" in
+
+1)
+PORT="90"
+;;
+
+2)
+PORT="143"
+;;
+
+*)
+echo "❌ Puerto inválido"
+sleep 2
+continue
+;;
+
+esac
+
+
+echo ""
+echo "📦 Instalando Dropbear..."
+
 apt update
 apt install dropbear -y
+
+
+echo "⚙️ Configurando puerto $PORT..."
+
+sed -i "s/^DROPBEAR_PORT=.*/DROPBEAR_PORT=$PORT/" /etc/default/dropbear
+
 
 systemctl enable dropbear
 systemctl restart dropbear
 
+
 sed -i 's/DROPBEAR=OFF/DROPBEAR=ON/' "$CONFIG"
+
 DROPBEAR=ON
 
+
 echo ""
-echo "✅ Dropbear instalado."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ DROPBEAR INSTALADO"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "🔐 Puerto SSH : $PORT"
 
 fi
 
