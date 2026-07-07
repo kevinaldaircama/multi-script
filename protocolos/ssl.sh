@@ -79,7 +79,6 @@ if [[ -z "$SERVER_DOMAIN" ]]; then
 fi
 
 echo "📦 Actualizando paquetes..."
-echo "📦 Actualizando paquetes..."
 apt update -y >/dev/null 2>&1
 
 echo "📦 Instalando Stunnel..."
@@ -89,7 +88,25 @@ apt install -y stunnel4 certbot >/dev/null 2>&1
 echo ""
 echo "🔐 Generando certificado SSL..."
 echo ""
+#==============================
+# VERIFICAR PUERTO 443
+#==============================
 
+if ss -ltn | grep -q ":443 "; then
+
+    echo ""
+    echo "❌ El puerto 443 ya está siendo utilizado."
+    echo ""
+
+    echo "Servicio que lo está usando:"
+    ss -ltnp | grep ":443"
+
+    echo ""
+    echo "Detén ese servicio e intenta nuevamente."
+    sleep 5
+    continue
+
+fi
 certbot certonly \
 --standalone \
 -d "$SERVER_DOMAIN" \
@@ -119,7 +136,43 @@ sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4
 
 systemctl enable stunnel4
 systemctl restart stunnel4
+if systemctl is-active --quiet stunnel4; then
 
+    sed -i 's/^SSL=.*/SSL=ON/' "$CONFIG"
+    sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=ON/' "$CONFIG"
+
+    SSL="ON"
+    SSL_TUNNEL="ON"
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "      ✅ SSL TUNNEL INSTALADO"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "🌐 Dominio : $SERVER_DOMAIN"
+    echo "🔒 SSL     : 443"
+    echo "➡ Destino : 127.0.0.1:22"
+    echo "🚀 Compatible con:"
+    echo "   ✔ HTTP Injector"
+    echo "   ✔ HTTP Custom"
+    echo "   ✔ eHTTP"
+    echo "   ✔ HTTP Custom Lite"
+
+else
+
+    sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
+    sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=OFF/' "$CONFIG"
+
+    SSL="OFF"
+    SSL_TUNNEL="OFF"
+
+    echo ""
+    echo "❌ Error iniciando Stunnel4."
+
+fi
+
+sleep 4
+continue
 if [[ $? -eq 0 ]]; then
 
 sed -i 's/^SSL=.*/SSL=ON/' "$CONFIG"
