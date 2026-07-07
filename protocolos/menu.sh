@@ -62,76 +62,77 @@ echo ""
 read -rp " ► Opción: " OP
 
 case "$OP" in
+
 1)
     bash "$BASE/protocolos/openssh.sh"
 ;;
 
 2)
-    bash "$BASE/protocolos/dropbear.sh"
+    bash "$BASE/protocolos/systemdns.sh"
 ;;
 
 3)
-    bash "$BASE/protocolos/openvpn.sh"
+    bash "$BASE/protocolos/websocket.sh"
 ;;
 
 4)
-    bash "$BASE/protocolos/ssl.sh"
+    bash "$BASE/protocolos/nginx.sh"
 ;;
 
 5)
-    bash "$BASE/protocolos/shadowsocks.sh"
+    bash "$BASE/protocolos/dropbear.sh"
 ;;
 
 6)
-    bash "$BASE/protocolos/squid.sh"
+    bash "$BASE/protocolos/ssl.sh"
 ;;
 
 7)
-    bash "$BASE/protocolos/python.sh"
+    bash "$BASE/protocolos/badvpn.sh"
 ;;
 
 8)
-    bash "$BASE/protocolos/v2ray.sh"
+    bash "$BASE/protocolos/udpcustom.sh"
 ;;
 
 9)
-    bash "$BASE/protocolos/clash.sh"
+    bash "$BASE/protocolos/slowdns.sh"
 ;;
 
 10)
-    bash "$BASE/protocolos/blocktorrent.sh"
+    bash "$BASE/herramientas/blocktorrent.sh"
 ;;
 
 11)
-    bash "$BASE/protocolos/onlinefile.sh"
+    bash "$BASE/herramientas/archivoonline.sh"
 ;;
 
 12)
-    bash "$BASE/protocolos/speedtest.sh"
+    bash "$BASE/herramientas/speedtest.sh"
 ;;
 
 13)
-    bash "$BASE/protocolos/detalles.sh"
+    bash "$BASE/herramientas/detalles.sh"
 ;;
 
 14)
-    bash "$BASE/protocolos/blockads.sh"
+    bash "$BASE/herramientas/blockads.sh"
 ;;
 
 15)
-    bash "$BASE/protocolos/herramientas.sh"
+    bash "$BASE/herramientas/menu.sh"
 ;;
 
 16)
-    bash "$BASE/protocolos/reiniciar.sh"
+    bash "$BASE/herramientas/reiniciar.sh"
 ;;
 
 17)
-    bash "$BASE/protocolos/firewall.sh"
+    bash "$BASE/herramientas/firewall.sh"
 ;;
 
 18)
-    bash "$BASE/protocolos/rootpass.sh"
+    bash "$BASE/herramientas/rootpass.sh"
 ;;
 
 0)
@@ -139,7 +140,6 @@ case "$OP" in
 ;;
 
 *)
-    echo ""
     echo "❌ Opción inválida."
     sleep 2
     exec bash "$BASE/protocolos/menu.sh"
