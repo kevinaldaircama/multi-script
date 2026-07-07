@@ -204,4 +204,121 @@ fi
 sleep 3
 
 ;;
+2)
 
+clear
+
+echo "🔄 Reiniciando BadVPN..."
+
+systemctl restart $SERVICE1
+systemctl restart $SERVICE2
+
+echo ""
+echo "✅ Servicios reiniciados."
+
+sleep 2
+
+;;
+
+
+3)
+
+clear
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}        ESTADO BADVPN UDPGW${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo ""
+
+systemctl status $SERVICE1 --no-pager
+
+echo ""
+
+systemctl status $SERVICE2 --no-pager
+
+echo ""
+
+echo "Puertos activos:"
+
+ss -lnpt | grep -E "7300|7200"
+
+echo ""
+
+read -n1 -r -p "Presione una tecla para continuar..."
+
+;;
+
+
+4)
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        DESINSTALAR BADVPN"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+read -rp "¿Seguro que deseas eliminar BadVPN? (s/n): " R
+
+
+if [[ "$R" =~ ^[Ss]$ ]]; then
+
+
+systemctl stop $SERVICE1 2>/dev/null
+systemctl stop $SERVICE2 2>/dev/null
+
+
+systemctl disable $SERVICE1 2>/dev/null
+systemctl disable $SERVICE2 2>/dev/null
+
+
+rm -f /etc/systemd/system/$SERVICE1.service
+rm -f /etc/systemd/system/$SERVICE2.service
+
+
+rm -f "$BIN"
+
+
+systemctl daemon-reload
+
+
+sed -i 's/^BADVPN=.*/BADVPN=OFF/' "$CONFIG"
+
+
+BADVPN="OFF"
+
+
+echo ""
+
+echo "✅ BadVPN eliminado."
+
+else
+
+echo "❌ Cancelado."
+
+fi
+
+
+sleep 3
+
+;;
+
+
+0)
+
+exec bash "$BASE/protocolos/menu.sh"
+
+;;
+
+
+*)
+
+echo "❌ Opción inválida."
+
+sleep 2
+
+;;
+
+esac
+
+done
