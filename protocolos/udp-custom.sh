@@ -176,3 +176,65 @@ fi
 sleep 3
 
 ;;
+2)
+
+clear
+
+echo "🔄 Reiniciando UDP Custom..."
+
+systemctl restart $SERVICE
+
+echo ""
+echo "✅ Servicio reiniciado."
+
+sleep 2
+
+;;
+
+
+3)
+
+clear
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}        ESTADO UDP CUSTOM${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo ""
+
+systemctl status $SERVICE --no-pager
+
+
+echo ""
+
+echo "Puerto escuchando:"
+
+ss -ulnp | grep "$PORT"
+
+
+echo ""
+
+read -n1 -r -p "Presione una tecla para continuar..."
+
+;;
+
+
+0)
+
+exec bash "$BASE/protocolos/menu.sh"
+
+;;
+
+
+*)
+
+echo ""
+echo "❌ Opción inválida."
+
+sleep 2
+
+;;
+
+esac
+
+done
