@@ -2,70 +2,63 @@
 
 BASE="/etc/kevintech"
 
+CYAN="\e[1;96m"
+BLUE="\e[1;94m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+RED="\e[1;91m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
+RESET="\e[0m"
+
 while true; do
 
 clear
 
 RAM=$(free -h | awk '/Mem:/ {print $7}')
-CPU=$(top -bn1 | awk -F'id,' '/Cpu/ {split($1,a,","); print 100-a[length(a)]"%"}')
+CPU=$(top -bn1 | awk -F'id,' '/Cpu/ {split($1,a,","); printf("%.0f%%",100-a[length(a)])}')
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "      =====>>►► 🪧 Kevin Tech 💥 Multi Script 🪧 ◄◄<<====="
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " 🔐 ADMINISTRADOR DE USUARIOS SSH | SSL | DROPBEAR 🔐"
-echo " ▸ M LIBRE: $RAM   ▸ USO DE CPU: $CPU"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${MAGENTA}            🛡️ KevinTech Multi Script 🛡️            ${CYAN}║${RESET}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
+echo -e "${YELLOW}║${GREEN}           🔐 ADMINISTRADOR DE USUARIOS 🔐           ${YELLOW}║${RESET}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
+echo -e "${BLUE}║${WHITE} 💾 RAM Libre : ${GREEN}${RAM}${WHITE}        ⚡ CPU : ${GREEN}${CPU}              ${BLUE}║${RESET}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
 
-echo " [01] ➮ AGREGAR USUARIO (HWID/NORMAL/TOKEN)"
-echo " [02] ➮ BORRAR 1/TODOS LOS USUARIOS"
-echo " [03] ➮ EDITAR / RENOVAR USUARIOS"
-echo " [04] ➮ MOSTRAR USUARIOS REGISTRADOS"
-echo " [05] ➮ MOSTRAR USUARIOS CONECTADOS"
-echo " [06] ➮ ADD / REMOVE BANNER"
-echo " [07] ➮ LOG DE CONSUMO"
-echo " [08] ➮ BLOQUEAR / DESBLOQUEAR USUARIOS"
-echo " [09] ➮ BACKUP USUARIOS"
+echo -e "${GREEN} [01]${WHITE} 👤 Agregar Usuario (HWID / NORMAL / TOKEN)"
+echo -e "${RED}   [02]${WHITE} 🗑 Eliminar Usuario(s)"
+echo -e "${YELLOW}[03]${WHITE} ♻ Renovar / Editar Usuario"
+echo -e "${CYAN}  [04]${WHITE} 📋 Usuarios Registrados"
+echo -e "${MAGENTA}[05]${WHITE} 👁 Usuarios Conectados"
+echo -e "${BLUE}  [06]${WHITE} 📢 Banner SSH / Dropbear"
+echo -e "${GREEN} [07]${WHITE} 📊 Log de Consumo"
+echo -e "${RED}   [08]${WHITE} 🔒 Bloquear / Desbloquear Usuarios"
+echo -e "${YELLOW}[09]${WHITE} 💾 Backup de Usuarios"
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " [0] ➮ REGRESAR"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
+echo -e "${MAGENTA}║${WHITE}        Kevin Tech Tutorials © • Privanox VPN        ${MAGENTA}║${RESET}"
+echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
+echo -e "${RED} [00]${WHITE} ⬅ Regresar al Menú Principal"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${RESET}"
 
 echo
-read -rp " ► Opción: " op
+read -rp "$(echo -e "${GREEN} ► Seleccione una opción:${RESET} ")" op
 
 case "$op" in
-1)
-    bash "$BASE/usuarios/add.sh"
-;;
-2)
-    bash "$BASE/usuarios/delete.sh"
-;;
-3)
-    bash "$BASE/usuarios/edit.sh"
-;;
-4)
-    bash "$BASE/usuarios/list.sh"
-;;
-5)
-    bash "$BASE/usuarios/online.sh"
-;;
-6)
-    bash "$BASE/usuarios/banner.sh"
-;;
-7)
-    bash "$BASE/usuarios/log.sh"
-;;
-8)
-    bash "$BASE/usuarios/block.sh"
-;;
-9)
-    bash "$BASE/usuarios/backup.sh"
-;;
-0)
-    exec bash "$BASE/menu.sh"
-;;
+1) bash "$BASE/usuarios/add.sh" ;;
+2) bash "$BASE/usuarios/delete.sh" ;;
+3) bash "$BASE/usuarios/edit.sh" ;;
+4) bash "$BASE/usuarios/list.sh" ;;
+5) bash "$BASE/usuarios/online.sh" ;;
+6) bash "$BASE/usuarios/banner.sh" ;;
+7) bash "$BASE/usuarios/log.sh" ;;
+8) bash "$BASE/usuarios/block.sh" ;;
+9) bash "$BASE/usuarios/backup.sh" ;;
+0) exec bash "$BASE/menu.sh" ;;
 *)
-    echo "❌ Opción inválida."
+    echo -e "\n${RED}❌ Opción inválida.${RESET}"
     sleep 2
 ;;
 esac
