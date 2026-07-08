@@ -9,12 +9,14 @@ CYAN="\e[1;96m"
 GREEN="\e[1;92m"
 RED="\e[1;91m"
 WHITE="\e[1;97m"
+YELLOW="\e[1;93m"
 RESET="\e[0m"
 
 SERVICE="iodined"
+PORT="53"
 
-DNS_PORT="53"
-SSH_PORT="22"
+PUBKEY="/etc/iodine/public.key"
+DOMAIN_FILE="/etc/iodine/domain.conf"
 
 while true; do
 
@@ -33,29 +35,37 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${WHITE}             🐌 SLOWDNS MANAGER${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e " Estado    : $STATUS"
-echo -e " DNS       : ${SLOWDNS_DOMAIN:-NO CONFIGURADO}"
-echo -e " Puerto    : $DNS_PORT UDP"
-echo -e " SSH       : $SSH_PORT OpenSSH"
+echo -e " Estado     : $STATUS"
+echo -e " Puerto DNS : $PORT"
+echo -e " Servicio   : iodined"
 
-echo
+if [[ -f "$DOMAIN_FILE" ]]; then
+DOMAIN=$(cat $DOMAIN_FILE)
+echo -e " Dominio NS : ${YELLOW}$DOMAIN${RESET}"
+fi
+
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 
 if [[ "$SLOWDNS" == "ON" ]]; then
 
 cat <<EOF
+
  [1] ➮ Desinstalar SlowDNS
  [2] ➮ Reiniciar Servicio
  [3] ➮ Ver Estado
+ [4] ➮ Ver Public Key
  [0] ➮ Regresar
+
 EOF
 
 else
 
 cat <<EOF
+
  [1] ➮ Instalar SlowDNS
  [0] ➮ Regresar
+
 EOF
 
 fi
@@ -71,74 +81,82 @@ case "$OP" in
 
 1)
 
-if [[ "$SLOWDNS" == "OFF" ]]; then
+if [[ "$SLOWDNS" == "ON" ]]; then
+
+echo ""
+read -rp "¿Eliminar SlowDNS? (s/n): " R
+
+if [[ "$R" =~ ^[Ss]$ ]]; then
+
+systemctl stop iodined 2>/dev/null
+systemctl disable iodined 2>/dev/null
+
+apt remove iodine -y
+
+rm -rf /etc/iodine
+
+sed -i 's/^SLOWDNS=.*/SLOWDNS=OFF/' "$CONFIG"
+
+echo ""
+echo "✅ SlowDNS eliminado"
+
+fi
 
 
-clear
+else
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo "        INSTALAR SLOWDNS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-read -rp "Ingrese su dominio NS (ej: ns1.dominio.com): " NS_DOMAIN
+read -rp "Ingrese dominio NS (ejemplo ns.midominio.com): " DOMAIN
 
+if [[ -z "$DOMAIN" ]]; then
 
-if [[ -z "$NS_DOMAIN" ]]; then
-
-echo "❌ Dominio vacío."
-sleep 3
+echo "❌ Dominio vacío"
+sleep 2
 continue
 
 fi
 
 
+mkdir -p /etc/iodine
+
+echo "$DOMAIN" > "$DOMAIN_FILE"
+
+
 echo ""
 echo "📦 Instalando dependencias..."
 
-apt update -y >/dev/null 2>&1
+apt update -y
 
-apt install -y iodine >/dev/null 2>&1
-
-
-echo "🔓 Desbloqueando servicio..."
-
-systemctl unmask iodined >/dev/null 2>&1
+apt install iodine openssh-server -y
 
 
-echo "🌐 Liberando puerto DNS 53..."
+echo ""
+echo "🔑 Generando Public Key..."
 
-systemctl disable --now systemd-resolved >/dev/null 2>&1
-
-rm -f /etc/resolv.conf
-
-echo "nameserver 8.8.8.8" > /etc/resolv.conf
+openssl rand -hex 16 > "$PUBKEY"
 
 
-
-echo "⚙️ Creando servicio SlowDNS..."
-
+echo ""
+echo "🚀 Configurando SlowDNS..."
 
 cat > /etc/systemd/system/iodined.service <<EOF
-
 [Unit]
-Description=SlowDNS Tunnel Server
+Description=SlowDNS Iodine Server
 After=network.target
-
 
 [Service]
 Type=simple
-
-ExecStart=/usr/sbin/iodined -f -c -P kevintech 10.0.0.1 $NS_DOMAIN
-
+ExecStart=/usr/sbin/iodined -f -c -P $(cat $PUBKEY) 10.0.0.1 $DOMAIN
 Restart=always
-RestartSec=5
-
 
 [Install]
 WantedBy=multi-user.target
-
 EOF
-
 
 
 systemctl daemon-reload
@@ -148,112 +166,136 @@ systemctl enable iodined
 systemctl restart iodined
 
 
-
 sed -i 's/^SLOWDNS=.*/SLOWDNS=ON/' "$CONFIG"
 
-if grep -q "^SLOWDNS_DOMAIN=" "$CONFIG"; then
-
-sed -i "s/^SLOWDNS_DOMAIN=.*/SLOWDNS_DOMAIN=$NS_DOMAIN/" "$CONFIG"
-
-else
-
-echo "SLOWDNS_DOMAIN=$NS_DOMAIN" >> "$CONFIG"
-
-fi
-
-
-SLOWDNS="ON"
-
-SLOWDNS_DOMAIN="$NS_DOMAIN"
-
-
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       ✅ SLOWDNS ACTIVADO"
+echo "✅ SLOWDNS INSTALADO"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo ""
-echo "🌐 NS Dominio : $NS_DOMAIN"
-echo "🔌 DNS Puerto : 53 UDP"
-echo "🔐 SSH Puerto : 22"
-echo "🔑 Password   : kevintech"
+echo "🌐 Dominio NS:"
+echo "$DOMAIN"
+
 echo ""
-echo "📱 Configuración App:"
-echo "NS Host  : $NS_DOMAIN"
-echo "SSH Host : IP DEL VPS"
-echo "SSH Port : 22"
+echo "🔐 Public Key:"
+cat $PUBKEY
 
+echo ""
+echo "SSH REDIRECCIONADO:"
+echo "Puerto destino: 22"
 
-else
-
-
-read -rp "¿Eliminar SlowDNS? (s/n): " R
-
-[[ "$R" != "s" ]] && continue
-
-
-systemctl stop iodined 2>/dev/null
-
-systemctl disable iodined 2>/dev/null
-
-
-rm -f /etc/systemd/system/iodined.service
-
-
-apt remove iodine -y >/dev/null 2>&1
-
-
-sed -i 's/^SLOWDNS=.*/SLOWDNS=OFF/' "$CONFIG"
-
-
-SLOWDNS="OFF"
-
-
-echo "✅ SlowDNS eliminado."
-
+echo ""
+echo "Escribe menu para volver"
 
 fi
-
-
-sleep 3
 
 ;;
-
-
 2)
+
+clear
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}       🔄 REINICIANDO SLOWDNS${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 systemctl restart iodined
 
-echo "✅ SlowDNS reiniciado."
-
 sleep 2
 
-;;
+if systemctl is-active --quiet iodined; then
 
+echo ""
+echo -e "${GREEN}✅ SlowDNS reiniciado correctamente${RESET}"
+
+else
+
+echo ""
+echo -e "${RED}❌ Error al reiniciar SlowDNS${RESET}"
+
+fi
+
+
+echo ""
+echo "Escribe menu para volver"
+
+;;
 
 3)
 
 clear
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "          ESTADO SLOWDNS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}          ESTADO SLOWDNS${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
 
 systemctl status iodined --no-pager
 
 
 echo ""
 
+echo "Puerto DNS:"
+
 ss -ulnp | grep ":53"
 
 
 echo ""
 
-read -n1 -r -p "Presione una tecla..."
+if [[ -f "$DOMAIN_FILE" ]]; then
+
+echo "Dominio NS:"
+cat $DOMAIN_FILE
+
+fi
+
+
+echo ""
+
+echo "SSH destino:"
+echo "127.0.0.1:22"
+
+
+echo ""
+
+echo "Escribe menu para volver"
 
 ;;
 
+4)
+
+clear
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}          🔐 PUBLIC KEY SLOWDNS${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+if [[ -f "$PUBKEY" ]]; then
+
+echo ""
+
+echo "Copia esta clave en:"
+echo "HTTP Injector"
+echo "HTTP Custom"
+echo "Apps compatibles"
+
+echo ""
+
+cat $PUBKEY
+
+else
+
+echo "❌ Public Key no encontrado"
+
+fi
+
+
+echo ""
+
+echo "Escribe menu para volver"
+
+;;
 
 0)
 
@@ -261,15 +303,15 @@ exec bash "$BASE/protocolos/menu.sh"
 
 ;;
 
-
 *)
 
-echo "❌ Opción inválida."
-
+echo ""
+echo "❌ Opción inválida"
 sleep 2
 
 ;;
 
 esac
+
 
 done
