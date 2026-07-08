@@ -127,48 +127,36 @@ apt update -y >/dev/null 2>&1
 apt install -y wget curl >/dev/null 2>&1
 
 
-echo "📦 Instalando dependencias..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      🐲 INSTALANDO UDPserver"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-apt install -y git cmake build-essential >/dev/null 2>&1
+apt update -y >/dev/null 2>&1
 
-
-echo "⬇️ Descargando fuente UDP Custom..."
-
-rm -rf /tmp/udpcustom-build
-
-git clone -q https://github.com/ambrop72/badvpn.git /tmp/udpcustom-build
+apt install -y curl wget >/dev/null 2>&1
 
 
-cd /tmp/udpcustom-build
+echo "⬇️ Descargando instalador UDPserver..."
 
 
-mkdir -p build
-cd build
+wget -q https://raw.githubusercontent.com/ChumoGH/UDPserver/main/install.sh \
+-O /tmp/udpserver-install.sh
 
 
-cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 >/dev/null 2>&1
+if [ -f /tmp/udpserver-install.sh ]; then
 
+    chmod +x /tmp/udpserver-install.sh
 
-make -j$(nproc) >/dev/null 2>&1
+    bash /tmp/udpserver-install.sh
 
-
-if [ -f "udpgw/badvpn-udpgw" ]; then
-
-    cp udpgw/badvpn-udpgw "$BIN"
-
-    chmod +x "$BIN"
-
-    echo "✅ Binario UDP Custom creado."
+    rm -f /tmp/udpserver-install.sh
 
 else
 
-    echo "❌ Error compilando UDP Custom."
+    echo "❌ Error descargando UDPserver"
     exit 1
 
 fi
-
-
-rm -rf /tmp/udpcustom-build
 
 
 cat > /etc/systemd/system/$SERVICE.service <<EOF
