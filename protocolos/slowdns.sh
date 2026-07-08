@@ -230,27 +230,41 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${WHITE}          ESTADO SLOWDNS${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-
 systemctl status iodined --no-pager
-
 
 echo ""
 
 echo "Puerto DNS:"
-
 ss -ulnp | grep ":53"
-
 
 echo ""
 
 if [[ -f "$DOMAIN_FILE" ]]; then
-
 echo "Dominio NS:"
-cat $DOMAIN_FILE
-
+cat "$DOMAIN_FILE"
 fi
-;;
 
+echo ""
+
+echo "SSH DESTINO:"
+echo "Puerto 22 (OpenSSH)"
+
+echo ""
+
+echo "Public Key:"
+echo ""
+
+cat "$PUBKEY" 2>/dev/null
+
+echo ""
+
+read -rp "Escribe menu para volver: " SALIR
+
+if [[ "$SALIR" == "menu" ]]; then
+    exec bash "$BASE/protocolos/menu.sh"
+fi
+
+;;
 4)
 
 clear
