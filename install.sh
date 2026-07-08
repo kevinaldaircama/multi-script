@@ -12,22 +12,21 @@
   
 #==============================  
   
-if [[ -d "/etc/kevintech" ]]; then  
-echo "🔄 Instalación detectada..."  
-echo "📦 Actualizando sistema..."  
-  
-cd /etc/kevintech || exit        
-    
-if [[ -d .git ]]; then        
-    git reset --hard        
-    git pull origin main || git pull        
-    echo "✅ Sistema actualizado correctamente"        
-    exit        
-else        
-    rm -rf /etc/kevintech        
-fi  
-  
-fi  
+if [[ -d "/etc/kevintech" ]]; then
+    echo "🔄 Instalación detectada..."
+    echo "📦 Actualizando sistema..."
+
+    if [[ -d "/etc/kevintech/.git" ]]; then
+        cd /etc/kevintech || exit 1
+        git reset --hard
+        git pull origin main || git pull
+        echo "✅ Sistema actualizado correctamente"
+        exit 0
+    else
+        cd /
+        rm -rf /etc/kevintech
+    fi
+fi
   
 clear  
   
