@@ -133,6 +133,7 @@ echo "📦 Instalando dependencias..."
 apt update -y
 
 apt install iodine openssh-server -y
+systemctl unmask iodined 2>/dev/null
 
 
 echo ""
@@ -151,7 +152,9 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/iodined -f -c -P $(cat $PUBKEY) 10.0.0.1 $DOMAIN
+PASSWORD=$(cat "$PUBKEY")
+
+ExecStart=/usr/sbin/iodined -f -c -P $PASSWORD 10.0.0.1 $DOMAIN
 Restart=always
 
 [Install]
@@ -160,6 +163,8 @@ EOF
 
 
 systemctl daemon-reload
+
+systemctl unmask iodined
 
 systemctl enable iodined
 
