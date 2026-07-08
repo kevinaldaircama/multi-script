@@ -265,11 +265,15 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📥 Descargando KevinTech Multi Script..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+cd /root || exit 1
+
 rm -rf /tmp/multi-script
 
-git clone https://github.com/kevinaldaircama/multi-script.git /tmp/multi-script
+git clone https://github.com/kevinaldaircama/multi-script.git /tmp/multi-script || exit 1
 
-cp -r /tmp/multi-script/* /etc/kevintech/
+mkdir -p /etc/kevintech
+
+cp -a /tmp/multi-script/. /etc/kevintech/
 
 chmod -R +x /etc/kevintech
 
