@@ -11,10 +11,10 @@ RED="\e[1;91m"
 WHITE="\e[1;97m"
 RESET="\e[0m"
 
-SERVICE="udpcustom"
+SERVICE="UDPserver"
 PORT="36712"
 
-BIN="/usr/local/bin/udpcustom"
+BIN="/usr/bin/UDPserver"
 
 while true; do
 
@@ -22,7 +22,7 @@ clear
 
 source "$CONFIG"
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
+if systemctl is-active --quiet $SERVICE; then
     STATUS="${GREEN}🟢 ACTIVO${RESET}"
 else
     STATUS="${RED}🔴 DESINSTALADO${RESET}"
