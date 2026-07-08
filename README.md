@@ -166,9 +166,7 @@ multi-script
 
 # 🔄 Actualizar
 
-```bash
-cd /etc/kevintech
-git pull
+```bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/update.sh)
 ```
 
 ---
