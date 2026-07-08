@@ -34,7 +34,7 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 printf "${GREEN} [01]${WHITE} ➮ OpenSSH           [%s]\n" "$OPENSSH"
 printf "${GREEN} [02]${WHITE} ➮ System DNS        [%s]\n" "$SYSTEMDNS"
 printf "${GREEN} [03]${WHITE} ➮ WebSocket         [%s]\n" "$WEBSOCKET"
-printf "${GREEN} [04]${WHITE} ➮ Nginx             [%s]\n" "$NGINX"
+printf "${GREEN} [04]${WHITE} ➮ ZIPVPN            [%s]\n" "$ZIPVPN"
 printf "${GREEN} [05]${WHITE} ➮ Dropbear         [%s]\n" "$DROPBEAR"
 printf "${GREEN} [06]${WHITE} ➮ SSL/TLS          [%s]\n" "$SSL"
 printf "${GREEN} [07]${WHITE} ➮ BadVPN           [%s]\n" "$BADVPN"
@@ -76,7 +76,7 @@ case "$OP" in
 ;;
 
 4)
-    bash "$BASE/protocolos/nginx.sh"
+    bash "$BASE/protocolos/zipvpn.sh"
 ;;
 
 5)
