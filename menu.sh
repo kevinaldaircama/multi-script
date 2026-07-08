@@ -25,7 +25,7 @@ if ! grep -q "^OPTIMIZAR=" "$CONFIG"; then
 fi
 
 source "$CONFIG"
-
+ZIPVPN=${ZIPVPN:-OFF}
 OPTIMIZAR=${OPTIMIZAR:-OFF}
 #==============================
 # FIX VARIABLES FALTANTES
