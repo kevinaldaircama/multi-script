@@ -128,7 +128,7 @@ apt install -y wget curl >/dev/null 2>&1
 
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "      🐲 INSTALANDO UDPserver"
+echo "       INSTALANDO UDPserver"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 apt update -y >/dev/null 2>&1
@@ -157,23 +157,6 @@ else
     exit 1
 
 fi
-
-
-cat > /etc/systemd/system/$SERVICE.service <<EOF
-[Unit]
-Description=UDP Custom Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$BIN --listen-addr 0.0.0.0:$PORT --max-clients 999
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 
 systemctl daemon-reload
 
