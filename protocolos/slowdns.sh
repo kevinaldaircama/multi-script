@@ -145,6 +145,8 @@ openssl rand -hex 16 > "$PUBKEY"
 echo ""
 echo "🚀 Configurando SlowDNS..."
 
+PASSWORD=$(cat "$PUBKEY")
+
 cat > /etc/systemd/system/iodined.service <<EOF
 [Unit]
 Description=SlowDNS Iodine Server
@@ -152,10 +154,9 @@ After=network.target
 
 [Service]
 Type=simple
-PASSWORD=$(cat "$PUBKEY")
-
-ExecStart=/usr/sbin/iodined -f -c -P $PASSWORD 10.0.0.1 $DOMAIN
+ExecStart=/usr/sbin/iodined -f -c -P ${PASSWORD} 10.0.0.1 ${DOMAIN}
 Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
