@@ -124,14 +124,48 @@ apt update -y >/dev/null 2>&1
 apt install -y wget curl >/dev/null 2>&1
 
 
-echo "⬇️ Descargando UDP Custom..."
+echo "📦 Instalando dependencias..."
+
+apt install -y git cmake build-essential >/dev/null 2>&1
 
 
-wget -q -O "$BIN" \
-https://raw.githubusercontent.com/ambrop72/badvpn/master/udpgw/badvpn-udpgw
+echo "⬇️ Descargando fuente UDP Custom..."
+
+rm -rf /tmp/udpcustom-build
+
+git clone -q https://github.com/ambrop72/badvpn.git /tmp/udpcustom-build
 
 
-chmod +x "$BIN"
+cd /tmp/udpcustom-build
+
+
+mkdir -p build
+cd build
+
+
+cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 >/dev/null 2>&1
+
+
+make -j$(nproc) >/dev/null 2>&1
+
+
+if [ -f "udpgw/badvpn-udpgw" ]; then
+
+    cp udpgw/badvpn-udpgw "$BIN"
+
+    chmod +x "$BIN"
+
+    echo "✅ Binario UDP Custom creado."
+
+else
+
+    echo "❌ Error compilando UDP Custom."
+    exit 1
+
+fi
+
+
+rm -rf /tmp/udpcustom-build
 
 
 cat > /etc/systemd/system/$SERVICE.service <<EOF
