@@ -25,6 +25,8 @@ REPO_URL="https://github.com/Depwisescript/zivpn-panel.git"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="zivpn-panel"
 BUILD_DIR="/tmp/zivpn-panel-build"
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
 
 install_panel() {
     echo -e "${CYAN}=================================================="
@@ -77,9 +79,17 @@ install_panel() {
     echo -e "${GREEN}=================================================="
     echo -e "   ✅ INSTALACIÓN COMPLETADA"
     echo -e "==================================================${NC}"
-    echo -e ""
-    echo -e "  Ejecuta el panel con:  ${CYAN}zivpn-panel${NC}"
-    echo -e ""
+    if [[ -f "$CONFIG" ]]; then
+    if grep -q "^ZIPVPN=" "$CONFIG"; then
+        sed -i 's/^ZIPVPN=.*/ZIPVPN=ON/' "$CONFIG"
+    else
+        echo "ZIPVPN=ON" >> "$CONFIG"
+    fi
+fi
+
+echo -e ""
+echo -e "  Ejecuta el panel con:  ${CYAN}zivpn-panel${NC}"
+echo -e ""
 }
 
 uninstall_panel() {
@@ -94,7 +104,15 @@ uninstall_panel() {
     fi
 
     log_info "Eliminando binario..."
-    rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+rm -f "${INSTALL_DIR}/${BINARY_NAME}"
+
+if [[ -f "$CONFIG" ]]; then
+    if grep -q "^ZIPVPN=" "$CONFIG"; then
+        sed -i 's/^ZIPVPN=.*/ZIPVPN=OFF/' "$CONFIG"
+    else
+        echo "ZIPVPN=OFF" >> "$CONFIG"
+    fi
+fi
 
     echo -e "${GREEN}=================================================="
     echo -e "   ✅ PANEL DESINSTALADO"
