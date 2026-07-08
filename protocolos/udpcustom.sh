@@ -11,7 +11,7 @@ RED="\e[1;91m"
 WHITE="\e[1;97m"
 RESET="\e[0m"
 
-SERVICE="udp-custom"
+SERVICE="udpcustom"
 PORT="36712"
 
 BIN="/usr/local/bin/udpcustom"
