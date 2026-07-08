@@ -110,7 +110,7 @@ PROTO5=""
 [[ "$BADVPN" == "ON" ]]      && PROTO4+=" ∘ BadVPN:7200/7300"
 [[ "$UDP_CUSTOM" == "ON" ]]  && PROTO4+="    ∘ UDP Custom:36712"
 
-[[ "$SLOWDNS" == "ON" ]]     && PROTO5+=" ∘ SlowDNS:53"      ∘ UDP-Custom: 36712"
+[[ "$SLOWDNS" == "ON" ]]     && PROTO5+=" ∘ SlowDNS:53"
 
 clear
 animacion
@@ -334,7 +334,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "        ✅ ACTUALIZACIÓN COMPLETADA"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "✔️ la script de "kevin tech tutorials" se actualizó correctamente."
+echo '✔️ El script de "Kevin Tech Tutorials" se actualizó correctamente.'
 echo ""
 echo "🚀 Reiniciando el panel espere un momento..."
 echo ""
