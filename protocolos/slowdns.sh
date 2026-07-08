@@ -252,66 +252,45 @@ fi
 
 
 echo ""
-
-echo "SSH destino:"
-echo "127.0.0.1:22"
-
-
-echo ""
-
-echo "Escribe menu para volver"
-
-;;
-
-4)
-
-clear
-
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}          🔐 PUBLIC KEY SLOWDNS${RESET}"
+echo -e "${GREEN}        ✅ SLOWDNS ACTIVADO${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-if [[ -f "$PUBKEY" ]]; then
+IP=$(curl -s ifconfig.me)
 
 echo ""
-
-echo "Copia esta clave en:"
-echo "HTTP Injector"
-echo "HTTP Custom"
-echo "Apps compatibles"
+echo "🌐 Dominio NS:"
+echo "$DOMAIN"
 
 echo ""
+echo "🌍 IP VPS:"
+echo "$IP"
 
-cat $PUBKEY
+echo ""
+echo "📡 Puerto DNS:"
+echo "53"
 
-else
+echo ""
+echo "🔐 SSH DESTINO:"
+echo "Puerto 22 (OpenSSH)"
 
-echo "❌ Public Key no encontrado"
+echo ""
+echo "🔑 PUBLIC KEY:"
+echo ""
+
+cat "$PUBKEY"
+
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+while true; do
+
+read -rp "Escribe menu para volver: " SALIR
+
+if [[ "$SALIR" == "menu" ]]; then
+
+    exec bash "$BASE/protocolos/menu.sh"
 
 fi
-
-
-echo ""
-
-echo "Escribe menu para volver"
-
-;;
-
-0)
-
-exec bash "$BASE/protocolos/menu.sh"
-
-;;
-
-*)
-
-echo ""
-echo "❌ Opción inválida"
-sleep 2
-
-;;
-
-esac
-
 
 done
