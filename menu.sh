@@ -14,7 +14,7 @@ CONFIG="$BASE/config.conf"
 
 if [[ ! -f "$CONFIG" ]]; then
     echo "No se encontró la configuración."
-    echo "Ejecute primero instalar.sh"
+    echo "Ejecute primero install.sh"
     exit 1
 fi
 
@@ -92,25 +92,25 @@ BUFFER=$(free -h | awk '/Mem:/ {print $6}')
 #==============================
 
 PROTO1=""
+PROTO1=""
 PROTO2=""
 PROTO3=""
 PROTO4=""
 PROTO5=""
 
-[[ "$OPENSSH" == "ON" ]]   && PROTO1+=" ∘ SSH: 22"
-[[ "$SYSTEMDNS" == "ON" ]] && PROTO1+="             ∘ System-DNS: 53"
+[[ "$OPENSSH" == "ON" ]]     && PROTO1+=" ∘ OpenSSH:22"
+[[ "$SYSTEMDNS" == "ON" ]]   && PROTO1+="    ∘ SystemDNS:53"
 
-[[ "$WEBSOCKET" == "ON" ]] && PROTO2+=" ∘ WS-Epro: 80"
-[[ "$NGINX" == "ON" ]]     && PROTO2+="         ∘ WEB-NGinx: 81"
+[[ "$WEBSOCKET" == "ON" ]]   && PROTO2+=" ∘ WebSocket:80"
+[[ "$ZIPVPN" == "ON" ]]      && PROTO2+="    ∘ ZIPVPN"
 
-[[ "$DROPBEAR" == "ON" ]]  && PROTO3+=" ∘ DROPBEAR: 90"
-[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && PROTO3+=" ∘ SSL/TUNNEL: 443"
+[[ "$DROPBEAR" == "ON" ]]    && PROTO3+=" ∘ Dropbear:90"
+[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && PROTO3+="    ∘ SSL/TLS:443"
 
-[[ "$CUPSD" == "ON" ]]     && PROTO4+=" ∘ cupsd: 631"
-[[ "$BADVPN" == "ON" ]]    && PROTO4+="          ∘ BadVPN: 7200"
+[[ "$BADVPN" == "ON" ]]      && PROTO4+=" ∘ BadVPN:7200/7300"
+[[ "$UDP_CUSTOM" == "ON" ]]  && PROTO4+="    ∘ UDP Custom:36712"
 
-[[ "$BADVPN" == "ON" ]]    && PROTO5+=" ∘ BadVPN: 7300"
-[[ "$UDP_CUSTOM" == "ON" ]]&& PROTO5+="      ∘ UDP-Custom: 36712"
+[[ "$SLOWDNS" == "ON" ]]     && PROTO5+=" ∘ SlowDNS:53"      ∘ UDP-Custom: 36712"
 
 clear
 animacion
