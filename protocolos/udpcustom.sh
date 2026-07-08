@@ -159,10 +159,8 @@ else
 fi
 
 systemctl daemon-reload
-
-systemctl enable $SERVICE
-
-systemctl restart $SERVICE
+systemctl enable UDPserver
+systemctl restart UDPserver
 
 
 sed -i 's/^UDPCUSTOM=.*/UDPCUSTOM=ON/' "$CONFIG"
@@ -190,7 +188,7 @@ clear
 
 echo "🔄 Reiniciando UDP Custom..."
 
-systemctl restart $SERVICE
+systemctl restart UDPserver
 
 echo ""
 echo "✅ Servicio reiniciado."
@@ -210,7 +208,7 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 echo ""
 
-systemctl status $SERVICE --no-pager
+systemctl status UDPserver --no-pager
 
 
 echo ""
