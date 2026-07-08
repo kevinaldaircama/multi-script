@@ -14,7 +14,7 @@ RESET="\e[0m"
 SERVICE="udp-custom"
 PORT="36712"
 
-BIN="/usr/local/bin/udp-custom"
+BIN="/usr/local/bin/udpcustom"
 
 while true; do
 
