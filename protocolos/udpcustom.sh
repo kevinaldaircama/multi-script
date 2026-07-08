@@ -95,8 +95,11 @@ rm -f "$BIN"
 systemctl daemon-reload
 
 
-sed -i 's/^UDPCUSTOM=.*/UDPCUSTOM=OFF/' "$CONFIG"
-
+if grep -q "^UDPCUSTOM=" "$CONFIG"; then
+    sed -i 's/^UDPCUSTOM=.*/UDPCUSTOM=ON/' "$CONFIG"
+else
+    echo "UDPCUSTOM=ON" >> "$CONFIG"
+fi
 
 UDPCUSTOM="OFF"
 
