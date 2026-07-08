@@ -226,7 +226,7 @@ sleep 2
 # permisos  
   
 chmod -R 777 $BASE  
-chmod +x $BASE/menu.sh  
+
   
 # comando menu  
   
@@ -262,22 +262,23 @@ echo "   ⚙️ Ningún protocolo fue instalado automáticamente"
 echo "   💡 Instala los protocolos desde el menú principal"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-echo "📦 Copiando menú principal..."  
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-mkdir -p /etc/kevintech  
-  
-if [[ -f "./menu.sh" ]]; then
-    cp -f "./menu.sh" /etc/kevintech/menu.sh
-elif [[ -f "/root/multi-script/menu.sh" ]]; then
-    cp -f "/root/multi-script/menu.sh" /etc/kevintech/menu.sh
-fi
+echo "📥 Descargando KevinTech Multi Script..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-chmod +x /etc/kevintech/menu.sh
-  
-if [[ ! -f /etc/kevintech/menu.sh ]]; then  
-echo "❌ ERROR: menu.sh no fue instalado"  
-exit 1  
-fi  
+rm -rf /tmp/multi-script
+
+git clone https://github.com/kevinaldaircama/multi-script.git /tmp/multi-script
+
+cp -r /tmp/multi-script/* /etc/kevintech/
+
+chmod -R +x /etc/kevintech
+
+rm -rf /tmp/multi-script
+
+if [[ ! -f /etc/kevintech/menu.sh ]]; then
+    echo "❌ ERROR: menu.sh no fue instalado"
+    exit 1
+fi
   
 echo ""  
 echo "💻 Abriendo menú..."  
