@@ -249,48 +249,49 @@ echo "Dominio NS:"
 cat $DOMAIN_FILE
 
 fi
+;;
 
+4)
 
-echo ""
+clear
+
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${GREEN}        ✅ SLOWDNS ACTIVADO${RESET}"
+echo -e "${WHITE}          🔑 PUBLIC KEY SLOWDNS${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-IP=$(curl -s ifconfig.me)
+if [[ -f "$PUBKEY" ]]; then
 
 echo ""
-echo "🌐 Dominio NS:"
-echo "$DOMAIN"
-
-echo ""
-echo "🌍 IP VPS:"
-echo "$IP"
-
-echo ""
-echo "📡 Puerto DNS:"
-echo "53"
-
-echo ""
-echo "🔐 SSH DESTINO:"
-echo "Puerto 22 (OpenSSH)"
-
-echo ""
-echo "🔑 PUBLIC KEY:"
-echo ""
-
 cat "$PUBKEY"
 
+else
+
+echo "❌ No existe Public Key"
+
+fi
+
 echo ""
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-while true; do
-
 read -rp "Escribe menu para volver: " SALIR
 
 if [[ "$SALIR" == "menu" ]]; then
-
     exec bash "$BASE/protocolos/menu.sh"
-
 fi
+
+;;
+
+0)
+
+exec bash "$BASE/protocolos/menu.sh"
+
+;;
+
+*)
+
+echo "❌ Opción inválida"
+sleep 2
+
+;;
+
+esac
 
 done
