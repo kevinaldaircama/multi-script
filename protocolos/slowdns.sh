@@ -12,8 +12,9 @@ WHITE="\e[1;97m"
 RESET="\e[0m"
 
 SERVICE="iodined"
-PORT="53"
-DOMAIN="${SERVER_DOMAIN}"
+
+DNS_PORT="53"
+SSH_PORT="22"
 
 while true; do
 
@@ -28,17 +29,17 @@ else
 fi
 
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}              🐌 SLOWDNS MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}             🐌 SLOWDNS MANAGER${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e " Estado     : $STATUS"
-echo -e " Puerto DNS : $PORT UDP"
-echo -e " Servicio   : Iodine DNS Tunnel"
-echo -e " Dominio    : ${DOMAIN:-NO CONFIGURADO}"
+echo -e " Estado    : $STATUS"
+echo -e " DNS       : ${SLOWDNS_DOMAIN:-NO CONFIGURADO}"
+echo -e " Puerto    : $DNS_PORT UDP"
+echo -e " SSH       : $SSH_PORT OpenSSH"
 
 echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 
 if [[ "$SLOWDNS" == "ON" ]]; then
@@ -60,7 +61,7 @@ EOF
 fi
 
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 read -rp " ► Opción: " OP
 
@@ -70,74 +71,65 @@ case "$OP" in
 
 1)
 
-if [[ "$SLOWDNS" == "ON" ]]; then
-
-
-read -rp "¿Eliminar SlowDNS? (s/n): " R
-
-[[ "$R" != "s" ]] && continue
-
-
-systemctl stop $SERVICE 2>/dev/null
-systemctl disable $SERVICE 2>/dev/null
-
-
-apt remove iodine -y >/dev/null 2>&1
-
-
-rm -f /etc/systemd/system/$SERVICE.service
-
-
-systemctl daemon-reload
-
-
-sed -i 's/^SLOWDNS=.*/SLOWDNS=OFF/' "$CONFIG"
-
-SLOWDNS="OFF"
-
-
-echo ""
-echo "✅ SlowDNS eliminado."
-
-
-else
+if [[ "$SLOWDNS" == "OFF" ]]; then
 
 
 clear
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "        INSTALANDO SLOWDNS"
+echo "        INSTALAR SLOWDNS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+read -rp "Ingrese su dominio NS (ej: ns1.dominio.com): " NS_DOMAIN
 
-if [[ -z "$SERVER_DOMAIN" ]]; then
 
-echo "❌ Falta dominio configurado."
+if [[ -z "$NS_DOMAIN" ]]; then
 
+echo "❌ Dominio vacío."
 sleep 3
 continue
 
 fi
 
 
+echo ""
+echo "📦 Instalando dependencias..."
+
 apt update -y >/dev/null 2>&1
 
 apt install -y iodine >/dev/null 2>&1
 
 
-echo "🔐 Creando servicio SlowDNS..."
+echo "🔓 Desbloqueando servicio..."
+
+systemctl unmask iodined >/dev/null 2>&1
 
 
-cat > /etc/systemd/system/$SERVICE.service <<EOF
+echo "🌐 Liberando puerto DNS 53..."
+
+systemctl disable --now systemd-resolved >/dev/null 2>&1
+
+rm -f /etc/resolv.conf
+
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+
+
+echo "⚙️ Creando servicio SlowDNS..."
+
+
+cat > /etc/systemd/system/iodined.service <<EOF
 
 [Unit]
-Description=SlowDNS DNS Tunnel
+Description=SlowDNS Tunnel Server
 After=network.target
 
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/iodined -f -c -P kevintech 10.0.0.1 dns.${DOMAIN}
+
+ExecStart=/usr/sbin/iodined -f -c -P kevintech 10.0.0.1 $NS_DOMAIN
+
 Restart=always
 RestartSec=5
 
@@ -148,25 +140,77 @@ WantedBy=multi-user.target
 EOF
 
 
+
 systemctl daemon-reload
 
-systemctl enable $SERVICE
+systemctl enable iodined
 
-systemctl restart $SERVICE
+systemctl restart iodined
+
 
 
 sed -i 's/^SLOWDNS=.*/SLOWDNS=ON/' "$CONFIG"
 
+if grep -q "^SLOWDNS_DOMAIN=" "$CONFIG"; then
+
+sed -i "s/^SLOWDNS_DOMAIN=.*/SLOWDNS_DOMAIN=$NS_DOMAIN/" "$CONFIG"
+
+else
+
+echo "SLOWDNS_DOMAIN=$NS_DOMAIN" >> "$CONFIG"
+
+fi
+
+
 SLOWDNS="ON"
+
+SLOWDNS_DOMAIN="$NS_DOMAIN"
+
 
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "       ✅ SLOWDNS ACTIVADO"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 echo ""
-echo "DNS Puerto : 53"
-echo "Dominio    : dns.$DOMAIN"
+echo "🌐 NS Dominio : $NS_DOMAIN"
+echo "🔌 DNS Puerto : 53 UDP"
+echo "🔐 SSH Puerto : 22"
+echo "🔑 Password   : kevintech"
+echo ""
+echo "📱 Configuración App:"
+echo "NS Host  : $NS_DOMAIN"
+echo "SSH Host : IP DEL VPS"
+echo "SSH Port : 22"
+
+
+else
+
+
+read -rp "¿Eliminar SlowDNS? (s/n): " R
+
+[[ "$R" != "s" ]] && continue
+
+
+systemctl stop iodined 2>/dev/null
+
+systemctl disable iodined 2>/dev/null
+
+
+rm -f /etc/systemd/system/iodined.service
+
+
+apt remove iodine -y >/dev/null 2>&1
+
+
+sed -i 's/^SLOWDNS=.*/SLOWDNS=OFF/' "$CONFIG"
+
+
+SLOWDNS="OFF"
+
+
+echo "✅ SlowDNS eliminado."
 
 
 fi
@@ -179,9 +223,8 @@ sleep 3
 
 2)
 
-systemctl restart $SERVICE
+systemctl restart iodined
 
-echo ""
 echo "✅ SlowDNS reiniciado."
 
 sleep 2
@@ -194,14 +237,14 @@ sleep 2
 clear
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "        ESTADO SLOWDNS"
+echo "          ESTADO SLOWDNS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-systemctl status $SERVICE --no-pager
+systemctl status iodined --no-pager
 
 
 echo ""
-echo "Puerto DNS:"
+
 ss -ulnp | grep ":53"
 
 
