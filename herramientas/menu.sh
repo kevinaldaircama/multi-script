@@ -27,7 +27,7 @@ printf "${GREEN} [03]${WHITE} ➮ Speedtest\n"
 printf "${GREEN} [04]${WHITE} ➮ Detalles VPS\n"
 printf "${GREEN} [05]${WHITE} ➮ Block Ads\n"
 printf "${GREEN} [06]${WHITE} ➮ Cambiar contraseña Root\n"
-
+printf "${GREEN} [07]${WHITE} ➮ scanner host o dominio\n"
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW} [00]${WHITE} ➮ Regresar${RESET}"
@@ -61,7 +61,9 @@ case "$OP" in
 6)
     bash "$BASE/herramientas/rootpass.sh"
 ;;
-
+7)
+    bash "$BASE/herramientas/scanner.sh"
+;;
 0)
     exec bash "$BASE/protocolos/menu.sh"
 ;;
