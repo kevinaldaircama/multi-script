@@ -28,34 +28,30 @@ RESET="\e[0m"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${MAGENTA}        🛡️ KevinTech Multi Script 🛡️${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${YELLOW}            📢 INSTALADOR DE PROTOCOLOS${RESET}"
+echo -e "${YELLOW}               📡 PROTOCOLOS${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-printf "${GREEN} [01]${WHITE} ➮ OpenSSH           [%s]\n" "$OPENSSH"
-printf "${GREEN} [02]${WHITE} ➮ System DNS        [%s]\n" "$SYSTEMDNS"
-printf "${GREEN} [03]${WHITE} ➮ WebSocket         [%s]\n" "$WEBSOCKET"
-printf "${GREEN} [04]${WHITE} ➮ ZIPVPN            [%s]\n" "$ZIPVPN"
-printf "${GREEN} [05]${WHITE} ➮ Dropbear         [%s]\n" "$DROPBEAR"
-printf "${GREEN} [06]${WHITE} ➮ SSL/TLS          [%s]\n" "$SSL"
-printf "${GREEN} [07]${WHITE} ➮ BadVPN           [%s]\n" "$BADVPN"
-printf "${GREEN} [08]${WHITE} ➮ UDP Custom       [%s]\n" "$UDP_CUSTOM"
-printf "${GREEN} [09]${WHITE} ➮ SlowDNS         [%s]\n" "$SLOWDNS"
+printf "${GREEN} [01]${WHITE} ➮ OpenSSH        [%s]\n" "$OPENSSH"
+printf "${GREEN} [02]${WHITE} ➮ WebSocket      [%s]\n" "$WEBSOCKET"
+printf "${GREEN} [03]${WHITE} ➮ ZIPVPN         [%s]\n" "$ZIPVPN"
+printf "${GREEN} [04]${WHITE} ➮ Dropbear       [%s]\n" "$DROPBEAR"
+printf "${GREEN} [05]${WHITE} ➮ SSL/TLS        [%s]\n" "$SSL"
+printf "${GREEN} [06]${WHITE} ➮ BadVPN         [%s]\n" "$BADVPN"
+printf "${GREEN} [07]${WHITE} ➮ UDP Custom     [%s]\n" "$UDP_CUSTOM"
+printf "${GREEN} [08]${WHITE} ➮ SlowDNS        [%s]\n" "$SLOWDNS"
+
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${YELLOW}            🛠 HERRAMIENTAS${RESET}"
+echo -e "${YELLOW}                 🛠 SISTEMA${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-printf "${GREEN} [10]${WHITE} ➮ Block Torrent\n"
-printf "${GREEN} [11]${WHITE} ➮ Archivo Online\n"
-printf "${GREEN} [12]${WHITE} ➮ Speedtest\n"
-printf "${GREEN} [13]${WHITE} ➮ Detalles VPS\n"
-printf "${GREEN} [14]${WHITE} ➮ Block Ads\n"
-printf "${GREEN} [15]${WHITE} ➮ Herramientas\n"
-printf "${GREEN} [16]${WHITE} ➮ Reiniciar Servicios\n"
-printf "${GREEN} [17]${WHITE} ➮ Firewall\n"
-printf "${GREEN} [18]${WHITE} ➮ Cambiar contraseña Root\n"
 
+printf "${GREEN} [09]${WHITE} ➮ Herramientas\n"
+printf "${GREEN} [10]${WHITE} ➮ Reiniciar Servicios\n"
+printf "${GREEN} [11]${WHITE} ➮ Firewall\n"
+
+echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${YELLOW} [0]${WHITE} ➮ Regresar${RESET}"
+echo -e "${YELLOW} [00]${WHITE} ➮ Regresar${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo ""
@@ -64,85 +60,57 @@ read -rp " ► Opción: " OP
 case "$OP" in
 
 1)
-    bash "$BASE/protocolos/openssh.sh"
+bash "$BASE/protocolos/openssh.sh"
 ;;
 
 2)
-    bash "$BASE/protocolos/systemdns.sh"
+bash "$BASE/protocolos/websocket.sh"
 ;;
 
 3)
-    bash "$BASE/protocolos/websocket.sh"
+bash "$BASE/protocolos/zipvpn.sh"
 ;;
 
 4)
-    bash "$BASE/protocolos/zipvpn.sh"
+bash "$BASE/protocolos/dropbear.sh"
 ;;
 
 5)
-    bash "$BASE/protocolos/dropbear.sh"
+bash "$BASE/protocolos/ssl.sh"
 ;;
 
 6)
-    bash "$BASE/protocolos/ssl.sh"
+bash "$BASE/protocolos/badvpn.sh"
 ;;
 
 7)
-    bash "$BASE/protocolos/badvpn.sh"
+bash "$BASE/protocolos/udpcustom.sh"
 ;;
 
 8)
-    bash "$BASE/protocolos/udpcustom.sh"
+bash "$BASE/protocolos/slowdns.sh"
 ;;
 
 9)
-    bash "$BASE/protocolos/slowdns.sh"
+bash "$BASE/herramientas/menu.sh"
 ;;
 
 10)
-    bash "$BASE/herramientas/blocktorrent.sh"
+bash "$BASE/herramientas/reiniciar.sh"
 ;;
 
 11)
-    bash "$BASE/herramientas/archivoonline.sh"
-;;
-
-12)
-    bash "$BASE/herramientas/speedtest.sh"
-;;
-
-13)
-    bash "$BASE/herramientas/detalles.sh"
-;;
-
-14)
-    bash "$BASE/herramientas/blockads.sh"
-;;
-
-15)
-    bash "$BASE/herramientas/menu.sh"
-;;
-
-16)
-    bash "$BASE/herramientas/reiniciar.sh"
-;;
-
-17)
-    bash "$BASE/herramientas/firewall.sh"
-;;
-
-18)
-    bash "$BASE/herramientas/rootpass.sh"
+bash "$BASE/herramientas/firewall.sh"
 ;;
 
 0)
-    exec bash "$BASE/menu.sh"
+exec bash "$BASE/menu.sh"
 ;;
 
 *)
-    echo "❌ Opción inválida."
-    sleep 2
-    exec bash "$BASE/protocolos/menu.sh"
+echo "❌ Opción inválida."
+sleep 2
+exec bash "$BASE/protocolos/menu.sh"
 ;;
 
 esac
