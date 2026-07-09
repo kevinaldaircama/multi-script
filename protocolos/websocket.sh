@@ -1,76 +1,486 @@
 #!/bin/bash
 
-BASE="/etc/kevintech"
-CONFIG="$BASE/config.conf"
+# ═══════════════════════════════════════════════
+# KevinTech WebSocket Universal Installer
+# Compatible Ubuntu 18.04 / 20.04 / 22.04 / 24.04
+# Parte 1/4
+# ═══════════════════════════════════════════════
 
-[[ -f "$CONFIG" ]] || exit 1
+set -e
 
-source "$CONFIG"
-
-CYAN="\e[1;96m"
+# Colores
 GREEN="\e[1;92m"
 RED="\e[1;91m"
+CYAN="\e[1;96m"
+YELLOW="\e[1;93m"
 WHITE="\e[1;97m"
 RESET="\e[0m"
 
-SERVICE="websocket"
-PORT="80"
-TARGET="127.0.0.1:22"
+
+BASE="/etc/kevintech"
+WS_DIR="$BASE/websocket"
+CONFIG="$BASE/config.conf"
 
 
-instalar(){
+# ===============================
+# ROOT
+# ===============================
+
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}Ejecuta este script como root${RESET}"
+    exit 1
+fi
+
+
+# ===============================
+# DETECTAR UBUNTU
+# ===============================
 
 clear
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "      INSTALANDO WEBSOCKET"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-echo "📦 Instalando dependencias..."
-
-apt update -y >/dev/null 2>&1
-apt install -y wget tar curl >/dev/null 2>&1
+echo -e "${CYAN}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  KevinTech WebSocket"
+echo "  Instalador Universal"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${RESET}"
 
 
-echo "📥 Instalando wstunnel..."
+if [[ -f /etc/os-release ]]; then
+
+    source /etc/os-release
+
+    echo -e "${WHITE}Sistema:${RESET} $PRETTY_NAME"
+
+else
+
+    echo -e "${RED}No se pudo detectar el sistema${RESET}"
+    exit 1
+
+fi
+
+
+if [[ "$ID" != "ubuntu" ]]; then
+
+    echo -e "${YELLOW}Advertencia: No es Ubuntu${RESET}"
+    echo "Intentando continuar..."
+
+fi
+
+
+# ===============================
+# ARQUITECTURA
+# ===============================
 
 ARCH=$(uname -m)
 
-if [[ "$ARCH" == "x86_64" ]]; then
-URL="https://github.com/erebe/wstunnel/releases/latest/download/wstunnel_linux_amd64"
-else
-URL="https://github.com/erebe/wstunnel/releases/latest/download/wstunnel_linux_arm64"
+echo -e "${WHITE}Arquitectura:${RESET} $ARCH"
+
+
+case "$ARCH" in
+
+x86_64)
+    CPU="amd64"
+;;
+
+aarch64|arm64)
+    CPU="arm64"
+;;
+
+armv7*)
+    CPU="arm"
+;;
+
+*)
+    CPU="unknown"
+;;
+
+esac
+
+
+echo -e "${WHITE}CPU:${RESET} $CPU"
+
+
+# ===============================
+# INSTALAR DEPENDENCIAS
+# ===============================
+
+echo ""
+echo -e "${CYAN}Instalando dependencias...${RESET}"
+
+
+apt update -y >/dev/null 2>&1
+
+
+apt install -y \
+python3 \
+python3-pip \
+curl \
+wget \
+net-tools \
+procps \
+openssh-server \
+lsof \
+>/dev/null 2>&1
+
+
+
+echo -e "${GREEN}✔ Dependencias instaladas${RESET}"
+
+
+# ===============================
+# CREAR DIRECTORIOS
+# ===============================
+
+mkdir -p "$WS_DIR"
+
+
+# ===============================
+# CREAR CONFIG
+# ===============================
+
+if [[ ! -f "$CONFIG" ]]; then
+
+cat > "$CONFIG" <<EOF
+
+# KevinTech WebSocket Config
+
+WEBSOCKET=OFF
+
+WS_PORT=80
+
+SSH_PORT=22
+
+DOMAIN=
+
+EOF
+
 fi
 
 
-wget -q "$URL" -O /usr/local/bin/wstunnel
+echo -e "${GREEN}✔ Configuración creada${RESET}"
 
 
-if [[ ! -f /usr/local/bin/wstunnel ]]; then
+echo ""
+echo -e "${CYAN}Base instalada correctamente.${RESET}"
+echo ""
+echo "Siguiente parte:"
+echo "→ Crear motor WebSocket Python compatible con cualquier payload"
 
-echo "❌ Error descargando wstunnel"
 sleep 3
-return
+# ===============================
+# CREAR PROXY WEBSOCKET PYTHON
+# ===============================
 
-fi
+PROXY="$WS_DIR/proxy.py"
 
 
-chmod +x /usr/local/bin/wstunnel
+cat > "$PROXY" <<'PYEOF'
+#!/usr/bin/env python3
+
+import asyncio
+import signal
+import sys
 
 
-echo "⚙️ Creando servicio..."
+BUFFER = 65535
 
-cat > /etc/systemd/system/websocket.service <<EOF
+SSH_HOST = "127.0.0.1"
+
+
+connections = 0
+
+
+RESPONSE_WS = (
+    b"HTTP/1.1 101 Switching Protocols\r\n"
+    b"Upgrade: websocket\r\n"
+    b"Connection: Upgrade\r\n"
+    b"\r\n"
+)
+
+
+RESPONSE_CONNECT = (
+    b"HTTP/1.1 200 Connection Established\r\n"
+    b"\r\n"
+)
+
+
+RESPONSE_OK = (
+    b"HTTP/1.1 200 OK\r\n"
+    b"Content-Length: 0\r\n"
+    b"\r\n"
+)
+
+
+
+async def pipe(reader, writer):
+
+    try:
+
+        while True:
+
+            data = await reader.read(BUFFER)
+
+            if not data:
+                break
+
+
+            writer.write(data)
+            await writer.drain()
+
+
+    except Exception:
+        pass
+
+
+    finally:
+
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except:
+            pass
+
+
+
+
+async def client_handler(reader, writer):
+
+    global connections
+
+    connections += 1
+
+
+    ssh_writer = None
+
+
+    try:
+
+
+        # Leer primer paquete del cliente
+
+        try:
+
+            request = await asyncio.wait_for(
+                reader.read(BUFFER),
+                timeout=10
+            )
+
+        except:
+
+            writer.close()
+            return
+
+
+
+        if not request:
+
+            writer.close()
+            return
+
+
+
+        text = request.decode(
+            "utf-8",
+            errors="ignore"
+        ).upper()
+
+
+
+        # Aceptar diferentes payloads
+
+
+        if (
+            "UPGRADE: WEBSOCKET" in text
+            or "UPGRADE" in text
+            or "WEBSOCKET" in text
+        ):
+
+            writer.write(RESPONSE_WS)
+
+
+
+        elif text.startswith("CONNECT"):
+
+            writer.write(RESPONSE_CONNECT)
+
+
+
+        else:
+
+            writer.write(RESPONSE_OK)
+
+
+
+        await writer.drain()
+
+
+
+        # Conectar SSH
+
+
+        ssh_reader, ssh_writer = await asyncio.open_connection(
+            SSH_HOST,
+            SSH_PORT
+        )
+
+
+
+        print(
+            "[+] Cliente conectado"
+        )
+
+
+
+        # Enviar resto del tráfico recibido
+
+        if request:
+
+            ssh_writer.write(request)
+            await ssh_writer.drain()
+
+
+
+        await asyncio.gather(
+
+            pipe(reader, ssh_writer),
+
+            pipe(ssh_reader, writer)
+
+        )
+
+
+
+    except Exception as e:
+
+        print(
+            "[ERROR]",
+            e
+        )
+
+
+    finally:
+
+
+        connections -= 1
+
+
+        try:
+            writer.close()
+        except:
+            pass
+
+
+        if ssh_writer:
+
+            try:
+                ssh_writer.close()
+            except:
+                pass
+
+
+
+
+
+async def start(port):
+
+
+    global SSH_PORT
+
+
+    server = await asyncio.start_server(
+
+        client_handler,
+
+        "0.0.0.0",
+
+        port
+
+    )
+
+
+    print(
+        f"KevinTech WebSocket activo en puerto {port}"
+    )
+
+
+    async with server:
+
+        await server.serve_forever()
+
+
+
+
+
+def stop():
+
+    print(
+        "Deteniendo servidor..."
+    )
+
+    sys.exit(0)
+
+
+
+
+
+if __name__ == "__main__":
+
+
+    if len(sys.argv) < 3:
+
+        print(
+            "Uso: proxy.py PUERTO SSH_PORT"
+        )
+
+        sys.exit(1)
+
+
+
+    PORT = int(sys.argv[1])
+
+    SSH_PORT = int(sys.argv[2])
+
+
+
+    signal.signal(
+        signal.SIGTERM,
+        lambda x,y: stop()
+    )
+
+
+    asyncio.run(
+        start(PORT)
+    )
+
+PYEOF
+
+
+chmod +x "$PROXY"
+# ===============================
+# CREAR SERVICIO SYSTEMD
+# ===============================
+
+SERVICE="/etc/systemd/system/kevintech-websocket.service"
+
+
+cat > "$SERVICE" <<EOF
 [Unit]
-Description=KevinTech WebSocket SSH Tunnel
-After=network.target
+Description=KevinTech Universal WebSocket SSH
+After=network.target ssh.service sshd.service
+Wants=ssh.service
 
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/wstunnel server ws://0.0.0.0:$PORT --restrict-to 127.0.0.1:22
+
+ExecStart=/usr/bin/python3 $WS_DIR/proxy.py 80 22
+
 Restart=always
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
 
 
 [Install]
@@ -78,204 +488,287 @@ WantedBy=multi-user.target
 EOF
 
 
-systemctl daemon-reload
-
-systemctl enable websocket
-systemctl restart websocket
-
-
-sed -i 's/^WEBSOCKET=.*/WEBSOCKET=ON/' "$CONFIG"
-
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ WEBSOCKET INSTALADO"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "🌐 Puerto : $PORT"
-echo "➡ SSH    : $TARGET"
-
-sleep 4
-
-}
-desinstalar(){
-
-clear
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "    DESINSTALANDO WEBSOCKET"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-read -rp "¿Eliminar WebSocket? (s/n): " RESP
-
-if [[ "$RESP" =~ ^[Ss]$ ]]; then
-
-systemctl stop websocket 2>/dev/null
-systemctl disable websocket 2>/dev/null
-
-rm -f /etc/systemd/system/websocket.service
-rm -f /usr/local/bin/wstunnel
 
 systemctl daemon-reload
 
-sed -i 's/^WEBSOCKET=.*/WEBSOCKET=OFF/' "$CONFIG"
 
-WEBSOCKET="OFF"
 
-echo ""
-echo "✅ WebSocket eliminado."
+echo -e "${GREEN}✔ Servicio creado${RESET}"
+
+
+
+# ===============================
+# ACTIVAR SERVICIO
+# ===============================
+
+
+systemctl enable kevintech-websocket.service \
+>/dev/null 2>&1
+
+
+
+systemctl restart kevintech-websocket.service
+
+
+
+sleep 2
+
+
+
+# ===============================
+# VERIFICAR ESTADO
+# ===============================
+
+
+if systemctl is-active --quiet kevintech-websocket.service
+
+then
+
+
+echo -e "${GREEN}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo " WebSocket ACTIVO"
+echo " Puerto : 80"
+echo " SSH    : 22"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${RESET}"
+
+
+sed -i \
+'s/^WEBSOCKET=.*/WEBSOCKET=ON/' \
+"$CONFIG"
+
+
 
 else
 
+
+echo -e "${RED}"
+echo "Error iniciando WebSocket"
+echo -e "${RESET}"
+
+
+journalctl \
+-u kevintech-websocket.service \
+-n 20 \
+--no-pager
+
+
+
+fi
+# ===============================
+# FUNCIONES DEL MENU
+# ===============================
+
+
+estado_ws(){
+
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ESTADO WEBSOCKET"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+
+systemctl status kevintech-websocket \
+--no-pager
+
+
 echo ""
-echo "❌ Cancelado."
+
+ss -tulpn | grep :80 || \
+echo "Puerto 80 no activo"
+
+
+read -n1 -r -p "Presiona una tecla..."
+
+}
+
+
+
+reiniciar_ws(){
+
+clear
+
+echo "Reiniciando WebSocket..."
+
+systemctl restart kevintech-websocket
+
+
+sleep 2
+
+
+if systemctl is-active --quiet kevintech-websocket
+then
+echo "✅ Reiniciado correctamente"
+else
+echo "❌ Error al reiniciar"
+fi
+
+
+sleep 2
+
+}
+
+
+
+desinstalar_ws(){
+
+
+clear
+
+
+read -rp "¿Eliminar WebSocket? (s/n): " R
+
+
+if [[ "$R" =~ ^[Ss]$ ]]
+
+then
+
+
+systemctl stop kevintech-websocket 2>/dev/null
+
+systemctl disable kevintech-websocket 2>/dev/null
+
+
+rm -f /etc/systemd/system/kevintech-websocket.service
+
+rm -rf "$WS_DIR"
+
+
+systemctl daemon-reload
+
+
+
+sed -i \
+'s/^WEBSOCKET=.*/WEBSOCKET=OFF/' \
+"$CONFIG"
+
+
+
+echo "✅ WebSocket eliminado"
+
+
+else
+
+echo "Cancelado"
 
 fi
 
-sleep 3
+
+sleep 2
 
 }
 
 
-reiniciar(){
+
+
+
+menu_ws(){
+
+
+while true
+
+do
+
 
 clear
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "    REINICIANDO WEBSOCKET"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-systemctl restart websocket
-
-echo "✅ Servicio reiniciado."
-
-sleep 3
-
-}
-
-
-estado(){
-
-clear
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       ESTADO WEBSOCKET"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-systemctl status websocket --no-pager
-
-echo ""
-read -n1 -r -p "Presione una tecla para continuar..."
-
-}
-while true; do
-
-clear
 
 source "$CONFIG"
 
-if [[ "$WEBSOCKET" == "ON" ]]; then
-    STATUS="${GREEN}🟢 ACTIVO${RESET}"
+
+
+if [[ "$WEBSOCKET" == "ON" ]]
+
+then
+
+STATUS="🟢 ACTIVO"
+
 else
-    STATUS="${RED}🔴 DESINSTALADO${RESET}"
+
+STATUS="🔴 OFF"
+
 fi
 
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}          🌐 WEBSOCKET MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e " Estado     : $STATUS"
-echo -e " Puerto     : $PORT"
-echo -e " Destino    : $TARGET"
-echo -e " Servicio   : $SERVICE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  🌐 KevinTech WebSocket"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+
+echo "Estado : $STATUS"
+echo "Puerto : $WS_PORT"
+echo "SSH    : $SSH_PORT"
 
 echo ""
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo "[1] Instalar"
+echo "[2] Estado"
+echo "[3] Reiniciar"
+echo "[4] Desinstalar"
+echo "[0] Salir"
+
+echo ""
+
+read -rp "Opción: " OP
 
 
-if [[ "$WEBSOCKET" == "ON" ]]; then
 
-cat <<EOF
- [1] ➮ Desinstalar WebSocket
- [2] ➮ Reiniciar Servicio
- [3] ➮ Ver Estado
- [0] ➮ Regresar
-EOF
-
-else
-
-cat <<EOF
- [1] ➮ Instalar WebSocket
- [0] ➮ Regresar
-EOF
-
-fi
-
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-read -rp " ► Opción: " OP
-
-
-case "$OP" in
+case $OP in
 
 
 1)
 
-if [[ "$WEBSOCKET" == "ON" ]]; then
-
-desinstalar
-
-else
-
-instalar
-
-fi
+bash "$0" install
 
 ;;
 
 
 2)
 
-if [[ "$WEBSOCKET" == "ON" ]]; then
-
-reiniciar
-
-fi
+estado_ws
 
 ;;
 
 
 3)
 
-if [[ "$WEBSOCKET" == "ON" ]]; then
+reiniciar_ws
 
-estado
+;;
 
-fi
+
+4)
+
+desinstalar_ws
 
 ;;
 
 
 0)
 
-exec bash "$BASE/protocolos/menu.sh"
+break
 
 ;;
 
 
 *)
 
-echo ""
-echo "❌ Opción inválida."
+echo "Opción inválida"
 sleep 2
 
 ;;
 
+
 esac
 
+
 done
+
+}
+
+
+
+# Ejecutar menú
+
+menu_ws
