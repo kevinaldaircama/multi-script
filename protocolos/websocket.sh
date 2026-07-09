@@ -170,6 +170,7 @@ echo "→ Crear motor WebSocket Python compatible con cualquier payload"
 sleep 3
 # ===============================
 # CREAR PROXY WEBSOCKET PYTHON
+# COMPATIBLE CON PAYLOADS PERSONALIZADOS
 # ===============================
 
 PROXY="$WS_DIR/proxy.py"
@@ -185,13 +186,11 @@ import sys
 
 BUFFER = 65535
 
-SSH_HOST = "127.0.0.1"
-
-
 connections = 0
 
 
-RESPONSE_WS = (
+# Respuesta WebSocket
+WS_RESPONSE = (
     b"HTTP/1.1 101 Switching Protocols\r\n"
     b"Upgrade: websocket\r\n"
     b"Connection: Upgrade\r\n"
@@ -199,18 +198,11 @@ RESPONSE_WS = (
 )
 
 
-RESPONSE_CONNECT = (
+# Respuesta CONNECT
+CONNECT_RESPONSE = (
     b"HTTP/1.1 200 Connection Established\r\n"
     b"\r\n"
 )
-
-
-RESPONSE_OK = (
-    b"HTTP/1.1 200 OK\r\n"
-    b"Content-Length: 0\r\n"
-    b"\r\n"
-)
-
 
 
 async def pipe(reader, writer):
@@ -223,7 +215,6 @@ async def pipe(reader, writer):
 
             if not data:
                 break
-
 
             writer.write(data)
             await writer.drain()
@@ -244,12 +235,11 @@ async def pipe(reader, writer):
 
 
 
-async def client_handler(reader, writer):
+async def handler(client_reader, client_writer):
 
     global connections
 
     connections += 1
-
 
     ssh_writer = None
 
@@ -257,95 +247,95 @@ async def client_handler(reader, writer):
     try:
 
 
-        # Leer primer paquete del cliente
+        # Leer payload inicial
 
         try:
 
-            request = await asyncio.wait_for(
-                reader.read(BUFFER),
+            payload = await asyncio.wait_for(
+                client_reader.read(BUFFER),
                 timeout=10
             )
 
         except:
 
-            writer.close()
+            client_writer.close()
             return
 
 
 
-        if not request:
+        if not payload:
 
-            writer.close()
+            client_writer.close()
             return
 
 
 
-        text = request.decode(
+        text = payload.decode(
             "utf-8",
             errors="ignore"
         ).upper()
 
 
 
-        # Aceptar diferentes payloads
-
+        # Aceptar cualquier payload
 
         if (
-            "UPGRADE: WEBSOCKET" in text
-            or "UPGRADE" in text
+            "UPGRADE" in text
             or "WEBSOCKET" in text
         ):
 
-            writer.write(RESPONSE_WS)
-
+            client_writer.write(
+                WS_RESPONSE
+            )
 
 
         elif text.startswith("CONNECT"):
 
-            writer.write(RESPONSE_CONNECT)
-
+            client_writer.write(
+                CONNECT_RESPONSE
+            )
 
 
         else:
 
-            writer.write(RESPONSE_OK)
+            client_writer.write(
+                WS_RESPONSE
+            )
+
+
+        await client_writer.drain()
 
 
 
-        await writer.drain()
-
-
-
-        # Conectar SSH
-
+        # Conectar SSH limpio
 
         ssh_reader, ssh_writer = await asyncio.open_connection(
-            SSH_HOST,
+            "127.0.0.1",
             SSH_PORT
         )
 
 
-
         print(
-            "[+] Cliente conectado"
+            "[+] SSH conectado"
         )
 
 
-
-        # Enviar resto del tráfico recibido
-
-        if request:
-
-            ssh_writer.write(request)
-            await ssh_writer.drain()
-
+        # IMPORTANTE:
+        # NO enviar payload HTTP a SSH
+        # Solo pasa tráfico nuevo
 
 
         await asyncio.gather(
 
-            pipe(reader, ssh_writer),
+            pipe(
+                client_reader,
+                ssh_writer
+            ),
 
-            pipe(ssh_reader, writer)
+            pipe(
+                ssh_reader,
+                client_writer
+            )
 
         )
 
@@ -366,7 +356,7 @@ async def client_handler(reader, writer):
 
 
         try:
-            writer.close()
+            client_writer.close()
         except:
             pass
 
@@ -381,16 +371,12 @@ async def client_handler(reader, writer):
 
 
 
-
 async def start(port):
-
-
-    global SSH_PORT
 
 
     server = await asyncio.start_server(
 
-        client_handler,
+        handler,
 
         "0.0.0.0",
 
@@ -400,26 +386,13 @@ async def start(port):
 
 
     print(
-        f"KevinTech WebSocket activo en puerto {port}"
+        f"KevinTech WebSocket activo : {port}"
     )
 
 
     async with server:
 
         await server.serve_forever()
-
-
-
-
-
-def stop():
-
-    print(
-        "Deteniendo servidor..."
-    )
-
-    sys.exit(0)
-
 
 
 
@@ -441,12 +414,6 @@ if __name__ == "__main__":
 
     SSH_PORT = int(sys.argv[2])
 
-
-
-    signal.signal(
-        signal.SIGTERM,
-        lambda x,y: stop()
-    )
 
 
     asyncio.run(
