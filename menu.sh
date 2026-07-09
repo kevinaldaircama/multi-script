@@ -189,19 +189,19 @@ case "$OPCION" in
 2)
 
 # Si existe en la instalación
-if [[ -f "$BASE/sistema/optimizar.sh" ]]; then
-    bash "$BASE/sistema/optimizar.sh"
+if [[ -f "$BASE/herramientas/optimizar.sh" ]]; then
+    bash "$BASE/herramientas/optimizar.sh"
 
 # Si existe en la carpeta del proyecto
-elif [[ -f "$HOME/multi-script/sistema/optimizar.sh" ]]; then
+elif [[ -f "$HOME/multi-script/herramientas/optimizar.sh" ]]; then
 
-    mkdir -p "$BASE/sistema"
+    mkdir -p "$BASE/herramientas"
 
-    cp "$HOME/multi-script/sistema/optimizar.sh" "$BASE/sistema/optimizar.sh"
+    cp "$HOME/multi-script/herramientas/optimizar.sh" "$BASE/sistema/optimizar.sh"
 
-    chmod +x "$BASE/sistema/optimizar.sh"
+    chmod +x "$BASE/herramientas/optimizar.sh"
 
-    bash "$BASE/sistema/optimizar.sh"
+    bash "$BASE/herramientas/optimizar.sh"
 
 else
 
@@ -215,8 +215,8 @@ else
 fi
 ;;
 3)
-    if [[ -f "$BASE/sistema/contador.sh" ]]; then
-        bash "$BASE/sistema/contador.sh"
+    if [[ -f "$BASE/herramientas/contador.sh" ]]; then
+        bash "$BASE/herramientas/contador.sh"
     else
         echo ""
         echo "🚧 Función en desarrollo."
