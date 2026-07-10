@@ -92,7 +92,7 @@ bash "$BASE/protocolos/udpcustom.sh"
 bash "$BASE/protocolos/slowdns.sh"
 ;;
 
-19)
+9)
 bash "$BASE/protocolos/v2ray.sh"
 ;;
 
