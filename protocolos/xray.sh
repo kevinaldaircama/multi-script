@@ -795,3 +795,804 @@ echo
 read -n1 -r -p "Presiona una tecla..."
 
 }
+#==============================
+# LISTAR USUARIOS VMESS
+#==============================
+
+list_vmess_users(){
+
+
+clear
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}          📋 CUENTAS VMESS${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+if [[ ! -s "$USERS_DB" ]]; then
+
+echo -e "${YELLOW}No hay usuarios creados${RESET}"
+
+sleep 2
+
+return
+
+fi
+
+
+
+NUM=1
+
+
+while IFS="|" read -r USER UUID EXP
+
+do
+
+
+echo
+
+echo -e "${GREEN}$NUM)${RESET} Usuario : $USER"
+
+echo "   UUID   : $UUID"
+
+echo "   Expira : $EXP"
+
+
+NUM=$((NUM+1))
+
+
+done < "$USERS_DB"
+
+
+
+echo
+
+read -n1 -r -p "Presiona una tecla..."
+
+}
+
+
+
+
+
+#==============================
+# ELIMINAR USUARIO VMESS
+#==============================
+
+delete_vmess_user(){
+
+
+clear
+
+
+read -rp "Usuario a eliminar: " USER
+
+
+
+if ! grep -q "^$USER|" "$USERS_DB"; then
+
+echo -e "${RED}Usuario no existe${RESET}"
+
+sleep 2
+
+return
+
+fi
+
+
+
+UUID=$(grep "^$USER|" "$USERS_DB" | cut -d "|" -f2)
+
+
+
+# Eliminar del archivo DB
+
+grep -v "^$USER|" "$USERS_DB" > /tmp/users.db
+
+mv /tmp/users.db "$USERS_DB"
+
+
+
+# Eliminar de Xray
+
+python3 <<PYTHON
+
+import json
+
+
+file="$XRAY_CONFIG"
+
+
+with open(file) as f:
+    data=json.load(f)
+
+
+clients=data["inbounds"][0]["settings"]["clients"]
+
+
+data["inbounds"][0]["settings"]["clients"]=[
+
+c for c in clients
+
+if c.get("id") != "$UUID"
+
+]
+
+
+with open(file,"w") as f:
+    json.dump(data,f,indent=2)
+
+PYTHON
+
+
+
+systemctl restart xray
+
+
+
+echo
+
+echo -e "${GREEN}✔ Usuario eliminado correctamente${RESET}"
+
+sleep 3
+
+
+}
+
+
+
+
+
+#==============================
+# BUSCAR USUARIO
+#==============================
+
+search_vmess_user(){
+
+
+clear
+
+
+read -rp "Buscar usuario: " USER
+
+
+
+DATA=$(grep "^$USER|" "$USERS_DB")
+
+
+
+if [[ -z "$DATA" ]]; then
+
+echo -e "${RED}Usuario no encontrado${RESET}"
+
+else
+
+
+UUID=$(echo "$DATA" | cut -d "|" -f2)
+
+EXP=$(echo "$DATA" | cut -d "|" -f3)
+
+
+
+echo
+
+echo "Usuario : $USER"
+
+echo "UUID    : $UUID"
+
+echo "Expira  : $EXP"
+
+
+
+fi
+
+
+sleep 3
+
+
+}
+
+
+
+
+#==============================
+# MENU VMESS
+#==============================
+
+vmess_panel(){
+
+
+while true
+
+do
+
+
+clear
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e "${WHITE}          🚀 VMESS PANEL${RESET}"
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+echo
+
+echo "[1] Crear cuenta VMess"
+
+echo "[2] Ver cuentas"
+
+echo "[3] Generar link VMess"
+
+echo "[4] Buscar usuario"
+
+echo "[5] Eliminar usuario"
+
+echo "[0] Salir"
+
+
+echo
+
+read -rp "Opción: " OP
+
+
+
+case "$OP" in
+
+
+1)
+
+create_vmess_user
+
+;;
+
+
+2)
+
+list_vmess_users
+
+;;
+
+
+3)
+
+read -rp "Usuario: " USER
+
+generate_vmess_link "$USER"
+
+;;
+
+
+4)
+
+search_vmess_user
+
+;;
+
+
+5)
+
+delete_vmess_user
+
+;;
+
+
+0)
+
+break
+
+;;
+
+
+*)
+
+echo "Opción inválida"
+
+sleep 2
+
+;;
+
+
+esac
+
+
+done
+
+
+}
+#==============================
+# INSTALAR XRAY CORE
+#==============================
+
+install_xray_core(){
+
+
+clear
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}        📦 INSTALANDO XRAY CORE${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+
+if command -v xray >/dev/null 2>&1
+then
+
+echo -e "${GREEN}✔ Xray ya está instalado${RESET}"
+
+else
+
+
+echo "Descargando instalador oficial..."
+
+
+
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+
+
+if command -v xray >/dev/null 2>&1
+then
+
+echo -e "${GREEN}✔ Xray instalado correctamente${RESET}"
+
+else
+
+echo -e "${RED}❌ Error instalando Xray${RESET}"
+
+return 1
+
+fi
+
+
+fi
+
+
+
+
+#==============================
+# CREAR DIRECTORIOS
+#==============================
+
+
+mkdir -p /usr/local/etc/xray
+
+mkdir -p /var/log/xray
+
+mkdir -p "$BASE/v2ray"
+
+touch "$USERS_DB"
+
+
+
+chmod 755 /usr/local/etc/xray
+
+chmod 755 /var/log/xray
+
+
+
+
+
+#==============================
+# CONFIGURACIÓN INICIAL
+#==============================
+
+
+if [[ ! -f "$XRAY_CONFIG" ]]
+then
+
+
+echo "Creando configuración inicial..."
+
+create_xray_config
+
+
+else
+
+echo "Configuración existente encontrada"
+
+
+fi
+
+
+
+
+#==============================
+# SERVICIO SYSTEMD
+#==============================
+
+
+mkdir -p /etc/systemd/system/xray.service.d
+
+
+
+cat > /etc/systemd/system/xray.service.d/restart.conf <<EOF
+[Service]
+
+Restart=always
+
+RestartSec=5
+
+EOF
+
+
+
+systemctl daemon-reload
+
+
+systemctl enable xray
+
+
+systemctl restart xray
+
+
+
+
+
+if systemctl is-active --quiet xray
+
+then
+
+
+echo
+
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e "${GREEN}   ✅ XRAY ACTIVO${RESET}"
+
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+else
+
+
+echo -e "${RED}❌ Xray no pudo iniciar${RESET}"
+
+journalctl -u xray -n 20 --no-pager
+
+
+fi
+
+
+sleep 3
+
+
+}
+
+
+
+
+
+#==============================
+# VERIFICAR XRAY
+#==============================
+
+status_xray(){
+
+
+clear
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e "${WHITE}        ESTADO XRAY${RESET}"
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+
+systemctl status xray --no-pager
+
+
+
+echo
+
+echo "Puerto VMess interno: 10000"
+
+echo "WebSocket Path: /vmess"
+
+
+echo
+
+read -n1 -r -p "Presiona una tecla..."
+
+}
+
+
+
+
+
+#==============================
+# REINICIAR XRAY
+#==============================
+
+
+restart_xray(){
+
+
+systemctl restart xray
+
+
+sleep 2
+
+
+
+if systemctl is-active --quiet xray
+
+then
+
+echo -e "${GREEN}✔ Xray reiniciado${RESET}"
+
+else
+
+echo -e "${RED}❌ Error reiniciando Xray${RESET}"
+
+fi
+
+
+sleep 2
+
+
+}
+#==============================
+# DESINSTALAR XRAY
+#==============================
+
+remove_xray(){
+
+
+clear
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}        🗑️ ELIMINAR XRAY${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+read -rp "¿Eliminar Xray completamente? (s/n): " R
+
+
+
+if [[ ! "$R" =~ ^[Ss]$ ]]
+then
+
+echo "Cancelado"
+
+sleep 2
+
+return
+
+fi
+
+
+
+systemctl stop xray 2>/dev/null
+
+systemctl disable xray 2>/dev/null
+
+
+
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove
+
+
+
+rm -rf /usr/local/etc/xray
+
+rm -rf /var/log/xray
+
+rm -rf "$BASE/v2ray"
+
+
+
+sed -i '/^V2RAY=/d' "$CONFIG"
+
+echo "V2RAY=OFF" >> "$CONFIG"
+
+
+
+echo
+
+echo -e "${GREEN}✔ Xray eliminado${RESET}"
+
+sleep 3
+
+
+}
+
+
+
+
+
+#==============================
+# MENU V2RAY MANAGER
+#==============================
+
+
+v2ray_manager(){
+
+
+while true
+
+do
+
+
+clear
+
+
+source "$CONFIG"
+
+
+
+if systemctl is-active --quiet xray
+
+then
+
+STATUS="${GREEN}🟢 ACTIVO${RESET}"
+
+else
+
+STATUS="${RED}🔴 DETENIDO${RESET}"
+
+fi
+
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e "${WHITE}             🚀 V2RAY MANAGER${RESET}"
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+echo -e " Estado : $STATUS"
+
+echo -e " Dominio: ${SERVER_DOMAIN:-NO CONFIGURADO}"
+
+echo -e " Puerto : 443"
+
+echo -e " WS     : /vmess"
+
+echo
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+
+cat <<EOF
+
+ [1] ➮ Instalar Xray Core
+
+ [2] ➮ Crear cuenta VMess
+
+ [3] ➮ Ver cuentas
+
+ [4] ➮ Generar Link VMess
+
+ [5] ➮ Buscar usuario
+
+ [6] ➮ Eliminar usuario
+
+ [7] ➮ Estado Xray
+
+ [8] ➮ Reiniciar Xray
+
+ [9] ➮ Desinstalar Xray
+
+ [0] ➮ Regresar
+
+EOF
+
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+read -rp " ► Opción: " OP
+
+
+
+case "$OP" in
+
+
+1)
+
+install_xray_core
+
+;;
+
+
+
+2)
+
+create_vmess_user
+
+;;
+
+
+
+3)
+
+list_vmess_users
+
+;;
+
+
+
+4)
+
+read -rp "Usuario: " USER
+
+generate_vmess_link "$USER"
+
+;;
+
+
+
+5)
+
+search_vmess_user
+
+;;
+
+
+
+6)
+
+delete_vmess_user
+
+;;
+
+
+
+7)
+
+status_xray
+
+;;
+
+
+
+8)
+
+restart_xray
+
+;;
+
+
+
+9)
+
+remove_xray
+
+;;
+
+
+
+0)
+
+break
+
+;;
+
+
+
+*)
+
+echo "❌ Opción inválida"
+
+sleep 2
+
+;;
+
+
+esac
+
+
+done
+
+
+}
