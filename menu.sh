@@ -97,6 +97,7 @@ PROTO2=""
 PROTO3=""
 PROTO4=""
 PROTO5=""
+PROTO6=""
 
 [[ "$OPENSSH" == "ON" ]]     && PROTO1+=" ∘ OpenSSH:22"
 [[ "$SYSTEMDNS" == "ON" ]]   && PROTO1+="    ∘ SystemDNS:53"
@@ -111,6 +112,7 @@ PROTO5=""
 [[ "$UDP_CUSTOM" == "ON" ]]  && PROTO4+="    ∘ UDP Custom:36712"
 
 [[ "$SLOWDNS" == "ON" ]]     && PROTO5+=" ∘ SlowDNS:53"
+[[ "$V2RAY" == "ON" ]] && PROTO6+=" ∘ V2Ray/Xray:443 WS:/vmess"
 
 clear
 animacion
@@ -145,6 +147,7 @@ echo -e "${RED2} Protocolos Instalados:${RESET}"
 [[ -n "$PROTO3" ]] && echo -e "${WHITE}${PROTO3}${RESET}"
 [[ -n "$PROTO4" ]] && echo -e "${WHITE}${PROTO4}${RESET}"
 [[ -n "$PROTO5" ]] && echo -e "${WHITE}${PROTO5}${RESET}"
+[[ -n "$PROTO6" ]] && echo -e "${WHITE}${PROTO6}${RESET}"
 
 echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
