@@ -1244,7 +1244,11 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}   ✅ XRAY ACTIVO${RESET}"
 
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
+if grep -q "^V2RAY=" "$CONFIG"; then
+    sed -i 's/^V2RAY=.*/V2RAY=ON/' "$CONFIG"
+else
+    echo "V2RAY=ON" >> "$CONFIG"
+fi
 
 else
 
@@ -1398,7 +1402,11 @@ echo
 echo -e "${GREEN}✔ Xray eliminado${RESET}"
 
 sleep 3
-
+if grep -q "^V2RAY=" "$CONFIG"; then
+    sed -i 's/^V2RAY=.*/V2RAY=OFF/' "$CONFIG"
+else
+    echo "V2RAY=OFF" >> "$CONFIG"
+fi
 
 }
 
