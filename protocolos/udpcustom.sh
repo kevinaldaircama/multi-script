@@ -141,7 +141,7 @@ systemctl restart "$SERVICE"
 
 if systemctl is-active --quiet "$SERVICE"; then
 
-echo "UDPCUSTOM=ON" >> "$CONFIG"
+echo "UDP_CUSTOM=ON" >> "$CONFIG"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -241,7 +241,7 @@ fi
 
 sed -i '/^UDPCUSTOM=/d' "$CONFIG"
 
-echo "UDPCUSTOM=OFF" >> "$CONFIG"
+echo "UDP_CUSTOM=OFF" >> "$CONFIG"
 
 
 echo ""
@@ -355,7 +355,7 @@ echo -e " Servicio : udp-custom"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
+if [[ "$UDP_CUSTOM" == "ON" ]]; then
 
 
 cat <<EOF
@@ -398,7 +398,7 @@ case "$OP" in
 1)
 
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
+if [[ "$UDP_CUSTOM" == "ON" ]]; then
 
 remove_udp
 
@@ -415,7 +415,7 @@ fi
 2)
 
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
+if [[ "$UDP_CUSTOM" == "ON" ]]; then
 
 restart_udp
 
@@ -434,7 +434,7 @@ fi
 3)
 
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
+if [[ "$UDP_CUSTOM" == "ON" ]]; then
 
 status_udp
 
