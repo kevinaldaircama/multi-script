@@ -39,6 +39,7 @@ printf "${GREEN} [05]${WHITE} ➮ SSL/TLS        [%s]\n" "$SSL"
 printf "${GREEN} [06]${WHITE} ➮ BadVPN         [%s]\n" "$BADVPN"
 printf "${GREEN} [07]${WHITE} ➮ UDP Custom     [%s]\n" "$UDP_CUSTOM"
 printf "${GREEN} [08]${WHITE} ➮ SlowDNS        [%s]\n" "$SLOWDNS"
+printf "${GREEN} [08]${WHITE} ➮ v2ray/xray        [%s]\n" "$V2RAY"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -102,7 +103,9 @@ bash "$BASE/herramientas/reiniciar.sh"
 11)
 bash "$BASE/herramientas/firewall.sh"
 ;;
-
+12)
+bash "$BASE/protocolos/v2ray.sh"
+;;
 0)
 exec bash "$BASE/menu.sh"
 ;;
