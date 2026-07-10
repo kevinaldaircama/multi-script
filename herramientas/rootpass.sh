@@ -32,22 +32,40 @@ if [[ "$PASS1" != "$PASS2" ]]; then
     exec bash "$BASE/protocolos/menu.sh"
 fi
 
-echo "root:$PASS1" | chpasswd
-
-if [[ $? -eq 0 ]]; then
-    clear
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "   ✅ CONTRASEÑA CAMBIADA"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "Usuario      : root"
-    echo "Contraseña   : $PASS1"
-    echo ""
-else
+echo "root:$PASS1" | chpasswd || {
     echo ""
     echo "❌ No se pudo cambiar la contraseña."
-fi
+    sleep 2
+    exec bash "$BASE/protocolos/menu.sh"
+}
 
+# Habilitar acceso root por SSH
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+grep -q "^PermitRootLogin" /etc/ssh/sshd_config || \
+echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+
+# Habilitar autenticación por contraseña
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+grep -q "^PasswordAuthentication" /etc/ssh/sshd_config || \
+echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+# Ubuntu 22.04 y 24.04
+mkdir -p /etc/ssh/sshd_config.d
+cat >/etc/ssh/sshd_config.d/99-root.conf <<EOF
+PermitRootLogin yes
+PasswordAuthentication yes
+EOF
+
+systemctl restart ssh 2>/dev/null || systemctl restart sshd
+
+clear
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "   ✅ CONTRASEÑA CAMBIADA"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Usuario      : root"
+echo "Contraseña   : $PASS1"
+echo "SSH Root     : Habilitado"
 echo ""
 read -n1 -r -p "Presiona una tecla para regresar..."
 
