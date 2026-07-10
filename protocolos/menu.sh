@@ -39,7 +39,7 @@ printf "${GREEN} [05]${WHITE} ➮ SSL/TLS        [%s]\n" "$SSL"
 printf "${GREEN} [06]${WHITE} ➮ BadVPN         [%s]\n" "$BADVPN"
 printf "${GREEN} [07]${WHITE} ➮ UDP Custom     [%s]\n" "$UDP_CUSTOM"
 printf "${GREEN} [08]${WHITE} ➮ SlowDNS        [%s]\n" "$SLOWDNS"
-printf "${GREEN} [09]${WHITE} ➮ v2ray/xray        [%s]\n" "$V2RAY"
+printf "${GREEN} [09]${WHITE} ➮ V2Ray / Xray     [%s]\n" "$V2RAY"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
