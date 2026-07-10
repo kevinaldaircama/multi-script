@@ -1587,12 +1587,14 @@ echo "❌ Opción inválida"
 sleep 2
 
 ;;
-
-
 esac
-
-
 done
+}
 
 
+#==============================
+# INICIO DEL PANEL
+#==============================
+
+v2ray_manager
 }
