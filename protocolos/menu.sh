@@ -39,16 +39,16 @@ printf "${GREEN} [05]${WHITE} ➮ SSL/TLS        [%s]\n" "$SSL"
 printf "${GREEN} [06]${WHITE} ➮ BadVPN         [%s]\n" "$BADVPN"
 printf "${GREEN} [07]${WHITE} ➮ UDP Custom     [%s]\n" "$UDP_CUSTOM"
 printf "${GREEN} [08]${WHITE} ➮ SlowDNS        [%s]\n" "$SLOWDNS"
-printf "${GREEN} [08]${WHITE} ➮ v2ray/xray        [%s]\n" "$V2RAY"
+printf "${GREEN} [09]${WHITE} ➮ v2ray/xray        [%s]\n" "$V2RAY"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW}                 🛠 SISTEMA${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-printf "${GREEN} [09]${WHITE} ➮ Herramientas\n"
-printf "${GREEN} [10]${WHITE} ➮ Reiniciar Servicios\n"
-printf "${GREEN} [11]${WHITE} ➮ Firewall\n"
+printf "${GREEN} [10]${WHITE} ➮ Herramientas\n"
+printf "${GREEN} [11]${WHITE} ➮ Reiniciar Servicios\n"
+printf "${GREEN} [12]${WHITE} ➮ Firewall\n"
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -92,20 +92,22 @@ bash "$BASE/protocolos/udpcustom.sh"
 bash "$BASE/protocolos/slowdns.sh"
 ;;
 
-9)
-bash "$BASE/herramientas/menu.sh"
+19)
+bash "$BASE/protocolos/v2ray.sh"
 ;;
 
 10)
-bash "$BASE/herramientas/reiniciar.sh"
+bash "$BASE/herramientas/menu.sh"
 ;;
 
 11)
+bash "$BASE/herramientas/reiniciar.sh"
+;;
+
+12)
 bash "$BASE/herramientas/firewall.sh"
 ;;
-12)
-bash "$BASE/protocolos/v2ray.sh"
-;;
+
 0)
 exec bash "$BASE/menu.sh"
 ;;
