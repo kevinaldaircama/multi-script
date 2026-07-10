@@ -3,6 +3,11 @@
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
+[[ ! -f "$CONFIG" ]] && {
+    echo "❌ No existe configuración KevinTech"
+    exit 1
+}
+
 source "$CONFIG"
 
 CYAN="\e[1;96m"
@@ -11,236 +16,473 @@ RED="\e[1;91m"
 WHITE="\e[1;97m"
 RESET="\e[0m"
 
-SERVICE="UDPserver"
-PORT="36712"
 
-BIN="/usr/bin/UDPserver"
+SERVICE="udp-custom"
+PORT="2100"
+BIN="/usr/bin/udp"
+CONFIG_UDP="/usr/bin/config.json"
 
-while true; do
 
-clear
+set_udp_status(){
 
-source "$CONFIG"
-
-if systemctl is-active --quiet $SERVICE; then
+if systemctl is-active --quiet "$SERVICE"; then
     STATUS="${GREEN}🟢 ACTIVO${RESET}"
 else
-    STATUS="${RED}🔴 DESINSTALADO${RESET}"
+    STATUS="${RED}🔴 DETENIDO${RESET}"
 fi
 
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}            🚀 UDP CUSTOM MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-echo -e " Estado     : $STATUS"
-echo -e " Puerto     : $PORT"
-echo -e " Servicio   : UDP Custom"
-
-echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
 
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
-
-cat <<EOF
- [1] ➮ Desinstalar UDP Custom
- [2] ➮ Reiniciar Servicio
- [3] ➮ Ver Estado
- [0] ➮ Regresar
-EOF
-
-else
-
-cat <<EOF
- [1] ➮ Instalar UDP Custom
- [0] ➮ Regresar
-EOF
-
-fi
-
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-read -rp " ► Opción: " OP
-
-
-case "$OP" in
-1)
+install_udp(){
 
 clear
 
-if [[ "$UDPCUSTOM" == "ON" ]]; then
-
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "     DESINSTALAR UDP CUSTOM"
+echo "       🚀 INSTALANDO UDP CUSTOM"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 
-read -rp "¿Eliminar UDP Custom? (s/n): " R
+apt update -y
+
+apt install -y curl wget iptables libpam0g
 
 
-if [[ "$R" =~ ^[Ss]$ ]]; then
+echo "⚙️ Activando IP Forward..."
+
+sysctl -w net.ipv4.ip_forward=1
+
+grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || \
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
 
-systemctl stop $SERVICE 2>/dev/null
-systemctl disable $SERVICE 2>/dev/null
+ARCH=$(uname -m)
 
 
-rm -f /etc/systemd/system/$SERVICE.service
-rm -f "$BIN"
+case "$ARCH" in
+
+x86_64)
+URL="https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-amd64"
+;;
+
+aarch64)
+URL="https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-arm"
+;;
+
+*)
+echo "❌ Arquitectura no soportada: $ARCH"
+return
+;;
+
+esac
+
+
+echo "⬇️ Descargando UDP..."
+
+curl -L -s -f "$URL" -o "$BIN"
+
+
+if [[ ! -f "$BIN" ]]; then
+
+echo "❌ Error descargando UDP"
+
+return
+
+fi
+
+
+chmod +x "$BIN"
+
+
+
+echo "📝 Creando configuración..."
+
+cat > "$CONFIG_UDP" <<EOF
+{
+    "listen": ":2100",
+    "stream_buffer": 33554432,
+    "receive_buffer": 83886080,
+    "auth": {
+        "mode": "passwords"
+    }
+}
+EOF
+
+
+
+echo "⚙️ Creando servicio..."
+
+
+cat > /etc/systemd/system/$SERVICE.service <<EOF
+[Unit]
+Description=UDP Custom Server KevinTech
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/bin
+ExecStart=/usr/bin/udp server -exclude 2200,7300,7200,7100,323,10008,10004 /usr/bin/config.json
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 
 systemctl daemon-reload
 
+systemctl enable "$SERVICE"
 
-if grep -q "^UDPCUSTOM=" "$CONFIG"; then
-    sed -i 's/^UDPCUSTOM=.*/UDPCUSTOM=ON/' "$CONFIG"
-else
-    echo "UDPCUSTOM=ON" >> "$CONFIG"
-fi
-
-UDPCUSTOM="OFF"
+systemctl restart "$SERVICE"
 
 
-echo ""
-echo "✅ UDP Custom eliminado."
 
-else
+if systemctl is-active --quiet "$SERVICE"; then
 
-echo "❌ Cancelado."
-
-fi
-
-
-else
-
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       INSTALANDO UDP CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-
-apt update -y >/dev/null 2>&1
-
-apt install -y wget curl >/dev/null 2>&1
-
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       INSTALANDO UDPserver"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-apt update -y >/dev/null 2>&1
-
-apt install -y curl wget >/dev/null 2>&1
-
-
-echo "⬇️ Descargando instalador UDPserver..."
-
-
-wget -q https://raw.githubusercontent.com/ChumoGH/UDPserver/main/install.sh \
--O /tmp/udpserver-install.sh
-
-
-if [ -f /tmp/udpserver-install.sh ]; then
-
-    chmod +x /tmp/udpserver-install.sh
-
-    bash /tmp/udpserver-install.sh
-
-    rm -f /tmp/udpserver-install.sh
-
-else
-
-    echo "❌ Error descargando UDPserver"
-    exit 1
-
-fi
-
-systemctl daemon-reload
-systemctl enable UDPserver
-systemctl restart UDPserver
-
-
-sed -i 's/^UDPCUSTOM=.*/UDPCUSTOM=ON/' "$CONFIG"
-
-UDPCUSTOM="ON"
-
+echo "UDPCUSTOM=ON" >> "$CONFIG"
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "      ✅ UDP CUSTOM ACTIVADO"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ UDP CUSTOM INSTALADO"
+echo "Puerto: $PORT"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-echo "🌐 Puerto UDP : $PORT"
+else
 
+echo "❌ UDP no inició"
+journalctl -u "$SERVICE" --no-pager -n 20
 
 fi
 
 
 sleep 3
 
-;;
-2)
+}
+remove_udp(){
 
 clear
 
-echo "🔄 Reiniciando UDP Custom..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "       🗑️ ELIMINAR UDP CUSTOM"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-systemctl restart UDPserver
+
+read -rp "¿Eliminar UDP Custom? (s/n): " CONFIRM
+
+
+if [[ ! "$CONFIRM" =~ ^[Ss]$ ]]; then
+
+echo "❌ Cancelado"
+sleep 2
+return
+
+fi
+
+
+
+echo "⏳ Deteniendo servicio..."
+
+
+systemctl stop "$SERVICE" 2>/dev/null
+
+systemctl disable "$SERVICE" 2>/dev/null
+
+
+
+echo "🧹 Eliminando archivos..."
+
+
+rm -f "/etc/systemd/system/$SERVICE.service"
+
+rm -f "$BIN"
+
+rm -f "$CONFIG_UDP"
+
+
+
+systemctl daemon-reload
+
+
+
+echo "🧹 Limpiando reglas temporales..."
+
+
+DEV=$(ip -4 route show default | awk '{print $5}' | head -1)
+
+
+
+if [[ -n "$DEV" ]]; then
+
+
+iptables -t nat -S PREROUTING 2>/dev/null \
+| grep "2100" \
+| sed 's/-A/-D/' \
+| while read RULE
+do
+iptables -t nat $RULE 2>/dev/null
+done
+
+
+
+iptables -S INPUT 2>/dev/null \
+| grep "2100" \
+| sed 's/-A/-D/' \
+| while read RULE
+do
+iptables $RULE 2>/dev/null
+done
+
+
+fi
+
+
+
+sed -i '/^UDPCUSTOM=/d' "$CONFIG"
+
+echo "UDPCUSTOM=OFF" >> "$CONFIG"
+
 
 echo ""
-echo "✅ Servicio reiniciado."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ UDP CUSTOM ELIMINADO"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+
+sleep 3
+
+}
+
+
+
+restart_udp(){
+
+
+clear
+
+
+echo "🔄 Reiniciando UDP Custom..."
+
+
+systemctl restart "$SERVICE"
+
+
 
 sleep 2
 
+
+
+if systemctl is-active --quiet "$SERVICE"; then
+
+echo "✅ Servicio activo"
+
+else
+
+echo "❌ No pudo iniciar"
+
+journalctl -u "$SERVICE" --no-pager -n 15
+
+fi
+
+
+sleep 3
+
+
+}
+
+
+
+status_udp(){
+
+
+clear
+
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "       📊 ESTADO UDP CUSTOM"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+
+echo ""
+
+
+systemctl status "$SERVICE" --no-pager
+
+
+
+echo ""
+
+echo "Puerto interno: $PORT"
+
+
+echo ""
+
+echo "Escuchando UDP:"
+
+
+ss -ulnp | grep ":$PORT"
+
+
+
+echo ""
+
+read -n1 -r -p "Presiona una tecla para continuar..."
+
+}
+while true
+do
+
+clear
+
+source "$CONFIG"
+
+
+set_udp_status
+
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}             🚀 UDP CUSTOM MANAGER${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+echo -e " Estado   : $STATUS"
+echo -e " Puerto   : $PORT"
+echo -e " Servicio : udp-custom"
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+if [[ "$UDPCUSTOM" == "ON" ]]; then
+
+
+cat <<EOF
+
+ [1] ➮ Desinstalar UDP Custom
+ [2] ➮ Reiniciar Servicio
+ [3] ➮ Ver Estado
+
+ [0] ➮ Regresar
+
+EOF
+
+
+else
+
+
+cat <<EOF
+
+ [1] ➮ Instalar UDP Custom
+
+ [0] ➮ Regresar
+
+EOF
+
+
+fi
+
+
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+
+read -rp " ► Opción: " OP
+
+
+
+case "$OP" in
+
+
+1)
+
+
+if [[ "$UDPCUSTOM" == "ON" ]]; then
+
+remove_udp
+
+else
+
+install_udp
+
+fi
+
 ;;
+
+
+
+2)
+
+
+if [[ "$UDPCUSTOM" == "ON" ]]; then
+
+restart_udp
+
+else
+
+echo "❌ UDP Custom no está instalado"
+
+sleep 2
+
+fi
+
+;;
+
 
 
 3)
 
-clear
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}        ESTADO UDP CUSTOM${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+if [[ "$UDPCUSTOM" == "ON" ]]; then
 
-echo ""
+status_udp
 
-systemctl status UDPserver --no-pager
+else
 
+echo "❌ UDP Custom no está instalado"
 
-echo ""
+sleep 2
 
-echo "Puerto escuchando:"
-
-ss -ulnp | grep "$PORT"
-
-
-echo ""
-
-read -n1 -r -p "Presione una tecla para continuar..."
+fi
 
 ;;
+
 
 
 0)
 
+
+if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+
 exec bash "$BASE/protocolos/menu.sh"
+
+else
+
+clear
+
+echo "❌ Menú principal no encontrado"
+
+sleep 2
+
+exit
+
+fi
 
 ;;
 
 
+
 *)
 
-echo ""
-echo "❌ Opción inválida."
+echo "❌ Opción inválida"
 
 sleep 2
 
 ;;
 
+
 esac
+
 
 done
