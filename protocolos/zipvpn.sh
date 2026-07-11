@@ -1036,11 +1036,11 @@ else
 fi
           
           
+echo -e "\nEstado: $ESTADO\n"
+
 echo -e "${CYAN}${BOLD}
 ╔══════════════════════════════╗
 ║        MENÚ ZiVPN            ║
-╠══════════════════════════════╣
-echo -e "\nEstado: $ESTADO\n"
 ╠══════════════════════════════╣
 ║ 1) 🚀 Instalar ZiVPN         ║
 ║ 2) ➕ Agregar usuario        ║
