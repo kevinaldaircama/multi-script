@@ -676,3 +676,512 @@ msg "ZiVPN instalado correctamente"
 
 
 }
+# ==========================
+# CONFIGURAR IPTABLES
+# ==========================
+
+
+setup_iptables(){
+
+
+PORT=$(cat "$PORT_FILE" 2>/dev/null)
+
+
+
+if [ -z "$PORT" ]
+
+then
+
+error "No se encontró puerto ZiVPN"
+
+return
+
+fi
+
+
+
+info "Configurando reglas de red..."
+
+
+
+DEV=$(ip -4 route show default | awk '{print $5}' | head -1)
+
+
+
+if [ -z "$DEV" ]
+
+then
+
+error "No se detectó interfaz de red"
+
+return
+
+fi
+
+
+
+
+# Limpiar reglas antiguas ZiVPN
+
+iptables -t nat -S PREROUTING | grep "6000:19999" |
+sed 's/-A/-D/' |
+while read RULE
+
+do
+
+iptables -t nat $RULE
+
+done
+
+
+
+iptables -S INPUT | grep "6000:19999" |
+sed 's/-A/-D/' |
+while read RULE
+
+do
+
+iptables $RULE
+
+done
+
+
+
+
+# Permitir puerto interno
+
+iptables -I INPUT 1 \
+-p udp \
+--dport "$PORT" \
+-j ACCEPT
+
+
+
+# Permitir rango externo
+
+iptables -I INPUT 1 \
+-p udp \
+--dport 6000:19999 \
+-j ACCEPT
+
+
+
+
+# Redirección UDP
+
+iptables -t nat -I PREROUTING 1 \
+-i "$DEV" \
+-p udp \
+--dport 6000:19999 \
+-j REDIRECT \
+--to-port "$PORT"
+
+
+
+
+# NAT salida
+
+iptables -t nat -D POSTROUTING \
+-o "$DEV" \
+-j MASQUERADE 2>/dev/null
+
+
+
+iptables -t nat -A POSTROUTING \
+-o "$DEV" \
+-j MASQUERADE
+
+
+
+
+msg "IPTables configurado"
+
+}
+
+
+
+
+
+# ==========================
+# AGREGAR USUARIO
+# ==========================
+
+
+add_user(){
+
+
+read -p "Nueva contraseña ZiVPN: " PASS
+
+
+
+if [ -z "$PASS" ]
+
+then
+
+error "Contraseña vacía"
+
+return
+
+fi
+
+
+
+jq ".auth.config += [\"$PASS\"] | .auth.config |= unique" \
+"$CONFIG" \
+> /tmp/zivpn.json
+
+
+
+mv /tmp/zivpn.json "$CONFIG"
+
+
+
+systemctl restart zivpn.service
+
+
+
+msg "Usuario agregado: $PASS"
+
+
+}
+
+
+
+
+
+# ==========================
+# ELIMINAR USUARIO
+# ==========================
+
+
+remove_user(){
+
+
+read -p "Contraseña a eliminar: " PASS
+
+
+
+jq ".auth.config -= [\"$PASS\"]" \
+"$CONFIG" \
+> /tmp/zivpn.json
+
+
+
+mv /tmp/zivpn.json "$CONFIG"
+
+
+
+systemctl restart zivpn.service
+
+
+
+msg "Usuario eliminado"
+
+
+}
+
+
+
+
+
+# ==========================
+# LISTAR USUARIOS
+# ==========================
+
+
+list_users(){
+
+
+title "Usuarios ZiVPN"
+
+
+if [ -f "$CONFIG" ]
+
+then
+
+jq -r '.auth.config[]' "$CONFIG"
+
+else
+
+error "ZiVPN no instalado"
+
+fi
+
+
+}
+# ==========================
+# RESTAURAR USUARIOS
+# ==========================
+
+
+restore_users(){
+
+
+FILE="/etc/kevintech/usuarios/zivpn.txt"
+
+
+
+if [ ! -f "$FILE" ]
+
+then
+
+warning "No existe archivo de usuarios"
+
+return
+
+fi
+
+
+
+info "Restaurando usuarios..."
+
+
+
+while read -r PASS
+
+do
+
+
+if [ -n "$PASS" ]
+
+then
+
+
+jq ".auth.config += [\"$PASS\"] | .auth.config |= unique" \
+"$CONFIG" \
+> /tmp/zivpn.json
+
+
+
+mv /tmp/zivpn.json "$CONFIG"
+
+
+fi
+
+
+done < "$FILE"
+
+
+
+systemctl restart zivpn.service
+
+
+
+msg "Usuarios restaurados"
+
+}
+
+
+
+
+
+# ==========================
+# ESTADO
+# ==========================
+
+
+status_zivpn(){
+
+
+title "Estado ZiVPN"
+
+
+
+systemctl status zivpn.service --no-pager
+
+
+}
+
+
+
+
+
+# ==========================
+# DESINSTALAR
+# ==========================
+
+
+remove_zivpn(){
+
+
+warning "Eliminando ZiVPN..."
+
+
+
+systemctl stop zivpn.service 2>/dev/null
+
+systemctl disable zivpn.service 2>/dev/null
+
+
+
+rm -f "$SERVICE"
+
+rm -f "$BIN"
+
+rm -rf "$ZIVPN_DIR"
+
+
+
+systemctl daemon-reload
+
+
+
+msg "ZiVPN eliminado completamente"
+
+
+}
+
+
+
+
+
+# ==========================
+# MENU PRINCIPAL
+# ==========================
+
+
+menu(){
+
+
+while true
+
+do
+
+
+banner
+
+
+
+echo -e "${CYAN}${BOLD}
+╔══════════════════════════════╗
+║        MENÚ ZiVPN            ║
+╠══════════════════════════════╣
+║ 1) 🚀 Instalar ZiVPN         ║
+║ 2) ➕ Agregar usuario         ║
+║ 3) ❌ Eliminar usuario        ║
+║ 4) 👥 Lista usuarios          ║
+║ 5) 🔄 Restaurar usuarios      ║
+║ 6) 📊 Estado ZiVPN            ║
+║ 7) 🗑️ Desinstalar ZiVPN       ║
+║ 0) Salir                      ║
+╚══════════════════════════════╝
+${RESET}"
+
+
+
+read -p "Seleccione una opción: " OP
+
+
+
+case $OP in
+
+
+1)
+
+install_zivpn
+
+setup_iptables
+
+pause
+
+;;
+
+
+
+2)
+
+add_user
+
+pause
+
+;;
+
+
+
+3)
+
+remove_user
+
+pause
+
+;;
+
+
+
+4)
+
+list_users
+
+pause
+
+;;
+
+
+
+5)
+
+restore_users
+
+pause
+
+;;
+
+
+
+6)
+
+status_zivpn
+
+pause
+
+;;
+
+
+
+7)
+
+remove_zivpn
+
+pause
+
+;;
+
+
+
+0)
+
+exit
+
+;;
+
+
+
+*)
+
+warning "Opción incorrecta"
+
+pause
+
+;;
+
+
+esac
+
+
+done
+
+
+}
+
+
+
+
+
+# ==========================
+# EJECUCIÓN
+# ==========================
+
+
+check_root
+
+menu
