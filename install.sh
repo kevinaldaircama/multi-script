@@ -28,12 +28,38 @@ if [[ -d "/etc/kevintech" ]]; then
     fi
 fi
   
-clear  
-  
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-echo "      🛡️ KevinTech Multi Script 🛡️"  
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-  
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      🛡️ KevinTech Multi Script 🛡️"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+#=====================================
+# OBTENER KEY
+#=====================================
+
+KEY="${INSTALL_KEY}"
+
+if [ -z "$KEY" ]; then
+    read -p "🔑 Ingrese su Key: " KEY
+fi
+
+echo ""
+echo "🔍 Verificando licencia..."
+sleep 2
+
+# AQUÍ DESPUÉS CONSULTAREMOS LA API
+echo "✅ Licencia recibida:"
+echo "$KEY"
+
+sleep 1
+clear
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      🛡️ KevinTech Multi Script 🛡️"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 #==============================  
   
 # ROOT  
