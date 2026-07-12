@@ -53,7 +53,7 @@ sleep 2
 # VALIDAR KEY FIREBASE
 #=====================================
 
-FIREBASE_URL="https://TU-PROYECTO-default-rtdb.firebaseio.com"
+FIREBASE_URL="https://keygenbpt-default-rtdb.firebaseio.com"
 
 KEY=$(echo "$KEY" | tr -d '\r\n ')
 
