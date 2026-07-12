@@ -49,13 +49,30 @@ echo ""
 echo "🔍 Verificando licencia..."
 sleep 2
 
-# AQUÍ DESPUÉS CONSULTAREMOS LA API
-echo "✅ Licencia recibida:"
-echo "$KEY"
+#=====================================
+# VALIDAR KEY FIREBASE
+#=====================================
+
+FIREBASE_URL="https://TU-PROYECTO-default-rtdb.firebaseio.com"
+
+KEY=$(echo "$KEY" | tr -d '\r\n ')
+
+KEY_RESPONSE=$(curl -s "${FIREBASE_URL}/keys/${KEY}.json")
+
+if [[ "$KEY_RESPONSE" == "null" ]] || [[ -z "$KEY_RESPONSE" ]]; then
+    echo ""
+    echo "❌ Key inválida o ya utilizada."
+    exit 1
+fi
+
+echo ""
+echo "✅ Key válida."
+
+# Quemar la Key (eliminarla de Firebase)
+curl -s -X DELETE "${FIREBASE_URL}/keys/${KEY}.json" >/dev/null
 
 sleep 1
 clear
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "      🛡️ KevinTech Multi Script 🛡️"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
