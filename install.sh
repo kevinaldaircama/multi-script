@@ -55,6 +55,9 @@ sleep 2
 
 FIREBASE_URL="https://keygenbpt-default-rtdb.firebaseio.com"
 
+apt update -y >/dev/null 2>&1
+apt install -y curl ca-certificates >/dev/null 2>&1
+
 KEY=$(echo "$KEY" | tr -d '\r\n ')
 
 KEY_RESPONSE=$(curl -s "${FIREBASE_URL}/keys/${KEY}.json")
