@@ -137,7 +137,7 @@ else
     echo " 🌐 DOMINIO: NO CONFIGURADO"
 fi
 echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${RED2} Verified【 Kevin Tech Tutorials © 】 by (Privanox VPN)${RESET}"
+echo -e "${RED2} dueño【 Kevin Tech Tutorials © 】${RESET}"
 echo -e "${BLUE2}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo -e "${RED2} Protocolos Instalados:${RESET}"
