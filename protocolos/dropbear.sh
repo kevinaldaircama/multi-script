@@ -118,9 +118,18 @@ apt install dropbear -y
 echo "⚙️ Configurando puerto $PORT..."
 
 cat > /etc/default/dropbear <<EOF
-DROPBEAR_PORT=90
-DROPBEAR_EXTRA_ARGS="-p 90 -p 143"
+DROPBEAR_PORT=$PORT
+DROPBEAR_EXTRA_ARGS="-p $PORT"
 EOF
+
+if [[ -f /etc/dropbear/run ]]; then
+cat > /etc/dropbear/run <<EOF
+#!/bin/sh
+exec /usr/sbin/dropbear -F -E -p $PORT
+EOF
+chmod +x /etc/dropbear/run
+fi
+
 systemctl daemon-reload
 systemctl enable dropbear
 systemctl restart dropbear
