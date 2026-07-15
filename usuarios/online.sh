@@ -1,7 +1,7 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Usuarios SSH Online
+# Usuarios SSH Online (Resumen)
 #==================================================
 
 GREEN="\e[1;92m"
@@ -16,62 +16,63 @@ RESET="\e[0m"
 
 clear
 
-echo -e "${CYAN}╔════════════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║${MAGENTA}                 👁 USUARIOS CONECTADOS SSH 👁                  ${CYAN}║${RESET}"
-echo -e "${CYAN}╠════╦════════════════════╦══════════════════════╦═══════════════╣${RESET}"
-printf "${CYAN}║${WHITE} %-2s ${CYAN}║ ${WHITE}%-18s ${CYAN}║ ${WHITE}%-20s ${CYAN}║ ${WHITE}%-13s${CYAN}║${RESET}\n" \
-"N°" "USUARIO" "IP" "SERVICIO"
-echo -e "${CYAN}╠════╬════════════════════╬══════════════════════╬═══════════════╣${RESET}"
+echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${MAGENTA}           👁 USUARIOS SSH CONECTADOS 👁           ${CYAN}║${RESET}"
+echo -e "${CYAN}╠════╦════════════════════════════╦═════════════════╣${RESET}"
+
+printf "${CYAN}║${WHITE} %-2s ${CYAN}║ ${WHITE}%-26s ${CYAN}║ ${WHITE}%-15s${CYAN}║${RESET}\n" \
+"N°" "USUARIO" "CONECTADOS"
+
+echo -e "${CYAN}╠════╬════════════════════════════╬═════════════════╣${RESET}"
 
 TOTAL=0
+declare -A USERS
 
-# OpenSSH
-while read -r USER IP _; do
-    [[ -z "$USER" || -z "$IP" ]] && continue
+#=========================================
+# CONTAR CONEXIONES OPENSSH
+#=========================================
+
+while read -r USER TTY FECHA HORA RESTO; do
+
+    [[ -z "$USER" ]] && continue
+
+    # Ignorar root
+    [[ "$USER" == "root" ]] && continue
+
+    ((USERS["$USER"]++))
+
+done < <(who)
+
+#=========================================
+# MOSTRAR USUARIOS
+#=========================================
+
+for USER in $(printf "%s\n" "${!USERS[@]}" | sort); do
 
     ((TOTAL++))
 
-    printf "${CYAN}║${WHITE} %02d ${CYAN}║ ${GREEN}%-18s ${CYAN}║ ${WHITE}%-20s ${CYAN}║ ${BLUE}%-13s${CYAN}║${RESET}\n" \
-    "$TOTAL" "$USER" "$IP" "OpenSSH"
-
-done < <(
-who | while read USER TTY FECHA HORA RESTO
-do
-IP=$(echo "$RESTO" | tr -d '()')
-echo "$USER $IP"
-done
-)
-
-# Dropbear
-if pgrep dropbear >/dev/null 2>&1; then
-
-for PID in $(pgrep dropbear); do
-
-USER=$(ps -o user= -p "$PID" 2>/dev/null)
-
-IP=$(netstat -tnp 2>/dev/null | grep "$PID/" | awk '{print $5}' | cut -d: -f1 | head -1)
-
-[[ -z "$USER" || "$USER" == "root" ]] && continue
-[[ -z "$IP" ]] && continue
-
-((TOTAL++))
-
-printf "${CYAN}║${WHITE} %02d ${CYAN}║ ${GREEN}%-18s ${CYAN}║ ${WHITE}%-20s ${CYAN}║ ${YELLOW}%-13s${CYAN}║${RESET}\n" \
-"$TOTAL" "$USER" "$IP" "Dropbear"
+    printf "${CYAN}║${WHITE} %02d ${CYAN}║ ${GREEN}%-26s ${CYAN}║ ${YELLOW}%-15s${CYAN}║${RESET}\n" \
+    "$TOTAL" "$USER" "${USERS[$USER]}"
 
 done
-
-fi
+#=========================================
+# SI NO HAY USUARIOS CONECTADOS
+#=========================================
 
 if [[ $TOTAL -eq 0 ]]; then
-echo -e "${CYAN}║${RED}                  No hay usuarios conectados.                   ${CYAN}║${RESET}"
+
+    echo -e "${CYAN}║${RED}           No hay usuarios conectados.            ${CYAN}║${RESET}"
+
 fi
 
-echo -e "${CYAN}╠════════════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${WHITE} Total de conexiones activas: ${GREEN}$TOTAL${RESET}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════════════════════╝${RESET}"
+#=========================================
+# PIE DE LA TABLA
+#=========================================
 
-echo
-echo -e "${GRAY}Actualizado: $(date '+%d/%m/%Y %H:%M:%S')${RESET}"
+echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
+echo -e "${WHITE} Usuarios conectados : ${GREEN}$TOTAL${RESET}"
+echo -e "${WHITE} Última actualización: ${GREEN}$(date '+%d/%m/%Y %H:%M:%S')${RESET}"
+echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+
 echo
 read -n1 -s -r -p "Presione cualquier tecla para regresar..."
