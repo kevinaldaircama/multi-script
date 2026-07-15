@@ -217,7 +217,7 @@ echo
 if [[ ! -f "$BANNER" ]]; then
     echo -e "${RED}No existe ningún banner para eliminar.${RESET}"
     sleep 2
-    ;;
+    continue
 fi
 
 read -rp "$(echo -e "${YELLOW}¿Desea eliminar el banner? [S/N]: ${RESET}")" RESP
