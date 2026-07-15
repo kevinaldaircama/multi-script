@@ -118,7 +118,7 @@ spinner() {
 
         for i in $(seq 0 9); do
 
-            printf "\r${CYAN}%s${RESET} Cargando Kevin Tech..." "${spin:$i:1}"
+            printf "\r${CYAN}%s${RESET} Cargando..." "${spin:$i:1}"
 
             sleep 0.08
 
@@ -291,8 +291,6 @@ printf "${WHITE}║ ${YELLOW}[01]${WHITE} 👥 Control de Usuarios (SSH / SSL / 
 printf "${WHITE}║ ${YELLOW}[02]${WHITE} 🚀 Optimizar VPS                     %-15b║${RESET}\n" \
 "$(status "$OPTIMIZAR")"
 
-printf "${WHITE}║ ${YELLOW}[03]${WHITE} 📊 Contador Online Users            ${RED}🚧 OFF${WHITE}         ║${RESET}\n"
-
 printf "${WHITE}║ ${YELLOW}[04]${WHITE} 🔄 Auto Inicio                      %-15b║${RESET}\n" \
 "$(status "$AUTO_START")"
 
@@ -378,30 +376,6 @@ fi
 
 ;;
 
-#=========================================================
-
-3)
-
-clear
-
-echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${WHITE}║                📊 CONTADOR DE USUARIOS                      ║${RESET}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-
-if [[ -f "$BASE/herramientas/contador.sh" ]]; then
-
-    bash "$BASE/herramientas/contador.sh"
-
-else
-
-    echo -e "${YELLOW}🚧 Esta función aún está en desarrollo.${RESET}"
-    sleep 2
-    exec bash "$BASE/menu.sh"
-
-fi
-
-;;
 #=========================================================
 
 4)
