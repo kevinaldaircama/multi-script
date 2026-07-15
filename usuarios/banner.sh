@@ -172,7 +172,7 @@ fi
 if ! command -v nano >/dev/null 2>&1; then
     echo -e "${RED}Nano no está instalado.${RESET}"
     sleep 2
-    ;;
+    break
 fi
 
 # Abrir editor
