@@ -1,7 +1,10 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Usuarios SSH Online (Resumen)
+# Monitor de Usuarios SSH Online
+# Compatible con:
+# OpenSSH • HTTP Injector • HTTP Custom
+# TLS Tunnel • WebSocket • Dropbear
 #==================================================
 
 GREEN="\e[1;92m"
@@ -14,65 +17,93 @@ WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 RESET="\e[0m"
 
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
+
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+
 clear
 
-echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║${MAGENTA}           👁 USUARIOS SSH CONECTADOS 👁           ${CYAN}║${RESET}"
-echo -e "${CYAN}╠════╦════════════════════════════╦═════════════════╣${RESET}"
+#==============================
+# CABECERA
+#==============================
 
-printf "${CYAN}║${WHITE} %-2s ${CYAN}║ ${WHITE}%-26s ${CYAN}║ ${WHITE}%-15s${CYAN}║${RESET}\n" \
-"N°" "USUARIO" "CONECTADOS"
+echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${MAGENTA}            👁 USUARIOS SSH CONECTADOS 👁              ${CYAN}║${RESET}"
+echo -e "${CYAN}╠════╦════════════════════╦══════════╦══════════╦════════════╣${RESET}"
 
-echo -e "${CYAN}╠════╬════════════════════════════╬═════════════════╣${RESET}"
+printf "${CYAN}║${WHITE} %-2s ${CYAN}║ ${WHITE}%-18s ${CYAN}║ ${WHITE}%-8s ${CYAN}║ ${WHITE}%-8s ${CYAN}║ ${WHITE}%-10s${CYAN}║${RESET}\n" \
+"N°" "USUARIO" "ONLINE" "LÍMITE" "EXPIRA"
 
-TOTAL=0
-declare -A USERS
+echo -e "${CYAN}╠════╬════════════════════╬══════════╬══════════╬════════════╣${RESET}"
 
+TOTAL_USERS=0
+TOTAL_CONN=0
+
+declare -A ONLINE
+declare -A LIMIT
+declare -A EXPIRE
 #=========================================
-# CONTAR CONEXIONES OPENSSH
+# DETECTAR USUARIOS SSH CONECTADOS
+# Compatible con HTTP Injector / Custom
 #=========================================
 
-while read -r USER TTY FECHA HORA RESTO; do
+while read -r PID USER; do
 
+    # Ignorar procesos vacíos
+    [[ -z "$PID" ]] && continue
     [[ -z "$USER" ]] && continue
 
     # Ignorar root
     [[ "$USER" == "root" ]] && continue
 
-    ((USERS["$USER"]++))
+    # Sumar conexión
+    ((ONLINE["$USER"]++))
+    ((TOTAL_CONN++))
 
-done < <(who)
+done < <(
 
+ps -eo pid,user,cmd | awk '
+/sshd:/ {
+
+    if ($2 != "root") {
+
+        print $1, $2
+
+    }
+
+}
+'
+
+)
 #=========================================
-# MOSTRAR USUARIOS
+# OBTENER LÍMITE Y FECHA DE EXPIRACIÓN
 #=========================================
 
-for USER in $(printf "%s\n" "${!USERS[@]}" | sort); do
+for USER in "${!ONLINE[@]}"; do
 
-    ((TOTAL++))
+    ((TOTAL_USERS++))
 
-    printf "${CYAN}║${WHITE} %02d ${CYAN}║ ${GREEN}%-26s ${CYAN}║ ${YELLOW}%-15s${CYAN}║${RESET}\n" \
-    "$TOTAL" "$USER" "${USERS[$USER]}"
+    #-----------------------------
+    # Límite de conexiones
+    #-----------------------------
+    MAX=$(grep "^$USER[[:space:]]" /etc/security/limits.conf 2>/dev/null | \
+          awk '/maxlogins/ {print $4}' | head -1)
+
+    [[ -z "$MAX" ]] && MAX="∞"
+
+    LIMIT["$USER"]="$MAX"
+
+    #-----------------------------
+    # Fecha de expiración
+    #-----------------------------
+    EXP=$(chage -l "$USER" 2>/dev/null | \
+          awk -F': ' '/Account expires/ {print $2}')
+
+    if [[ -z "$EXP" || "$EXP" == "never" || "$EXP" == "Nunca" ]]; then
+        EXP="Nunca"
+    fi
+
+    EXPIRE["$USER"]="$EXP"
 
 done
-#=========================================
-# SI NO HAY USUARIOS CONECTADOS
-#=========================================
-
-if [[ $TOTAL -eq 0 ]]; then
-
-    echo -e "${CYAN}║${RED}           No hay usuarios conectados.            ${CYAN}║${RESET}"
-
-fi
-
-#=========================================
-# PIE DE LA TABLA
-#=========================================
-
-echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
-echo -e "${WHITE} Usuarios conectados : ${GREEN}$TOTAL${RESET}"
-echo -e "${WHITE} Última actualización: ${GREEN}$(date '+%d/%m/%Y %H:%M:%S')${RESET}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
-
-echo
-read -n1 -s -r -p "Presione cualquier tecla para regresar..."
