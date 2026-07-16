@@ -36,33 +36,43 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 #=====================================
-# OBTENER KEY
-#=====================================
-
-KEY="${INSTALL_KEY}"
-
-if [ -z "$KEY" ]; then
-    read -p "🔑 Ingrese su Key: " KEY
-fi
-
-echo ""
-echo "🔍 Verificando licencia..."
-sleep 2
-
-#=====================================
-# VALIDAR KEY FIREBASE
+# CONFIGURACIÓN PRIVADA
 #=====================================
 
 FIREBASE_URL="https://keygenbpt-default-rtdb.firebaseio.com"
 
+#=====================================
+# OBTENER KEY
+#=====================================
+
+if [ -z "${INSTALL_KEY:-}" ]; then
+    read -p "🔑 Introduce tu Key de Instalación: " INSTALL_KEY
+fi
+
+if [ -z "$INSTALL_KEY" ]; then
+    echo "❌ La Key no puede estar vacía."
+    exit 1
+fi
+
+INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r' | tr -d '\n' | tr -d ' ')
+
+echo ""
+echo "📦 Preparando verificación..."
+
 apt update -y >/dev/null 2>&1
-apt install -y curl ca-certificates >/dev/null 2>&1
+apt install -y curl wget ca-certificates >/dev/null 2>&1
+update-ca-certificates >/dev/null 2>&1 || true
 
-KEY=$(echo "$KEY" | tr -d '\r\n ')
+echo "🔍 Verificando licencia..."
 
-KEY_RESPONSE=$(curl -s "${FIREBASE_URL}/keys/${KEY}.json")
+if ! KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \
+    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"); then
+    echo ""
+    echo "❌ Error de conexión con Firebase."
+    exit 1
+fi
 
-if [[ "$KEY_RESPONSE" == "null" ]] || [[ -z "$KEY_RESPONSE" ]]; then
+if [ "$KEY_RESPONSE" = "null" ] || [ -z "$KEY_RESPONSE" ]; then
     echo ""
     echo "❌ Key inválida o ya utilizada."
     exit 1
@@ -71,8 +81,10 @@ fi
 echo ""
 echo "✅ Key válida."
 
-# Quemar la Key (eliminarla de Firebase)
-curl -s -X DELETE "${FIREBASE_URL}/keys/${KEY}.json" >/dev/null
+echo "🔥 Registrando activación..."
+
+curl -4 -s -X DELETE \
+"${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null || true
 
 sleep 1
 clear
