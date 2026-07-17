@@ -1509,29 +1509,19 @@ echo
 
 echo -e "${YELLOW}================== GESTIÓN DEL SERVIDOR ==================${RESET}"
 
-echo -e "${WHITE} ${GREEN}[01]${WHITE} Instalar Dependencias"
-echo -e "${WHITE} ${GREEN}[02]${WHITE} Instalar Xray Core"
-echo -e "${WHITE} ${GREEN}[03]${WHITE} Configurar Xray"
-echo -e "${WHITE} ${GREEN}[04]${WHITE} Configurar Nginx"
-echo -e "${WHITE} ${GREEN}[05]${WHITE} Instalar SSL"
-echo -e "${WHITE} ${GREEN}[06]${WHITE} Activar SSL"
+echo -e "${WHITE} ${GREEN}[01]${WHITE} Instalar Xray Completo"
+echo -e "${WHITE} ${GREEN}[02]${WHITE} Estado de Xray"
+echo -e "${WHITE} ${GREEN}[03]${WHITE} Reiniciar Xray"
+echo -e "${WHITE} ${GREEN}[04]${WHITE} Desinstalar Xray"
 
 echo
 echo -e "${YELLOW}================== GESTIÓN DE USUARIOS ===================${RESET}"
 
-echo -e "${WHITE} ${GREEN}[07]${WHITE} Crear Usuario VMess"
-echo -e "${WHITE} ${GREEN}[08]${WHITE} Listar Usuarios"
-echo -e "${WHITE} ${GREEN}[09]${WHITE} Buscar Usuario"
-echo -e "${WHITE} ${GREEN}[10]${WHITE} Generar Link VMess"
-echo -e "${WHITE} ${GREEN}[11]${WHITE} Eliminar Usuario"
-
-echo
-echo -e "${YELLOW}==================== MANTENIMIENTO ======================${RESET}"
-
-echo -e "${WHITE} ${GREEN}[12]${WHITE} Estado de Xray"
-echo -e "${WHITE} ${GREEN}[13]${WHITE} Reiniciar Xray"
-echo -e "${WHITE} ${GREEN}[14]${WHITE} Desinstalar Xray"
-
+echo -e "${WHITE} ${GREEN}[05]${WHITE} Crear Usuario VMess"
+echo -e "${WHITE} ${GREEN}[06]${WHITE} Listar Usuarios"
+echo -e "${WHITE} ${GREEN}[07]${WHITE} Buscar Usuario"
+echo -e "${WHITE} ${GREEN}[08]${WHITE} Generar Link VMess"
+echo -e "${WHITE} ${GREEN}[09]${WHITE} Eliminar Usuario"
 echo
 echo -e "${WHITE} ${RED}[00] Salir${RESET}"
 
@@ -1543,85 +1533,55 @@ case "$OP" in
 
 1|01)
 
-install_dependencies
+setup_xray
 
 ;;
 
 2|02)
 
-install_xray_core
+status_xray
 
 ;;
 
 3|03)
 
-create_xray_config
+restart_xray
 
 ;;
 
 4|04)
 
-configure_nginx
+remove_xray
 
 ;;
 
 5|05)
 
-install_ssl
+create_vmess_user
 
 ;;
 
 6|06)
 
-enable_ssl
+list_vmess_users
 
 ;;
 
 7|07)
 
-create_vmess_user
+search_vmess_user
 
 ;;
 
 8|08)
 
-list_vmess_users
+generate_vmess_link
 
 ;;
 
 9|09)
 
-search_vmess_user
-
-;;
-
-10)
-
-generate_vmess_link
-
-;;
-
-11)
-
 delete_vmess_user
-
-;;
-
-12)
-
-status_xray
-
-;;
-
-13)
-
-restart_xray
-
-;;
-
-14)
-
-remove_xray
 
 ;;
 
