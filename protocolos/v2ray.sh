@@ -1,16 +1,19 @@
 #!/bin/bash
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            KevinTech Multi Script Premium
-#                  Xray / V2Ray Manager
+#          KevinTech Multi Script Premium
+#                 Xray Manager v4.0
 #
 # Compatible:
-#   Ubuntu 18.04
-#   Ubuntu 20.04
-#   Ubuntu 22.04
-#   Ubuntu 24.04
+#   Ubuntu 18.04 / 20.04 / 22.04 / 24.04
 #
-# Versión : 3.0 Premium
-# Autor   : KevinTech
+# Integración:
+#   ✔ WebSocket Manager
+#   ✔ SSL Manager (Stunnel)
+#   ✔ VMess
+#   ✔ VLESS
+#   ✔ Trojan
+#
+# Autor : KevinTech
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 
 ############################
@@ -20,8 +23,6 @@
 RESET="\e[0m"
 
 BLACK="\e[1;30m"
-GRAY="\e[1;90m"
-
 RED="\e[1;91m"
 GREEN="\e[1;92m"
 YELLOW="\e[1;93m"
@@ -29,9 +30,10 @@ BLUE="\e[1;94m"
 MAGENTA="\e[1;95m"
 CYAN="\e[1;96m"
 WHITE="\e[1;97m"
+GRAY="\e[1;90m"
 
 ############################
-# VARIABLES
+# RUTAS
 ############################
 
 BASE="/etc/kevintech"
@@ -43,68 +45,44 @@ XRAY_CONFIG="$XRAY_DIR/config.json"
 
 DATA_DIR="$BASE/v2ray"
 
-USERS_DB="$DATA_DIR/users.db"
+VMESS_DB="$DATA_DIR/vmess.db"
+VLESS_DB="$DATA_DIR/vless.db"
+TROJAN_DB="$DATA_DIR/trojan.db"
 
-LOG_DIR="$BASE/logs"
+LOG_DIR="/var/log/xray"
 
-VERSION="3.0 Premium"
+VERSION="4.0 Premium"
 
 ############################
-# COMPROBAR ROOT
+# VALIDAR ROOT
 ############################
 
-if [[ $EUID -ne 0 ]]
-then
-
-clear
-
-echo
-
-echo -e "${RED}╔══════════════════════════════════════╗${RESET}"
-echo -e "${RED}║      ESTE SCRIPT NECESITA ROOT      ║${RESET}"
-echo -e "${RED}╚══════════════════════════════════════╝${RESET}"
-
-echo
-
-exit 1
-
+if [[ $EUID -ne 0 ]]; then
+    clear
+    echo
+    echo -e "${RED}Este módulo requiere permisos ROOT.${RESET}"
+    echo
+    exit 1
 fi
 
 ############################
 # VALIDAR UBUNTU
 ############################
 
-if [[ -f /etc/os-release ]]
-then
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
 
-source /etc/os-release
-
-case "$VERSION_ID" in
-
-18.04|20.04|22.04|24.04)
-
-;;
-
-*)
-
-clear
-
-echo
-
-echo -e "${RED}Ubuntu no compatible.${RESET}"
-
-echo
-
-echo "Versión detectada: $VERSION_ID"
-
-echo
-
-exit 1
-
-;;
-
-esac
-
+    case "$VERSION_ID" in
+        18.04|20.04|22.04|24.04)
+        ;;
+        *)
+            clear
+            echo
+            echo -e "${RED}Ubuntu $VERSION_ID no soportado.${RESET}"
+            echo
+            exit 1
+        ;;
+    esac
 fi
 
 ############################
@@ -112,403 +90,163 @@ fi
 ############################
 
 mkdir -p "$BASE"
-
 mkdir -p "$DATA_DIR"
-
+mkdir -p "$XRAY_DIR"
 mkdir -p "$LOG_DIR"
 
-mkdir -p "$XRAY_DIR"
-
-touch "$USERS_DB"
+touch "$VMESS_DB"
+touch "$VLESS_DB"
+touch "$TROJAN_DB"
 
 ############################
 # CARGAR CONFIG
 ############################
 
-if [[ -f "$CONFIG" ]]
-then
-
-source "$CONFIG"
-
-fi
+[[ -f "$CONFIG" ]] && source "$CONFIG"
 
 ############################
 # FUNCIONES VISUALES
 ############################
 
-line(){
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
+line() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-title(){
+title() {
+    clear
 
-clear
-
-echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║${MAGENTA}              ⚜️ KevinTech Multi Script ⚜️              ${CYAN}║${RESET}"
-echo -e "${CYAN}║${WHITE}                   Xray / V2Ray Manager                  ${CYAN}║${RESET}"
-echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${MAGENTA}          ⚡ KevinTech Multi Script Premium ⚡          ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${WHITE}                 Xray Manager v4.0                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 }
 
-subtitle(){
-
-echo
-
-echo -e "${YELLOW}$1${RESET}"
-
-line
-
+ok() {
+    echo -e "${GREEN}✔ $1${RESET}"
 }
 
-ok(){
-
-echo
-
-echo -e "${GREEN}✔ $1${RESET}"
-
+error() {
+    echo -e "${RED}✘ $1${RESET}"
 }
 
-error(){
-
-echo
-
-echo -e "${RED}✘ $1${RESET}"
-
+info() {
+    echo -e "${CYAN}➜ $1${RESET}"
 }
 
-info(){
-
-echo
-
-echo -e "${CYAN}➜ $1${RESET}"
-
+pause() {
+    echo
+    read -n1 -rsp "Presiona cualquier tecla para continuar..."
 }
 
-pause(){
+############################
+# INFORMACIÓN VPS
+############################
 
-echo
+get_info() {
 
-read -n1 -rsp "Presiona cualquier tecla para continuar..."
+    VPS_IP=$(curl -4 -s ifconfig.me)
+
+    [[ -z "$VPS_IP" ]] && VPS_IP=$(hostname -I | awk '{print $1}')
+
+    HOST=$(hostname)
+
+    DOMAIN="${SERVER_DOMAIN:-Sin configurar}"
+
+    CPU=$(nproc)
+
+    RAM=$(free -h | awk '/Mem:/ {print $2}')
+
+    UPTIME=$(uptime -p | sed 's/up //')
+
+    KERNEL=$(uname -r)
 
 }
 
 ############################
-# OBTENER DATOS VPS
+# ENCABEZADO
 ############################
 
-get_server_info(){
+header() {
 
-IP=$(curl -4 -s ifconfig.me)
+    get_info
 
-[[ -z "$IP" ]] && IP=$(hostname -I | awk '{print $1}')
+    title
 
-DOMAIN="${SERVER_DOMAIN:-No Configurado}"
+    echo -e "${WHITE} Hostname : ${GREEN}$HOST${RESET}"
+    echo -e "${WHITE} Dominio  : ${GREEN}$DOMAIN${RESET}"
+    echo -e "${WHITE} IP VPS   : ${GREEN}$VPS_IP${RESET}"
+    echo -e "${WHITE} Kernel   : ${GREEN}$KERNEL${RESET}"
+    echo -e "${WHITE} CPU      : ${GREEN}${CPU} Core(s)${RESET}"
+    echo -e "${WHITE} RAM      : ${GREEN}$RAM${RESET}"
+    echo -e "${WHITE} Uptime   : ${GREEN}$UPTIME${RESET}"
 
-HOSTNAME=$(hostname)
-
-KERNEL=$(uname -r)
-
-RAM=$(free -h | awk '/Mem:/ {print $2}')
-
-CPU=$(nproc)
-
-UPTIME=$(uptime -p | sed 's/up //')
+    line
 
 }
 
 ############################
-# PANEL PRINCIPAL
+# FUNCIONES GENERALES
 ############################
 
-header(){
-
-get_server_info
-
-title
-
-echo -e "${WHITE} Hostname : ${GREEN}$HOSTNAME"
-echo -e "${WHITE} Dominio  : ${GREEN}$DOMAIN"
-echo -e "${WHITE} IP VPS   : ${GREEN}$IP"
-echo -e "${WHITE} Kernel   : ${GREEN}$KERNEL"
-echo -e "${WHITE} CPU      : ${GREEN}$CPU Core(s)"
-echo -e "${WHITE} RAM      : ${GREEN}$RAM"
-echo -e "${WHITE} Uptime   : ${GREEN}$UPTIME"
-
-line
-
-}
-############################
-# VALIDACIONES
-############################
-
-check_command(){
-
-command -v "$1" >/dev/null 2>&1
-
+public_ip() {
+    curl -4 -s ifconfig.me
 }
 
-check_service(){
+generate_uuid() {
+    uuidgen
+}
 
-systemctl list-unit-files | grep -qw "$1.service"
+today() {
+    date +"%Y-%m-%d"
+}
+
+save_config() {
+
+    local KEY="$1"
+    local VALUE="$2"
+
+    mkdir -p "$BASE"
+
+    touch "$CONFIG"
+
+    if grep -q "^${KEY}=" "$CONFIG"; then
+        sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG"
+    else
+        echo "${KEY}=${VALUE}" >> "$CONFIG"
+    fi
 
 }
 
-service_status(){
+service_status() {
 
-if systemctl is-active --quiet "$1"
-then
-    echo -e "${GREEN}🟢 ACTIVO${RESET}"
-else
-    echo -e "${RED}🔴 DETENIDO${RESET}"
-fi
-
-}
-
-############################
-# DETECTAR PUERTOS
-############################
-
-detect_port(){
-
-local SERVICE="$1"
-
-ss -tlnp 2>/dev/null |
-grep "$SERVICE" |
-awk '{print $4}' |
-awk -F: '{print $NF}' |
-head -1
+    if systemctl is-active --quiet "$1"; then
+        echo -e "${GREEN}ACTIVO${RESET}"
+    else
+        echo -e "${RED}DETENIDO${RESET}"
+    fi
 
 }
 
-############################
-# GUARDAR CONFIGURACIÓN
-############################
+restart_service() {
 
-save_config(){
+    systemctl restart "$1"
 
-local KEY="$1"
-local VALUE="$2"
+    sleep 2
 
-mkdir -p "$BASE"
-
-touch "$CONFIG"
-
-if grep -q "^${KEY}=" "$CONFIG"
-then
-
-sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG"
-
-else
-
-echo "${KEY}=${VALUE}" >> "$CONFIG"
-
-fi
-
-source "$CONFIG"
+    if systemctl is-active --quiet "$1"; then
+        ok "$1 iniciado correctamente."
+    else
+        error "No fue posible iniciar $1."
+    fi
 
 }
 
-############################
-# CONFIRMACIÓN
-############################
+check_internet() {
 
-confirm(){
+    curl -Is https://google.com --connect-timeout 5 >/dev/null
 
-read -rp "$(echo -e "${YELLOW}$1 [S/N]: ${RESET}")" RESP
-
-case "$RESP" in
-
-s|S|si|SI|Sí|sí|y|Y)
-
-return 0
-
-;;
-
-*)
-
-return 1
-
-;;
-
-esac
-
-}
-
-############################
-# BARRA DE PROGRESO
-############################
-
-progress(){
-
-local TEXT="$1"
-
-echo
-
-printf "${CYAN}%s${RESET}" "$TEXT"
-
-for i in {1..25}
-do
-printf "${GREEN}█${RESET}"
-sleep 0.03
-done
-
-echo
-
-}
-
-############################
-# COMPROBAR INTERNET
-############################
-
-check_internet(){
-
-curl -Is https://google.com --connect-timeout 5 >/dev/null
-
-if [[ $? -ne 0 ]]
-then
-
-error "No hay conexión a Internet."
-
-return 1
-
-fi
-
-return 0
-
-}
-
-############################
-# OBTENER FECHA
-############################
-
-today(){
-
-date +"%d/%m/%Y"
-
-}
-
-############################
-# GENERAR UUID
-############################
-
-generate_uuid(){
-
-uuidgen
-
-}
-
-############################
-# CONTAR USUARIOS
-############################
-
-total_users(){
-
-if [[ -f "$USERS_DB" ]]
-then
-grep -c "|" "$USERS_DB"
-else
-echo 0
-fi
-
-}
-
-############################
-# EXISTE USUARIO
-############################
-
-user_exists(){
-
-grep -q "^$1|" "$USERS_DB"
-
-}
-
-############################
-# OBTENER IP PÚBLICA
-############################
-
-public_ip(){
-
-curl -4 -s ifconfig.me
-
-}
-
-############################
-# LIMPIAR LOGS
-############################
-
-clean_logs(){
-
-rm -f "$LOG_DIR"/*.log 2>/dev/null
-
-}
-
-############################
-# REINICIAR SERVICIO
-############################
-
-restart_service(){
-
-local SERVICE="$1"
-
-systemctl restart "$SERVICE"
-
-sleep 2
-
-if systemctl is-active --quiet "$SERVICE"
-then
-
-ok "$SERVICE reiniciado correctamente."
-
-else
-
-error "No fue posible reiniciar $SERVICE."
-
-fi
-
-}
-
-############################
-# INSTALAR PAQUETES
-############################
-
-install_pkg(){
-
-for PKG in "$@"
-do
-
-if ! dpkg -s "$PKG" >/dev/null 2>&1
-then
-
-info "Instalando $PKG..."
-
-apt-get install -y "$PKG"
-
-fi
-
-done
-
-}
-
-############################
-# INFORMACIÓN DEL SISTEMA
-############################
-
-system_info(){
-
-header
-
-echo -e "${WHITE} Sistema      : ${GREEN}$PRETTY_NAME"
-echo -e "${WHITE} Arquitectura : ${GREEN}$(uname -m)"
-echo -e "${WHITE} Xray         : $(service_status xray)"
-echo -e "${WHITE} Nginx        : $(service_status nginx)"
-echo -e "${WHITE} Usuarios     : ${GREEN}$(total_users)"
-
-line
+    [[ $? -eq 0 ]]
 
 }
 ############################
@@ -517,52 +255,35 @@ line
 
 install_dependencies(){
 
-header
+    header
 
-subtitle "INSTALACIÓN DE DEPENDENCIAS"
+    echo -e "${YELLOW}Instalando dependencias...${RESET}"
 
-check_internet || return
+    apt-get update
 
-PACKAGES=(
-curl
-wget
-jq
-uuid-runtime
-nginx
-openssl
-certbot
-python3
-python3-pip
-ca-certificates
-tar
-unzip
-cron
-socat
-)
+    PACKAGES=(
+        curl
+        wget
+        unzip
+        tar
+        jq
+        uuid-runtime
+        socat
+        cron
+        openssl
+        ca-certificates
+    )
 
-for PKG in "${PACKAGES[@]}"
-do
+    for PKG in "${PACKAGES[@]}"
+    do
+        if ! dpkg -s "$PKG" >/dev/null 2>&1
+        then
+            info "Instalando $PKG..."
+            apt-get install -y "$PKG"
+        fi
+    done
 
-if dpkg -s "$PKG" >/dev/null 2>&1
-then
-
-echo -e "${GREEN}✔${RESET} $PKG"
-
-else
-
-echo -e "${YELLOW}➜ Instalando $PKG...${RESET}"
-
-apt-get install -y "$PKG"
-
-fi
-
-done
-
-echo
-
-ok "Dependencias instaladas correctamente."
-
-pause
+    ok "Dependencias instaladas."
 
 }
 
@@ -572,110 +293,75 @@ pause
 
 install_xray_core(){
 
-header
+    header
 
-subtitle "INSTALACIÓN DE XRAY CORE"
+    echo -e "${YELLOW}Instalando Xray Core...${RESET}"
 
-check_internet || return
+    if command -v xray >/dev/null 2>&1
+    then
+        ok "Xray ya está instalado."
+        return
+    fi
 
-if check_command xray
-then
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
-ok "Xray ya se encuentra instalado."
+    if ! command -v xray >/dev/null 2>&1
+    then
+        error "No fue posible instalar Xray."
+        pause
+        return
+    fi
 
-pause
+    mkdir -p "$XRAY_DIR"
 
-return
+    mkdir -p /var/log/xray
 
-fi
+    touch /var/log/xray/access.log
+    touch /var/log/xray/error.log
 
-progress "Descargando Xray "
+    chmod 755 "$XRAY_DIR"
+    chmod 755 /var/log/xray
 
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+    systemctl enable xray
 
-if ! check_command xray
-then
+    mkdir -p /etc/systemd/system/xray.service.d
 
-error "No fue posible instalar Xray."
-
-pause
-
-return
-
-fi
-
-mkdir -p "$XRAY_DIR"
-
-mkdir -p /var/log/xray
-
-touch /var/log/xray/access.log
-touch /var/log/xray/error.log
-
-chmod 755 "$XRAY_DIR"
-chmod 755 /var/log/xray
-
-systemctl enable xray
-
-cat >/etc/systemd/system/xray.service.d/restart.conf <<EOF
+    cat >/etc/systemd/system/xray.service.d/restart.conf <<EOF
 [Service]
 Restart=always
-RestartSec=5
+RestartSec=3
+LimitNOFILE=1048576
 EOF
 
-systemctl daemon-reload
+    systemctl daemon-reload
 
-systemctl restart xray
-
-sleep 2
-
-if systemctl is-active --quiet xray
-then
-
-save_config V2RAY ON
-
-ok "Xray instalado correctamente."
-
-else
-
-error "Xray no pudo iniciar."
-
-journalctl -u xray -n 15 --no-pager
-
-fi
-
-pause
+    ok "Xray instalado correctamente."
 
 }
 
 ############################
-# DESINSTALAR XRAY
+# CONFIGURACIÓN INICIAL
 ############################
 
-remove_xray(){
+prepare_xray(){
 
-header
+    header
 
-subtitle "DESINSTALAR XRAY"
+    echo -e "${YELLOW}Preparando entorno Xray...${RESET}"
 
-confirm "¿Desea eliminar completamente Xray?" || return
+    mkdir -p "$DATA_DIR"
 
-systemctl stop xray 2>/dev/null
+    touch "$VMESS_DB"
+    touch "$VLESS_DB"
+    touch "$TROJAN_DB"
 
-systemctl disable xray 2>/dev/null
+    mkdir -p "$XRAY_DIR"
 
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove
+    chmod -R 755 "$XRAY_DIR"
 
-rm -rf "$XRAY_DIR"
+    save_config XRAY ON
 
-rm -rf /var/log/xray
-
-rm -rf "$DATA_DIR"
-
-save_config V2RAY OFF
-
-ok "Xray eliminado correctamente."
-
-pause
+    ok "Entorno preparado."
 
 }
 
@@ -685,42 +371,70 @@ pause
 
 restart_xray(){
 
-header
-
-subtitle "REINICIAR XRAY"
-
-restart_service xray
-
-pause
+    restart_service xray
 
 }
 
 ############################
-# ESTADO XRAY
+# ESTADO
 ############################
 
 status_xray(){
 
-header
+    header
 
-subtitle "ESTADO DEL SERVICIO"
+    echo
+    echo -e "Estado del servicio : $(service_status xray)"
+    echo
 
-echo
+    systemctl --no-pager --full status xray
 
-systemctl --no-pager --full status xray
+    pause
 
-echo
+}
 
-line
+############################
+# DESINSTALAR XRAY
+############################
 
-echo -e "${WHITE}Estado          : $(service_status xray)"
-echo -e "${WHITE}Puerto Interno  : ${GREEN}10000"
-echo -e "${WHITE}WebSocket Path  : ${GREEN}/vmess"
-echo -e "${WHITE}Usuarios VMess  : ${GREEN}$(total_users)"
+remove_xray(){
 
-line
+    header
 
-pause
+    read -rp "¿Eliminar Xray completamente? [S/N]: " R
+
+    [[ "$R" != "S" && "$R" != "s" ]] && return
+
+    systemctl stop xray
+
+    systemctl disable xray
+
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove
+
+    rm -rf "$XRAY_DIR"
+    rm -rf "$DATA_DIR"
+
+    save_config XRAY OFF
+
+    ok "Xray eliminado."
+
+    pause
+
+}
+
+############################
+# INSTALACIÓN COMPLETA
+############################
+
+setup_xray(){
+
+    install_dependencies
+
+    install_xray_core
+
+    prepare_xray
+
+    restart_xray
 
 }
 ############################
@@ -729,13 +443,13 @@ pause
 
 create_xray_config(){
 
-header
+    header
 
-subtitle "CONFIGURANDO XRAY"
+    echo -e "${YELLOW}Creando configuración Xray...${RESET}"
 
-mkdir -p "$XRAY_DIR"
+    mkdir -p "$XRAY_DIR"
 
-cat > "$XRAY_CONFIG" <<EOF
+    cat > "$XRAY_CONFIG" <<EOF
 {
   "log": {
     "access": "/var/log/xray/access.log",
@@ -744,10 +458,11 @@ cat > "$XRAY_CONFIG" <<EOF
   },
 
   "inbounds":[
-    {
-      "listen":"127.0.0.1",
-      "port":10000,
 
+    {
+      "tag":"vmess-tcp",
+      "listen":"0.0.0.0",
+      "port":10000,
       "protocol":"vmess",
 
       "settings":{
@@ -755,19 +470,794 @@ cat > "$XRAY_CONFIG" <<EOF
       },
 
       "streamSettings":{
-        "network":"ws",
-        "security":"none",
+        "network":"tcp",
+        "security":"none"
+      }
+    },
 
-        "wsSettings":{
-          "path":"/vmess"
-        }
+    {
+      "tag":"vless-tcp",
+      "listen":"0.0.0.0",
+      "port":10001,
+      "protocol":"vless",
+
+      "settings":{
+        "clients":[]
+      },
+
+      "streamSettings":{
+        "network":"tcp",
+        "security":"none"
+      }
+    },
+
+    {
+      "tag":"trojan",
+      "listen":"0.0.0.0",
+      "port":10002,
+      "protocol":"trojan",
+
+      "settings":{
+        "clients":[]
+      },
+
+      "streamSettings":{
+        "network":"tcp",
+        "security":"none"
       }
     }
+
   ],
 
   "outbounds":[
     {
-      "protocol":"freedom"
+      "protocol":"freedom",
+      "tag":"direct"
+    },
+    {
+      "protocol":"blackhole",
+      "tag":"blocked"
+    }
+  ]
+}
+EOF
+
+    chmod 644 "$XRAY_CONFIG"
+
+    systemctl restart xray
+
+    sleep 2
+
+    if systemctl is-active --quiet xray
+    then
+
+        ok "Configuración creada correctamente."
+
+    else
+
+        error "Xray no pudo iniciar."
+
+        journalctl -u xray -n 30 --no-pager
+
+    fi
+
+    pause
+
+}
+
+############################
+# INFORMACIÓN DEL SERVICIO
+############################
+
+show_ports(){
+
+    header
+
+    echo
+
+    echo -e "${WHITE}Estado        : $(service_status xray)"
+    echo -e "${WHITE}VMess TCP     : ${GREEN}10000${RESET}"
+    echo -e "${WHITE}VLESS TCP     : ${GREEN}10001${RESET}"
+    echo -e "${WHITE}Trojan TCP    : ${GREEN}10002${RESET}"
+
+    echo
+    line
+
+    ss -tlnp | grep xray
+
+    echo
+
+    pause
+
+}
+
+############################
+# INSTALACIÓN COMPLETA
+############################
+
+setup_xray(){
+
+    install_dependencies
+
+    install_xray_core
+
+    prepare_xray
+
+    create_xray_config
+
+    restart_xray
+
+}
+############################
+# CREAR USUARIO VMESS
+############################
+
+create_vmess(){
+
+    header
+
+    echo -e "${CYAN}Crear Usuario VMess${RESET}"
+    echo
+
+    read -rp "Usuario : " USER
+
+    [[ -z "$USER" ]] && {
+        error "Nombre inválido."
+        pause
+        return
+    }
+
+    if grep -qw "^${USER}|" "$VMESS_DB"; then
+        error "El usuario ya existe."
+        pause
+        return
+    fi
+
+    read -rp "Días de duración : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    UUID=$(generate_uuid)
+
+    EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    jq \
+    --arg uuid "$UUID" \
+    --arg email "$USER" \
+    '.inbounds[0].settings.clients += [{
+        "id":$uuid,
+        "alterId":0,
+        "email":$email
+    }]' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    echo "${USER}|${UUID}|${EXP}" >> "$VMESS_DB"
+
+    restart_xray
+
+    IP=$(public_ip)
+
+    clear
+
+    line
+    echo "       VMESS CREADO"
+    line
+
+    echo
+    echo "Usuario : $USER"
+    echo "UUID    : $UUID"
+    echo "Expira  : $EXP"
+    echo
+    echo "IP      : $IP"
+    echo "Puerto  : 10000"
+    echo
+    line
+
+    pause
+
+}
+
+############################
+# LISTAR VMESS
+############################
+
+list_vmess(){
+
+    header
+
+    if [[ ! -s "$VMESS_DB" ]]; then
+        info "No existen usuarios."
+        pause
+        return
+    fi
+
+    printf "%-20s %-15s\n" "USUARIO" "EXPIRACIÓN"
+
+    line
+
+    while IFS="|" read USER UUID EXP
+    do
+        printf "%-20s %-15s\n" "$USER" "$EXP"
+    done < "$VMESS_DB"
+
+    echo
+
+    pause
+
+}
+
+############################
+# ELIMINAR VMESS
+############################
+
+remove_vmess(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -qw "^${USER}|" "$VMESS_DB"; then
+        error "Usuario inexistente."
+        pause
+        return
+    fi
+
+    UUID=$(grep "^${USER}|" "$VMESS_DB" | cut -d'|' -f2)
+
+    jq \
+    --arg uuid "$UUID" \
+    '(.inbounds[0].settings.clients) |= map(select(.id != $uuid))' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    grep -vw "^${USER}|" "$VMESS_DB" > /tmp/vmess.db
+
+    mv /tmp/vmess.db "$VMESS_DB"
+
+    restart_xray
+
+    ok "Usuario eliminado."
+
+    pause
+
+}
+############################
+# CREAR USUARIO VLESS
+############################
+
+create_vless(){
+
+    header
+
+    echo -e "${CYAN}Crear Usuario VLESS${RESET}"
+    echo
+
+    read -rp "Usuario : " USER
+
+    [[ -z "$USER" ]] && {
+        error "Nombre inválido."
+        pause
+        return
+    }
+
+    if grep -qw "^${USER}|" "$VLESS_DB"; then
+        error "El usuario ya existe."
+        pause
+        return
+    fi
+
+    read -rp "Días de duración : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    UUID=$(generate_uuid)
+
+    EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    jq \
+    --arg uuid "$UUID" \
+    --arg email "$USER" \
+    '.inbounds[1].settings.clients += [{
+        "id":$uuid,
+        "email":$email
+    }]' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    echo "${USER}|${UUID}|${EXP}" >> "$VLESS_DB"
+
+    restart_xray
+
+    IP=$(public_ip)
+
+    clear
+
+    line
+    echo "       VLESS CREADO"
+    line
+    echo
+    echo "Usuario : $USER"
+    echo "UUID    : $UUID"
+    echo "Expira  : $EXP"
+    echo
+    echo "IP      : $IP"
+    echo "Puerto  : 10001"
+    echo
+    line
+
+    pause
+
+}
+
+############################
+# LISTAR VLESS
+############################
+
+list_vless(){
+
+    header
+
+    if [[ ! -s "$VLESS_DB" ]]; then
+        info "No existen usuarios."
+        pause
+        return
+    fi
+
+    printf "%-20s %-15s\n" "USUARIO" "EXPIRACIÓN"
+
+    line
+
+    while IFS="|" read USER UUID EXP
+    do
+        printf "%-20s %-15s\n" "$USER" "$EXP"
+    done < "$VLESS_DB"
+
+    echo
+
+    pause
+
+}
+
+############################
+# ELIMINAR VLESS
+############################
+
+remove_vless(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -qw "^${USER}|" "$VLESS_DB"; then
+        error "Usuario inexistente."
+        pause
+        return
+    fi
+
+    UUID=$(grep "^${USER}|" "$VLESS_DB" | cut -d'|' -f2)
+
+    jq \
+    --arg uuid "$UUID" \
+    '(.inbounds[1].settings.clients) |= map(select(.id != $uuid))' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    grep -vw "^${USER}|" "$VLESS_DB" > /tmp/vless.db
+
+    mv /tmp/vless.db "$VLESS_DB"
+
+    restart_xray
+
+    ok "Usuario eliminado."
+
+    pause
+
+}
+############################
+# CREAR USUARIO TROJAN
+############################
+
+create_trojan(){
+
+    header
+
+    echo -e "${CYAN}Crear Usuario Trojan${RESET}"
+    echo
+
+    read -rp "Usuario : " USER
+
+    [[ -z "$USER" ]] && {
+        error "Nombre inválido."
+        pause
+        return
+    }
+
+    if grep -qw "^${USER}|" "$TROJAN_DB"; then
+        error "El usuario ya existe."
+        pause
+        return
+    fi
+
+    read -rp "Días de duración : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    PASSWORD=$(openssl rand -hex 16)
+
+    EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    jq \
+    --arg pass "$PASSWORD" \
+    --arg email "$USER" \
+    '.inbounds[2].settings.clients += [{
+        "password":$pass,
+        "email":$email
+    }]' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    echo "${USER}|${PASSWORD}|${EXP}" >> "$TROJAN_DB"
+
+    restart_xray
+
+    IP=$(public_ip)
+
+    clear
+
+    line
+    echo "        TROJAN CREADO"
+    line
+    echo
+    echo "Usuario    : $USER"
+    echo "Password   : $PASSWORD"
+    echo "Expira     : $EXP"
+    echo
+    echo "Servidor   : $IP"
+    echo "Puerto     : 10002"
+    echo
+    line
+
+    pause
+
+}
+
+############################
+# LISTAR TROJAN
+############################
+
+list_trojan(){
+
+    header
+
+    if [[ ! -s "$TROJAN_DB" ]]; then
+        info "No existen usuarios."
+        pause
+        return
+    fi
+
+    printf "%-20s %-15s\n" "USUARIO" "EXPIRACIÓN"
+
+    line
+
+    while IFS="|" read USER PASS EXP
+    do
+        printf "%-20s %-15s\n" "$USER" "$EXP"
+    done < "$TROJAN_DB"
+
+    echo
+
+    pause
+
+}
+
+############################
+# ELIMINAR TROJAN
+############################
+
+remove_trojan(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -qw "^${USER}|" "$TROJAN_DB"; then
+        error "Usuario inexistente."
+        pause
+        return
+    fi
+
+    PASS=$(grep "^${USER}|" "$TROJAN_DB" | cut -d'|' -f2)
+
+    jq \
+    --arg pass "$PASS" \
+    '(.inbounds[2].settings.clients) |= map(select(.password != $pass))' \
+    "$XRAY_CONFIG" > /tmp/xray.json
+
+    mv /tmp/xray.json "$XRAY_CONFIG"
+
+    grep -vw "^${USER}|" "$TROJAN_DB" > /tmp/trojan.db
+
+    mv /tmp/trojan.db "$TROJAN_DB"
+
+    restart_xray
+
+    ok "Usuario eliminado."
+
+    pause
+
+}
+############################
+# RENOVAR USUARIO VMESS
+############################
+
+renew_vmess(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -q "^${USER}|" "$VMESS_DB"; then
+        error "Usuario no encontrado."
+        pause
+        return
+    fi
+
+    read -rp "Días adicionales : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    UUID=$(grep "^${USER}|" "$VMESS_DB" | cut -d'|' -f2)
+
+    NEW_EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    sed -i "/^${USER}|/d" "$VMESS_DB"
+
+    echo "${USER}|${UUID}|${NEW_EXP}" >> "$VMESS_DB"
+
+    ok "Cuenta renovada."
+
+    pause
+
+}
+
+############################
+# RENOVAR USUARIO VLESS
+############################
+
+renew_vless(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -q "^${USER}|" "$VLESS_DB"; then
+        error "Usuario no encontrado."
+        pause
+        return
+    fi
+
+    read -rp "Días adicionales : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    UUID=$(grep "^${USER}|" "$VLESS_DB" | cut -d'|' -f2)
+
+    NEW_EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    sed -i "/^${USER}|/d" "$VLESS_DB"
+
+    echo "${USER}|${UUID}|${NEW_EXP}" >> "$VLESS_DB"
+
+    ok "Cuenta renovada."
+
+    pause
+
+}
+
+############################
+# RENOVAR USUARIO TROJAN
+############################
+
+renew_trojan(){
+
+    header
+
+    read -rp "Usuario : " USER
+
+    if ! grep -q "^${USER}|" "$TROJAN_DB"; then
+        error "Usuario no encontrado."
+        pause
+        return
+    fi
+
+    read -rp "Días adicionales : " DAYS
+
+    [[ -z "$DAYS" ]] && DAYS=30
+
+    PASS=$(grep "^${USER}|" "$TROJAN_DB" | cut -d'|' -f2)
+
+    NEW_EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
+
+    sed -i "/^${USER}|/d" "$TROJAN_DB"
+
+    echo "${USER}|${PASS}|${NEW_EXP}" >> "$TROJAN_DB"
+
+    ok "Cuenta renovada."
+
+    pause
+
+}
+
+############################
+# ELIMINAR CUENTAS EXPIRADAS
+############################
+
+remove_expired(){
+
+    TODAY=$(date +%F)
+
+    for DB in "$VMESS_DB" "$VLESS_DB" "$TROJAN_DB"
+    do
+
+        [[ -f "$DB" ]] || continue
+
+        TMP=$(mktemp)
+
+        while IFS="|" read -r USER KEY EXP
+        do
+
+            [[ -z "$USER" ]] && continue
+
+            if [[ "$EXP" > "$TODAY" || "$EXP" == "$TODAY" ]]; then
+                echo "$USER|$KEY|$EXP" >> "$TMP"
+            fi
+
+        done < "$DB"
+
+        mv "$TMP" "$DB"
+
+    done
+
+    sync_xray
+
+}
+
+############################
+# SINCRONIZAR CONFIG.JSON
+############################
+
+sync_xray(){
+
+    create_xray_config
+
+    while IFS="|" read -r USER UUID EXP
+    do
+
+        [[ -z "$USER" ]] && continue
+
+        jq \
+        --arg uuid "$UUID" \
+        --arg email "$USER" \
+        '.inbounds[0].settings.clients += [{
+            "id":$uuid,
+            "alterId":0,
+            "email":$email
+        }]' \
+        "$XRAY_CONFIG" > /tmp/xray.json
+
+        mv /tmp/xray.json "$XRAY_CONFIG"
+
+    done < "$VMESS_DB"
+
+    while IFS="|" read -r USER UUID EXP
+    do
+
+        [[ -z "$USER" ]] && continue
+
+        jq \
+        --arg uuid "$UUID" \
+        --arg email "$USER" \
+        '.inbounds[1].settings.clients += [{
+            "id":$uuid,
+            "email":$email
+        }]' \
+        "$XRAY_CONFIG" > /tmp/xray.json
+
+        mv /tmp/xray.json "$XRAY_CONFIG"
+
+    done < "$VLESS_DB"
+
+    while IFS="|" read -r USER PASS EXP
+    do
+
+        [[ -z "$USER" ]] && continue
+
+        jq \
+        --arg pass "$PASS" \
+        --arg email "$USER" \
+        '.inbounds[2].settings.clients += [{
+            "password":$pass,
+            "email":$email
+        }]' \
+        "$XRAY_CONFIG" > /tmp/xray.json
+
+        mv /tmp/xray.json "$XRAY_CONFIG"
+
+    done < "$TROJAN_DB"
+
+    restart_xray
+
+}
+############################
+# GENERAR CONFIG.JSON
+############################
+
+generate_xray_config(){
+
+cat > "$XRAY_CONFIG" <<EOF
+{
+  "log":{
+    "access":"/var/log/xray/access.log",
+    "error":"/var/log/xray/error.log",
+    "loglevel":"warning"
+  },
+
+  "inbounds":[
+
+    {
+      "tag":"vmess-tcp",
+      "listen":"0.0.0.0",
+      "port":10000,
+      "protocol":"vmess",
+      "settings":{
+        "clients":[]
+      },
+      "streamSettings":{
+        "network":"tcp",
+        "security":"none"
+      }
+    },
+
+    {
+      "tag":"vless-tcp",
+      "listen":"0.0.0.0",
+      "port":10001,
+      "protocol":"vless",
+      "settings":{
+        "clients":[]
+      },
+      "streamSettings":{
+        "network":"tcp",
+        "security":"none"
+      }
+    },
+
+    {
+      "tag":"trojan",
+      "listen":"0.0.0.0",
+      "port":10002,
+      "protocol":"trojan",
+      "settings":{
+        "clients":[]
+      },
+      "streamSettings":{
+        "network":"tcp",
+        "security":"none"
+      }
+    }
+
+  ],
+
+  "outbounds":[
+    {
+      "protocol":"freedom",
+      "tag":"direct"
     },
     {
       "protocol":"blackhole",
@@ -779,821 +1269,339 @@ EOF
 
 chmod 644 "$XRAY_CONFIG"
 
-systemctl restart xray
+}
 
-if systemctl is-active --quiet xray
-then
+############################
+# RECONSTRUIR CONFIG.JSON
+############################
 
-ok "Configuración Xray creada."
+rebuild_xray(){
 
-else
+    generate_xray_config
 
-error "Xray no pudo iniciar."
-
-journalctl -u xray -n 20 --no-pager
-
-fi
-
-pause
+    sync_xray
 
 }
 
 ############################
-# CONFIGURAR NGINX
+# TAREA AUTOMÁTICA
 ############################
 
-configure_nginx(){
+install_cron(){
 
-header
+cat >/etc/cron.daily/xray-clean <<'EOF'
+#!/bin/bash
 
-subtitle "CONFIGURANDO NGINX"
+BASE="/etc/kevintech/xray"
 
-if [[ -z "$SERVER_DOMAIN" ]]
-then
+[[ -f "$BASE/vmess.db" ]] || exit 0
 
-error "No existe un dominio configurado."
-
-pause
-
-return
-
-fi
-
-cat >/etc/nginx/conf.d/vmess.conf <<EOF
-server {
-
-    listen 80;
-
-    server_name $SERVER_DOMAIN;
-
-    location /vmess {
-
-        proxy_redirect off;
-
-        proxy_pass http://127.0.0.1:10000;
-
-        proxy_http_version 1.1;
-
-        proxy_set_header Upgrade \$http_upgrade;
-
-        proxy_set_header Connection "upgrade";
-
-        proxy_set_header Host \$host;
-
-        proxy_set_header X-Real-IP \$remote_addr;
-
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-
-    }
-
-}
+bash "$BASE/expire.sh"
 EOF
 
-if nginx -t
-then
-
-systemctl restart nginx
-
-ok "Nginx configurado correctamente."
-
-else
-
-error "La configuración de Nginx contiene errores."
-
-fi
-
-pause
+chmod +x /etc/cron.daily/xray-clean
 
 }
 
 ############################
-# INSTALAR SSL
+# SCRIPT DE EXPIRACIÓN
 ############################
 
-install_ssl(){
+cat > "$XRAY_DIR/expire.sh" <<'EOF'
+#!/bin/bash
 
-header
+BASE="/etc/kevintech/xray"
 
-subtitle "GENERAR CERTIFICADO SSL"
+VMESS_DB="$BASE/vmess.db"
+VLESS_DB="$BASE/vless.db"
+TROJAN_DB="$BASE/trojan.db"
 
-if [[ -z "$SERVER_DOMAIN" ]]
-then
+XRAY_CONFIG="/usr/local/etc/xray/config.json"
 
-error "No hay dominio configurado."
+TODAY=$(date +%F)
 
-pause
+clean_db(){
 
-return
+DB="$1"
 
-fi
+TMP=$(mktemp)
 
-IP=$(public_ip)
-
-DNS=$(dig +short "$SERVER_DOMAIN" | head -1)
-
-if [[ "$IP" != "$DNS" ]]
-then
-
-error "El dominio aún no apunta a esta VPS."
-
-echo
-
-echo "Dominio : $SERVER_DOMAIN"
-echo "DNS     : $DNS"
-echo "VPS     : $IP"
-
-pause
-
-return
-
-fi
-
-progress "Generando certificado "
-
-certbot certonly \
---nginx \
--d "$SERVER_DOMAIN" \
---agree-tos \
---register-unsafely-without-email \
---non-interactive
-
-if [[ $? -ne 0 ]]
-then
-
-error "No fue posible generar el certificado."
-
-pause
-
-return
-
-fi
-
-ok "Certificado SSL instalado."
-
-pause
-
-}
-
-############################
-# ACTIVAR SSL EN NGINX
-############################
-
-enable_ssl(){
-
-header
-
-subtitle "ACTIVANDO SSL"
-
-cat >/etc/nginx/conf.d/vmess.conf <<EOF
-server {
-
-    listen 80;
-
-    server_name $SERVER_DOMAIN;
-
-    return 301 https://\$host\$request_uri;
-
-}
-
-server {
-
-    listen 443 ssl http2;
-
-    server_name $SERVER_DOMAIN;
-
-    ssl_certificate /etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem;
-
-    ssl_certificate_key /etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem;
-
-    location /vmess {
-
-        proxy_redirect off;
-
-        proxy_pass http://127.0.0.1:10000;
-
-        proxy_http_version 1.1;
-
-        proxy_set_header Upgrade \$http_upgrade;
-
-        proxy_set_header Connection "upgrade";
-
-        proxy_set_header Host \$host;
-
-        proxy_set_header X-Real-IP \$remote_addr;
-
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-
-    }
-
-}
-EOF
-
-if nginx -t
-then
-
-systemctl restart nginx
-
-save_config V2RAY ON
-
-ok "SSL activado correctamente."
-
-else
-
-error "No fue posible activar SSL."
-
-fi
-
-pause
-
-}
-
-############################
-# INSTALACIÓN AUTOMÁTICA
-############################
-
-setup_xray(){
-
-install_dependencies
-
-install_xray_core
-
-create_xray_config
-
-configure_nginx
-
-install_ssl
-
-enable_ssl
-
-}
-############################
-# CREAR USUARIO VMESS
-############################
-
-create_vmess_user(){
-
-header
-
-subtitle "CREAR NUEVA CUENTA VMESS"
-
-echo
-
-read -rp "$(echo -e "${GREEN}👤 Usuario             : ${RESET}")" USER
-
-[[ -z "$USER" ]] && {
-
-error "Debe ingresar un usuario."
-
-pause
-
-return
-
-}
-
-if user_exists "$USER"
-then
-
-error "El usuario ya existe."
-
-pause
-
-return
-
-fi
-
-echo
-
-read -rp "$(echo -e "${GREEN}📅 Duración (días)     : ${RESET}")" DAYS
-
-[[ -z "$DAYS" ]] && DAYS=30
-
-echo
-
-read -rp "$(echo -e "${GREEN}👥 Límite (0=Ilimitado): ${RESET}")" LIMIT
-
-[[ -z "$LIMIT" ]] && LIMIT=0
-
-if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]
-then
-
-error "Límite inválido."
-
-pause
-
-return
-
-fi
-
-UUID=$(generate_uuid)
-
-EXP=$(date -d "+$DAYS days" +"%Y-%m-%d")
-
-if [[ "$LIMIT" == "0" ]]
-then
-
-LIMIT_SHOW="♾ Ilimitado"
-
-else
-
-LIMIT_SHOW="$LIMIT"
-
-fi
-
-############################
-# GUARDAR USUARIO
-############################
-
-echo "$USER|$UUID|$EXP|$LIMIT" >> "$USERS_DB"
-
-############################
-# AGREGAR A XRAY
-############################
-
-python3 <<PYTHON
-
-import json
-
-config="$XRAY_CONFIG"
-
-with open(config,"r") as f:
-    data=json.load(f)
-
-clients=data["inbounds"][0]["settings"]["clients"]
-
-clients.append({
-"id":"$UUID",
-"email":"$USER",
-"level":0
-})
-
-with open(config,"w") as f:
-    json.dump(data,f,indent=2)
-
-PYTHON
-
-systemctl restart xray
-
-############################
-# VERIFICAR
-############################
-
-if ! systemctl is-active --quiet xray
-then
-
-error "Xray no pudo iniciar."
-
-pause
-
-return
-
-fi
-
-header
-
-subtitle "CUENTA CREADA"
-
-IP=$(public_ip)
-
-echo
-
-echo -e "${CYAN}┌───────────────────────────────────────────────────────────┐${RESET}"
-printf "${WHITE}│ Usuario      : ${GREEN}%-38s${WHITE}│\n" "$USER"
-printf "${WHITE}│ UUID         : ${GREEN}%-38s${WHITE}│\n" "$UUID"
-printf "${WHITE}│ Expira       : ${GREEN}%-38s${WHITE}│\n" "$EXP"
-printf "${WHITE}│ Límite       : ${GREEN}%-38s${WHITE}│\n" "$LIMIT_SHOW"
-printf "${WHITE}│ Dominio      : ${GREEN}%-38s${WHITE}│\n" "$SERVER_DOMAIN"
-printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "443"
-printf "${WHITE}│ WebSocket    : ${GREEN}%-38s${WHITE}│\n" "/vmess"
-echo -e "${CYAN}└───────────────────────────────────────────────────────────┘${RESET}"
-
-echo
-
-ok "Cuenta VMess creada correctamente."
-
-pause
-
-}
-############################
-# LISTAR USUARIOS VMESS
-############################
-
-list_vmess_users(){
-
-header
-
-subtitle "LISTA DE CUENTAS VMESS"
-
-if [[ ! -s "$USERS_DB" ]]
-then
-
-error "No existen usuarios registrados."
-
-pause
-
-return
-
-fi
-
-printf "${CYAN}┌────┬────────────────┬──────────────┬──────────────┬──────────────┐${RESET}\n"
-printf "${WHITE}│ Nº │ Usuario        │ Expira       │ Límite       │ Estado       │${RESET}\n"
-printf "${CYAN}├────┼────────────────┼──────────────┼──────────────┼──────────────┤${RESET}\n"
-
-NUM=1
-
-TODAY=$(date +%s)
-
-while IFS="|" read -r USER UUID EXP LIMIT
+while IFS="|" read USER KEY EXP
 do
 
-EXP_TIME=$(date -d "$EXP" +%s)
+[[ -z "$USER" ]] && continue
 
-if [[ "$LIMIT" == "0" ]]
+if [[ "$EXP" > "$TODAY" || "$EXP" == "$TODAY" ]]
 then
-    LIMIT_SHOW="♾"
-else
-    LIMIT_SHOW="$LIMIT"
+echo "$USER|$KEY|$EXP" >> "$TMP"
 fi
 
-if (( EXP_TIME >= TODAY ))
-then
-    STATUS="${GREEN}🟢 Activo${RESET}"
-else
-    STATUS="${RED}🔴 Expirado${RESET}"
-fi
+done < "$DB"
 
-printf "│ %-2s │ %-14s │ %-12s │ %-12s │ %-20b │\n" \
-"$NUM" \
-"$USER" \
-"$EXP" \
-"$LIMIT_SHOW" \
-"$STATUS"
-
-NUM=$((NUM+1))
-
-done < "$USERS_DB"
-
-printf "${CYAN}└────┴────────────────┴──────────────┴──────────────┴──────────────┘${RESET}\n"
-
-echo
-
-echo -e "${WHITE}Total de usuarios : ${GREEN}$((NUM-1))${RESET}"
-
-pause
+mv "$TMP" "$DB"
 
 }
 
-############################
-# BUSCAR USUARIO
-############################
+clean_db "$VMESS_DB"
+clean_db "$VLESS_DB"
+clean_db "$TROJAN_DB"
 
-search_vmess_user(){
-
-header
-
-subtitle "BUSCAR USUARIO"
-
-echo
-
-read -rp "$(echo -e "${GREEN}Usuario: ${RESET}")" USER
-
-DATA=$(grep "^$USER|" "$USERS_DB")
-
-if [[ -z "$DATA" ]]
-then
-
-error "Usuario no encontrado."
-
-pause
-
-return
-
-fi
-
-UUID=$(echo "$DATA" | cut -d "|" -f2)
-EXP=$(echo "$DATA" | cut -d "|" -f3)
-LIMIT=$(echo "$DATA" | cut -d "|" -f4)
-
-[[ "$LIMIT" == "0" ]] && LIMIT="♾ Ilimitado"
-
-echo
-
-echo -e "${CYAN}┌───────────────────────────────────────────────────────────┐${RESET}"
-printf "${WHITE}│ Usuario      : ${GREEN}%-38s${WHITE}│\n" "$USER"
-printf "${WHITE}│ UUID         : ${GREEN}%-38s${WHITE}│\n" "$UUID"
-printf "${WHITE}│ Expira       : ${GREEN}%-38s${WHITE}│\n" "$EXP"
-printf "${WHITE}│ Límite       : ${GREEN}%-38s${WHITE}│\n" "$LIMIT"
-echo -e "${CYAN}└───────────────────────────────────────────────────────────┘${RESET}"
-
-pause
-
-}
-
-############################
-# ELIMINAR USUARIO
-############################
-
-delete_vmess_user(){
-
-header
-
-subtitle "ELIMINAR USUARIO"
-
-echo
-
-read -rp "$(echo -e "${GREEN}Usuario: ${RESET}")" USER
-
-if ! user_exists "$USER"
-then
-
-error "El usuario no existe."
-
-pause
-
-return
-
-fi
-
-UUID=$(grep "^$USER|" "$USERS_DB" | cut -d "|" -f2)
-
-confirm "¿Eliminar la cuenta de $USER?" || return
-
-grep -v "^$USER|" "$USERS_DB" > "$USERS_DB.tmp"
-
-mv "$USERS_DB.tmp" "$USERS_DB"
-
-python3 <<PYTHON
-import json
-
-cfg="$XRAY_CONFIG"
-
-with open(cfg) as f:
-    data=json.load(f)
-
-clients=data["inbounds"][0]["settings"]["clients"]
-
-data["inbounds"][0]["settings"]["clients"]=[
-c for c in clients
-if c.get("id") != "$UUID"
-]
-
-with open(cfg,"w") as f:
-    json.dump(data,f,indent=2)
-PYTHON
-
-systemctl restart xray
-
-ok "Usuario eliminado correctamente."
-
-pause
-
-}
-############################
-# GENERAR LINK VMESS
-############################
-
-generate_vmess_link(){
-
-header
-
-subtitle "GENERAR LINK VMESS"
-
-echo
-
-read -rp "$(echo -e "${GREEN}👤 Usuario: ${RESET}")" USER
-
-DATA=$(grep "^$USER|" "$USERS_DB")
-
-if [[ -z "$DATA" ]]
-then
-
-error "El usuario no existe."
-
-pause
-
-return
-
-fi
-
-UUID=$(echo "$DATA" | cut -d "|" -f2)
-EXP=$(echo "$DATA" | cut -d "|" -f3)
-LIMIT=$(echo "$DATA" | cut -d "|" -f4)
-
-[[ "$LIMIT" == "0" ]] && LIMIT_SHOW="♾ Ilimitado" || LIMIT_SHOW="$LIMIT"
-
-IP=$(public_ip)
-
-VMESS_JSON=$(cat <<EOF
-{
-  "v":"2",
-  "ps":"$USER",
-  "add":"$SERVER_DOMAIN",
-  "port":"443",
-  "id":"$UUID",
-  "aid":"0",
-  "scy":"auto",
-  "net":"ws",
-  "type":"none",
-  "host":"$SERVER_DOMAIN",
-  "path":"/vmess",
-  "tls":"tls",
-  "sni":"$SERVER_DOMAIN"
-}
+exit 0
 EOF
-)
 
-LINK=$(echo -n "$VMESS_JSON" | base64 -w0)
+chmod +x "$XRAY_DIR/expire.sh"
 
-header
+############################
+# FINALIZAR INSTALACIÓN
+############################
 
-subtitle "DATOS DE LA CUENTA VMESS"
+finish_install(){
 
-echo -e "${CYAN}┌────────────────────────────────────────────────────────────┐${RESET}"
-printf "${WHITE}│ Usuario      : ${GREEN}%-38s${WHITE}│\n" "$USER"
-printf "${WHITE}│ UUID         : ${GREEN}%-38s${WHITE}│\n" "$UUID"
-printf "${WHITE}│ Expira       : ${GREEN}%-38s${WHITE}│\n" "$EXP"
-printf "${WHITE}│ Límite       : ${GREEN}%-38s${WHITE}│\n" "$LIMIT_SHOW"
-printf "${WHITE}│ Dominio      : ${GREEN}%-38s${WHITE}│\n" "$SERVER_DOMAIN"
-printf "${WHITE}│ Host/IP      : ${GREEN}%-38s${WHITE}│\n" "$IP"
-printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "443"
-printf "${WHITE}│ WebSocket    : ${GREEN}%-38s${WHITE}│\n" "/vmess"
-printf "${WHITE}│ TLS          : ${GREEN}%-38s${WHITE}│\n" "Activado"
-echo -e "${CYAN}└────────────────────────────────────────────────────────────┘${RESET}"
+    install_cron
 
-echo
+    rebuild_xray
 
-subtitle "CONFIGURACIÓN MANUAL"
+    restart_xray
 
-echo -e "${WHITE}🌐 Servidor  : ${GREEN}$SERVER_DOMAIN"
-echo -e "${WHITE}📡 Puerto    : ${GREEN}443"
-echo -e "${WHITE}📂 Path      : ${GREEN}/vmess"
-echo -e "${WHITE}🔒 TLS       : ${GREEN}Sí"
-echo -e "${WHITE}🛰 SNI       : ${GREEN}$SERVER_DOMAIN"
-
-echo
-
-subtitle "ENLACE VMESS"
-
-echo -e "${GREEN}vmess://$LINK${RESET}"
-
-echo
-
-subtitle "APLICACIONES COMPATIBLES"
-
-echo -e "${WHITE}✔ v2rayNG"
-echo -e "${WHITE}✔ NekoBox"
-echo -e "${WHITE}✔ Hiddify"
-echo -e "${WHITE}✔ HTTP Injector"
-echo -e "${WHITE}✔ HTTP Custom"
-echo -e "${WHITE}✔ NapsternetV"
-echo -e "${WHITE}✔ V2Box"
-echo -e "${WHITE}✔ Clash Meta"
-
-echo
-
-ok "Link generado correctamente."
-
-pause
+    ok "Xray configurado correctamente."
 
 }
 ############################
-# PANEL PRINCIPAL XRAY
+# MENÚ VMESS
 ############################
 
-v2ray_manager(){
+menu_vmess(){
 
 while true
 do
 
 header
 
-XRAY_STATUS=$(service_status xray)
-NGINX_STATUS=$(service_status nginx)
-
-TOTAL=$(total_users)
-
-ACTIVE=0
-EXPIRED=0
-
-if [[ -s "$USERS_DB" ]]
-then
-
-NOW=$(date +%s)
-
-while IFS="|" read -r USER UUID EXP LIMIT
-do
-
-EXP_TIME=$(date -d "$EXP" +%s)
-
-if (( EXP_TIME >= NOW ))
-then
-
-ACTIVE=$((ACTIVE+1))
-else
-
-EXPIRED=$((EXPIRED+1))
-fi
-
-done < "$USERS_DB"
-
-fi
-
-echo -e "${CYAN}┌────────────────────────────────────────────────────────────┐${RESET}"
-printf "${WHITE}│ Estado Xray    : %-38b │\n" "$XRAY_STATUS"
-printf "${WHITE}│ Estado Nginx   : %-38b │\n" "$NGINX_STATUS"
-printf "${WHITE}│ Usuarios       : ${GREEN}%-38s${WHITE}│\n" "$TOTAL"
-printf "${WHITE}│ Activos        : ${GREEN}%-38s${WHITE}│\n" "$ACTIVE"
-printf "${WHITE}│ Expirados      : ${RED}%-38s${WHITE}│\n" "$EXPIRED"
-echo -e "${CYAN}└────────────────────────────────────────────────────────────┘${RESET}"
-
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        VMESS MANAGER"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+echo " [1] Crear Usuario"
+echo " [2] Eliminar Usuario"
+echo " [3] Renovar Usuario"
+echo " [4] Listar Usuarios"
+echo
+echo " [0] Regresar"
 echo
 
-echo -e "${YELLOW}================== GESTIÓN DEL SERVIDOR ==================${RESET}"
-
-echo -e "${WHITE} ${GREEN}[01]${WHITE} Instalar Xray Completo"
-echo -e "${WHITE} ${GREEN}[02]${WHITE} Estado de Xray"
-echo -e "${WHITE} ${GREEN}[03]${WHITE} Reiniciar Xray"
-echo -e "${WHITE} ${GREEN}[04]${WHITE} Desinstalar Xray"
-
-echo
-echo -e "${YELLOW}================== GESTIÓN DE USUARIOS ===================${RESET}"
-
-echo -e "${WHITE} ${GREEN}[05]${WHITE} Crear Usuario VMess"
-echo -e "${WHITE} ${GREEN}[06]${WHITE} Listar Usuarios"
-echo -e "${WHITE} ${GREEN}[07]${WHITE} Buscar Usuario"
-echo -e "${WHITE} ${GREEN}[08]${WHITE} Generar Link VMess"
-echo -e "${WHITE} ${GREEN}[09]${WHITE} Eliminar Usuario"
-echo
-echo -e "${WHITE} ${RED}[00] Salir${RESET}"
-
-echo
-
-read -rp "$(echo -e "${GREEN}Seleccione una opción ➜ ${RESET}")" OP
+read -rp "Opción : " OP
 
 case "$OP" in
 
-1|01)
+1) create_vmess ;;
 
-setup_xray
+2) remove_vmess ;;
+
+3) renew_vmess ;;
+
+4) list_vmess ;;
+
+0) break ;;
+
+*) error "Opción inválida"; sleep 2 ;;
+
+esac
+
+done
+
+}
+
+############################
+# MENÚ VLESS
+############################
+
+menu_vless(){
+
+while true
+do
+
+header
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        VLESS MANAGER"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+echo " [1] Crear Usuario"
+echo " [2] Eliminar Usuario"
+echo " [3] Renovar Usuario"
+echo " [4] Listar Usuarios"
+echo
+echo " [0] Regresar"
+echo
+
+read -rp "Opción : " OP
+
+case "$OP" in
+
+1) create_vless ;;
+
+2) remove_vless ;;
+
+3) renew_vless ;;
+
+4) list_vless ;;
+
+0) break ;;
+
+*) error "Opción inválida"; sleep 2 ;;
+
+esac
+
+done
+
+}
+
+############################
+# MENÚ TROJAN
+############################
+
+menu_trojan(){
+
+while true
+do
+
+header
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "       TROJAN MANAGER"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+echo " [1] Crear Usuario"
+echo " [2] Eliminar Usuario"
+echo " [3] Renovar Usuario"
+echo " [4] Listar Usuarios"
+echo
+echo " [0] Regresar"
+echo
+
+read -rp "Opción : " OP
+
+case "$OP" in
+
+1) create_trojan ;;
+
+2) remove_trojan ;;
+
+3) renew_trojan ;;
+
+4) list_trojan ;;
+
+0) break ;;
+
+*) error "Opción inválida"; sleep 2 ;;
+
+esac
+
+done
+
+}
+
+############################
+# INFORMACIÓN XRAY
+############################
+
+info_xray(){
+
+header
+
+echo
+echo "Estado : $(service_status xray)"
+echo
+echo "VMess  : $(wc -l < "$VMESS_DB") Usuarios"
+echo "VLESS  : $(wc -l < "$VLESS_DB") Usuarios"
+echo "Trojan : $(wc -l < "$TROJAN_DB") Usuarios"
+echo
+
+systemctl --no-pager --full status xray
+
+echo
+
+pause
+
+}
+
+############################
+# MENÚ PRINCIPAL
+############################
+
+menu_xray(){
+
+while true
+do
+
+header
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        XRAY MANAGER"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+echo " Estado : $(service_status xray)"
+echo
+
+echo " [1] VMess"
+echo " [2] VLESS"
+echo " [3] Trojan"
+echo
+echo " [4] Reiniciar Xray"
+echo " [5] Estado del Servicio"
+echo " [6] Sincronizar Configuración"
+echo " [7] Eliminar Cuentas Expiradas"
+echo
+echo " [0] Regresar"
+echo
+
+read -rp "Opción : " OP
+
+case "$OP" in
+
+1)
+
+menu_vmess
 
 ;;
 
-2|02)
+2)
 
-status_xray
+menu_vless
 
 ;;
 
-3|03)
+3)
+
+menu_trojan
+
+;;
+
+4)
 
 restart_xray
 
 ;;
 
-4|04)
+5)
 
-remove_xray
-
-;;
-
-5|05)
-
-create_vmess_user
+info_xray
 
 ;;
 
-6|06)
+6)
 
-list_vmess_users
-
-;;
-
-7|07)
-
-search_vmess_user
+sync_xray
 
 ;;
 
-8|08)
+7)
 
-generate_vmess_link
-
-;;
-
-9|09)
-
-delete_vmess_user
+remove_expired
 
 ;;
 
-0|00)
-
-clear
-
-echo
-
-echo -e "${GREEN}Gracias por utilizar KevinTech Multi Script Premium${RESET}"
-
-echo
+0)
 
 break
 
@@ -1614,7 +1622,7 @@ done
 }
 
 ############################
-# INICIO
+# INICIAR
 ############################
 
-v2ray_manager
+menu_xray
