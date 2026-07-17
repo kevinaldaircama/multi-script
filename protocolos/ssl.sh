@@ -119,8 +119,6 @@ fi
 
 cat >/etc/stunnel/stunnel.conf <<EOF
 pid=/var/run/stunnel.pid
-/
-pid=/var/run/stunnel.pid
 
 cert=/etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem
 key=/etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem
