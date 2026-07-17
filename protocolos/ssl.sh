@@ -32,7 +32,7 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 echo -e " Estado      : $STATUS"
 echo -e " Dominio     : ${SERVER_DOMAIN:-NO CONFIGURADO}"
-echo -e " Puerto      : 443 ➜ SSH 22"
+echo -e " Puertos     : 443, 444 ➜ SSH 22"
 echo -e " Servicio    : Stunnel4"
 echo -e " Destino     : 127.0.0.1:22"
 echo -e " Certificado : Let's Encrypt"
@@ -92,17 +92,14 @@ echo ""
 # VERIFICAR PUERTO 443
 #==============================
 
-if ss -ltn | grep -q ":443 "; then
+if ss -ltn | egrep -q ":443 |:444 "; then
 
-    echo ""
-    echo "❌ El puerto 443 ya está siendo utilizado."
-    echo ""
+    echo
+    echo "❌ El puerto 443 o 444 ya está siendo utilizado."
+    echo
 
-    echo "Servicio que lo está usando:"
-    ss -ltnp | grep ":443"
+    ss -ltnp | egrep ":443 |:444 "
 
-    echo ""
-    echo "Detén ese servicio e intenta nuevamente."
     sleep 5
     continue
 
@@ -122,14 +119,21 @@ fi
 
 cat >/etc/stunnel/stunnel.conf <<EOF
 pid=/var/run/stunnel.pid
+/
+pid=/var/run/stunnel.pid
 
-[openssh]
+cert=/etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem
+key=/etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem
+
+[openssh-443]
 client = no
 accept = 443
 connect = 127.0.0.1:22
 
-cert=/etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem
-key=/etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem
+[openssh-444]
+client = no
+accept = 444
+connect = 127.0.0.1:22
 EOF
 
 sed -i 's/ENABLED=0/ENABLED=1/' /etc/default/stunnel4
@@ -150,7 +154,7 @@ if systemctl is-active --quiet stunnel4; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "🌐 Dominio : $SERVER_DOMAIN"
-    echo "🔒 SSL     : 443"
+    echo "🔒 SSL     : 443, 444"
     echo "➡ Destino : 127.0.0.1:22"
     echo "🚀 Compatible con:"
     echo "   ✔ HTTP Injector"
@@ -308,7 +312,7 @@ if [[ "$RESP" =~ ^[Ss]$ ]]; then
     echo "     ✅ SSL TUNNEL ELIMINADO"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "🔓 Puerto 443 liberado."
+    echo "🔓 Puertos 443 y 444 liberados."
     echo "🔐 OpenSSH (22) continúa funcionando."
 
 else
