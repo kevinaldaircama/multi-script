@@ -28,7 +28,7 @@ SERVICE_FILE="/etc/systemd/system/$SERVICE"
 
 source "$CONFIG"
 
-WS_PORT=${WS_PORT:-80}
+WS_PORTS="80 8080"
 SSH_PORT=${SSH_PORT:-22}
 WEBSOCKET=${WEBSOCKET:-OFF}
 
@@ -211,29 +211,36 @@ async def handler(client_reader, client_writer):
             except:
                 pass
 
-async def start(port):
+async def start():
 
-    server = await asyncio.start_server(
-        handler,
-        "0.0.0.0",
-        port
+    servers = []
+
+    for port in PORTS:
+        server = await asyncio.start_server(
+            handler,
+            "0.0.0.0",
+            port
+        )
+
+        print(f"KevinTech WebSocket activo en puerto {port}")
+
+        servers.append(server)
+
+    await asyncio.gather(
+        *[server.serve_forever() for server in servers]
     )
-
-    print(f"KevinTech WebSocket activo en puerto {port}")
-
-    async with server:
-        await server.serve_forever()
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
-        print("Uso: proxy.py PUERTO SSH_PORT")
+    if len(sys.argv) < 3:
+        print("Uso: proxy.py PUERTO1 [PUERTO2 ...] SSH_PORT")
         sys.exit(1)
 
-    PORT = int(sys.argv[1])
-    SSH_PORT = int(sys.argv[2])
+    SSH_PORT = int(sys.argv[-1])
 
-    asyncio.run(start(PORT))
+    PORTS = [int(x) for x in sys.argv[1:-1]]
+
+    asyncio.run(start())
 
 PYEOF
 
@@ -252,7 +259,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 $PROXY $WS_PORT $SSH_PORT
+ExecStart=/usr/bin/python3 $PROXY 80 8080 $SSH_PORT
 Restart=always
 RestartSec=3
 User=root
@@ -330,7 +337,7 @@ fi
 
 echo
 echo "Servicio : $SERVICE"
-echo "Puerto WS: $WS_PORT"
+echo "Puertos WS: 80, 8080"
 echo "Puerto SSH: $SSH_PORT"
 
 echo
@@ -342,7 +349,7 @@ echo
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "PUERTOS"
 
-ss -tulpn | grep ":$WS_PORT"
+ss -tulpn | egrep ":80|:8080"
 
 echo
 read -n1 -r -p "Presiona una tecla..."
