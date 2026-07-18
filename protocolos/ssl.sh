@@ -342,10 +342,7 @@ backend recir_https_backend
 backend recir_http_backend
     mode tcp
 
-    server recir_http_server \
-        abns@haproxy-http \
-        send-proxy-v2 \
-        check
+    server recir_http_server abns@haproxy-http send-proxy-v2 check
 
 frontend multiports_frontend
     mode tcp
