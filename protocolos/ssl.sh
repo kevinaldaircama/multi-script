@@ -270,7 +270,8 @@ fi
 
 0)
 
-break
+exec bash "$BASE/protocolos/menu.sh"
+
 ;;
 
 *)
