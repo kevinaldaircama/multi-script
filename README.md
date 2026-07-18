@@ -25,7 +25,7 @@ Administrador completo para VPS Ubuntu con instalación automática de protocolo
 - 🔒 SSL/TLS
 - ⚡ BadVPN
 - 🚀 UDP Custom
-- 🐌 SlowDNS
+- 🌐 V2Ray / Xray
 - 🔥 Firewall
 - 📊 Speedtest
 - 📁 Archivo Online
@@ -42,43 +42,29 @@ Administrador completo para VPS Ubuntu con instalación automática de protocolo
 
 - Ubuntu 22.04 LTS
 - Ubuntu 24.04 LTS
-- x86_64 / AMD64
+- Arquitectura x86_64 / AMD64
 
 ---
 
 # 📥 Instalación
 
-## Instalación rápida
-
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/install.sh)
 ```
 
-o
-
-```bash
-wget -O install.sh https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/install.sh
-chmod +x install.sh
-bash install.sh
-```
-
 ---
 
-# ▶ Ejecutar el panel
+# ▶ Acceder al Script
+
+Una vez finalizada la instalación, ejecuta:
 
 ```bash
 menu
 ```
 
-o
-
-```bash
-bash /etc/kevintech/menu.sh
-```
-
 ---
 
-# 📦 Protocolos soportados
+# 📦 Protocolos Disponibles
 
 | Protocolo | Estado |
 |-----------|:------:|
@@ -90,77 +76,21 @@ bash /etc/kevintech/menu.sh
 | SSL/TLS | ✅ |
 | BadVPN | ✅ |
 | UDP Custom | ✅ |
-| SlowDNS | ✅ |
+| V2Ray / Xray | ✅ |
+| SlowDNS | ❌ En desarrollo |
 
 ---
 
 # 🛠 Herramientas
 
-- Firewall
-- Speedtest
-- Archivo Online
-- Block Torrent
-- Block Ads
-- Reiniciar Servicios
-- Información del VPS
-- Cambio de contraseña Root
-
----
-
-# 📂 Estructura
-
-```
-multi-script
-│
-├── install.sh
-├── menu.sh
-├── README.md
-│
-├── protocolos
-│   ├── openssh.sh
-│   ├── websocket.sh
-│   ├── zipvpn.sh
-│   ├── dropbear.sh
-│   ├── ssl.sh
-│   ├── badvpn.sh
-│   ├── udpcustom.sh
-│   ├── slowdns.sh
-│   └── menu.sh
-│
-├── herramientas
-│   ├── firewall.sh
-│   ├── speedtest.sh
-│   ├── archivoonline.sh
-│   ├── blockads.sh
-│   ├── blocktorrent.sh
-│   ├── reiniciar.sh
-│   ├── detalles.sh
-│   └── menu.sh
-│
-└── usuarios
-```
-
----
-
-# 📸 Vista previa
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        🛡️ KevinTech Multi Script 🛡️
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[01] OpenSSH
-[02] System DNS
-[03] WebSocket
-[04] ZIPVPN
-[05] Dropbear
-[06] SSL/TLS
-[07] BadVPN
-[08] UDP Custom
-[09] SlowDNS
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+- 🔥 Firewall
+- 📊 Speedtest
+- 📁 Archivo Online
+- 🚫 Block Torrent
+- 🚫 Block Ads
+- 🔄 Reiniciar Servicios
+- 📋 Información del VPS
+- 🔑 Cambiar contraseña Root
 
 ---
 
@@ -172,13 +102,40 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script
 
 ---
 
+# 🩹 Solución de errores
+
+Si algún módulo muestra un error similar a:
+
+```text
+warning: here-document delimited by end-of-file (wanted `EOF`)
+syntax error: unexpected end of file
+```
+
+Ejecuta:
+
+```bash
+sed -i 's/[[:space:]]*$//' /etc/kevintech/protocolos/ssl.sh
+bash -n /etc/kevintech/protocolos/ssl.sh
+```
+
+Si el problema ocurre en otro módulo, reemplaza `ssl.sh` por el nombre correspondiente, por ejemplo:
+
+```bash
+sed -i 's/[[:space:]]*$//' /etc/kevintech/protocolos/v2ray.sh
+bash -n /etc/kevintech/protocolos/v2ray.sh
+```
+
+Si `bash -n` no muestra ningún mensaje, el script no tiene errores de sintaxis.
+
+---
+
 # 🤝 Contribuciones
 
 Las contribuciones son bienvenidas.
 
 1. Haz un Fork.
-2. Crea una rama.
-3. Realiza tus cambios.
+2. Crea una rama para tus cambios.
+3. Realiza tus modificaciones.
 4. Envía un Pull Request.
 
 ---
@@ -187,11 +144,9 @@ Las contribuciones son bienvenidas.
 
 Si este proyecto te fue útil:
 
-⭐ Dale una estrella al repositorio.
-
-🍴 Haz un Fork.
-
-📢 Compártelo con otros usuarios.
+- ⭐ Dale una estrella al repositorio.
+- 🍴 Haz un Fork.
+- 📢 Compártelo con otros usuarios.
 
 ---
 
