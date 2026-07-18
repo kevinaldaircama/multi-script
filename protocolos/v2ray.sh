@@ -957,7 +957,7 @@ server {
             
 server {            
             
-    listen 444 ssl http2;            
+    listen 443 ssl http2;            
             
     server_name $SERVER_DOMAIN;            
             
@@ -1162,7 +1162,7 @@ printf "${WHITE}│ UUID         : ${GREEN}%-38s${WHITE}│\n" "$UUID"
 printf "${WHITE}│ Expira       : ${GREEN}%-38s${WHITE}│\n" "$EXP"            
 printf "${WHITE}│ Límite       : ${GREEN}%-38s${WHITE}│\n" "$LIMIT_SHOW"            
 printf "${WHITE}│ Dominio      : ${GREEN}%-38s${WHITE}│\n" "$SERVER_DOMAIN"            
-printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "444"            
+printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "443"            
 printf "${WHITE}│ WebSocket    : ${GREEN}%-38s${WHITE}│\n" "/vmess"            
 echo -e "${CYAN}└───────────────────────────────────────────────────────────┘${RESET}"            
             
@@ -1387,7 +1387,7 @@ VMESS_JSON=$(cat <<EOF
   "v":"2",            
   "ps":"$USER",            
   "add":"$SERVER_DOMAIN",            
-  "port":"444",            
+  "port":"443",            
   "id":"$UUID",            
   "aid":"0",            
   "scy":"auto",            
@@ -1414,7 +1414,7 @@ printf "${WHITE}│ Expira       : ${GREEN}%-38s${WHITE}│\n" "$EXP"
 printf "${WHITE}│ Límite       : ${GREEN}%-38s${WHITE}│\n" "$LIMIT_SHOW"            
 printf "${WHITE}│ Dominio      : ${GREEN}%-38s${WHITE}│\n" "$SERVER_DOMAIN"            
 printf "${WHITE}│ Host/IP      : ${GREEN}%-38s${WHITE}│\n" "$IP"            
-printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "444"            
+printf "${WHITE}│ Puerto TLS   : ${GREEN}%-38s${WHITE}│\n" "443"            
 printf "${WHITE}│ WebSocket    : ${GREEN}%-38s${WHITE}│\n" "/vmess"            
 printf "${WHITE}│ TLS          : ${GREEN}%-38s${WHITE}│\n" "Activado"            
 echo -e "${CYAN}└────────────────────────────────────────────────────────────┘${RESET}"            
@@ -1424,7 +1424,7 @@ echo
 subtitle "CONFIGURACIÓN MANUAL"            
             
 echo -e "${WHITE}🌐 Servidor  : ${GREEN}$SERVER_DOMAIN"            
-echo -e "${WHITE}📡 Puerto    : ${GREEN}444"            
+echo -e "${WHITE}📡 Puerto    : ${GREEN}443"            
 echo -e "${WHITE}📂 Path      : ${GREEN}/vmess"            
 echo -e "${WHITE}🔒 TLS       : ${GREEN}Sí"            
 echo -e "${WHITE}🛰 SNI       : ${GREEN}$SERVER_DOMAIN"            
