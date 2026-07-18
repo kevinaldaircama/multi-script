@@ -174,63 +174,110 @@ while true
 do
 clear
 
-echo -e "${CYAN}"
-echo "╔══════════════════════════════════════╗"
-echo "║       SSL TUNNEL MANAGER            ║"
-echo "╚══════════════════════════════════════╝"
-echo -e "${RESET}"
+source "$CONFIG" 2>/dev/null
 
-echo " 1) Instalar SSL Tunnel"
-echo " 2) Desinstalar SSL Tunnel"
-echo " 3) Reiniciar Servicios"
-echo " 4) Estado"
-echo " 0) Volver"
+if systemctl is-active --quiet haproxy; then
+    STATUS="${GREEN}🟢 ACTIVO${RESET}"
+else
+    STATUS="${RED}🔴 DESINSTALADO${RESET}"
+fi
 
-line
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}          🔐 SSL TUNNEL MANAGER${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-read -rp "Seleccione una opción: " opc
+echo -e " Estado      : $STATUS"
+echo -e " Dominio     : ${SERVER_DOMAIN:-NO CONFIGURADO}"
+echo -e " Puertos     : 80, 443, 8080"
+echo -e " Servicio    : HAProxy"
+echo -e " Backend     : SSH WebSocket"
+echo -e " Certificado : Auto Firmado"
 
-case $opc in
+echo
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+if systemctl is-active --quiet haproxy; then
+
+echo " [1] ➮ Reinstalar SSL Tunnel"
+echo " [2] ➮ Reiniciar Servicios"
+echo " [3] ➮ Ver Estado"
+echo " [4] ➮ Desinstalar SSL Tunnel"
+echo
+echo " [0] ➮ Regresar"
+
+else
+
+echo " [1] ➮ Instalar SSL Tunnel"
+echo
+echo " [0] ➮ Regresar"
+
+fi
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+read -rp " ► Opción: " opc
+
+case "$opc" in
 
 1)
+clear
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "      INSTALANDO SSL TUNNEL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
 
 install_ssl_tunnel
-read -n1 -r -p "Presione una tecla para continuar..."
 
+sleep 3
 ;;
 
 2)
 
-remove_ssl_tunnel
-read -n1 -r
+if systemctl is-active --quiet haproxy; then
+    restart_ssl_tunnel
+else
+    echo "❌ SSL Tunnel no está instalado."
+    sleep 3
+fi
 
 ;;
 
 3)
 
-restart_ssl_tunnel
-read -n1 -r
+clear
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "        ESTADO DEL SERVICIO"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
 
+ssl_tunnel_status
+
+echo
+read -n1 -r -p "Presione una tecla para continuar..."
 ;;
 
 4)
 
-ssl_tunnel_status
-read -n1 -r
+if systemctl is-active --quiet haproxy; then
+    remove_ssl_tunnel
+    sleep 3
+else
+    echo "❌ SSL Tunnel no está instalado."
+    sleep 3
+fi
 
 ;;
 
 0)
 
-exec bash "$BASE/protocolos/menu.sh"
-
+break
 ;;
 
 *)
 
-echo "Opción inválida."
+echo
+echo "❌ Opción inválida."
 sleep 2
-
 ;;
 
 esac
@@ -290,10 +337,7 @@ frontend multiport_frontend
 backend recir_https_backend
     mode tcp
 
-    server recir_https_server \
-        abns@haproxy-https \
-        send-proxy-v2 \
-        check
+    server recir_https_server abns@haproxy-https send-proxy-v2 check
 
 backend recir_http_backend
     mode tcp
@@ -313,9 +357,7 @@ frontend multiports_frontend
 backend recir_https_www_backend
     mode tcp
 
-    server recir_https_www_server \
-        127.0.0.1:2223 \
-        check
+    server recir_https_www_server 127.0.0.1:2223 check
 
 frontend ssl_frontend
 
@@ -324,12 +366,7 @@ frontend ssl_frontend
     bind *:80 tfo
     bind *:8080 tfo
 
-    bind abns@haproxy-https \
-        accept-proxy \
-        ssl \
-        crt /etc/haproxy/yha.pem \
-        alpn h2,http/1.1 \
-        tfo
+    bind abns@haproxy-https accept-proxy ssl crt /etc/haproxy/yha.pem alpn h2,http/1.1 tfo
 
     tcp-request inspect-delay 200ms
 
@@ -370,32 +407,24 @@ frontend ssl_frontend
 backend websocket_backend
     mode tcp
 
-    server ssh_ws_server \
-        127.0.0.1:10015 \
-        check
+    server ssh_ws_server 127.0.0.1:10015 check
 
 backend grpc_backend
     mode tcp
 
-    server grpc_server \
-        127.0.0.1:1013 \
-        check
+    server grpc_server 127.0.0.1:1013 check
 
 backend ssh_ws_default_backend
     mode tcp
 
     balance roundrobin
 
-    server ssh_ws_server \
-        127.0.0.1:10015 \
-        check
+    server ssh_ws_server 127.0.0.1:10015 check
 
 backend bot_ftvpn_backend
     mode tcp
 
-    server ssh_direct \
-        127.0.0.1:22 \
-        check
+    server ssh_direct 127.0.0.1:22 check
 backend payload_backend
     mode tcp
 
@@ -416,9 +445,7 @@ backend payload_backend
 backend ssh_backend
     mode tcp
 
-    server ssh_server \
-        127.0.0.1:10015 \
-        check
+    server ssh_server 127.0.0.1:10015 check
 
 EOF
 
