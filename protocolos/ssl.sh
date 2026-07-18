@@ -222,7 +222,7 @@ read -n1 -r
 
 0)
 
-break
+exec bash "$BASE/protocolos/menu.sh"
 
 ;;
 
@@ -848,3 +848,8 @@ ensure_haproxy_running() {
     fi
 
 }
+#==================================================
+# INICIAR MENÚ
+#==================================================
+
+ssl_tunnel_menu
