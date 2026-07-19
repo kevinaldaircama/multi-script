@@ -33,6 +33,7 @@ declare -A USERS
 #==================================================
 
 while read -r USER; do
+while read -r USER; do
 
     [[ -z "$USER" ]] && continue
     [[ "$USER" == "root" ]] && continue
@@ -41,10 +42,8 @@ while read -r USER; do
 
 done < <(
 
-ps -eo cmd | \
-grep "sshd:" | \
-grep -v "\[listener\]" | \
-grep -v "@pts" | \
+ps -C sshd -o args= | \
+grep "\[priv\]" | \
 awk -F'sshd: ' '{print $2}' | \
 awk '{print $1}'
 
