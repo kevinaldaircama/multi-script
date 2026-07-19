@@ -159,14 +159,12 @@ remove_ssl_tunnel() {
     rm -f "$PROXY_SCRIPT"
 
     systemctl daemon-reload
-grep -q "^WEBSOCKET=" "$CONFIG" \
-    && sed -i 's/^WEBSOCKET=.*/WEBSOCKET=OFF/' "$CONFIG"
 
-grep -q "^WS_PORT=" "$CONFIG" \
-    && sed -i 's/^WS_PORT=.*/WS_PORT=OFF/' "$CONFIG"
-    
     grep -q "^SSL=" "$CONFIG" \
     && sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
+
+grep -q "^SSL_TUNNEL=" "$CONFIG" \
+    && sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=OFF/' "$CONFIG"
     
     msg_ok "SSL Tunnel eliminado."
 
@@ -751,17 +749,13 @@ ensure_haproxy_resilience
     if systemctl restart haproxy; then
     
 # Actualizar configuración
-grep -q "^WEBSOCKET=" "$CONFIG" \
-    && sed -i 's/^WEBSOCKET=.*/WEBSOCKET=ON/' "$CONFIG" \
-    || echo "WEBSOCKET=ON" >> "$CONFIG"
-
-grep -q "^WS_PORT=" "$CONFIG" \
-    && sed -i 's/^WS_PORT=.*/WS_PORT=80,443,8080/' "$CONFIG" \
-    || echo "WS_PORT=80,443,8080" >> "$CONFIG"
-    
     grep -q "^SSL=" "$CONFIG" \
     && sed -i 's/^SSL=.*/SSL=ON/' "$CONFIG" \
     || echo "SSL=ON" >> "$CONFIG"
+
+grep -q "^SSL_TUNNEL=" "$CONFIG" \
+    && sed -i 's/^SSL_TUNNEL=.*/SSL_TUNNEL=ON/' "$CONFIG" \
+    || echo "SSL_TUNNEL=ON" >> "$CONFIG"
     
         msg_ok "HAProxy iniciado correctamente."
 
