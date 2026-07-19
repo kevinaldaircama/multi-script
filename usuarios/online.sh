@@ -1,4 +1,4 @@
- #!/bin/bash
+#!/bin/bash
 #==================================================
 # KevinTech Multi Script
 # Usuarios SSH Online v2
@@ -35,15 +35,18 @@ declare -A USERS
 while read -r USER; do
 
     [[ -z "$USER" ]] && continue
-
-    # Ignorar root
     [[ "$USER" == "root" ]] && continue
 
     ((USERS["$USER"]++))
 
 done < <(
 
-who | awk '{print $1}'
+ps -eo cmd | \
+grep "sshd:" | \
+grep -v "\[listener\]" | \
+grep -v "@pts" | \
+awk -F'sshd: ' '{print $2}' | \
+awk '{print $1}'
 
 )
 #==================================================
