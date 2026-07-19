@@ -718,7 +718,6 @@ xray_status() {
 #--------------------------------------------------
 # Menú
 #--------------------------------------------------
-
 xray_menu() {
 
 while true
@@ -726,76 +725,142 @@ do
 
 clear
 
-echo -e "${CYAN}╔══════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║          XRAY MANAGER               ║${RESET}"
-echo -e "${CYAN}╚══════════════════════════════════════╝${RESET}"
+source "$CONFIG" 2>/dev/null
+
+if systemctl is-active --quiet xray; then
+    STATUS="${GREEN}🟢 ACTIVO${RESET}"
+else
+    STATUS="${RED}🔴 DESINSTALADO${RESET}"
+fi
+
+VERSION=$(xray version 2>/dev/null | head -1)
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${WHITE}              🚀 XRAY MANAGER${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e " Estado      : $STATUS"
+echo -e " Dominio     : ${DOMAIN:-${SERVER_DOMAIN:-NO CONFIGURADO}}"
+echo -e " Puerto      : 443"
+echo -e " Network     : WebSocket"
+echo -e " Path        : /vmess"
+echo -e " Servicio    : Xray Core"
+echo -e " Versión     : ${VERSION:-NO INSTALADO}"
 
 echo
-echo " 1) Instalar Xray"
-echo " 2) Desinstalar Xray"
-echo " 3) Crear Usuario VMess"
-echo " 4) Eliminar Usuario"
-echo " 5) Listar Usuarios"
-echo " 6) Mostrar Cuenta"
-echo " 7) Usuarios Online"
-echo " 8) Reiniciar Xray"
-echo " 9) Estado"
-echo "10) Información VMess"
-echo " 0) Volver"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
+if systemctl is-active --quiet xray; then
+
+echo " [1] ➮ Reinstalar Xray"
+echo " [2] ➮ Crear Usuario VMess"
+echo " [3] ➮ Eliminar Usuario"
+echo " [4] ➮ Listar Usuarios"
+echo " [5] ➮ Mostrar Cuenta"
+echo " [6] ➮ Usuarios Online"
+echo " [7] ➮ Información VMess"
+echo " [8] ➮ Reiniciar Xray"
+echo " [9] ➮ Estado del Servicio"
+echo " [10] ➮ Desinstalar Xray"
 echo
-read -rp "Seleccione una opción: " opc
+echo " [0] ➮ Regresar"
+
+else
+
+echo " [1] ➮ Instalar Xray"
+echo
+echo " [0] ➮ Regresar"
+
+fi
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+read -rp " ► Opción: " opc
 
 case "$opc" in
 
 1)
 install_xray
-read -n1 -rsp "Presione una tecla..."
+sleep 2
 ;;
 
 2)
-remove_xray
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    create_vmess_account
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 3)
-create_vmess_account
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    remove_vmess_user
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 4)
-remove_vmess_user
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    list_vmess_users
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 5)
-list_vmess_users
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    show_vmess_account
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 6)
-show_vmess_account
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    xray_online_users
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 7)
-xray_online_users
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    vmess_server_info
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 8)
-restart_xray_service
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    restart_xray_service
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 9)
-xray_status
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    xray_status
+else
+    echo "❌ Xray no está instalado."
+    sleep 2
+fi
 ;;
 
 10)
-vmess_server_info
-read -n1 -rsp "Presione una tecla..."
+if systemctl is-active --quiet xray; then
+    remove_xray
+    sleep 2
+fi
 ;;
 
 0)
@@ -804,8 +869,8 @@ exec bash "$BASE/protocolos/menu.sh"
 
 *)
 echo
-echo -e "${RED}Opción inválida.${RESET}"
-sleep 1
+echo "❌ Opción inválida."
+sleep 2
 ;;
 
 esac
