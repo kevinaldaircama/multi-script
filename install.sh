@@ -39,7 +39,8 @@ echo ""
 # CONFIGURACIÓN PRIVADA
 #=====================================
 
-FIREBASE_URL="https://keygenbpt-default-rtdb.firebaseio.com"
+FIREBASE_URL_B64="aHR0cHM6Ly9rZXlnZW5icHQtZGVmYXVsdC1ydGRiLmZpcmViYXNlaW8uY29t"
+FIREBASE_URL=$(echo "$FIREBASE_URL_B64" | base64 -d)
 
 #=====================================
 # OBTENER KEY
