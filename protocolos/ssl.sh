@@ -164,6 +164,10 @@ grep -q "^WEBSOCKET=" "$CONFIG" \
 
 grep -q "^WS_PORT=" "$CONFIG" \
     && sed -i 's/^WS_PORT=.*/WS_PORT=OFF/' "$CONFIG"
+    
+    grep -q "^SSL=" "$CONFIG" \
+    && sed -i 's/^SSL=.*/SSL=OFF/' "$CONFIG"
+    
     msg_ok "SSL Tunnel eliminado."
 
 }
@@ -754,6 +758,10 @@ grep -q "^WEBSOCKET=" "$CONFIG" \
 grep -q "^WS_PORT=" "$CONFIG" \
     && sed -i 's/^WS_PORT=.*/WS_PORT=80,443,8080/' "$CONFIG" \
     || echo "WS_PORT=80,443,8080" >> "$CONFIG"
+    
+    grep -q "^SSL=" "$CONFIG" \
+    && sed -i 's/^SSL=.*/SSL=ON/' "$CONFIG" \
+    || echo "SSL=ON" >> "$CONFIG"
     
         msg_ok "HAProxy iniciado correctamente."
 
