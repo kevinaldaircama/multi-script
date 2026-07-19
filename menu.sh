@@ -191,7 +191,7 @@ PROTO6=""
 [[ "$ZIPVPN" == "ON" ]]      && PROTO2+="\n🟢 ZIP VPN"
 
 [[ "$DROPBEAR" == "ON" ]]    && PROTO3+="🟢 Dropbear       Puerto 90"
-[[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && \
+[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && \
 PROTO3+="\n🟢 SSL/TLS (HAProxy)  Puertos 80 / 443 / 8080"
 
 [[ "$BADVPN" == "ON" ]]      && PROTO4+="🟢 BadVPN         7200 / 7300"
