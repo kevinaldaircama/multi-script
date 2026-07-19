@@ -33,7 +33,6 @@ declare -A USERS
 #==================================================
 
 while read -r USER; do
-while read -r USER; do
 
     [[ -z "$USER" ]] && continue
     [[ "$USER" == "root" ]] && continue
