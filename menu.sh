@@ -39,6 +39,22 @@ CLOUDFLARE_STATUS=${CLOUDFLARE_STATUS:-OFF}
 PROXY_STATUS=${PROXY_STATUS:-OFF}
 AUTO_START=${AUTO_START:-OFF}
 
+# Detectar HAProxy
+if systemctl is-active --quiet haproxy; then
+    SSL="ON"
+    SSL_TUNNEL="ON"
+else
+    SSL="OFF"
+    SSL_TUNNEL="OFF"
+fi
+# Detectar Cloudflare
+if [[ -n "$SERVER_DOMAIN" ]]; then
+    if dig +short NS "$SERVER_DOMAIN" | grep -qi cloudflare; then
+        CLOUDFLARE_STATUS="ON"
+    else
+        CLOUDFLARE_STATUS="OFF"
+    fi
+fi
 #=========================================================
 # Colores Premium
 #=========================================================
@@ -172,7 +188,6 @@ PROTO6=""
 [[ "$OPENSSH" == "ON" ]]     && PROTO1+="🟢 OpenSSH        Puerto 22"
 [[ "$SYSTEMDNS" == "ON" ]]   && PROTO1+="\n🟢 SystemDNS      Puerto 53"
 
-[[ "$WEBSOCKET" == "ON" ]]   && PROTO2+="🟢 WebSocket      Puerto 80"
 [[ "$ZIPVPN" == "ON" ]]      && PROTO2+="\n🟢 ZIP VPN"
 
 [[ "$DROPBEAR" == "ON" ]]    && PROTO3+="🟢 Dropbear       Puerto 90"
@@ -183,7 +198,8 @@ PROTO6=""
 
 [[ "$SLOWDNS" == "ON" ]]     && PROTO5+="🟢 SlowDNS        Puerto 53"
 
-[[ "$V2RAY" == "ON" ]] && PROTO6+="🟢 V2Ray / Xray   WebSocket"
+[[ "$V2RAY" == "ON" ]] && \
+PROTO6+="🟢 V2Ray / Xray  443 SSL/TLS"
 
 clear
 
