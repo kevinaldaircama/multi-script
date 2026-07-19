@@ -381,36 +381,47 @@ list_vmess_users() {
     check_xray_config || return
 
     echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${WHITE}        USUARIOS VMESS${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}                  👥 USUARIOS VMESS                        ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠════╦══════════════════════╦═══════════════════════════════╣${RESET}"
+
+    printf "${CYAN}║${WHITE} %-2s ${CYAN}║${WHITE} %-20s ${CYAN}║${WHITE} %-29s ${CYAN}║${RESET}\n" "#" "USUARIO" "UUID"
+
+    echo -e "${CYAN}╠════╬══════════════════════╬═══════════════════════════════╣${RESET}"
 
     TOTAL=0
 
-    while read USER
+    while read -r USER
     do
 
         [[ -z "$USER" ]] && continue
 
         UUID=$(get_vmess_uuid "$USER")
 
+        SHORT_UUID="${UUID:0:29}..."
+
         TOTAL=$((TOTAL+1))
 
-        echo -e "${GREEN}$TOTAL)${RESET} ${WHITE}$USER${RESET}"
-        echo "    UUID : $UUID"
-        echo
+        printf "${CYAN}║${GREEN} %-2s ${CYAN}║${WHITE} %-20s ${CYAN}║${YELLOW} %-29s ${CYAN}║${RESET}\n" \
+            "$TOTAL" "$USER" "$SHORT_UUID"
 
     done < <(
-
-        jq -r \
-        '.inbounds[0].settings.clients[].email' \
-        "$XRAY_CFG"
-
+        jq -r '.inbounds[0].settings.clients[].email' "$XRAY_CFG"
     )
 
     if [[ "$TOTAL" == "0" ]]; then
-        echo "No existen usuarios."
+
+        echo -e "${CYAN}║${RED}              NO EXISTEN USUARIOS REGISTRADOS              ${CYAN}║${RESET}"
+        TOTAL=0
+
     fi
+
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════╣${RESET}"
+    printf "${CYAN}║${WHITE} Total de usuarios : ${GREEN}%-34s${CYAN}║${RESET}\n" "$TOTAL"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+    read -n1 -r -p "Presione cualquier tecla para continuar..."
 
 }
 
@@ -494,23 +505,30 @@ show_vmess_user() {
     LINK="vmess://$(generate_vmess_link "$USER" "$UUID")"
 
     echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${WHITE}          CUENTA VMESS${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}                 ✅ CUENTA VMESS CREADA                     ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
-    echo -e "${GREEN}Usuario :${RESET} $USER"
-    echo -e "${GREEN}UUID    :${RESET} $UUID"
-    echo -e "${GREEN}Host    :${RESET} $DOMAIN"
-    echo -e "${GREEN}Puerto  :${RESET} 443"
-    echo -e "${GREEN}TLS     :${RESET} Sí"
-    echo -e "${GREEN}Network :${RESET} WebSocket"
-    echo -e "${GREEN}Path    :${RESET} /vmess"
+    printf "${CYAN}║${RESET} 👤 Usuario    ${WHITE}: %-40s${CYAN}║${RESET}\n" "$USER"
+    printf "${CYAN}║${RESET} 🆔 UUID       ${WHITE}: %-40s${CYAN}║${RESET}\n" "$UUID"
+    printf "${CYAN}║${RESET} 🌐 Dominio    ${WHITE}: %-40s${CYAN}║${RESET}\n" "$DOMAIN"
+    printf "${CYAN}║${RESET} 🔒 Puerto     ${WHITE}: %-40s${CYAN}║${RESET}\n" "443"
+    printf "${CYAN}║${RESET} 🛡 Seguridad  ${WHITE}: %-40s${CYAN}║${RESET}\n" "TLS"
+    printf "${CYAN}║${RESET} 📡 Network    ${WHITE}: %-40s${CYAN}║${RESET}\n" "WebSocket"
+    printf "${CYAN}║${RESET} 📂 Path       ${WHITE}: %-40s${CYAN}║${RESET}\n" "/vmess"
+
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${YELLOW}                     🔗 ENLACE VMESS                        ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
     echo
-    echo -e "${YELLOW}══════════════════════════════════════════════${RESET}"
-    echo "$LINK"
-    echo -e "${YELLOW}══════════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}$LINK${RESET}"
     echo
+
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+    read -n1 -r -p "Presione cualquier tecla para continuar..."
 
 }
 
@@ -547,7 +565,40 @@ create_vmess_account() {
 
     create_vmess_user || return
 
-    show_vmess_user "$VMESS_USER" "$VMESS_UUID"
+    load_domain
+
+    LINK="vmess://$(generate_vmess_link "$VMESS_USER" "$VMESS_UUID")"
+
+    clear
+
+    echo
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}                 🎉 CUENTA VMESS CREADA EXITOSAMENTE              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════════╣${RESET}"
+
+    printf "${CYAN}║${RESET} 👤 Usuario     ${WHITE}: %-42s${CYAN}║${RESET}\n" "$VMESS_USER"
+    printf "${CYAN}║${RESET} 🆔 UUID        ${WHITE}: %-42s${CYAN}║${RESET}\n" "$VMESS_UUID"
+    printf "${CYAN}║${RESET} 🌐 Dominio     ${WHITE}: %-42s${CYAN}║${RESET}\n" "$DOMAIN"
+    printf "${CYAN}║${RESET} 🔒 Puerto      ${WHITE}: %-42s${CYAN}║${RESET}\n" "443"
+    printf "${CYAN}║${RESET} 📡 Network     ${WHITE}: %-42s${CYAN}║${RESET}\n" "WebSocket"
+    printf "${CYAN}║${RESET} 🛡 Seguridad   ${WHITE}: %-42s${CYAN}║${RESET}\n" "TLS"
+    printf "${CYAN}║${RESET} 📂 Path        ${WHITE}: %-42s${CYAN}║${RESET}\n" "/vmess"
+
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${YELLOW}                     🔗 ENLACE VMESS                              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+    echo -e "${GREEN}$LINK${RESET}"
+    echo
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${GREEN}✔ La cuenta está lista para usar.${RESET}"
+    echo -e "${GREEN}✔ Comparta el enlace VMess con el cliente.${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+    read -n1 -r -p "Presione cualquier tecla para regresar al menú..."
 
 }
 
@@ -693,25 +744,54 @@ restart_xray_service() {
 xray_status() {
 
     echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${WHITE}           ESTADO XRAY${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-    if systemctl is-active --quiet xray
-    then
-        STATUS="${GREEN}ACTIVO${RESET}"
+    if systemctl is-active --quiet xray; then
+        STATUS="${GREEN}🟢 ACTIVO${RESET}"
     else
-        STATUS="${RED}DETENIDO${RESET}"
+        STATUS="${RED}🔴 DETENIDO${RESET}"
     fi
 
     VERSION=$(xray version 2>/dev/null | head -1)
+    VERSION=${VERSION:-NO INSTALADO}
+
+    if xray run -test -config "$XRAY_CFG" >/dev/null 2>&1; then
+        CONFIG_STATUS="${GREEN}🟢 CORRECTA${RESET}"
+    else
+        CONFIG_STATUS="${RED}🔴 ERROR${RESET}"
+    fi
+
+    if ss -lnt | grep -q ":10002 "; then
+        PORT10002="${GREEN}🟢 ESCUCHANDO${RESET}"
+    else
+        PORT10002="${RED}🔴 CERRADO${RESET}"
+    fi
+
+    if ss -lnt | grep -q ":443 "; then
+        PORT443="${GREEN}🟢 DISPONIBLE${RESET}"
+    else
+        PORT443="${YELLOW}🟡 Gestionado por HAProxy${RESET}"
+    fi
+
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}                 📊 ESTADO DEL SERVICIO XRAY              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════╣${RESET}"
+
+    printf " %-18s %b\n" "Estado:" "$STATUS"
+    printf " %-18s ${GREEN}%s${RESET}\n" "Versión:" "$VERSION"
+    printf " %-18s %b\n" "Configuración:" "$CONFIG_STATUS"
+    printf " %-18s %b\n" "Puerto 443:" "$PORT443"
+    printf " %-18s %b\n" "Puerto 10002:" "$PORT10002"
 
     echo
-    echo -e "Estado  : $STATUS"
-    echo -e "Versión : $VERSION"
-    echo -e "Puerto  : 10002"
-    echo -e "Path    : /vmess"
+    echo -e " ${GREEN}🟢${RESET} VMess ............... Disponible"
+    echo -e " ${GREEN}🟢${RESET} WebSocket ........... Disponible"
+    echo -e " ${GREEN}🟢${RESET} TLS ................. Disponible"
+    echo -e " ${GREEN}🟢${RESET} JSON Config ......... Cargado"
+
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
+
     echo
+    read -n1 -r -p "Presione cualquier tecla para continuar..."
 
 }
 
@@ -734,47 +814,82 @@ else
 fi
 
 VERSION=$(xray version 2>/dev/null | head -1)
+VERSION=${VERSION:-NO INSTALADO}
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}              🚀 XRAY MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+DOMAIN_SHOW="${DOMAIN:-${SERVER_DOMAIN:-NO CONFIGURADO}}"
 
-echo -e " Estado      : $STATUS"
-echo -e " Dominio     : ${DOMAIN:-${SERVER_DOMAIN:-NO CONFIGURADO}}"
-echo -e " Puerto      : 443"
-echo -e " Network     : WebSocket"
-echo -e " Path        : /vmess"
-echo -e " Servicio    : Xray Core"
-echo -e " Versión     : ${VERSION:-NO INSTALADO}"
+TOTAL_USERS=0
+ONLINE_USERS=0
+
+if [[ -f "$XRAY_CFG" ]]; then
+    TOTAL_USERS=$(jq '.inbounds[0].settings.clients | length' "$XRAY_CFG" 2>/dev/null)
+fi
+
+if [[ -f "$XRAY_LOG" ]]; then
+    LIMIT=$(date -d "60 seconds ago" "+%Y/%m/%d %H:%M:%S")
+    ONLINE_USERS=$(awk -v LIM="$LIMIT" '
+    /email:/{
+        DATA=$1" "$2
+        if(DATA>=LIM){
+            split($0,a,"email: ")
+            print a[2]
+        }
+    }' "$XRAY_LOG" | sort -u | wc -l)
+fi
+
+echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${WHITE}              🚀 KevinTech Multi Script              ${CYAN}║${RESET}"
+echo -e "${CYAN}║${WHITE}                 XRAY MANAGER v3.0                  ${CYAN}║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${RESET}"
+
+echo -e "${CYAN}┌──────────────── INFORMACIÓN ────────────────┐${RESET}"
+printf " ${WHITE}Estado      : %b\n" "$STATUS"
+printf " ${WHITE}Dominio     : ${GREEN}%s${RESET}\n" "$DOMAIN_SHOW"
+printf " ${WHITE}Protocolo   : ${GREEN}VMess + WebSocket + TLS${RESET}\n"
+printf " ${WHITE}Puerto TLS  : ${GREEN}443${RESET}\n"
+printf " ${WHITE}Path        : ${GREEN}/vmess${RESET}\n"
+printf " ${WHITE}Servicio    : ${GREEN}Xray Core${RESET}\n"
+printf " ${WHITE}Versión     : ${GREEN}%s${RESET}\n" "$VERSION"
+printf " ${WHITE}Usuarios    : ${GREEN}%s${RESET}\n" "$TOTAL_USERS"
+printf " ${WHITE}Online      : ${GREEN}%s${RESET}\n" "$ONLINE_USERS"
+echo -e "${CYAN}└─────────────────────────────────────────────┘${RESET}"
 
 echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 if systemctl is-active --quiet xray; then
 
-echo " [1] ➮ Reinstalar Xray"
-echo " [2] ➮ Crear Usuario VMess"
-echo " [3] ➮ Eliminar Usuario"
-echo " [4] ➮ Listar Usuarios"
-echo " [5] ➮ Mostrar Cuenta"
-echo " [6] ➮ Usuarios Online"
-echo " [7] ➮ Información VMess"
-echo " [8] ➮ Reiniciar Xray"
-echo " [9] ➮ Estado del Servicio"
-echo " [10] ➮ Desinstalar Xray"
+echo -e "${CYAN}┌────────────── Gestión de Usuarios ──────────────┐${RESET}"
+echo -e " ${GREEN}[1]${RESET} 👤 Crear Usuario VMess"
+echo -e " ${GREEN}[2]${RESET} 🗑 Eliminar Usuario"
+echo -e " ${GREEN}[3]${RESET} 📋 Listar Usuarios"
+echo -e " ${GREEN}[4]${RESET} 📄 Mostrar Cuenta"
+echo -e "${CYAN}└────────────────────────────────────────────────┘${RESET}"
+
 echo
-echo " [0] ➮ Regresar"
+
+echo -e "${CYAN}┌──────────── Administración del Servicio ───────┐${RESET}"
+echo -e " ${GREEN}[5]${RESET} 🌐 Usuarios Online"
+echo -e " ${GREEN}[6]${RESET} ℹ Información VMess"
+echo -e " ${GREEN}[7]${RESET} 🔄 Reiniciar Xray"
+echo -e " ${GREEN}[8]${RESET} 📊 Estado del Servicio"
+echo -e " ${GREEN}[9]${RESET} ♻ Reinstalar Xray"
+echo -e " ${GREEN}[10]${RESET} 🗑 Desinstalar Xray"
+echo -e "${CYAN}└────────────────────────────────────────────────┘${RESET}"
 
 else
 
-echo " [1] ➮ Instalar Xray"
-echo
-echo " [0] ➮ Regresar"
+echo -e "${CYAN}┌──────────────── Instalación ────────────────┐${RESET}"
+echo -e " ${GREEN}[1]${RESET} 🚀 Instalar Xray Core"
+echo -e "${CYAN}└─────────────────────────────────────────────┘${RESET}"
 
 fi
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e " ${GREEN}[0]${RESET} ↩ Regresar"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
+echo
 read -rp " ► Opción: " opc
 
 case "$opc" in
@@ -804,7 +919,7 @@ fi
 
 4)
 if systemctl is-active --quiet xray; then
-    list_vmess_users
+    show_vmess_account
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -813,7 +928,7 @@ fi
 
 5)
 if systemctl is-active --quiet xray; then
-    show_vmess_account
+    xray_online_users
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -822,7 +937,7 @@ fi
 
 6)
 if systemctl is-active --quiet xray; then
-    xray_online_users
+    vmess_server_info
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -831,7 +946,7 @@ fi
 
 7)
 if systemctl is-active --quiet xray; then
-    vmess_server_info
+    restart_xray_service
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -840,7 +955,7 @@ fi
 
 8)
 if systemctl is-active --quiet xray; then
-    restart_xray_service
+    xray_status
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -849,9 +964,7 @@ fi
 
 9)
 if systemctl is-active --quiet xray; then
-    xray_status
-else
-    echo "❌ Xray no está instalado."
+    install_xray
     sleep 2
 fi
 ;;
