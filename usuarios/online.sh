@@ -35,7 +35,10 @@ declare -A USERS
 while read -r USER; do
 
     [[ -z "$USER" ]] && continue
-    [[ "$USER" == "root" ]] && continue
+[[ "$USER" == "root" ]] && continue
+[[ "$USER" == "unknown" ]] && continue
+[[ "$USER" == "invalid" ]] && continue
+[[ "$USER" == "(null)" ]] && continue
 
     ((USERS["$USER"]++))
 
