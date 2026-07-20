@@ -74,35 +74,63 @@ install_slowdns_binary(){
     ARCH=$(uname -m)
 
     case "$ARCH" in
-
         x86_64)
-            URL="https://dnstt.network/dnstt-server-linux-amd64"
+            BIN_NAME="dnstt-server-linux-amd64"
         ;;
-
         aarch64|arm64)
-            URL="https://dnstt.network/dnstt-server-linux-arm64"
+            BIN_NAME="dnstt-server-linux-arm64"
         ;;
-
+        i386|i686)
+            BIN_NAME="dnstt-server-linux-386"
+        ;;
         *)
             echo "❌ Arquitectura no soportada: $ARCH"
             return 1
         ;;
-
     esac
+
+    MIRRORS=(
+        "https://dnstt.network/$BIN_NAME"
+        "https://github.com/bugfloyd/dnstt-deploy/raw/main/bin/$BIN_NAME"
+        "https://raw.githubusercontent.com/Dan3651/scripts/main/slowdns-server"
+    )
 
     echo ""
     echo "⬇️ Descargando SlowDNS Server..."
 
+    if [[ -x "$BIN" ]]; then
+        echo "✅ SlowDNS Server ya existe."
+        return 0
+    fi
+
     rm -f "$BIN"
 
-    curl -L --fail "$URL" -o "$BIN"
+    SUCCESS=0
 
-    if [[ ! -f "$BIN" ]]; then
-        echo "❌ Error descargando SlowDNS."
+    for URL in "${MIRRORS[@]}"
+    do
+        echo "🌐 Probando: $URL"
+
+        if curl -L -k -s -f "$URL" -o "$BIN"; then
+
+            chmod +x "$BIN"
+
+            if "$BIN" -h >/dev/null 2>&1; then
+                SUCCESS=1
+                break
+            fi
+        fi
+
+        rm -f "$BIN"
+
+    done
+
+    if [[ $SUCCESS -eq 0 ]]; then
+        echo "❌ No fue posible descargar SlowDNS Server."
         return 1
     fi
 
-    chmod +x "$BIN"
+    echo "✅ SlowDNS Server instalado."
 
 }
 
@@ -132,28 +160,41 @@ configure_dnsdist(){
 
     echo "⚙️ Configurando DNSDist..."
 
+    DOMAIN=$(cat "$DOMAIN_FILE")
+
     mkdir -p /etc/dnsdist
 
     cat > /etc/dnsdist/dnsdist.conf <<EOF
 -- KevinTech Multi Script Premium
 
-setLocal("0.0.0.0:53")
-setLocal("[::]:53")
+setLocal("0.0.0.0:5380")
+addLocal("[::]:5380")
 
 addACL("0.0.0.0/0")
 addACL("::/0")
 
 newServer({
     address="127.0.0.1:5300",
-    name="slowdns"
+    name="slowdns",
+    pool="slowdns"
 })
+
+addAction(
+    RegexRule("$(echo "$DOMAIN" | sed 's/\./\\\\./g')"),
+    PoolAction("slowdns")
+)
 EOF
 
+if ! dnsdist --check-config >/dev/null 2>&1; then
+    echo "❌ Error en dnsdist.conf"
+    dnsdist --check-config
+    return 1
+fi
     systemctl daemon-reload
-    systemctl enable dnsdist
+
+    systemctl enable dnsdist >/dev/null 2>&1
 
 }
-
 #==================================================
 # Crear servicio SlowDNS
 #==================================================
@@ -190,11 +231,47 @@ EOF
 
 open_dns_port(){
 
-    iptables -C INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null || \
-    iptables -I INPUT -p udp --dport 53 -j ACCEPT
+    echo "🛡 Configurando reglas DNS..."
 
-    iptables -C INPUT -p tcp --dport 53 -j ACCEPT 2>/dev/null || \
-    iptables -I INPUT -p tcp --dport 53 -j ACCEPT
+    # Limpiar reglas antiguas IPv4
+    while iptables -t nat -C PREROUTING \
+        -p udp --dport 53 \
+        -m u32 --u32 "0>>22&0x3C@12=0x00010000" \
+        -j REDIRECT --to-ports 5380 2>/dev/null
+    do
+        iptables -t nat -D PREROUTING \
+            -p udp --dport 53 \
+            -m u32 --u32 "0>>22&0x3C@12=0x00010000" \
+            -j REDIRECT --to-ports 5380
+    done
+
+    # Limpiar reglas antiguas IPv6
+    while ip6tables -t nat -C PREROUTING \
+        -p udp --dport 53 \
+        -j REDIRECT --to-ports 5380 2>/dev/null
+    do
+        ip6tables -t nat -D PREROUTING \
+            -p udp --dport 53 \
+            -j REDIRECT --to-ports 5380
+    done
+
+    # Agregar regla IPv4 (igual que el Go)
+    iptables -t nat -I PREROUTING 1 \
+        -p udp \
+        --dport 53 \
+        -m u32 \
+        --u32 "0>>22&0x3C@12=0x00010000" \
+        -j REDIRECT \
+        --to-ports 5380
+
+    # Agregar regla IPv6
+    ip6tables -t nat -I PREROUTING 1 \
+        -p udp \
+        --dport 53 \
+        -j REDIRECT \
+        --to-ports 5380
+
+    echo "✅ Reglas DNS aplicadas."
 
 }
 #==================================================
@@ -229,7 +306,9 @@ install_slowdns(){
     generate_keys || return
 
     configure_dnsdist
+systemctl restart dnsdist
 
+sleep 1
     create_slowdns_service
 
     open_dns_port
@@ -239,11 +318,32 @@ install_slowdns(){
 
     systemctl daemon-reload
 
-    systemctl enable dnsdist
-    systemctl enable slowdns
+systemctl enable dnsdist >/dev/null 2>&1
+systemctl enable slowdns >/dev/null 2>&1
 
-    systemctl restart dnsdist
-    systemctl restart slowdns
+# Reiniciar dnsdist primero
+systemctl restart dnsdist
+
+sleep 2
+
+# Verificar que dnsdist quedó activo
+if ! systemctl is-active --quiet dnsdist; then
+    echo "❌ dnsdist no pudo iniciar."
+    journalctl -u dnsdist -n 20 --no-pager
+    return 1
+fi
+
+# Iniciar SlowDNS
+systemctl restart slowdns
+
+sleep 2
+
+# Verificar SlowDNS
+if ! systemctl is-active --quiet slowdns; then
+    echo "❌ SlowDNS no pudo iniciar."
+    journalctl -u slowdns -n 20 --no-pager
+    return 1
+fi
 
     sleep 3
 
@@ -317,8 +417,19 @@ remove_slowdns(){
 
     systemctl daemon-reload
 
-    iptables -D INPUT -p udp --dport 53 -j ACCEPT 2>/dev/null
-    iptables -D INPUT -p tcp --dport 53 -j ACCEPT 2>/dev/null
+    iptables -t nat -D PREROUTING \
+    -p udp \
+    --dport 53 \
+    -m u32 \
+    --u32 "0>>22&0x3C@12=0x00010000" \
+    -j REDIRECT \
+    --to-ports 5380 2>/dev/null
+
+ip6tables -t nat -D PREROUTING \
+    -p udp \
+    --dport 53 \
+    -j REDIRECT \
+    --to-ports 5380 2>/dev/null
 
     sed -i '/^SLOWDNS=/d' "$CONFIG"
     echo "SLOWDNS=OFF" >> "$CONFIG"
