@@ -258,12 +258,12 @@ remove_xray() {
 
 load_domain() {
 
-    if [[ -f "$CONFIG" ]]; then
-        source "$CONFIG"
-    fi
+    [[ -f "$CONFIG" ]] && source "$CONFIG"
 
-    if [[ -z "$DOMAIN" ]]; then
-        DOMAIN=$(cat /etc/xray/domain 2>/dev/null)
+    DOMAIN="${SERVER_DOMAIN:-$DOMAIN}"
+
+    if [[ -z "$DOMAIN" && -f /etc/xray/domain ]]; then
+        DOMAIN=$(cat /etc/xray/domain)
     fi
 
 }
