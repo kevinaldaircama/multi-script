@@ -298,7 +298,10 @@ create_vmess_user() {
 
     echo
     read -rp "Usuario : " USERNAME
-
+if vmess_user_exists "$USERNAME"; then
+    echo -e "${RED}✘ El usuario ya existe.${RESET}"
+    return
+fi
     if [[ -z "$USERNAME" ]]; then
         echo -e "${RED}✘ Usuario inválido.${RESET}"
         return
@@ -316,7 +319,12 @@ create_vmess_user() {
             "email":$email
         }]' \
         "$XRAY_CFG" > /tmp/xray.json
-
+        
+if ! jq empty /tmp/xray.json >/dev/null 2>&1; then
+    echo -e "${RED}✘ Error al generar config.json.${RESET}"
+    rm -f /tmp/xray.json
+    return
+fi
     mv /tmp/xray.json "$XRAY_CFG"
 
     systemctl restart xray
@@ -566,7 +574,10 @@ create_vmess_account() {
     create_vmess_user || return
 
     load_domain
-
+if [[ -z "$DOMAIN" ]]; then
+    echo -e "${RED}✘ No hay dominio configurado.${RESET}"
+    return
+fi
     LINK="vmess://$(generate_vmess_link "$VMESS_USER" "$VMESS_UUID")"
 
     clear
@@ -727,6 +738,10 @@ restart_xray_service() {
     systemctl restart xray
 
     sleep 2
+if ! systemctl is-active --quiet xray; then
+    echo -e "${RED}✘ Xray no pudo iniciarse.${RESET}"
+    return
+fi
 
     if systemctl is-active --quiet xray
     then
@@ -806,6 +821,7 @@ do
 clear
 
 source "$CONFIG" 2>/dev/null
+load_domain
 
 if systemctl is-active --quiet xray; then
     STATUS="${GREEN}🟢 ACTIVO${RESET}"
@@ -895,13 +911,16 @@ read -rp " ► Opción: " opc
 case "$opc" in
 
 1)
-install_xray
-sleep 2
+if systemctl is-active --quiet xray; then
+    create_vmess_account
+else
+    install_xray
+fi
 ;;
 
 2)
 if systemctl is-active --quiet xray; then
-    create_vmess_account
+    remove_vmess_user
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -910,7 +929,7 @@ fi
 
 3)
 if systemctl is-active --quiet xray; then
-    remove_vmess_user
+    list_vmess_users
 else
     echo "❌ Xray no está instalado."
     sleep 2
@@ -965,14 +984,12 @@ fi
 9)
 if systemctl is-active --quiet xray; then
     install_xray
-    sleep 2
 fi
 ;;
 
 10)
 if systemctl is-active --quiet xray; then
     remove_xray
-    sleep 2
 fi
 ;;
 
