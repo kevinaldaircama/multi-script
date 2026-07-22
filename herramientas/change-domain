@@ -1,0 +1,211 @@
+#!/bin/bash
+
+#=========================================================
+#      KEVIN TECH - CAMBIAR DOMINIO (PARTE 1)
+#=========================================================
+
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
+
+GREEN="\e[1;92m"
+RED="\e[1;91m"
+YELLOW="\e[1;93m"
+CYAN="\e[1;96m"
+WHITE="\e[1;97m"
+RESET="\e[0m"
+
+[[ $EUID -ne 0 ]] && {
+    echo "Debe ejecutar como root."
+    exit 1
+}
+
+[[ ! -f "$CONFIG" ]] && {
+    echo "No existe config.conf"
+    exit 1
+}
+
+source "$CONFIG"
+
+clear
+
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${WHITE}║                 🌐 CAMBIAR DOMINIO                          ║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo
+
+CURRENT_DOMAIN="${SERVER_DOMAIN:-NO CONFIGURADO}"
+
+PUBLIC_IP=$(curl -4 -s https://api.ipify.org)
+
+echo -e "${WHITE}Dominio actual : ${GREEN}$CURRENT_DOMAIN${RESET}"
+echo -e "${WHITE}IP Pública     : ${GREEN}$PUBLIC_IP${RESET}"
+echo
+
+read -rp "Nuevo dominio: " NEWDOMAIN
+
+[[ -z "$NEWDOMAIN" ]] && {
+    echo
+    echo -e "${RED}Debe ingresar un dominio.${RESET}"
+    exit 1
+}
+
+#---------------------------------------------------------
+# Validar formato
+#---------------------------------------------------------
+
+if ! [[ "$NEWDOMAIN" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
+
+    echo
+    echo -e "${RED}Formato de dominio inválido.${RESET}"
+    exit 1
+
+fi
+
+echo
+echo -e "${CYAN}Verificando DNS...${RESET}"
+
+DOMAIN_IP=$(dig +short "$NEWDOMAIN" A | head -1)
+
+if [[ -z "$DOMAIN_IP" ]]; then
+
+    echo
+    echo -e "${RED}El dominio no tiene un registro A.${RESET}"
+    exit 1
+
+fi
+
+if [[ "$DOMAIN_IP" != "$PUBLIC_IP" ]]; then
+
+    echo
+    echo -e "${RED}El dominio no apunta a esta VPS.${RESET}"
+    echo
+    echo "IP VPS      : $PUBLIC_IP"
+    echo "IP Dominio  : $DOMAIN_IP"
+    exit 1
+
+fi
+
+#---------------------------------------------------------
+# Backup
+#---------------------------------------------------------
+
+BACKUP="/etc/kevintech/backup"
+
+mkdir -p "$BACKUP"
+
+DATE=$(date +%Y%m%d-%H%M%S)
+
+cp "$CONFIG" "$BACKUP/config.conf.$DATE"
+
+[[ -f /etc/xray/domain ]] && \
+cp /etc/xray/domain "$BACKUP/domain.$DATE"
+
+echo
+echo -e "${GREEN}✔ Verificación completada.${RESET}"
+echo -e "${GREEN}✔ Copias de seguridad creadas.${RESET}"
+
+echo
+echo -e "${YELLOW}Resumen:${RESET}"
+
+echo "Dominio actual : $CURRENT_DOMAIN"
+echo "Nuevo dominio  : $NEWDOMAIN"
+echo "IP VPS         : $PUBLIC_IP"
+
+echo
+echo -e "${CYAN}Continúe con la Parte 2 para aplicar el cambio.${RESET}"
+#=========================================================
+# PARTE 2
+# Aplicar cambio de dominio
+#=========================================================
+
+clear
+
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${WHITE}║               APLICANDO CAMBIOS                             ║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo
+
+echo -e "${CYAN}Actualizando configuración...${RESET}"
+
+#---------------------------------------------------------
+# Guardar dominio en config.conf
+#---------------------------------------------------------
+
+if grep -q '^SERVER_DOMAIN=' "$CONFIG"; then
+    sed -i "s|^SERVER_DOMAIN=.*|SERVER_DOMAIN=\"$NEWDOMAIN\"|" "$CONFIG"
+else
+    echo "SERVER_DOMAIN=\"$NEWDOMAIN\"" >> "$CONFIG"
+fi
+
+#---------------------------------------------------------
+# Crear / actualizar dominio de Xray
+#---------------------------------------------------------
+
+mkdir -p /etc/xray
+echo "$NEWDOMAIN" > /etc/xray/domain
+
+echo -e "${GREEN}✔ Dominio actualizado.${RESET}"
+
+#---------------------------------------------------------
+# Reiniciar Xray
+#---------------------------------------------------------
+
+echo -ne "Reiniciando Xray... "
+
+if systemctl restart xray 2>/dev/null; then
+    echo -e "${GREEN}OK${RESET}"
+else
+    echo -e "${RED}ERROR${RESET}"
+fi
+
+#---------------------------------------------------------
+# Validar HAProxy
+#---------------------------------------------------------
+
+echo -ne "Validando HAProxy... "
+
+if haproxy -c -f /etc/haproxy/haproxy.cfg >/dev/null 2>&1; then
+    echo -e "${GREEN}OK${RESET}"
+
+    echo -ne "Reiniciando HAProxy... "
+
+    if systemctl restart haproxy; then
+        echo -e "${GREEN}OK${RESET}"
+    else
+        echo -e "${RED}ERROR${RESET}"
+    fi
+
+else
+    echo -e "${RED}Configuración inválida${RESET}"
+    exit 1
+fi
+
+#---------------------------------------------------------
+# Verificar servicios
+#---------------------------------------------------------
+
+echo
+echo "Estado de servicios:"
+
+systemctl is-active --quiet xray \
+    && echo -e "Xray     : ${GREEN}ACTIVO${RESET}" \
+    || echo -e "Xray     : ${RED}DETENIDO${RESET}"
+
+systemctl is-active --quiet haproxy \
+    && echo -e "HAProxy  : ${GREEN}ACTIVO${RESET}" \
+    || echo -e "HAProxy  : ${RED}DETENIDO${RESET}"
+
+echo
+
+echo -e "${GREEN}═══════════════════════════════════════════════${RESET}"
+echo -e "${GREEN}✔ Dominio cambiado correctamente.${RESET}"
+echo -e "${GREEN}═══════════════════════════════════════════════${RESET}"
+
+echo
+echo "Dominio anterior : $CURRENT_DOMAIN"
+echo "Nuevo dominio    : $NEWDOMAIN"
+
+echo
+read -n1 -s -r -p "Presione cualquier tecla para volver..."
+
+exec menu
