@@ -298,14 +298,18 @@ create_vmess_user() {
 
     echo
     read -rp "Usuario : " USERNAME
-if vmess_user_exists "$USERNAME"; then
-    echo -e "${RED}✘ El usuario ya existe.${RESET}"
+USERNAME=$(echo "$USERNAME" | xargs)
+
+if [[ -z "$USERNAME" ]]; then
+    echo -e "${RED}✘ Usuario inválido.${RESET}"
     return
 fi
-    if [[ -z "$USERNAME" ]]; then
-        echo -e "${RED}✘ Usuario inválido.${RESET}"
-        return
-    fi
+
+if vmess_user_exists "$USERNAME"; then
+    echo -e "${RED}✘ El usuario ya existe.${RESET}"
+    read -n1 -r -p "Presione cualquier tecla para continuar..."
+    return
+fi
 
     UUID=$(cat /proc/sys/kernel/random/uuid)
 
@@ -441,9 +445,8 @@ vmess_user_exists() {
 
     jq -e \
     --arg email "$1" \
-    '.inbounds[0].settings.clients[]
-    | select(.email==$email)' \
-    "$XRAY_CFG" >/dev/null
+    '.inbounds[0].settings.clients | any(.email == $email)' \
+    "$XRAY_CFG" >/dev/null 2>&1
 
 }
 #==================================================
