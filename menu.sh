@@ -33,6 +33,7 @@ source "$CONFIG"
 ZIPVPN=${ZIPVPN:-OFF}
 OPTIMIZAR=${OPTIMIZAR:-OFF}
 SYSTEMDNS=${SYSTEMDNS:-OFF}
+XRAY=${XRAY:-OFF}
 CUPSD=${CUPSD:-OFF}
 SSL_TUNNEL=${SSL_TUNNEL:-OFF}
 CLOUDFLARE_STATUS=${CLOUDFLARE_STATUS:-OFF}
@@ -191,16 +192,15 @@ PROTO6=""
 [[ "$ZIPVPN" == "ON" ]]      && PROTO2+="\n🟢 ZIP VPN"
 
 [[ "$DROPBEAR" == "ON" ]]    && PROTO3+="🟢 Dropbear       Puerto 90"
-[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && \
-PROTO3+="\n🟢 SSL/TLS (HAProxy)  Puertos 80 / 443 / 8080"
+[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && PROTO3+="\n🟢 SSL/TLS        Puerto 443"
 
 [[ "$BADVPN" == "ON" ]]      && PROTO4+="🟢 BadVPN         7200 / 7300"
 [[ "$UDP_CUSTOM" == "ON" ]]  && PROTO4+="\n🟢 UDP Custom     Puerto 36712"
 
 [[ "$SLOWDNS" == "ON" ]]     && PROTO5+="🟢 SlowDNS        Puerto 53"
 
-[[ "$V2RAY" == "ON" ]] && \
-PROTO6+="🟢 V2Ray / Xray  443 SSL/TLS"
+[[ "$XRAY" == "ON" ]] && \
+PROTO6+="🟢 V2Ray / Xray      Puerto 443"
 
 clear
 
