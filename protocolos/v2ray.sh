@@ -664,6 +664,7 @@ vmess_server_info() {
     echo "Host    : $DOMAIN"
 
     echo
+read -n1 -r -p "Presione cualquier tecla para continuar..."
 }
 #==================================================
 # KevinTech Multi Script
@@ -724,7 +725,8 @@ xray_online_users() {
     echo
     echo -e "${GREEN}Usuarios conectados:${RESET} $TOTAL"
     echo
-
+echo
+read -n1 -r -p "Presione cualquier tecla para continuar..."
 }
 
 #--------------------------------------------------
