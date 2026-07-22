@@ -308,6 +308,8 @@ printf "${WHITE}║ ${YELLOW}[01]${WHITE} 👥 Control de Usuarios (SSH / SSL / 
 printf "${WHITE}║ ${YELLOW}[02]${WHITE} 🚀 Optimizar VPS                     %-15b║${RESET}\n" \
 "$(status "$OPTIMIZAR")"
 
+printf "${WHITE}║ ${YELLOW}[03]${WHITE} 🌐 Cambiar Dominio                            ║${RESET}\n"
+
 printf "${WHITE}║ ${YELLOW}[04]${WHITE} 🔄 Auto Inicio                      %-15b║${RESET}\n" \
 "$(status "$AUTO_START")"
 
@@ -392,7 +394,43 @@ else
 fi
 
 ;;
+#=========================================================
 
+3)
+
+clear
+
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${WHITE}║                  🌐 CAMBIAR DOMINIO                         ║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo ""
+
+if [[ -f "$BASE/herramientas/change-domain" ]]; then
+
+    bash "$BASE/herramientas/change-domain"
+
+elif [[ -f "$HOME/multi-script/herramientas/change-domain" ]]; then
+
+    mkdir -p "$BASE/herramientas"
+
+    cp "$HOME/multi-script/herramientas/change-domain" \
+       "$BASE/herramientas/change-domain"
+
+    chmod +x "$BASE/herramientas/change-domain"
+
+    bash "$BASE/herramientas/change-domain"
+
+else
+
+    echo -e "${RED}❌ No se encontró change-domain.${RESET}"
+
+    sleep 2
+
+    exec bash "$BASE/menu.sh"
+
+fi
+
+;;
 #=========================================================
 
 4)
