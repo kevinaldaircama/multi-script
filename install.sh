@@ -84,8 +84,35 @@ echo "✅ Key válida."
 
 echo "🔥 Registrando activación..."
 
+# Obtener información de la Key
+KEY_DATA=$(curl -4 -s "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")
+
+OWNER=$(echo "$KEY_DATA" | jq -r '.owner')
+RESELLER=$(echo "$KEY_DATA" | jq -r '.reseller')
+
+CLIENT_IP=$(curl -4 -s ifconfig.me)
+OS_NAME=$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
+HOSTNAME=$(hostname)
+DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")
+
+# Guardar activación
+curl -4 -s -X POST \
+-H "Content-Type: application/json" \
+-d "{
+\"owner\":\"$OWNER\",
+\"reseller\":\"$RESELLER\",
+\"token\":\"$INSTALL_KEY\",
+\"ip\":\"$CLIENT_IP\",
+\"hostname\":\"$HOSTNAME\",
+\"os\":\"$OS_NAME\",
+\"date\":\"$DATE_NOW\",
+\"notified\":false
+}" \
+"${FIREBASE_URL}/activations.json" >/dev/null
+
+# Eliminar la Key
 curl -4 -s -X DELETE \
-"${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null || true
+"${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null
 
 sleep 1
 clear
