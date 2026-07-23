@@ -61,7 +61,7 @@ echo ""
 echo "📦 Preparando verificación..."
 
 apt update -y >/dev/null 2>&1
-apt install -y curl wget ca-certificates >/dev/null 2>&1
+apt install -y curl wget ca-certificates jq >/dev/null 2>&1
 update-ca-certificates >/dev/null 2>&1 || true
 
 echo "🔍 Verificando licencia..."
@@ -89,6 +89,9 @@ KEY_DATA=$(curl -4 -s "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")
 
 OWNER=$(echo "$KEY_DATA" | jq -r '.owner')
 RESELLER=$(echo "$KEY_DATA" | jq -r '.reseller')
+echo "KEY_DATA: $KEY_DATA"
+echo "OWNER: $OWNER"
+echo "RESELLER: $RESELLER"
 
 CLIENT_IP=$(curl -4 -s ifconfig.me)
 OS_NAME=$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
@@ -285,7 +288,6 @@ V2RAY=OFF
 OPENVPN=OFF
 SQUID=OFF
 TROJAN=OFF
-V2RAY=OFF
 SHADOWSOCKS=OFF
 SOCKS5=OFF
 WEBMIN=OFF
