@@ -96,7 +96,7 @@ HOSTNAME=$(hostname)
 DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")
 
 # Guardar activación
-curl -4 -s -X POST \
+RESP=$(curl -4 -s -X POST \
 -H "Content-Type: application/json" \
 -d "{
 \"owner\":\"$OWNER\",
@@ -108,9 +108,16 @@ curl -4 -s -X POST \
 \"date\":\"$DATE_NOW\",
 \"notified\":false
 }" \
-"${FIREBASE_URL}/activations.json" >/dev/null
+"${FIREBASE_URL}/activations.json")
 
-# Eliminar la Key
+# Verificar que se guardó
+if [[ "$RESP" != *"name"* ]]; then
+    echo "❌ Error: no se pudo registrar la activación."
+    echo "$RESP"
+    exit 1
+fi
+
+# Eliminar la key solo si el POST fue exitoso
 curl -4 -s -X DELETE \
 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null
 
