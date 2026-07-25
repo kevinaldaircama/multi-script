@@ -78,15 +78,16 @@ printf " ${GREEN}[05]${RESET} ⚡ BadVPN           %b\n" "$BADVPN_STATUS"
 printf " ${GREEN}[06]${RESET} 🚀 UDP Custom       %b\n" "$UDP_STATUS"
 printf " ${GREEN}[07]${RESET} 🌐 SlowDNS          %b\n" "$SLOWDNS_STATUS"
 printf " ${GREEN}[08]${RESET} ☁️ Xray / V2Ray     %b\n" "$XRAY_STATUS"
+printf " ${GREEN}[09]${RESET} 👤 CheckUser\n"
 
 echo
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW}                🛠 SISTEMA${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e " ${GREEN}[09]${RESET} 🧰 Herramientas"
-echo -e " ${GREEN}[10]${RESET} 🔄 Reiniciar Servicios"
-echo -e " ${GREEN}[11]${RESET} 🔥 Firewall"
+echo -e " ${GREEN}[10]${RESET} 🧰 Herramientas"
+echo -e " ${GREEN}[11]${RESET} 🔄 Reiniciar Servicios"
+echo -e " ${GREEN}[12]${RESET} 🔥 Firewall"
 
 echo
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -105,9 +106,10 @@ case "$OP" in
 6) bash "$BASE/protocolos/udpcustom.sh" ;;
 7) bash "$BASE/protocolos/slowdns.sh" ;;
 8) bash "$BASE/protocolos/v2ray.sh" ;;
-9) bash "$BASE/herramientas/menu.sh" ;;
-10) bash "$BASE/herramientas/reiniciar.sh" ;;
-11) bash "$BASE/herramientas/firewall.sh" ;;
+9) bash "$BASE/protocolos/checkuser.sh" ;;
+10) bash "$BASE/herramientas/menu.sh" ;;
+11) bash "$BASE/herramientas/reiniciar.sh" ;;
+12) bash "$BASE/herramientas/firewall.sh" ;;
 0) exec bash "$BASE/menu.sh" ;;
 *)
 echo "❌ Opción inválida."
