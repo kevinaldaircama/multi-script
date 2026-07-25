@@ -45,35 +45,36 @@ loading() {
     echo  
 }  
   
-clear  
-loading "Cargando protocolos"  
-  
-status_service() {    
-    
-    local SERVICE="$1"    
-    local CONF="$2"    
-    
-    if systemctl list-unit-files | grep -q "^${SERVICE}.service"; then    
-        if systemctl is-active --quiet "$SERVICE"; then    
-            echo -e "${GREEN}🟢 ACTIVO${RESET}"    
-        else    
-            echo -e "${RED}🔴 OFF${RESET}"    
-        fi    
-    else    
-        if [[ "$CONF" == "ON" ]]; then    
-            echo -e "${GREEN}🟢 ACTIVO${RESET}"    
-        else    
-            echo -e "${RED}🔴 OFF${RESET}"    
-        fi    
-    fi    
-}    
-    
-OPENSSH_STATUS=$(status_service ssh "$OPENSSH")    
-DROPBEAR_STATUS=$(status_service dropbear "$DROPBEAR")    
-SSL_STATUS=$(status_service haproxy "$SSL")    
-UDP_STATUS=$(status_service udp-custom "$UDP_CUSTOM")    
-SLOWDNS_STATUS=$(status_service dnstt "$SLOWDNS")    
-XRAY_STATUS=$(status_service xray "$V2RAY")    
+clear
+
+loading "Verificando protocolos"
+
+status_service() {
+
+    local SERVICE="$1"
+    local CONF="$2"
+
+    if systemctl list-unit-files | grep -q "^${SERVICE}.service"; then
+        if systemctl is-active --quiet "$SERVICE"; then
+            echo -e "${GREEN}🟢 ACTIVO${RESET}"
+        else
+            echo -e "${RED}🔴 OFF${RESET}"
+        fi
+    else
+        if [[ "$CONF" == "ON" ]]; then
+            echo -e "${GREEN}🟢 ACTIVO${RESET}"
+        else
+            echo -e "${RED}🔴 OFF${RESET}"
+        fi
+    fi
+}
+
+OPENSSH_STATUS=$(status_service ssh "$OPENSSH")
+DROPBEAR_STATUS=$(status_service dropbear_custom "$DROPBEAR")
+SSL_STATUS=$(status_service haproxy "$SSL")
+UDP_STATUS=$(status_service udp-custom "$UDP_CUSTOM")
+SLOWDNS_STATUS=$(status_service dnstt "$SLOWDNS")
+XRAY_STATUS=$(status_service xray "$V2RAY")
     
 if [[ "$ZIPVPN" == "ON" ]]; then    
     ZIPVPN_STATUS="${GREEN}🟢 ACTIVO${RESET}"    
