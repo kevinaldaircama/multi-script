@@ -78,7 +78,7 @@ printf " ${GREEN}[05]${RESET} ⚡ BadVPN           %b\n" "$BADVPN_STATUS"
 printf " ${GREEN}[06]${RESET} 🚀 UDP Custom       %b\n" "$UDP_STATUS"
 printf " ${GREEN}[07]${RESET} 🌐 SlowDNS          %b\n" "$SLOWDNS_STATUS"
 printf " ${GREEN}[08]${RESET} ☁️ Xray / V2Ray     %b\n" "$XRAY_STATUS"
-printf " ${GREEN}[09]${RESET} 👤 CheckUser\n"
+printf " ${GREEN}[09]${RESET} 👤 CheckUser        %b\n" "$CHECKUSER_STATUS"
 
 echo
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
