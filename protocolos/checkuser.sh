@@ -1,66 +1,87 @@
 #!/bin/bash
 
-# Função para verificar se o CheckUser está instalado
+#==================================================
+# KevinTech Multi Script
+# CheckUser
+#==================================================
+
+BASE="/etc/kevintech"
+
+GREEN="\e[1;92m"
+RED="\e[1;91m"
+YELLOW="\e[1;93m"
+BLUE="\e[1;94m"
+CYAN="\e[1;96m"
+MAGENTA="\e[1;95m"
+WHITE="\e[1;97m"
+RESET="\e[0m"
+
 check_installed() {
-    if [ -f "/usr/lib/chall/chall.sh" ]; then
-        return 0  # Já instalado
+    [[ -f /usr/lib/chall/chall.sh ]]
+}
+status_checkuser() {
+    if [[ -f /usr/lib/chall/chall.sh ]]; then
+        echo -e "${GREEN}🟢 ACTIVO${RESET}"
     else
-        return 1  # Não instalado
+        echo -e "${RED}🔴 OFF${RESET}"
     fi
 }
 
-# Limpa a tela e exibe o menu
-show_menu() {
+while true; do
     clear
-    echo -e "\033[46;1;37m              ★ MENU CHECKUSER ★               \033[0m"
-    echo -e "\033[01;31m\033[0m"
-    echo -e "\033[01;31m\033[1;31m\033[1;34m[\033[1;37m 01 •\033[1;34m]\033[1;37m ➤  \033[1;33mINSTALAR CHECKUSER MULTI-APPS\033[0m"
-    echo -e "\033[01;31m\033[1;31m\033[1;34m[\033[1;37m 02 •\033[1;34m]\033[1;37m ➤  \033[1;33mINSTALAR CHECKUSER DTUNNEL\033[0m"
-    echo -e "\033[01;31m\033[1;31m\033[1;34m[\033[1;37m 03 •\033[1;34m]\033[1;37m ➤  \033[1;33mINSTALAR CHECKUSER DTUNNEL-GO\033[0m"
-    echo -e "\033[01;31m\033[1;31m\033[1;34m[\033[1;37m 04 •\033[1;34m]\033[1;37m ➤  \033[1;33mINSTALAR SUSPENDER USUÁRIO\033[0m"
-    echo -e "\033[01;31m\033[1;31m\033[1;34m[\033[1;37m 00 •\033[1;34m]\033[1;37m ➤  \033[1;33mVOLTAR  \033[1;32m<\033[1;33m<\033[1;31m< \033[0m"
-    echo -e "\033[01;31m\033[0m"
-    echo -e "\033[0;36m░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░░★░\033[0m"
-}
+    
+    CHECKUSER_STATUS=$
+(status_checkuser)
 
-# Exibe o menu e lê a escolha do usuário
-get_user_choice() {
-    tput civis
-    echo -ne "\033[1;31m➤ \033[1;32mESCOLHA OPÇÃO DESEJADA\033[1;33m\033[1;31m\033[1;37m:"; read x
-    tput cnorm
-}
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${MAGENTA}           🛡 KevinTech Multi Script${RESET}"
+    echo -e "${WHITE}               MENÚ CHECKUSER${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-# Executa a escolha do usuário
-execute_choice() {
-    case $x in
-    1 | 01)
-        if check_installed; then
-            chall # Já instalado, executar o sistema chall
-        else
-            bash <(curl -sL https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/instcheck.sh) && chall    
-        fi
+    printf " ${GREEN}[01]${RESET} 👤 CheckUser Multi-Apps    %b\n" "$CHECKUSER_STATUS"
+    echo -e " ${GREEN}[02]${RESET} 🌐 CheckUser DTunnel"
+    echo -e " ${GREEN}[03]${RESET} 🚀 CheckUser DTunnel-Go"
+    echo -e " ${GREEN}[04]${RESET} ⛔ Suspender Usuario"
+
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e " ${GREEN}[00]${RESET} ↩ Regresar"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+    read -rp " ► Opción: " OP
+
+    case "$OP" in
+
+        1|01)
+            if check_installed; then
+                chall
+            else
+                bash <(curl -sL https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/instcheck.sh)
+                [[ -x "$(command -v chall)" ]] && chall
+            fi
         ;;
-    2 | 02)
-        bash <(curl -sL https://raw.githubusercontent.com/PhoenixxZ2023/DTCheckUser/master/install.sh)
+
+        2|02)
+            bash <(curl -sL https://raw.githubusercontent.com/PhoenixxZ2023/DTCheckUser/master/install.sh)
         ;;
-    3 | 03)
-        bash <(curl -sL https://n9.cl/yo2nc)
+
+        3|03)
+            bash <(curl -sL https://n9.cl/yo2nc)
         ;;
-    4 | 04)
-        suspenderusuario.sh
+
+        4|04)
+            suspenderusuario.sh
         ;;
-    0 | 00)
-        clear
-        menu # Certifique-se de que a função `menu` está definida em outro lugar
+
+        0|00)
+            exec bash "$BASE/protocolos/menu.sh"
         ;;
-    *)
-        echo -e "\033[1;31mOpcao invalida!\033[0m"
+
+        *)
+            echo
+            echo -e "${RED}❌ Opción inválida.${RESET}"
+            sleep 2
         ;;
     esac
-}
-
-# Executa o script
-show_menu
-get_user_choice
-execute_choice
-sleep 2
+done
