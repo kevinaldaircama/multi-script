@@ -47,7 +47,7 @@ status_service() {
 }
 
 OPENSSH_STATUS=$(status_service ssh "$OPENSSH")
-DROPBEAR_STATUS=$(status_service dropbear "$DROPBEAR")
+DROPBEAR_STATUS=$(status_service dropbear_custom "$DROPBEAR")
 SSL_STATUS=$(status_service haproxy "$SSL")
 UDP_STATUS=$(status_service udp-custom "$UDP_CUSTOM")
 SLOWDNS_STATUS=$(status_service dnstt "$SLOWDNS")
