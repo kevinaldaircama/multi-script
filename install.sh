@@ -390,21 +390,31 @@ UPTIME=$(uptime -p | sed 's/up //')
 FECHA=$(date +"%d-%m-%Y")
 HORA=$(date +"%H:%M:%S")
 
-echo " ____  ____   _   _         ____   _     _   _  ____      "
-echo "/ ___|/ ___| | | | |       |  _ \ | |   | | | |/ ___|     "
-echo "\\___ \\\\___ \\ | |_| | _____ | |_) || |   | | | |\\___ \\     "
-echo " ___) |___) ||  _  ||_____||  __/ | |___| |_| | ___) |    "
-echo "|____/|____/ |_| |_|       |_|    |_____|\\___/ |____/     "
+echo " __  __       _ _   _   _      ____            _       _   "
+echo "|  \/  |_   _| | |_(_) | |    / ___|  ___ _ __(_)_ __ | |_ "
+echo "| |\/| | | | | | __| | | |    \___ \ / __| '__| | '_ \| __|"
+echo "| |  | | |_| | | |_| | | |___  ___) | (__| |  | | |_) | |_ "
+echo "|_|  |_|\__,_|_|\__|_| |_____| |____/ \___|_|  |_| .__/ \__|"
+echo "                                                 |_|       "
 echo
-echo " 🚀 KevinTech Multi Script"
+echo "              🚀 KevinTech Multi Script 🚀"
 echo
-echo " NOMBRE DEL SERVIDOR : $SERVER"
-echo " SERVIDOR ENCENDIDO  : $UPTIME"
-echo " FECHA               : $FECHA"
-echo " HORA                : $HORA"
-echo " YouTube              : Kevin tech tutorials"
-echo
-echo " ESCRIBE ( menu ) PARA ENTRAR"
+echo " Servidor : $SERVER"
+echo " Uptime   : $UPTIME"
+echo " Fecha    : $FECHA"
+echo " Hora     : $HORA"
+echo " GitHub   : github.com/kevinaldaircama"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [[ $EUID -ne 0 ]]; then
+    echo "👤 Usuario : $(whoami)"
+    echo "🔒 No eres root."
+    echo "👉 Ejecuta: sudo -i"
+else
+    echo "👑 Usuario : root"
+    echo "👉 Escribe: menu"
+fi
+
 echo
 EOF
 
