@@ -403,7 +403,7 @@ echo " Servidor : $SERVER"
 echo " Uptime   : $UPTIME"
 echo " Fecha    : $FECHA"
 echo " Hora     : $HORA"
-echo " GitHub   : github.com/kevinaldaircama"
+echo " YouTube  : kevin tech tutorials"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ $EUID -ne 0 ]]; then
