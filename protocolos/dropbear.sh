@@ -90,40 +90,12 @@ install_dropbear() {
     echo -e "${WHITE}        INSTALAR DROPBEAR${RESET}"
     line
 
-    echo ""
-    echo "Ingrese uno o varios puertos separados por comas."
-    echo ""
-    echo "Ejemplos:"
-    echo " 90"
-    echo " 143"
-    echo " 22,80,143"
-    echo ""
-
-    read -rp " Puertos: " PORTS
-
-    PORTS=$(echo "$PORTS" | tr -d ' ')
-
-    [[ -z "$PORTS" ]] && {
-        error "Debe ingresar al menos un puerto."
-        pause
-        return
-    }
+    # Puertos predeterminados
+    PORTS="90,143,109"
 
     IFS=',' read -ra PORT_ARRAY <<< "$PORTS"
 
     for PORT in "${PORT_ARRAY[@]}"; do
-
-        [[ ! "$PORT" =~ ^[0-9]+$ ]] && {
-            error "Puerto inválido: $PORT"
-            pause
-            return
-        }
-
-        ((PORT<1 || PORT>65535)) && {
-            error "Puerto fuera de rango: $PORT"
-            pause
-            return
-        }
 
         if ss -lnt | awk '{print $4}' | grep -q ":$PORT$"; then
             error "El puerto $PORT ya está en uso."
@@ -215,92 +187,6 @@ EOF
         error "No fue posible iniciar Dropbear."
 
     fi
-
-    pause
-
-}
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             CAMBIAR PUERTOS                  #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-change_ports() {
-
-    get_ports
-
-    clear
-    line
-    echo -e "${WHITE}          CAMBIAR PUERTOS${RESET}"
-    line
-
-    echo ""
-    echo " Puertos actuales : $PORTS"
-    echo ""
-    echo " Ejemplos:"
-    echo " 22"
-    echo " 143,109"
-    echo " 22,80,143"
-    echo ""
-
-    read -rp " Nuevos puertos: " NEW_PORTS
-
-    NEW_PORTS=$(echo "$NEW_PORTS" | tr -d ' ')
-
-    [[ -z "$NEW_PORTS" ]] && {
-        error "Debe ingresar al menos un puerto."
-        pause
-        return
-    }
-
-    IFS=',' read -ra ARRAY <<< "$NEW_PORTS"
-
-    for PORT in "${ARRAY[@]}"; do
-
-        [[ ! "$PORT" =~ ^[0-9]+$ ]] && {
-            error "Puerto inválido: $PORT"
-            pause
-            return
-        }
-
-        ((PORT<1 || PORT>65535)) && {
-            error "Puerto fuera de rango: $PORT"
-            pause
-            return
-        }
-
-    done
-
-    EXEC="/usr/sbin/dropbear -F"
-
-    for PORT in "${ARRAY[@]}"; do
-        EXEC="$EXEC -p $PORT"
-    done
-
-    EXEC="$EXEC -W 65536 -b /etc/issue.net"
-
-cat >/etc/systemd/system/dropbear_custom.service <<EOF
-[Unit]
-Description=KevinTech Dropbear Multi-Port
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$EXEC
-Restart=always
-RestartSec=3
-KillMode=process
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    systemctl restart dropbear_custom
-
-    sed -i "s/^DROPBEAR_PORT=.*/DROPBEAR_PORT=\"$NEW_PORTS\"/" "$CONFIG"
-
-    source "$CONFIG"
-
-    ok "Puertos actualizados."
 
     pause
 
@@ -537,13 +423,12 @@ while true; do
     if [[ "$DROPBEAR" == "ON" ]]; then
 
         cat <<EOF
-  [1] Reinstalar Dropbear
- [2] Cambiar Puertos
- [3] Reiniciar Servicio
- [4] Estado del Servicio
- [5] Diagnóstico
- [6] Información del Servidor
- [7] Desinstalar Dropbear
+ [1] Reinstalar Dropbear
+ [2] Reiniciar Servicio
+ [3] Estado del Servicio
+ [4] Diagnóstico
+ [5] Información del Servidor
+ [6] Desinstalar Dropbear
  [0] Regresar
 EOF
 
@@ -567,26 +452,22 @@ case "$OP" in
 ;;
 
 2)
-    change_ports
-;;
-
-3)
     restart_dropbear
 ;;
 
-4)
+3)
     status_dropbear
 ;;
 
-5)
+4)
     check_dropbear
 ;;
 
-6)
+5)
     system_info
 ;;
 
-7)
+6)
     remove_dropbear
 ;;
 
