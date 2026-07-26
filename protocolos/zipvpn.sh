@@ -26,13 +26,6 @@ line() {
     echo -e "${RESET}"
 }
 
-title() {
-    clear
-    line
-    echo -e "${WHITE}           🚀 KEVINTECH ZIVPN MANAGER${RESET}"
-    line
-}
-
 ok() {
     echo -e "${GREEN}✔${RESET} $1"
 }
