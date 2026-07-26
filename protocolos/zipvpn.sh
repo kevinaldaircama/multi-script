@@ -26,6 +26,13 @@ line() {
     echo -e "${RESET}"
 }
 
+title() {
+    clear
+    line
+    echo -e "${WHITE}           🚀 KEVINTECH ZIVPN MANAGER${RESET}"
+    line
+}
+
 ok() {
     echo -e "${GREEN}✔${RESET} $1"
 }
@@ -781,15 +788,16 @@ while true; do
     ARCH=$(uname -m)
 
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${WHITE}             🚀 KEVINTECH ZIVPN MANAGER             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
-    printf "${CYAN}║${RESET} Estado       : %-29b ${CYAN}║${RESET}\n" "$STATUS"
-    printf "${CYAN}║${RESET} Servicio     : %-29s ${CYAN}║${RESET}\n" "zivpn"
-    printf "${CYAN}║${RESET} Puerto UDP   : %-29s ${CYAN}║${RESET}\n" "$PORT"
-    printf "${CYAN}║${RESET} Rango UDP    : %-29s ${CYAN}║${RESET}\n" "20000-29999"
-    printf "${CYAN}║${RESET} Arquitectura : %-29s ${CYAN}║${RESET}\n" "$ARCH"
-    printf "${CYAN}║${RESET} Versión      : %-29s ${CYAN}║${RESET}\n" "$VERSION"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+    
+    echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
+printf "${CYAN}║${RESET} Estado       : %-29b ${CYAN}║${RESET}\n" "$STATUS"
+printf "${CYAN}║${RESET} Servicio     : %-29s ${CYAN}║${RESET}\n" "zivpn"
+printf "${CYAN}║${RESET} Puerto UDP   : %-29s ${CYAN}║${RESET}\n" "$PORT"
+printf "${CYAN}║${RESET} Rango UDP    : %-29s ${CYAN}║${RESET}\n" "20000-29999"
+printf "${CYAN}║${RESET} Arquitectura : %-29s ${CYAN}║${RESET}\n" "$ARCH"
+printf "${CYAN}║${RESET} Versión      : %-29s ${CYAN}║${RESET}\n" "$VERSION"
+echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
