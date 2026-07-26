@@ -786,7 +786,6 @@ while true; do
     fi
 
     ARCH=$(uname -m)
-echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
 printf "${CYAN}║${RESET} Estado       : %-29b ${CYAN}║${RESET}\n" "$STATUS"
 printf "${CYAN}║${RESET} Servicio     : %-29s ${CYAN}║${RESET}\n" "zivpn"
 printf "${CYAN}║${RESET} Puerto UDP   : %-29s ${CYAN}║${RESET}\n" "$PORT"
