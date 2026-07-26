@@ -103,19 +103,21 @@ HOSTNAME=$(hostname)
 DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")  
   
 # Guardar activación  
-RESP=$(curl -4 -s -X POST \  
--H "Content-Type: application/json" \  
--d "{  
-\"owner\":\"$OWNER\",  
-\"reseller\":\"$RESELLER\",  
-\"token\":\"$INSTALL_KEY\",  
-\"ip\":\"$CLIENT_IP\",  
-\"hostname\":\"$HOSTNAME\",  
-\"os\":\"$OS_NAME\",  
-\"date\":\"$DATE_NOW\",  
-\"notified\":false  
-}" \  
-"${FIREBASE_URL}/activations.json")  
+RESP=$(
+curl -4 -s -X POST \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"owner\":\"$OWNER\",
+    \"reseller\":\"$RESELLER\",
+    \"token\":\"$INSTALL_KEY\",
+    \"ip\":\"$CLIENT_IP\",
+    \"hostname\":\"$HOSTNAME\",
+    \"os\":\"$OS_NAME\",
+    \"date\":\"$DATE_NOW\",
+    \"notified\":false
+  }" \
+  "${FIREBASE_URL}/activations.json"
+)
   
 # Verificar que se guardó  
 if [[ "$RESP" != *"name"* ]]; then  
