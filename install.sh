@@ -378,10 +378,10 @@ if [[ ! -f /etc/kevintech/menu.sh ]]; then
     echo "❌ ERROR: menu.sh no fue instalado"
     exit 1
 fi
-  cat > /etc/profile.d/kevintech.sh << 'EOF'
+  cat > /etc/profile.d/kevintech-banner.sh << 'EOF'
 #!/bin/bash
 
-[ -z "$PS1" ] && return
+[[ $- != *i* ]] && return
 
 clear
 
@@ -390,29 +390,25 @@ UPTIME=$(uptime -p | sed 's/up //')
 FECHA=$(date +"%d-%m-%Y")
 HORA=$(date +"%H:%M:%S")
 
-cat << "BANNER"
-
- ██╗  ██╗███████╗██╗   ██╗██╗███╗   ██╗████████╗███████╗ ██████╗██╗  ██╗
- ██║ ██╔╝██╔════╝██║   ██║██║████╗  ██║╚══██╔══╝██╔════╝██╔════╝██║  ██║
- █████╔╝ █████╗  ██║   ██║██║██╔██╗ ██║   ██║   █████╗  ██║     ███████║
- ██╔═██╗ ██╔══╝  ╚██╗ ██╔╝██║██║╚██╗██║   ██║   ██╔══╝  ██║     ██╔══██║
- ██║  ██╗███████╗ ╚████╔╝ ██║██║ ╚████║   ██║   ███████╗╚██████╗██║  ██║
- ╚═╝  ╚═╝╚══════╝  ╚═══╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
-
-              KevinTech Multi Script
-BANNER
-
-echo "Servidor : $SERVER"
-echo "Uptime   : $UPTIME"
-echo "Fecha    : $FECHA"
-echo "Hora     : $HORA"
+echo " ____  ____   _   _         ____   _     _   _  ____      "
+echo "/ ___|/ ___| | | | |       |  _ \ | |   | | | |/ ___|     "
+echo "\\___ \\\\___ \\ | |_| | _____ | |_) || |   | | | |\\___ \\     "
+echo " ___) |___) ||  _  ||_____||  __/ | |___| |_| | ___) |    "
+echo "|____/|____/ |_| |_|       |_|    |_____|\\___/ |____/     "
 echo
-echo "👉 Escribe: menu"
+echo " 🚀 KevinTech Multi Script"
+echo
+echo " NOMBRE DEL SERVIDOR : $SERVER"
+echo " SERVIDOR ENCENDIDO  : $UPTIME"
+echo " FECHA               : $FECHA"
+echo " HORA                : $HORA"
+echo " YouTube              : Kevin tech tutorials"
+echo
+echo " ESCRIBE ( menu ) PARA ENTRAR"
 echo
 EOF
 
-chmod +x /etc/profile.d/kevintech.sh
-
+chmod +x /etc/profile.d/kevintech-banner.sh
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ KevinTech Multi Script instalado."
