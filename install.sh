@@ -378,10 +378,47 @@ if [[ ! -f /etc/kevintech/menu.sh ]]; then
     echo "❌ ERROR: menu.sh no fue instalado"
     exit 1
 fi
-  
-echo ""  
-echo "💻 Abriendo menú..."  
-  
-sleep 2  
-  
-exec /etc/kevintech/menu.sh
+  cat > /etc/profile.d/kevintech.sh << 'EOF'
+#!/bin/bash
+
+[ -z "$PS1" ] && return
+
+clear
+
+SERVER=$(hostname)
+UPTIME=$(uptime -p | sed 's/up //')
+FECHA=$(date +"%d-%m-%Y")
+HORA=$(date +"%H:%M:%S")
+
+cat << "BANNER"
+
+ ██╗  ██╗███████╗██╗   ██╗██╗███╗   ██╗████████╗███████╗ ██████╗██╗  ██╗
+ ██║ ██╔╝██╔════╝██║   ██║██║████╗  ██║╚══██╔══╝██╔════╝██╔════╝██║  ██║
+ █████╔╝ █████╗  ██║   ██║██║██╔██╗ ██║   ██║   █████╗  ██║     ███████║
+ ██╔═██╗ ██╔══╝  ╚██╗ ██╔╝██║██║╚██╗██║   ██║   ██╔══╝  ██║     ██╔══██║
+ ██║  ██╗███████╗ ╚████╔╝ ██║██║ ╚████║   ██║   ███████╗╚██████╗██║  ██║
+ ╚═╝  ╚═╝╚══════╝  ╚═══╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝
+
+              KevinTech Multi Script
+BANNER
+
+echo "Servidor : $SERVER"
+echo "Uptime   : $UPTIME"
+echo "Fecha    : $FECHA"
+echo "Hora     : $HORA"
+echo
+echo "👉 Escribe: menu"
+echo
+EOF
+
+chmod +x /etc/profile.d/kevintech.sh
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ KevinTech Multi Script instalado."
+echo "🔄 El servidor se reiniciará en 10 segundos..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+sleep 10
+
+reboot
