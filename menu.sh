@@ -187,11 +187,10 @@ PROTO5=""
 PROTO6=""
 
 [[ "$OPENSSH" == "ON" ]]     && PROTO1+="🟢 OpenSSH        Puerto 22"
-[[ "$SYSTEMDNS" == "ON" ]]   && PROTO1+="\n🟢 SystemDNS      Puerto 53"
-
-[[ "$ZIPVPN" == "ON" ]]      && PROTO2+="\n🟢 ZIP VPN"
-
-[[ "$DROPBEAR" == "ON" ]]    && PROTO3+="🟢 Dropbear       Puerto 90"
+if [[ "$ZIPVPN" == "ON" ]]; then
+    PROTO2+="\n🟢 ZiVPN          Puerto ${ZIPVPN_PORT:-Desconocido}"
+fi
+[[ "$DROPBEAR" == "ON" ]] && PROTO3+="🟢 Dropbear       Puerto ${DROPBEAR_PORT:-90}"
 [[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && PROTO3+="\n🟢 HAProxy SSL/TLS\n   ├ Puerto 80\n   ├ Puerto 443\n   └ Puerto 8080"
 
 [[ "$BADVPN" == "ON" ]]      && PROTO4+="🟢 BadVPN         7200 / 7300"
