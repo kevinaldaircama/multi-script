@@ -303,7 +303,7 @@ echo ""
 
 echo -e "${CYAN}╔══════════════════════ ⚙ MENÚ PRINCIPAL ══════════════════════╗${RESET}"
 
-printf "${WHITE}║ ${YELLOW}[01]${WHITE} 👥 Control de Usuarios (SSH / SSL / VMESS)           ║${RESET}\n"
+printf "${WHITE}║ ${YELLOW}[01]${WHITE} 👥 creación de Usuarios ssh          ║${RESET}\n"
 
 printf "${WHITE}║ ${YELLOW}[02]${WHITE} 🚀 Optimizar VPS                     %-15b║${RESET}\n" \
 "$(status "$OPTIMIZAR")"
@@ -341,7 +341,7 @@ case "$OPCION" in
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${WHITE}║                 👥 CONTROL DE USUARIOS                      ║${RESET}"
+echo -e "${WHITE}║                 👥 CREACION DE USUARIOS                      ║${RESET}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 
