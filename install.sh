@@ -203,7 +203,6 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "        CONFIGURACIÓN DEL SERVIDOR"  
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
   
-read -p "📝 Nombre servidor: " SERVER_NAME  
 read -p "🌐 Dominio: " SERVER_DOMAIN  
   
 SERVER_IP=$(curl -s ifconfig.me)  
@@ -248,7 +247,6 @@ mkdir -p $BASE/{protocolos,usuarios,sistema,logs}
 #==============================  
   
 cat > "$BASE/config.conf" <<EOF
-SERVER_NAME="$SERVER_NAME"
 SERVER_DOMAIN="$SERVER_DOMAIN"
 
 CLOUDFLARE_STATUS="$CLOUDFLARE_STATUS"
@@ -335,7 +333,6 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "        ✅ INSTALACIÓN COMPLETA"  
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
 echo ""  
-echo "📝 Server : $SERVER_NAME"  
 echo "🌐 Domain : $SERVER_DOMAIN"  
 echo "🔐 SSL    : $SSL_TUNNEL"  
 echo "☁️ CF     : $CLOUDFLARE_STATUS"  
@@ -378,6 +375,12 @@ cat > /etc/profile.d/kevintech-banner.sh << 'EOF'
 clear
 
 SERVER=$(hostname)
+DOMAIN="-"
+
+if [[ -f /etc/kevintech/config.conf ]]; then
+    source /etc/kevintech/config.conf
+    DOMAIN="${SERVER_DOMAIN:-"-"}"
+fi
 UPTIME=$(uptime -p | sed 's/up //')
 FECHA=$(date +"%d-%m-%Y")
 HORA=$(date +"%H:%M:%S")
@@ -392,10 +395,11 @@ echo
 echo "              🚀 KevinTech Multi Script 🚀"
 echo
 echo " Servidor : $SERVER"
+echo " Dominio  : $DOMAIN"
 echo " Uptime   : $UPTIME"
 echo " Fecha    : $FECHA"
 echo " Hora     : $HORA"
-echo " GitHub   : github.com/kevinaldaircama"
+echo " YouTube   : Kevin tech tutorials"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ $EUID -ne 0 ]]; then
