@@ -66,12 +66,16 @@ update-ca-certificates >/dev/null 2>&1 || true
   
 echo "🔍 Verificando licencia..."  
   
-if ! KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \  
-    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"); then  
-    echo ""  
-    echo "❌ Error de conexión con Firebase."  
-    exit 1  
-fi  
+KEY_RESPONSE=$(
+    curl -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" ||
+    wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"
+)
+
+if [[ $? -ne 0 ]]; then
+    echo ""
+    echo "❌ Error de conexión con Firebase."
+    exit 1
+fi
   
 if [ "$KEY_RESPONSE" = "null" ] || [ -z "$KEY_RESPONSE" ]; then  
     echo ""  
