@@ -66,16 +66,12 @@ update-ca-certificates >/dev/null 2>&1 || true
   
 echo "🔍 Verificando licencia..."  
   
-KEY_RESPONSE=$(
-    curl -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" ||
-    wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"
-)
-
-if [[ $? -ne 0 ]]; then
-    echo ""
-    echo "❌ Error de conexión con Firebase."
-    exit 1
-fi
+if ! KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \  
+    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"); then  
+    echo ""  
+    echo "❌ Error de conexión con Firebase."  
+    exit 1  
+fi  
   
 if [ "$KEY_RESPONSE" = "null" ] || [ -z "$KEY_RESPONSE" ]; then  
     echo ""  
@@ -103,21 +99,19 @@ HOSTNAME=$(hostname)
 DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")  
   
 # Guardar activación  
-RESP=$(
-curl -4 -s -X POST \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"owner\":\"$OWNER\",
-    \"reseller\":\"$RESELLER\",
-    \"token\":\"$INSTALL_KEY\",
-    \"ip\":\"$CLIENT_IP\",
-    \"hostname\":\"$HOSTNAME\",
-    \"os\":\"$OS_NAME\",
-    \"date\":\"$DATE_NOW\",
-    \"notified\":false
-  }" \
-  "${FIREBASE_URL}/activations.json"
-)
+RESP=$(curl -4 -s -X POST \  
+-H "Content-Type: application/json" \  
+-d "{  
+\"owner\":\"$OWNER\",  
+\"reseller\":\"$RESELLER\",  
+\"token\":\"$INSTALL_KEY\",  
+\"ip\":\"$CLIENT_IP\",  
+\"hostname\":\"$HOSTNAME\",  
+\"os\":\"$OS_NAME\",  
+\"date\":\"$DATE_NOW\",  
+\"notified\":false  
+}" \  
+"${FIREBASE_URL}/activations.json")  
   
 # Verificar que se guardó  
 if [[ "$RESP" != *"name"* ]]; then  
@@ -384,54 +378,10 @@ if [[ ! -f /etc/kevintech/menu.sh ]]; then
     echo "❌ ERROR: menu.sh no fue instalado"  
     exit 1  
 fi  
-  cat > /etc/profile.d/kevintech-banner.sh << 'EOF'
-#!/bin/bash
-
-[[ $- != *i* ]] && return
-
-clear
-
-SERVER=$(hostname)
-UPTIME=$(uptime -p | sed 's/up //')
-FECHA=$(date +"%d-%m-%Y")
-HORA=$(date +"%H:%M:%S")
-
-echo " __  __       _ _   _   _      ____            _       _   "
-echo "|  \/  |_   _| | |_(_) | |    / ___|  ___ _ __(_)_ __ | |_ "
-echo "| |\/| | | | | | __| | | |    \___ \ / __| '__| | '_ \| __|"
-echo "| |  | | |_| | | |_| | | |___  ___) | (__| |  | | |_) | |_ "
-echo "|_|  |_|\__,_|_|\__|_| |_____| |____/ \___|_|  |_| .__/ \__|"
-echo "                                                 |_|       "
-echo
-echo "              🚀 KevinTech Multi Script 🚀"
-echo
-echo " Servidor : $SERVER"
-echo " Uptime   : $UPTIME"
-echo " Fecha    : $FECHA"
-echo " Hora     : $HORA"
-echo " GitHub   : github.com/kevinaldaircama"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-if [[ $EUID -ne 0 ]]; then
-    echo "👤 Usuario : $(whoami)"
-    echo "🔒 No eres root."
-    echo "👉 Ejecuta: sudo -i"
-else
-    echo "👑 Usuario : root"
-    echo "👉 Escribe: menu"
-fi
-
-echo
-EOF
-
-chmod +x /etc/profile.d/kevintech-banner.sh
-  
-echo ""  
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-echo "✅ KevinTech Multi Script instalado."  
-echo "🔄 El servidor se reiniciará en 10 segundos..."  
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-  
-sleep 10  
-  
-reboot
+    
+echo ""    
+echo "💻 Abriendo menú..."    
+    
+sleep 2    
+    
+exec /etc/kevintech/menu.sh
