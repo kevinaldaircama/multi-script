@@ -41,7 +41,7 @@ while true; do
     printf " ${GREEN}[01]${RESET} 👤 CheckUser Multi-Apps    %b\n" "$CHECKUSER_STATUS"
     echo -e " ${GREEN}[02]${RESET} 🌐 CheckUser DTunnel"
     echo -e " ${GREEN}[03]${RESET} 🚀 CheckUser DTunnel-Go"
-    echo -e " ${GREEN}[04]${RESET} ⛔ Suspender Usuario"
+    echo -e " ${GREEN}[04]${RESET} 🔗 online app"
 
     echo
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -71,7 +71,7 @@ while true; do
         ;;
 
         4|04)
-            suspenderusuario.sh
+            onlineapp.sh
         ;;
 
         0|00)
