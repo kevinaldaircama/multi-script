@@ -71,8 +71,8 @@ while true; do
         ;;
 
         4|04)
-            onlineapp.sh
-        ;;
+    bash "$BASE/protocolos/onlineapp.sh"
+;;
 
         0|00)
             exec bash "$BASE/protocolos/menu.sh"
