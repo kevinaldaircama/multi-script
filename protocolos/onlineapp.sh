@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASE="/etc/kevintech"
-ONLINEAPP="/usr/local/bin/onlineapp"
+ONLINEAPP="$BASE/protocolos/onlineapp"
 
 IP=$(wget -qO- ipv4.icanhazip.com)
 
@@ -25,6 +25,7 @@ if pgrep -f "$ONLINEAPP" >/dev/null; then
     if [[ "$OP" =~ ^[Ss]$ ]]; then
         pkill -f "$ONLINEAPP"
         screen -S onlineapp -X quit >/dev/null 2>&1
+        service apache2 stop >/dev/null 2>&1
         echo
         echo "✓ Online App detenida."
     fi
@@ -39,17 +40,28 @@ else
 
         apt install apache2 -y >/dev/null 2>&1
         sed -i 's/^Listen 80$/Listen 8888/' /etc/apache2/ports.conf >/dev/null 2>&1
+
         mkdir -p /var/www/html/server
+
+        chmod +x "$ONLINEAPP"
+
         service apache2 restart >/dev/null 2>&1
 
-        screen -dmS onlineapp "$ONLINEAPP"
+        screen -dmS onlineapp bash "$ONLINEAPP"
 
-        echo
-        echo "✓ Online App iniciada."
-        echo
-        echo "URL:"
-        echo "http://$IP:8888/server/online"
-        echo "http://$IP:8888/server/online_app"
+        sleep 1
+
+        if pgrep -f "$ONLINEAPP" >/dev/null; then
+            echo
+            echo "✓ Online App iniciada."
+            echo
+            echo "URL:"
+            echo "http://$IP:8888/server/online"
+            echo "http://$IP:8888/server/online_app"
+        else
+            echo
+            echo "✗ Error: Online App no pudo iniciarse."
+        fi
     fi
 
 fi
