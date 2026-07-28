@@ -44,13 +44,15 @@ function onapp1() {
     rm -rf /var/www/html/server >/dev/null 2>&1
     mkdir -p /var/www/html/server >/dev/null 2>&1
 
-    fun_bar 'screen -dmS onlineapp onlineapp' 'sleep 3'
+    chmod +x "$BASE/protocolos/onlineapp"
+screen -dmS onlineapp "$BASE/protocolos/onlineapp"
+sleep 3
 
     if [[ $(grep -wc "onlineapp" /etc/autostart) = '0' ]]; then
-        echo "ps x | grep 'onlineapp' | grep -v grep && echo 'ON' || screen -dmS onlineapp onlineapp" >> /etc/autostart
+        echo "ps x | grep '$BASE/protocolos/onlineapp' | grep -v grep >/dev/null || screen -dmS onlineapp $BASE/protocolos/onlineapp" >> /etc/autostart
     else
         sed -i '/onlineapp/d' /etc/autostart
-        echo "ps x | grep 'onlineapp' | grep -v grep && echo 'ON' || screen -dmS onlineapp onlineapp" >> /etc/autostart
+        echo "ps x | grep '$BASE/protocolos/onlineapp' | grep -v grep >/dev/null || screen -dmS onlineapp $BASE/protocolos/onlineapp" >> /etc/autostart
     fi
 
     IP=$(wget -qO- ipv4.icanhazip.com)
@@ -61,7 +63,7 @@ function onapp1() {
     echo "http://$IP:8888/server/online"
 
     sleep 10
-    menu
+    
 }
 
 function onapp2() {
@@ -74,7 +76,7 @@ function onapp2() {
         service apache2 stop >/dev/null 2>&1
 
         screen -S onlineapp -X quit >/dev/null 2>&1
-        pkill -f onlineapp >/dev/null 2>&1
+        pkill -f "$BASE/protocolos/onlineapp" >/dev/null 2>&1
 
         screen -wipe >/dev/null 2>&1
 
@@ -83,13 +85,14 @@ function onapp2() {
         rm -rf /var/www/html/server >/dev/null 2>&1
     }
 
-    fun_bar 'fun_stponlineapp' 'sleep 3'
+    fun_stponlineapp
+sleep 3
 
     echo ""
     echo -e "\033[1;31mONLINE APP PARADO!\033[0m"
 
     sleep 3
-    menu
+    
 }
 
 function onapp_ssh() {
