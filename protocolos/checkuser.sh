@@ -144,7 +144,7 @@ while true; do
         ;;      
       
         4|04)      
-    onapp_ssh"      
+    onapp_ssh     
 ;;      
       
         0|00)      
