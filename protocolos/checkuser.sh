@@ -27,6 +27,52 @@ status_checkuser() {
     fi
 }
 
+onlineapp_start() {
+    echo -e "${GREEN}Iniciando Online App...${RESET}"
+
+    apt install apache2 -y >/dev/null 2>&1
+
+    sed -i 's/Listen 80/Listen 8888/g' /etc/apache2/ports.conf 2>/dev/null
+
+    mkdir -p /var/www/html/server
+
+    service apache2 restart >/dev/null 2>&1
+
+    screen -dmS onlineapp bash "$BASE/protocolos/onlineapp.sh"
+
+    grep -q "onlineapp.sh" /etc/autostart 2>/dev/null || \
+    echo "screen -dmS onlineapp bash $BASE/protocolos/onlineapp.sh" >> /etc/autostart
+
+    echo
+    echo -e "${GREEN}✓ Online App iniciado${RESET}"
+    sleep 2
+}
+
+onlineapp_stop() {
+    echo -e "${RED}Deteniendo Online App...${RESET}"
+
+    pkill -f onlineapp.sh >/dev/null 2>&1
+    screen -S onlineapp -X quit >/dev/null 2>&1
+
+    service apache2 stop >/dev/null 2>&1
+
+    rm -rf /var/www/html/server
+
+    sed -i '/onlineapp.sh/d' /etc/autostart 2>/dev/null
+
+    echo
+    echo -e "${GREEN}✓ Online App detenido${RESET}"
+    sleep 2
+}
+
+onlineapp_ssh() {
+    if pgrep -f "onlineapp.sh" >/dev/null; then
+        onlineapp_stop
+    else
+        onlineapp_start
+    fi
+}
+
 while true; do
     clear
     
@@ -71,7 +117,7 @@ while true; do
         ;;
 
         4|04)
-    bash "$BASE/protocolos/onlineapp.sh"
+    onlineapp_ssh
 ;;
 
         0|00)
