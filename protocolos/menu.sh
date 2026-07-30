@@ -75,7 +75,7 @@ SSL_STATUS=$(status_service haproxy "$SSL")
 UDP_STATUS=$(status_service udp-custom "$UDP_CUSTOM")
 SLOWDNS_STATUS=$(status_service dnstt "$SLOWDNS")
 XRAY_STATUS=$(status_service xray "$V2RAY")
-    
+    OPENVPN_STATUS=$(status_service openvpn-server@server "$OPENVPN")
 if [[ "$ZIPVPN" == "ON" ]]; then    
     ZIPVPN_STATUS="${GREEN}🟢 ACTIVO${RESET}"    
 else    
@@ -102,15 +102,15 @@ printf " ${GREEN}[06]${RESET} 🚀 UDP Custom       %b\n" "$UDP_STATUS"
 printf " ${GREEN}[07]${RESET} 🌐 SlowDNS          %b\n" "$SLOWDNS_STATUS"    
 printf " ${GREEN}[08]${RESET} ☁️ Xray / V2Ray     %b\n" "$XRAY_STATUS"    
 printf " ${GREEN}[09]${RESET} 👤 CheckUser        %b\n" "$CHECKUSER_STATUS"    
-    
+printf " ${GREEN}[10]${RESET} 🔐 OpenVPN          %b\n" "$OPENVPN_STATUS"
 echo    
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"    
 echo -e "${YELLOW}                🛠 SISTEMA${RESET}"    
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"    
     
-echo -e " ${GREEN}[10]${RESET} 🧰 Herramientas"    
-echo -e " ${GREEN}[11]${RESET} 🔄 Reiniciar Servicios"    
-echo -e " ${GREEN}[12]${RESET} 🔥 Firewall"    
+echo -e " ${GREEN}[11]${RESET} 🧰 Herramientas"    
+echo -e " ${GREEN}[12]${RESET} 🔄 Reiniciar Servicios"    
+echo -e " ${GREEN}[13]${RESET} 🔥 Firewall"    
     
 echo    
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"    
@@ -129,10 +129,11 @@ case "$OP" in
 6) bash "$BASE/protocolos/udpcustom.sh" ;;    
 7) bash "$BASE/protocolos/slowdns.sh" ;;    
 8) bash "$BASE/protocolos/v2ray.sh" ;;    
-9) bash "$BASE/protocolos/checkuser.sh" ;;    
-10) bash "$BASE/herramientas/menu.sh" ;;    
-11) bash "$BASE/herramientas/reiniciar.sh" ;;    
-12) bash "$BASE/herramientas/firewall.sh" ;;    
+9) bash "$BASE/protocolos/checkuser.sh" ;; 
+10) bash "$BASE/protocolos/openvpn.sh" ;;   
+11) bash "$BASE/herramientas/menu.sh" ;;    
+12) bash "$BASE/herramientas/reiniciar.sh" ;;    
+13) bash "$BASE/herramientas/firewall.sh" ;;    
 0) exec bash "$BASE/menu.sh" ;;    
 *)    
 echo "❌ Opción inválida."    
