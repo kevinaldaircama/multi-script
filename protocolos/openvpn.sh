@@ -389,7 +389,7 @@ echo "📄 Archivo: /root/$client.ovpn"
 		3|03)  
 			echo  
 			read -p "¿Deseas desinstalar OpenVPN? [s/N]: " remove  
-			until [[ "$remove" =~ ^[yYnN]*$ ]]; do  
+			until [[ "$remove" =~ ^([sSnNyY]|si|SI|Sí|sí)?$ ]]; do  
 				echo "$remove: invalid selection."  
 				read -p "¿Deseas desinstalar OpenVPN? [s/N]: " remove  
 			done  
