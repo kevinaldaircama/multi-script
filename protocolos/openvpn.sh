@@ -267,8 +267,7 @@ ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCE
 		echo "RemainAfterExit=yes  
 [Install]  
 WantedBy=multi-user.target" >> /etc/systemd/system/openvpn-iptables.service  
-		systemctl enable --now openvpn-iptables.service  
-	fi  
+		systemctl enable --now openvpn-iptables.service
 	# client-common.txt is created so we have a template to add further users later  
 	echo "client  
 dev tun  
