@@ -1,3 +1,4 @@
+#!/bin/bash
 ========================================
 # KevinTech Multi Script
 # OpenVPN Manager
