@@ -172,7 +172,7 @@ tar
 	# Without +x in the directory, OpenVPN can't run a stat() on the CRL file  
 	chmod o+x /etc/openvpn/server/  
 	# Generate key for tls-crypt  
-	openvpn --genkey --secret /etc/openvpn/server/tc.key  
+	openvpn --genkey secret /etc/openvpn/server/tc.key  
 	# Create the DH parameters file using the predefined ffdhe2048 group  
 	echo '-----BEGIN DH PARAMETERS-----  
 MIIBCAKCAQEA//////////+t+FRYortKmq/cViAnPTzx2LnFg84tNpWp4TZBFGQz  
@@ -218,8 +218,8 @@ management localhost 7505
 verb 3  
 crl-verify crl.pem  
 client-to-client    
-username-as-common-name  
-/usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so  
+username-as-common-name
+plugin /usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so login
 duplicate-cn" >> /etc/openvpn/server/server.conf  
 	if [[ "$protocol" = "udp" ]]; then  
 		echo "explicit-exit-notify" >> /etc/openvpn/server/server.conf  
