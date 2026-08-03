@@ -141,15 +141,7 @@ case "$OP" in
 7) bash "$BASE/protocolos/slowdns.sh" ;;        
 8) bash "$BASE/protocolos/v2ray.sh" ;;        
 9) bash "$BASE/protocolos/checkuser.sh" ;;        
-        
-10)    
-clear    
-echo "Instalando OpenVPN Pro..."    
-bash <(curl -fsSL https://raw.githubusercontent.com/PhoenixxZ2023/OpenVPN/master/openvpn-install.sh)    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
+10) bash "$BASE/protocolos/openvpn.sh" ;;
     
 11)    
 clear    
