@@ -1,5 +1,5 @@
 #!/bin/bash
-========================================
+#========================================
 # KevinTech Multi Script
 # OpenVPN Manager
 # Basado en Nyr OpenVPN Installer
