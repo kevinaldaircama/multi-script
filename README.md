@@ -40,10 +40,7 @@ Administrador completo para VPS Ubuntu con instalación automática de protocolo
 
 # 💻 Compatibilidad
 
-- Ubuntu 22.04 LTS
-- Ubuntu 24.04 LTS
-- Arquitectura x86_64 / AMD64
-
+todas las versiones de Ubuntu 
 ---
 
 # 📥 Instalación
@@ -77,7 +74,7 @@ menu
 | BadVPN | ✅ |
 | UDP Custom | ✅ |
 | V2Ray / Xray | ✅ |
-| SlowDNS | ❌ En desarrollo |
+| SlowDNS | ✅ |
 
 ---
 
@@ -102,32 +99,41 @@ bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script
 
 ---
 
-# 🩹 Solución de errores
+## Seguridad
 
-Si algún módulo muestra un error similar a:
+El instalador configura automáticamente:
 
-```text
-warning: here-document delimited by end-of-file (wanted `EOF`)
-syntax error: unexpected end of file
-```
+• Fail2Ban
+  - Protección para SSH y Dropbear.
+  - Bloqueo automático después de 3 intentos fallidos.
+  - Tiempo de baneo: 1 hora.
+  - Recidiva: 1 semana.
 
-Ejecuta:
+• RKHunter
+  - Escaneo de rootkits.
+  - Verificación de binarios modificados.
+  - Base de datos actualizada automáticamente.
 
-```bash
-sed -i 's/[[:space:]]*$//' /etc/kevintech/protocolos/ssl.sh
-bash -n /etc/kevintech/protocolos/ssl.sh
-```
+• Chkrootkit
+  - Detección de rootkits conocidos.
+  - Escaneo rápido del sistema.
 
-Si el problema ocurre en otro módulo, reemplaza `ssl.sh` por el nombre correspondiente, por ejemplo:
+• Lynis
+  - Auditoría completa de seguridad.
+  - Recomendaciones de hardening.
+  - Índice de seguridad del servidor.
 
-```bash
-sed -i 's/[[:space:]]*$//' /etc/kevintech/protocolos/v2ray.sh
-bash -n /etc/kevintech/protocolos/v2ray.sh
-```
+• Monitoreo de Consumo
+  - Snapshot automático cada minuto mediante Cron y Systemd.
+  - Registro del consumo de red.
+  - Base de datos:
+    /etc/kevintech/sistema/network_state.conf
 
-Si `bash -n` no muestra ningún mensaje, el script no tiene errores de sintaxis.
+Los límites de consumo pueden configurarse desde:
 
----
+Herramientas
+ └── [10] Consumo de Red
+      └── [3] Configurar límites (GB)
 
 # 🤝 Contribuciones
 
@@ -154,9 +160,7 @@ Si este proyecto te fue útil:
 
 **Kevin Aldair Camacho**
 
-GitHub: https://github.com/kevinaldaircama
-
-Repositorio: https://github.com/kevinaldaircama/multi-script
+- redes sociales: Kevin tech tutorials
 
 ---
 
