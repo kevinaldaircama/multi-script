@@ -108,20 +108,16 @@ printf " ${GREEN}[06]${RESET} 🚀 UDP Custom       %b\n" "$UDP_STATUS"
 printf " ${GREEN}[07]${RESET} 🌐 SlowDNS          %b\n" "$SLOWDNS_STATUS"                      
 printf " ${GREEN}[08]${RESET} ☁️ Xray / V2Ray     %b\n" "$XRAY_STATUS"                      
 printf " ${GREEN}[09]${RESET} 👤 CheckUser        %b\n" "$CHECKUSER_STATUS"              
-printf " ${GREEN}[10]${RESET} 🔐 OpenVPN Pro      %b\n" "$OPENVPN_STATUS"        
-printf " ${GREEN}[11]${RESET} 🛡 WireGuard        %b\n" "$WIREGUARD_STATUS"        
-printf " ${GREEN}[12]${RESET} 🚀 Hysteria Evozi   %b\n" "$HYSTERIA_V2_STATUS"        
-printf " ${GREEN}[13]${RESET} ⚡ Hysteria 2025    %b\n" "$HYSTERIA2025_STATUS"        
-printf " ${GREEN}[14]${RESET} 🔰 Hysteria Pro     %b\n" "$HYSTERIA_PRO_STATUS"        
-printf " ${GREEN}[15]${RESET} 🌐 UDPMOD           %b\n" "$UDPMOD_STATUS"                    
+printf " ${GREEN}[10]${RESET} 🔐 OpenVPN Pro      %b\n" "$OPENVPN_STATUS"                    
+printf " ${GREEN}[11]${RESET} 🔰 Hysteria v1     %b\n" "$HYSTERIA_PRO_STATUS"                            
 echo                      
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                      
 echo -e "${YELLOW}                🛠 SISTEMA${RESET}"                      
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                      
                       
-echo -e " ${GREEN}[16]${RESET} 🧰 Herramientas"                      
-echo -e " ${GREEN}[17]${RESET} 🔄 Reiniciar Servicios"                      
-echo -e " ${GREEN}[18]${RESET} 🔥 Firewall"                      
+echo -e " ${GREEN}[12]${RESET} 🧰 Herramientas"                      
+echo -e " ${GREEN}[13]${RESET} 🔄 Reiniciar Servicios"                      
+echo -e " ${GREEN}[14]${RESET} 🔥 Firewall"                      
                       
 echo                      
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                      
@@ -142,54 +138,10 @@ case "$OP" in
 8) bash "$BASE/protocolos/v2ray.sh" ;;        
 9) bash "$BASE/protocolos/checkuser.sh" ;;        
 10) bash "$BASE/protocolos/openvpn.sh" ;;
-    
-11)    
-clear    
-echo "Instalando WireGuard..."    
-rm -f /tmp/wireguard-install.sh    
-curl -fsSL -o /tmp/wireguard-install.sh https://raw.githubusercontent.com/angristan/wireguard-install/master/wireguard-install.sh    
-chmod +x /tmp/wireguard-install.sh    
-bash /tmp/wireguard-install.sh    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
-    
-12)    
-clear    
-echo "Instalando Hysteria Evozi V2..."    
-wget -qO /tmp/hysteria2.sh https://raw.githubusercontent.com/evozi/hysteria-install/main/hy2/hysteria2.sh    
-bash /tmp/hysteria2.sh    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
-    
-13)    
-clear    
-echo "Instalando Hysteria 2025..."    
-bash <(curl -fsSL https://raw.githubusercontent.com/ReturnFI/Hysteria2/main/install.sh)    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
-    
-14) bash "$BASE/protocolos/udphisteria.sh" ;;
-    
-15)    
-clear    
-echo "Instalando UDPMOD Hysteria..."    
-wget -qO /tmp/install.sh https://github.com/PhoenixxZ2023/UDPMOD/raw/main/install.sh    
-chmod +x /tmp/install.sh    
-bash /tmp/install.sh    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
-        
-16) bash "$BASE/herramientas/menu.sh" ;;        
-17) bash "$BASE/herramientas/reiniciar.sh" ;;        
-18) bash "$BASE/herramientas/firewall.sh" ;;        
+11) bash "$BASE/protocolos/udphisteria.sh" ;;   
+12) bash "$BASE/herramientas/menu.sh" ;;        
+13) bash "$BASE/herramientas/reiniciar.sh" ;;        
+14) bash "$BASE/herramientas/firewall.sh" ;;        
         
 0) exec bash "$BASE/menu.sh" ;;                  
 *)                      
