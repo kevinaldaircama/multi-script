@@ -239,13 +239,6 @@ printf "${WHITE}│ ${CYAN}Dominio${WHITE}   %-44s│\n" "${SERVER_DOMAIN:-NO CO
 
 printf "${WHITE}│ ${CYAN}IP Pública${WHITE} %-44s│\n" "$IP"
 
-printf "${WHITE}│ ${CYAN}Cloudflare${WHITE} %-44b│\n" "$(status "$CLOUDFLARE_STATUS")"
-
-printf "${WHITE}│ ${CYAN}Proxy CF${WHITE}  %-44s│\n" "$PROXY_STATUS"
-
-printf "${WHITE}│ ${CYAN}SSL Tunnel${WHITE} %-44b│\n" "$(status "$SSL_TUNNEL")"
-echo -e "${CYAN}└───────────────────────────────────────────────────┘${RESET}"
-
 echo ""
 
 #=========================================================
