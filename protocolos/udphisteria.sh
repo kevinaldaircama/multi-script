@@ -406,7 +406,11 @@ config_set "HYSTERIA_OBFS" ""
         4) modify_config ;;
         5) show_config ;;
         6) show_logs ;;
-        0) exit 0 ;;
-        *) echo -e "${COLOR[3]}Opción inválida${NC}"; sleep 1 ;;
+        0) exec bash "$BASE/menu.sh" ;;                  
+*)                      
+echo "❌ Opción inválida."                      
+sleep 2                      
+exec bash "$BASE/protocolos/menu.sh"                      
+;;     
     esac
 done
