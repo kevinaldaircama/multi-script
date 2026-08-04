@@ -174,8 +174,11 @@ jq \
 bc \
 socat \
 openssl \
-ca-certificates
-
+ca-certificates \
+fail2ban \
+rkhunter \
+chkrootkit \
+lynis
 echo "✅ Paquetes instalados."
 
 #==============================
@@ -191,6 +194,111 @@ systemctl restart ssh
 
 echo "✅ OpenSSH instalado y activo en el puerto 22."
 sleep 2
+
+#==============================
+# SEGURIDAD
+#==============================
+
+echo ""
+echo "🛡️ Instalando seguridad..."
+
+cat >/etc/fail2ban/jail.local <<EOF
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 3
+bantime.increment = true
+bantime.maxtime = 1w
+
+[sshd]
+enabled = true
+[dropbear]
+enabled = true
+port = ssh
+logpath = /var/log/auth.log
+maxretry = 3
+EOF
+
+systemctl enable fail2ban
+systemctl restart fail2ban
+
+rkhunter --update >/dev/null 2>&1
+rkhunter --propupd >/dev/null 2>&1
+cat >/etc/cron.daily/kevintech-security <<'EOF'
+#!/bin/bash
+
+/usr/bin/rkhunter --update >/dev/null 2>&1
+/usr/bin/rkhunter --check --skip-keypress >/dev/null 2>&1
+
+/usr/sbin/chkrootkit >/dev/null 2>&1
+
+/usr/bin/lynis audit system --quick >/var/log/kevintech-lynis.log 2>&1
+EOF
+
+chmod +x /etc/cron.daily/kevintech-security
+
+echo "✅ Fail2Ban configurado"
+echo "✅ RKHunter configurado"
+echo "✅ Chkrootkit instalado"
+echo "✅ Lynis instalado"
+
+sleep 2
+cat >/usr/local/bin/kevintech-network-monitor <<'EOF'
+#!/bin/bash
+
+BASE="/etc/kevintech"
+STATE="$BASE/sistema/network_state.conf"
+
+source "$STATE"
+
+IFACE=$(ip route | awk '/default/ {print $5}' | head -n1)
+
+RX=$(cat /sys/class/net/$IFACE/statistics/rx_bytes)
+TX=$(cat /sys/class/net/$IFACE/statistics/tx_bytes)
+
+if [[ "$RX_LAST" == "0" ]]; then
+    RX_LAST=$RX
+    TX_LAST=$TX
+fi
+
+DIFF_RX=$((RX-RX_LAST))
+DIFF_TX=$((TX-TX_LAST))
+
+RX_TOTAL=$((RX_TOTAL+DIFF_RX))
+TX_TOTAL=$((TX_TOTAL+DIFF_TX))
+
+TOTAL=$((RX_TOTAL+TX_TOTAL))
+TOTAL_GB=$(echo "scale=2; $TOTAL/1024/1024/1024" | bc)
+
+cat >"$STATE"<<EOL
+RX_LAST=$RX
+TX_LAST=$TX
+RX_TOTAL=$RX_TOTAL
+TX_TOTAL=$TX_TOTAL
+TOTAL_GB=$TOTAL_GB
+LIMIT_GB=$LIMIT_GB
+LIMIT_ENABLED=$LIMIT_ENABLED
+EOL
+EOF
+
+chmod +x /usr/local/bin/kevintech-network-monitor
+cat >/etc/cron.d/kevintech-network<<EOF
+* * * * * root /usr/local/bin/kevintech-network-monitor
+EOF
+cat >/etc/systemd/system/kevintech-network.timer<<EOF
+[Unit]
+Description=KevinTech Network Monitor Timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now kevintech-network.timer
 #==============================  
   
 # CONFIG SERVER  
@@ -239,7 +347,17 @@ fi
 BASE="/etc/kevintech"  
   
 mkdir -p $BASE/{protocolos,usuarios,sistema,logs}  
-  
+touch $BASE/sistema/network_state.conf
+
+cat > "$BASE/sistema/network_state.conf" <<EOF
+RX_LAST=0
+TX_LAST=0
+RX_TOTAL=0
+TX_TOTAL=0
+TOTAL_GB=0
+LIMIT_GB=0
+LIMIT_ENABLED=OFF
+EOF
 #==============================  
   
 # CONFIG FINAL  
@@ -261,8 +379,6 @@ AUTO_START=OFF
 #==============================
 
 OPENSSH=ON
-SYSTEMDNS=OFF
-WEBSOCKET=OFF
 ZIPVPN=OFF
 DROPBEAR=OFF
 SSL=OFF
@@ -280,7 +396,11 @@ V2RAY=OFF
 SHADOWSOCKS=OFF
 SOCKS5=OFF
 WEBMIN=OFF
-FAIL2BAN=OFF
+FAIL2BAN=ON
+RKHUNTER=ON
+CHKROOTKIT=ON
+LYNIS=ON
+NETWORK_MONITOR=ON
 BBR=OFF
 EOF
 #==============================
