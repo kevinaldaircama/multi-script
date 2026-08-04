@@ -174,16 +174,7 @@ bash "$BASE/protocolos/menu.sh"
 exit    
 ;;    
     
-14)    
-clear    
-echo "Instalando Hysteria Pro..."    
-wget -qO /tmp/install.sh https://github.com/thefather12/UDPHISTERIA/raw/main/install.sh    
-chmod +x /tmp/install.sh    
-bash /tmp/install.sh    
-read -p "Presione ENTER para continuar..."    
-bash "$BASE/protocolos/menu.sh"    
-exit    
-;;    
+14) bash "$BASE/protocolos/udphisteria.sh" ;;
     
 15)    
 clear    
