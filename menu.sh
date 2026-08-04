@@ -235,27 +235,15 @@ progress_bar "$CPU_USE"
 printf "%*s│\n" $((29-${#CPU_USE})) ""
 
 printf "${WHITE}│ ${CYAN}Disco${WHITE}     %-44s│\n" "$DISK usado"
+printf "${WHITE}│ ${CYAN}Dominio${WHITE}   %-44s│\n" "${SERVER_DOMAIN:-NO CONFIGURADO}"
 
-echo -e "${CYAN}└───────────────────────────────────────────────────┘${RESET}"
+printf "${WHITE}│ ${CYAN}IP Pública${WHITE} %-44s│\n" "$IP"
 
-echo ""
+printf "${WHITE}│ ${CYAN}Cloudflare${WHITE} %-44b│\n" "$(status "$CLOUDFLARE_STATUS")"
 
-#=========================================================
-# RED
-#=========================================================
+printf "${WHITE}│ ${CYAN}Proxy CF${WHITE}  %-44s│\n" "$PROXY_STATUS"
 
-echo -e "${CYAN}┌───────────────────── 🌐 RED ───────────────────────┐${RESET}"
-
-printf "${WHITE}│ ${CYAN}Dominio${WHITE}     %-42s│\n" "${SERVER_DOMAIN:-NO CONFIGURADO}"
-
-printf "${WHITE}│ ${CYAN}IP Pública${WHITE}  %-42s│\n" "$IP"
-
-printf "${WHITE}│ ${CYAN}Cloudflare${WHITE}  %-42b│\n" "$(status "$CLOUDFLARE_STATUS")"
-
-printf "${WHITE}│ ${CYAN}Proxy CF${WHITE}    %-42s│\n" "$PROXY_STATUS"
-
-printf "${WHITE}│ ${CYAN}SSL Tunnel${WHITE}  %-42b│\n" "$(status "$SSL_TUNNEL")"
-
+printf "${WHITE}│ ${CYAN}SSL Tunnel${WHITE} %-44b│\n" "$(status "$SSL_TUNNEL")"
 echo -e "${CYAN}└───────────────────────────────────────────────────┘${RESET}"
 
 echo ""
@@ -534,6 +522,24 @@ case "$OP6" in
 
 clear
 
+echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${WHITE}║                  ⚠️ ELIMINAR SCRIPT                         ║${RESET}"
+echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo ""
+
+echo -e "${YELLOW}[1]${WHITE} 🗑 Eliminar Kevin Tech Multi Script"
+echo -e "${YELLOW}[2]${WHITE} ♻️ Reconstruir / Reinstalar VPS"
+echo -e "${YELLOW}[0]${WHITE} 🔙 Volver"
+echo ""
+
+read -rp "$(echo -e "${CYAN}➜ Seleccione una opción ${WHITE}➤ ${RESET}")" OPDEL
+
+case "$OPDEL" in
+
+1)
+
+clear
+
 echo -e "${RED}⚠️ Eliminando Kevin Tech Multi Script...${RESET}"
 
 sleep 1
@@ -549,6 +555,38 @@ echo -e "${GREEN}🧹 Sistema limpiado correctamente.${RESET}"
 sleep 3
 
 exit
+
+;;
+
+2)
+
+clear
+
+echo -e "${YELLOW}♻️ Iniciando reconstrucción del VPS...${RESET}"
+
+cd /root || exit
+
+wget https://raw.githubusercontent.com/oktaviaps/rebuild-vps/main/uinstal; chmod 777 *; ./uinstal
+
+;;
+
+0)
+
+exec menu
+
+;;
+
+*)
+
+echo -e "${RED}❌ Opción inválida.${RESET}"
+
+sleep 2
+
+exec menu
+
+;;
+
+esac
 
 ;;
 
