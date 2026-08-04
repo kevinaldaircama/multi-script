@@ -214,7 +214,7 @@ echo ""
 # SISTEMA
 #=========================================================
 
-echo -e "${CYAN}┌──────────────────── 🖥 SISTEMA Y RECURSOS 📊 ────────────────────┐${RESET}"
+echo -e "${CYAN}┌──────────────────── 🖥 SISTEMA ────────────────────┐${RESET}"
 
 printf "${WHITE}│ ${CYAN}OS${WHITE}        %-44s│\n" "$OS"
 
@@ -233,12 +233,8 @@ printf "%*s│\n" $((29-${#RAM_USE})) ""
 echo -ne "${WHITE}│ ${CYAN}CPU Load${WHITE}  "
 progress_bar "$CPU_USE"
 printf "%*s│\n" $((29-${#CPU_USE})) ""
-printf "${WHITE}│ ${CYAN}RAM Total${WHITE} %-44s│\n" "$TOTAL_RAM"
-printf "${WHITE}│ ${CYAN}RAM Libre${WHITE} %-44s│\n" "$FREE_RAM"
-printf "${WHITE}│ ${CYAN}RAM Usada${WHITE} %-44s│\n" "$USED_RAM"
-printf "${WHITE}│ ${CYAN}Buffer${WHITE}    %-44s│\n" "$BUFFER"
-printf "${WHITE}│ ${CYAN}Disco${WHITE}     %-44s│\n" "$DISK usado"
 
+printf "${WHITE}│ ${CYAN}Disco${WHITE}     %-44s│\n" "$DISK usado"
 printf "${WHITE}│ ${CYAN}Dominio${WHITE}   %-44s│\n" "${SERVER_DOMAIN:-NO CONFIGURADO}"
 
 printf "${WHITE}│ ${CYAN}IP Pública${WHITE} %-44s│\n" "$IP"
