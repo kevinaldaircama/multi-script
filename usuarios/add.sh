@@ -279,9 +279,17 @@ HOST="${SERVER_DOMAIN:-$IP}"
 # SLOWDNS              #
 #========================#
 
-SLOWDNS_NS="${SLOWDNS_NS:-N/D}"
-SLOWDNS_KEY="${SLOWDNS_KEY:-N/D}"
+if [[ -f /etc/slowdns/domain.conf ]]; then
+    SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
+else
+    SLOWDNS_NS="N/D"
+fi
 
+if [[ -f /etc/slowdns/server.pub ]]; then
+    SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+else
+    SLOWDNS_KEY="N/D"
+fi
 #========================#
 # ESTADO DE SERVICIOS    #
 #========================#
