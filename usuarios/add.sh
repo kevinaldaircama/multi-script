@@ -346,10 +346,8 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}          ✅ Usuario SSH Creado${RESET}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo
-
-echo -e "${CYAN}🌐 INFORMACIÓN DEL SERVIDOR${RESET}"
+echo -e "${CYAN}👤 DATOS DE LA CUENTA${RESET}"
 echo -e "━━━━━━━━━━━━━━"
-
 echo -e "🌍 IP Principal : ${GREEN}${IP}${RESET}"
 
 if [[ -n "$SERVER_DOMAIN" ]]; then
@@ -357,10 +355,6 @@ if [[ -n "$SERVER_DOMAIN" ]]; then
 fi
 
 echo
-
-echo -e "${CYAN}👤 DATOS DE LA CUENTA${RESET}"
-echo -e "━━━━━━━━━━━━━━"
-
 echo -e "👤 Usuario : ${GREEN}${USER}${RESET}"
 echo -e "🔑 Password: ${GREEN}${PASS}${RESET}"
 echo -e "📅 Expira  : ${GREEN}${FECHA_MOSTRAR}${RESET}"
