@@ -431,8 +431,7 @@ echo -e "${GREEN}      ✔ Cuenta creada correctamente${RESET}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo
-read -rp "$(echo -e "${YELLOW}Presione ENTER para crear otro usuario...${RESET}")"
+read -rp "$(echo -e "${YELLOW}Presione ENTER para regresar al menú...${RESET}")"
 
-continue
-
+exec bash "$BASE/usuarios/menu.sh"
 done
