@@ -431,12 +431,9 @@ echo -e "${GREEN}      ✔ Cuenta creada correctamente${RESET}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo
+read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
 
-read -rp "$(echo -e "${YELLOW}¿Desea crear otro usuario? [S/N]: ${RESET}")" RESP
-
-case "$RESP" in
-    s|S|si|SI|sí|Sí|y|Y)
-        continue
+continue
         ;;
     *)
         break
