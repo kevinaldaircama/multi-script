@@ -353,8 +353,6 @@ echo -e "🌍 IP Principal : ${GREEN}${IP}${RESET}"
 if [[ -n "$SERVER_DOMAIN" ]]; then
     echo -e "☁ Dominio CDN  : ${GREEN}${SERVER_DOMAIN}${RESET}"
 fi
-
-echo
 echo -e "👤 Usuario : ${GREEN}${USER}${RESET}"
 echo -e "🔑 Password: ${GREEN}${PASS}${RESET}"
 echo -e "📅 Expira  : ${GREEN}${FECHA_MOSTRAR}${RESET}"
@@ -385,24 +383,7 @@ echo -e "NS  : ${GREEN}${SLOWDNS_NS}${RESET}"
 echo -e "KEY : ${GREEN}${SLOWDNS_KEY}${RESET}"
 }
 
-echo
-
-echo -e "${CYAN}🌐 WEBSOCKET${RESET}"
-echo -e "━━━━━━━━━━━━━━"
-
-[[ "$WEBSOCKET_STATUS" == "ON" ]] && {
-
-echo -e "WS HTTP : ${GREEN}ws://${IP}:${WS_PORT}${RESET}"
-echo -e "WSS TLS : ${GREEN}wss://${HOST}:${WSS_PORT}${RESET}"
-
-if [[ "$WS_CDN_PORT" != "" ]]; then
-    echo -e "WS CDN  : ${GREEN}ws://${HOST}:${WS_CDN_PORT}${RESET}"
-fi
-
-}
-
-echo
-
+echo k
 echo -e "${CYAN}🚀 PAYLOADS${RESET}"
 echo -e "━━━━━━━━━━━━━━"
 
