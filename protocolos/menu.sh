@@ -77,11 +77,7 @@ UDP_STATUS=$(status_service udp-custom "$UDP_CUSTOM")
 SLOWDNS_STATUS=$(status_service dnstt "$SLOWDNS")                  
 XRAY_STATUS=$(status_service xray "$V2RAY")                  
 OPENVPN_STATUS=$(status_service openvpn-server@server "$OPENVPN")                  
-WIREGUARD_STATUS=$(status_service wg-quick@wg0 "$WIREGUARD")        
-HYSTERIA_V2_STATUS=$(status_service hysteria-server "$HYSTERIA_V2")        
-HYSTERIA2025_STATUS=$(status_service hysteria "$HYSTERIA2025")        
-HYSTERIA_PRO_STATUS=$(status_service hysteria "$HYSTERIA_PRO")        
-UDPMOD_STATUS=$(status_service udpmod "$UDPMOD")                 
+HYSTERIA_PRO_STATUS=$(status_service hysteria1-server "$HYSTERIA")               
 if [[ "$ZIPVPN" == "ON" ]]; then             
     ZIPVPN_STATUS="${GREEN}🟢 ACTIVO${RESET}"                      
 else                      
