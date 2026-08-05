@@ -383,7 +383,7 @@ echo -e "NS  : ${GREEN}${SLOWDNS_NS}${RESET}"
 echo -e "KEY : ${GREEN}${SLOWDNS_KEY}${RESET}"
 }
 
-echo k
+echo 
 echo -e "${CYAN}🚀 PAYLOADS${RESET}"
 echo -e "━━━━━━━━━━━━━━"
 
