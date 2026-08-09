@@ -283,19 +283,19 @@ EOF
               
 progress "4/6" "Creando Servicio"              
               
-cat > "$SYSTEMD_SERVICE" <<EOF              
-[Unit]              
-Description=Hysteria V1              
-After=network.target              
-              
-[Service]              
-ExecStart=$EXECUTABLE -config $CONFIG_FILE server              
-Restart=always              
-User=root              
-              
-[Install]              
-WantedBy=multi-user.target              
-EOF              
+cat > "$SYSTEMD_SERVICE" <<EOF
+[Unit]
+Description=Hysteria V1
+After=network.target
+
+[Service]
+ExecStart=$EXECUTABLE -config $CONFIG_FILE server
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
               
 progress "5/6" "Iniciando Servicio"              
               
