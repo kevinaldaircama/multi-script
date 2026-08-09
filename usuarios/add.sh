@@ -346,7 +346,7 @@ clear
 HYSTERIA_PORT=$(grep -oP '"listen":\s*":\K[0-9]+' /etc/hysteria/config.json 2>/dev/null)
 [[ -z "$HYSTERIA_PORT" ]] && HYSTERIA_PORT="No instalado"
 
-# Detectar OBFS de Hysteria
+# Detectar OBFS
 HYSTERIA_OBFS=$(grep -oP '"obfs":\s*"\K[^"]+' /etc/hysteria/config.json 2>/dev/null)
 [[ -z "$HYSTERIA_OBFS" ]] && HYSTERIA_OBFS="No configurado"
 
@@ -356,54 +356,57 @@ ZIVPN_PORT=$(ss -ltnu 2>/dev/null | awk '/20254|5667/ {split($5,a,":"); print a[
 
 HOST="${SERVER_DOMAIN:-$IP}"
 
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "${GREEN}    CUENTA CREADA EXITOSAMENTE${RESET}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   Tipo          : NORMAL"
-echo -e "   Usuario/ID    : ${GREEN}$USER${RESET}"
-echo -e "   Contraseña    : ${GREEN}$PASS${RESET}"
-echo -e "   Expira        : ${GREEN}$FECHA${RESET} (${DIAS} Días)"
-echo -e "   Límite IP     : ${GREEN}$LIMITE_MOSTRAR${RESET}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   Host/IP       : ${GREEN}$HOST${RESET}"
-echo -e "   Puertos SSH   : ${GREEN}$SSH_PORTS${RESET}"
-echo -e "   Dropbear      : ${GREEN}${DROPBEAR_PORTS:-No instalado}${RESET}"
-echo -e "   Ssl tunel     : ${GREEN}${HAPROXY_PORTS:-No instalado}${RESET}"
-echo -e "   OpenVPN       : ${GREEN}1194, 2200, 443${RESET}"
-echo -e "   BadVPN        : ${GREEN}${BADVPN_PORTS:-No instalado}${RESET}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   HTTP CUSTOM   :"
-echo -e "   ${HOST}:443@${USER}:${PASS}"
-echo -e "   ${HOST}:80@${USER}:${PASS}"
-echo -e "   ${HOST}:8080@${USER}:${PASS}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   UDP CUSTOM    :"
-echo -e "   ${HOST}:1-65535@${USER}:${PASS}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   HYSTERIA V1 (Port:${HYSTERIA_PORT}):"
-echo -e "   Servidor  : ${HOST}:${HYSTERIA_PORT}"
-echo -e "   Obfs      : ${HYSTERIA_OBFS}"
-echo -e "   Contraseña: ${USER}:${PASS}"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   ZIVPN (UDP):"
-echo -e "   Servidor  : ${HOST}:${ZIVPN_PORT}"
-echo -e "   Contraseña: ${PASS}"
-echo -e "   Puerto    : 20000-29999"
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "   SLOW DNS PORT 5300:"
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${MAGENTA}               ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜            ${CYAN}║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo
+echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
+echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
+echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
+echo -e " ${WHITE}Expira       : ${GREEN}$FECHA${RESET} ${GRAY}(${DIAS} días)${RESET}"
+echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
+echo
+echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
+echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
+echo -e " ${WHITE}SSH          : ${GREEN}$SSH_PORTS${RESET}"
+echo -e " ${WHITE}Dropbear     : ${GREEN}${DROPBEAR_PORTS:-No instalado}${RESET}"
+echo -e " ${WHITE}SSL Tunnel   : ${GREEN}${HAPROXY_PORTS:-No instalado}${RESET}"
+echo -e " ${WHITE}OpenVPN      : ${GREEN}1194,2200,443${RESET}"
+echo -e " ${WHITE}BadVPN       : ${GREEN}${BADVPN_PORTS:-No instalado}${RESET}"
+echo
+echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
+echo -e " ${GREEN}${HOST}:443@${USER}:${PASS}${RESET}"
+echo -e " ${GREEN}${HOST}:80@${USER}:${PASS}${RESET}"
+echo -e " ${GREEN}${HOST}:8080@${USER}:${PASS}${RESET}"
+echo
+echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
+echo -e " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
+echo
+echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
+echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${HYSTERIA_PORT}${RESET}"
+echo -e " ${WHITE}OBFS         : ${GREEN}${HYSTERIA_OBFS}${RESET}"
+echo -e " ${WHITE}Credenciales : ${GREEN}${USER}:${PASS}${RESET}"
+echo
+echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
+echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT}${RESET}"
+echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
+echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
 
-if [[ "$SLOWDNS_STATUS" == "ON" ]]; then
-    echo -e "   NS  : ${SLOWDNS_NS}"
-    echo -e "   KEY : ${SLOWDNS_KEY}"
-else
-    echo -e "   No instalado"
-    echo -e "   Ns Subdominio:"
-    echo -e "   Sin NS"
+# Mostrar SlowDNS solo si existe
+if [[ -f /etc/slowdns/domain.conf && -f /etc/slowdns/server.pub ]]; then
+    SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
+    SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+
+    echo
+    echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
+    echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
+    echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
 fi
 
-echo -e "${GREEN}────────────────────────────────────────────────${RESET}"
-echo -e "       >> Presione enter para continuar <<${RESET}"
-read   
+echo
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+echo -e "${YELLOW}          Presione ENTER para continuar...${RESET}"
+read
     
 exec bash "$BASE/usuarios/menu.sh"    
 done    
