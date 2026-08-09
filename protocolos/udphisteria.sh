@@ -260,26 +260,26 @@ EOF
 
 chmod +x /usr/local/bin/hysteria-auth.sh
 
-progress "3/6" "Creando Configuración"            
-              
-[[ -n "$obfs_key" ]] && OBFS="\"obfs\":\"$obfs_key\","              
-              
-cat > "$CONFIG_FILE" <<EOF              
-{              
-"protocol":"udp",              
-"listen":":$port",              
-$OBFS              
-"cert":"$CONFIG_DIR/cert.crt",              
-"key":"$CONFIG_DIR/private.key",              
-"alpn":"h3",              
-"auth":{              
-"mode":"external",              
-"config":{              
-"cmd":"/usr/local/bin/hysteria-auth.sh"              
-}              
-}              
-}              
-EOF              
+progress "3/6" "Creando Configuración"
+
+[[ -n "$obfs_key" ]] && OBFS="\"obfs\":\"$obfs_key\","
+
+cat > "$CONFIG_FILE" <<EOF
+{
+  "protocol":"udp",
+  "listen":":$port",
+  $OBFS
+  "cert":"$CONFIG_DIR/cert.crt",
+  "key":"$CONFIG_DIR/private.key",
+  "alpn":"h3",
+  "auth":{
+    "mode":"external",
+    "config":{
+      "cmd":"/usr/local/bin/hysteria-auth.sh"
+    }
+  }
+}
+EOF
               
 progress "4/6" "Creando Servicio"              
               
@@ -420,4 +420,4 @@ sleep 2
 exec bash "$BASE/protocolos/menu.sh"                                    
 ;;                   
     esac              
-done             
+done
