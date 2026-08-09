@@ -254,7 +254,7 @@ cat > "$FILE" <<'EOF'
 if [[ $- == *i* ]]; then
     menu
 fi
-EOF        
+EOF
                     
     chmod +x "$FILE"                    
                     
