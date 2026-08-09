@@ -126,13 +126,25 @@ echo -e "${CYAN}─────────────────────�
 SSH_COUNT=$(awk -F: '$3 >= 1000 && $1 != "nobody" {c++} END {print c+0}' /etc/passwd)
 
 V2RAY_COUNT=0
-HYSTERIA_COUNT=0
+HYSTERIA_COUNT=$SSH_COUNT
 OPENVPN_COUNT=0
 
-echo -e " ${BLUE}CUENTAS${RESET} : SSH:${WHITE}${SSH_COUNT}${RESET}  V2Ray:${WHITE}${V2RAY_COUNT}${RESET}  Histeria:${WHITE}${HYSTERIA_COUNT}${RESET}  OpenVPN:${WHITE}${OPENVPN_COUNT}${RESET}"
-echo -e " ${BLUE}ESTADO${RESET}  : SSH:${GREEN}${OPENSSH:-OFF}${RESET}  V2Ray:${GREEN}${XRAY:-OFF}${RESET}  Histeria:${RED}OFF${RESET}  OpenVPN:${RED}OFF${RESET}"
+SSH_STATUS=${OPENSSH:-OFF}
+XRAY_STATUS=${XRAY:-OFF}
+HYS_STATUS=${HYSTERIA:-OFF}
+OVPN_STATUS=${OPENVPN:-OFF}
 
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
+[[ "$SSH_STATUS" == "ON" ]] && SSH_COLOR=$GREEN || SSH_COLOR=$RED
+[[ "$XRAY_STATUS" == "ON" ]] && XRAY_COLOR=$GREEN || XRAY_COLOR=$RED
+[[ "$HYS_STATUS" == "ON" ]] && HYS_COLOR=$GREEN || HYS_COLOR=$RED
+[[ "$OVPN_STATUS" == "ON" ]] && OVPN_COLOR=$GREEN || OVPN_COLOR=$RED
+
+echo
+echo -e " ${BLUE}CUENTAS${RESET} : SSH:${WHITE}${SSH_COUNT}${RESET}  V2Ray:${WHITE}${V2RAY_COUNT}${RESET}  Histeria:${WHITE}${HYSTERIA_COUNT}${RESET}  OpenVPN:${WHITE}${OPENVPN_COUNT}${RESET}"
+echo -e " ${BLUE}ESTADO${RESET}  : SSH:${SSH_COLOR}${SSH_STATUS}${RESET}  V2Ray:${XRAY_COLOR}${XRAY_STATUS}${RESET}  Histeria:${HYS_COLOR}${HYS_STATUS}${RESET}  OpenVPN:${OVPN_COLOR}${OVPN_STATUS}${RESET}"
+
+echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
+
 echo -e " ${YELLOW}[01]${RESET} Usuarios SSH      ${YELLOW}[05]${RESET} Instalar protocolos"  
 echo -e " ${YELLOW}[02]${RESET} Optimizar VPS     ${YELLOW}[06]${RESET} Update / Remove"  
 echo -e " ${YELLOW}[03]${RESET} Cambiar dominio   ${YELLOW}[00]${RESET} Salir"  
