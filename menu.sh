@@ -130,7 +130,8 @@ echo -e "${WHITE}         Kevin Tech Multi Script v2.0${RESET}"
 echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
 echo  
   
-read -rp "$(echo -e "${CYAN}Seleccione una opción:${RESET} ")" OPCION    
+echo -ne "${CYAN}Seleccione una opción:${RESET} "
+read -r OPCION
 #=========================================================                    
 # CASE PRINCIPAL                    
 #=========================================================                    
@@ -248,12 +249,12 @@ if [[ "$AUTO_START" == "OFF" ]]; then
                     
     sed -i 's/AUTO_START=OFF/AUTO_START=ON/' "$CONFIG"                    
                     
-cat > "$FILE" << EOF                    
-#!/bin/bash                    
-if [[ \$- == *i* ]]; then                    
-    menu                    
-fi                    
-EOF                    
+cat > "$FILE" <<'EOF'
+#!/bin/bash
+if [[ $- == *i* ]]; then
+    menu
+fi
+EOF        
                     
     chmod +x "$FILE"                    
                     
