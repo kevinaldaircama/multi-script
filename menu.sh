@@ -119,7 +119,21 @@ echo -e "${MAGENTA} PROTOCOLOS${RESET}"
 [[ "$UDP_CUSTOM" == "ON" ]] && echo -e "   ${GREEN}●${RESET} UDP Custom     ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(36712)${RESET}"  
 [[ "$SLOWDNS" == "ON" ]] && echo -e "   ${GREEN}●${RESET} SlowDNS        ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(53)${RESET}"  
 [[ "$XRAY" == "ON" ]] && echo -e "   ${GREEN}●${RESET} Xray/V2Ray     ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(443)${RESET}"  
-  
+echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
+#=========================================================
+# Contadores de cuentas
+#=========================================================
+SSH_COUNT=$(awk -F: '$3 >= 1000 && $1 != "nobody" {c++} END {print c+0}' /etc/passwd)
+
+V2RAY_COUNT=0
+HYSTERIA_COUNT=0
+OPENVPN_COUNT=0
+SS_COUNT=0
+
+echo
+echo -e " ${BLUE}CUENTAS${RESET} : SSH:${WHITE}${SSH_COUNT}${RESET}  V2Ray:${WHITE}${V2RAY_COUNT}${RESET}  Histeria:${WHITE}${HYSTERIA_COUNT}${RESET}  OpenVPN:${WHITE}${OPENVPN_COUNT}${RESET}  SS:${WHITE}${SS_COUNT}${RESET}"
+echo -e " ${BLUE}ESTADO${RESET}  : SSH:${GREEN}${OPENSSH:-OFF}${RESET}  V2Ray:${GREEN}${XRAY:-OFF}${RESET}  Histeria:${RED}OFF${RESET}  OpenVPN:${RED}OFF${RESET}  SS:${RED}OFF${RESET}"
+
 echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
 echo -e " ${YELLOW}[01]${RESET} Usuarios SSH      ${YELLOW}[05]${RESET} Instalar protocolos"  
 echo -e " ${YELLOW}[02]${RESET} Optimizar VPS     ${YELLOW}[06]${RESET} Update / Remove"  
