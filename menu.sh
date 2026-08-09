@@ -424,9 +424,7 @@ echo -e "${CYAN}📥 Descargando actualización...${RESET}"
                     
 sleep 1                    
                     
-git clone \                    
-https://github.com/kevinaldaircama/multi-script.git \                    
-"$TMP" >/dev/null 2>&1                    
+git clone https://github.com/kevinaldaircama/multi-script.git "$TMP" >/dev/null 2>&1                    
                     
 if [[ $? -ne 0 ]]; then                    
                     
