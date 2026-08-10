@@ -330,6 +330,23 @@ echo ""
 read -n1 -r -p "Presiona una tecla para continuar..."
 
 }
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+#               MODO AUTOMÁTICO                #
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando UDP Custom automáticamente..."
+
+    install_udp
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo "✅ UDP Custom instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando UDP Custom."
+        exit 1
+    fi
+fi
 while true
 do
 
