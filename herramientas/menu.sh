@@ -28,6 +28,7 @@ printf "${GREEN} [04]${WHITE} ➮ Detalles VPS\n"
 printf "${GREEN} [05]${WHITE} ➮ Block Ads\n"
 printf "${GREEN} [06]${WHITE} ➮ Cambiar contraseña Root\n"
 printf "${GREEN} [07]${WHITE} ➮ scanner host o dominio\n"
+printf "${GREEN} [08]${WHITE} ➮ bot telegram (privanox y dewise)\n"
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${YELLOW} [00]${WHITE} ➮ Regresar${RESET}"
@@ -63,6 +64,9 @@ case "$OP" in
 ;;
 7)
     bash "$BASE/herramientas/scanner.sh"
+;;
+8)
+    bash "$BASE/herramientas/dewisep.sh"
 ;;
 0)
     exec bash "$BASE/protocolos/menu.sh"
