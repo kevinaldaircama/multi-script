@@ -205,20 +205,15 @@ FECHA_MOSTRAR=$(date -d "$FECHA" +"%d/%m/%Y")
 #========================#      
 #    CREAR USUARIO SSH   #      
 #========================#      
-      
-msg_info "Creando usuario SSH..."  
-  
-useradd \  
--e "$FECHA" \  
--M \  
--s /usr/sbin/nologin \  
-"$USER"  
-  
-if [[ $? -ne 0 ]]; then  
-    msg_error "No fue posible crear el usuario."  
-    sleep 2  
-    continue  
-fi  
+msg_info "Creando usuario SSH..."
+
+useradd -e "$FECHA" -M -s /usr/sbin/nologin "$USER"
+
+if [[ $? -ne 0 ]]; then
+    msg_error "No fue posible crear el usuario."
+    sleep 2
+    continue
+fi
   
 echo "${USER}:${PASS}" | chpasswd
 
