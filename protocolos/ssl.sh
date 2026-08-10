@@ -876,6 +876,21 @@ ensure_haproxy_running() {
 
 }
 #==================================================
+# MODO AUTOMÁTICO
+#==================================================
+
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando SSL Tunnel automáticamente..."
+
+    if install_ssl_tunnel; then
+        echo "✅ SSL Tunnel instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando SSL Tunnel."
+        exit 1
+    fi
+fi
+#==================================================
 # INICIAR MENÚ
 #==================================================
 
