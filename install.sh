@@ -243,11 +243,25 @@ clear
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
 echo "        CONFIGURACIÓN DEL SERVIDOR"  
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-  
-read -p "🌐 Dominio: " SERVER_DOMAIN  
-  
-SERVER_IP=$(curl -s ifconfig.me)  
-  
+read -p "🌐 Dominio: " SERVER_DOMAIN
+
+echo ""
+read -rp "¿Deseas instalar los protocolos automáticamente? (s/n): " AUTO_PROTOCOLS
+
+AUTO_PROTOCOLS=$(echo "$AUTO_PROTOCOLS" | tr '[:upper:]' '[:lower:]')
+
+if [[ "$AUTO_PROTOCOLS" =~ ^(s|si|sí)$ ]]; then
+    INSTALL_PROTOCOLS="ON"
+    echo "🚀 Se instalarán automáticamente los protocolos."
+else
+    INSTALL_PROTOCOLS="OFF"
+    echo "ℹ️ Los protocolos no se instalarán automáticamente."
+fi
+
+sleep 1
+
+SERVER_IP=$(curl -s ifconfig.me)
+
 SERVER_IP=$(curl -4 -s ifconfig.me)
 
 DOMAIN_IP_MATCH="NO"
@@ -423,6 +437,28 @@ mkdir -p /etc/kevintech
 cp -a /tmp/multi-script/. /etc/kevintech/
 chmod -R +x /etc/kevintech
 rm -rf /tmp/multi-script
+
+if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   INSTALANDO PROTOCOLOS AUTOMÁTICOS"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Instalar BadVPN
+    bash /etc/kevintech/protocolos/badvpn.sh --auto
+
+    # Instalar Dropbear
+    bash /etc/kevintech/protocolos/dropbear.sh --auto
+
+    # Instalar UDP Custom
+    bash /etc/kevintech/protocolos/udp-custom.sh --auto
+
+    # Instalar SSL Tunnel
+    bash /etc/kevintech/protocolos/ssl.sh --auto
+
+    echo "✅ Protocolos instalados automáticamente."
+    sleep 2
+fi
 
 echo "✅ Archivos del sistema instalados correctamente."
 sleep 1
