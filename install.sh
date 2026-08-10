@@ -46,41 +46,38 @@ FIREBASE_URL=$(echo "$FIREBASE_URL_B64" | base64 -d)
 # OBTENER KEY
 #=====================================
 
-if [ -z "${INSTALL_KEY:-}" ]; then
-    read -p "🔑 Introduce tu Key de Instalación: " INSTALL_KEY
-fi
-
-if [ -z "$INSTALL_KEY" ]; then
-    echo "❌ La Key no puede estar vacía."
-    exit 1
-fi
-
-INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r' | tr -d '\n' | tr -d ' ')
-
-echo ""
-echo "📦 Preparando verificación..."
-
 apt update -y >/dev/null 2>&1
 apt install -y curl wget ca-certificates >/dev/null 2>&1
 update-ca-certificates >/dev/null 2>&1 || true
 
-echo "🔍 Verificando licencia..."
-
-if ! KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \
-    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"); then
+while true; do
     echo ""
-    echo "❌ Error de conexión con Firebase."
-    exit 1
-fi
+    read -p "Introduce tu Key de Instalación: " INSTALL_KEY
+    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')
 
-if [ "$KEY_RESPONSE" = "null" ] || [ -z "$KEY_RESPONSE" ]; then
-    echo ""
-    echo "❌ Key inválida o ya utilizada."
-    exit 1
-fi
+    [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }
 
-echo ""
-echo "✅ Key válida."
+    echo "Verificando licencia..."
+
+    KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \
+        || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")
+
+    if [ -z "$KEY_RESPONSE" ]; then
+        echo "No fue posible conectar con el servidor de licencias."
+        sleep 1
+        continue
+    fi
+
+    if [ "$KEY_RESPONSE" = "null" ]; then
+        echo "La Key es inválida, ya fue utilizada o está vencida."
+        sleep 1
+        continue
+    fi
+
+    echo "Licencia verificada correctamente."
+    break
+done
+
 
 echo "🔥 Registrando activación..."
 
@@ -154,7 +151,7 @@ sleep 1
 
 echo "📦 Instalando paquetes básicos..."
 
-apt update -y
+apt update -y >/dev/null 2>&1
 
 apt install -y \
 curl \
@@ -174,7 +171,7 @@ jq \
 bc \
 socat \
 openssl \
-ca-certificates
+ca-certificates >/dev/null 2>&1
 
 echo "✅ Paquetes instalados."
 
@@ -184,13 +181,57 @@ echo "✅ Paquetes instalados."
 
 echo "🔐 Instalando OpenSSH..."
 
-apt install -y openssh-server
+apt install -y openssh-server >/dev/null 2>&1
 
 systemctl enable ssh
 systemctl restart ssh
 
 echo "✅ OpenSSH instalado y activo en el puerto 22."
 sleep 2
+#==============================
+# SEGURIDAD DEL VPS
+#==============================
+
+echo "🛡️ Aplicando endurecimiento básico del sistema..."
+
+apt install -y ufw fail2ban >/dev/null 2>&1
+
+# Firewall
+ufw --force reset >/dev/null 2>&1
+ufw default deny incoming >/dev/null 2>&1
+ufw default allow outgoing >/dev/null 2>&1
+ufw allow 22/tcp >/dev/null 2>&1
+ufw allow 80/tcp >/dev/null 2>&1
+ufw allow 443/tcp >/dev/null 2>&1
+ufw --force enable >/dev/null 2>&1
+
+# Endurecer SSH
+SSHD_CFG="/etc/ssh/sshd_config"
+
+sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' "$SSHD_CFG"
+sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' "$SSHD_CFG"
+sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' "$SSHD_CFG"
+sed -i 's/^#*ClientAliveInterval.*/ClientAliveInterval 300/' "$SSHD_CFG"
+sed -i 's/^#*ClientAliveCountMax.*/ClientAliveCountMax 2/' "$SSHD_CFG"
+
+systemctl restart ssh
+
+# Fail2Ban
+cat > /etc/fail2ban/jail.local << EOF
+[sshd]
+enabled = true
+port = ssh
+logpath = /var/log/auth.log
+maxretry = 3
+findtime = 10m
+bantime = 1h
+EOF
+
+systemctl enable fail2ban >/dev/null 2>&1
+systemctl restart fail2ban >/dev/null 2>&1
+
+echo "✅ Seguridad básica aplicada correctamente."
+sleep 1
 #==============================  
   
 # CONFIG SERVER  
@@ -207,35 +248,49 @@ read -p "🌐 Dominio: " SERVER_DOMAIN
   
 SERVER_IP=$(curl -s ifconfig.me)  
   
-CLOUDFLARE_STATUS="OFF"  
-SSL_TUNNEL="OFF"  
-DOMAIN_IP_MATCH="NO"  
-PROXY_STATUS="UNKNOWN"  
-if [[ -n "$SERVER_DOMAIN" ]]; then  
-  
-echo ""        
-echo "🔍 Verificando dominio..."        
-    
-DOMAIN_IP=$(dig +short "$SERVER_DOMAIN" | head -n1)        
-    
-if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
-    DOMAIN_IP_MATCH="YES"
-    echo "✅ Dominio apunta al VPS"
-    echo "ℹ️ El certificado SSL se podrá instalar desde el menú."
+SERVER_IP=$(curl -4 -s ifconfig.me)
 
-    SSL_TUNNEL="OFF"
+DOMAIN_IP_MATCH="NO"
+DNS_PROVIDER="Desconocido"
 
-else
-    echo "❌ Dominio no apunta al VPS"
-    SSL_TUNNEL="OFF"
+if [[ -n "$SERVER_DOMAIN" ]]; then
+    echo ""
+    echo "Verificando dominio..."
+
+    DOMAIN_IP=$(dig +short A "$SERVER_DOMAIN" | head -n1)
+
+    if [[ "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+        DOMAIN_IP_MATCH="YES"
+        SSL_TUNNEL="OFF"
+        echo "Dominio configurado correctamente."
+        echo "El certificado SSL podrá instalarse desde el menú."
+    else
+        SSL_TUNNEL="OFF"
+        echo "El dominio aún no apunta a este VPS."
+    fi
+
+    NS=$(dig +short NS "$SERVER_DOMAIN" | tr '\n' ' ')
+
+    if echo "$NS" | grep -qi "cloudflare"; then
+        DNS_PROVIDER="Cloudflare"
+    elif echo "$NS" | grep -Eqi "awsdns|route53"; then
+        DNS_PROVIDER="AWS Route 53"
+    elif echo "$NS" | grep -qi "cloudfront"; then
+        DNS_PROVIDER="Amazon CloudFront"
+    elif echo "$NS" | grep -qi "googledomains\|google"; then
+        DNS_PROVIDER="Google Cloud DNS"
+    elif echo "$NS" | grep -qi "azure"; then
+        DNS_PROVIDER="Azure DNS"
+    elif echo "$NS" | grep -qi "namecheap"; then
+        DNS_PROVIDER="Namecheap"
+    elif echo "$NS" | grep -qi "godaddy"; then
+        DNS_PROVIDER="GoDaddy"
+    elif echo "$NS" | grep -qi "porkbun"; then
+        DNS_PROVIDER="Porkbun"
+    fi
+
+    echo "Proveedor DNS: $DNS_PROVIDER"
 fi
-    
-# Cloudflare detect        
-CF=$(dig +short NS "$SERVER_DOMAIN" | grep cloudflare)        
-    
-[[ -n "$CF" ]] && CLOUDFLARE_STATUS="ON"  
-  
-fi  
 BASE="/etc/kevintech"  
   
 mkdir -p $BASE/{protocolos,usuarios,sistema,logs}  
@@ -249,7 +304,7 @@ mkdir -p $BASE/{protocolos,usuarios,sistema,logs}
 cat > "$BASE/config.conf" <<EOF
 SERVER_DOMAIN="$SERVER_DOMAIN"
 
-CLOUDFLARE_STATUS="$CLOUDFLARE_STATUS"
+DNS_PROVIDER="$DNS_PROVIDER"
 SSL_TUNNEL="$SSL_TUNNEL"
 DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"
 PROXY_STATUS="$PROXY_STATUS"
@@ -335,7 +390,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""  
 echo "🌐 Domain : $SERVER_DOMAIN"  
 echo "🔐 SSL    : $SSL_TUNNEL"  
-echo "☁️ CF     : $CLOUDFLARE_STATUS"  
+echo "🌐 DNS    : $DNS_PROVIDER"  
 echo ""  
 echo ""
 echo "📦 Estado de la instalación:"
@@ -344,28 +399,33 @@ echo "   ✅ Sistema preparado correctamente"
 echo "   ⚙️ Ningún protocolo fue instalado automáticamente"
 echo "   💡 Instala los protocolos desde el menú principal"
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"  
-echo "📥 Descargando KevinTech Multi Script..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📦 Instalando KevinTech Multi Script"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📁 Preparando archivos del sistema..."
+sleep 1
+echo "⚙️ Configurando módulos principales..."
+sleep 1
+echo "🔐 Aplicando permisos y optimizaciones..."
+sleep 1
+echo "🛡️ Activando medidas de seguridad..."
+sleep 1
 
 cd /root || exit 1
-
 rm -rf /tmp/multi-script
 
-git clone https://github.com/kevinaldaircama/multi-script.git /tmp/multi-script || exit 1
+git clone -q https://github.com/kevinaldaircama/multi-script.git /tmp/multi-script >/dev/null 2>&1 || {
+    echo "❌ Error al obtener los archivos del sistema."
+    exit 1
+}
 
 mkdir -p /etc/kevintech
-
 cp -a /tmp/multi-script/. /etc/kevintech/
-
 chmod -R +x /etc/kevintech
-
 rm -rf /tmp/multi-script
 
-if [[ ! -f /etc/kevintech/menu.sh ]]; then
-    echo "❌ ERROR: menu.sh no fue instalado"
-    exit 1
-fi
+echo "✅ Archivos del sistema instalados correctamente."
+sleep 1
 
 cat > /etc/profile.d/kevintech-banner.sh << 'EOF'
 #!/bin/bash
