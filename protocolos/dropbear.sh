@@ -397,7 +397,23 @@ system_info() {
     pause
 
 }
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+#               MODO AUTOMÁTICO                #
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando Dropbear automáticamente..."
+
+    install_dropbear
+
+    if systemctl is-active --quiet dropbear_custom; then
+        echo "✅ Dropbear instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando Dropbear."
+        exit 1
+    fi
+fi
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 #                  MENÚ                        #
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
