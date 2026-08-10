@@ -128,7 +128,7 @@ RestartSec=5
     
 [Install]    
 WantedBy=multi-user.target    
-EOF    
+EOF
     
     systemctl daemon-reload    
     systemctl enable depwise.service    
