@@ -1,26 +1,25 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Privanox Bot Manager (Proyecto Externo)
+# Privanox Bot (usa install_go.sh original)
 #==================================================
 
 GREEN="\e[1;92m"
 RED="\e[1;91m"
 YELLOW="\e[1;93m"
-BLUE="\e[1;94m"
 CYAN="\e[1;96m"
 WHITE="\e[1;97m"
 NC="\e[0m"
 
-SERVICE="privanox.service"
+SERVICE="depwise.service"
 
 pause() {
     read -rp "Presiona ENTER para continuar..."
 }
 
 status_privanox() {
-    if systemctl list-unit-files | grep -q "^$SERVICE"; then
-        if systemctl is-active --quiet $SERVICE; then
+    if systemctl list-unit-files | grep -q "^${SERVICE}"; then
+        if systemctl is-active --quiet ${SERVICE}; then
             echo -e "${GREEN}● Privanox Bot: ACTIVO${NC}"
         else
             echo -e "${YELLOW}● Privanox Bot: INSTALADO (DETENIDO)${NC}"
@@ -33,12 +32,13 @@ status_privanox() {
 install_privanox() {
     clear
     echo -e "${CYAN}====================================${NC}"
-    echo -e "${WHITE}      INSTALAR PRIVANOX BOT${NC}"
+    echo -e "${WHITE}     PRIVANOX BOT (INSTALADOR ORIGINAL)${NC}"
     echo -e "${CYAN}====================================${NC}"
     echo
 
-    # No se vuelve a exportar INSTALL_KEY.
-    # El instalador principal ya la definió al inicio.
+    # Llama al install_go.sh ORIGINAL.
+    # Si INSTALL_KEY ya fue exportada por el instalador principal,
+    # install_go.sh NO volverá a pedir la key.
     bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/privanox-code/main/install_go.sh)
 
     echo
@@ -47,36 +47,31 @@ install_privanox() {
 }
 
 start_privanox() {
-    systemctl start $SERVICE
+    systemctl start ${SERVICE}
     echo -e "${GREEN}Privanox Bot iniciado.${NC}"
     pause
 }
 
 stop_privanox() {
-    systemctl stop $SERVICE
+    systemctl stop ${SERVICE}
     echo -e "${YELLOW}Privanox Bot detenido.${NC}"
     pause
 }
 
 restart_privanox() {
-    systemctl restart $SERVICE
+    systemctl restart ${SERVICE}
     echo -e "${GREEN}Privanox Bot reiniciado.${NC}"
     pause
 }
 
 uninstall_privanox() {
     clear
-    echo -e "${RED}¿Deseas desinstalar Privanox Bot?${NC}"
-    read -rp "[s/n]: " opt
+    echo -e "${RED}Esto ejecutará el desinstalador original de Privanox.${NC}"
+    read -rp "¿Continuar? [s/n]: " op
 
-    case "$opt" in
+    case "$op" in
         s|S)
-            systemctl stop $SERVICE 2>/dev/null
-            systemctl disable $SERVICE 2>/dev/null
-            rm -f /etc/systemd/system/$SERVICE
-            systemctl daemon-reload
-            rm -rf /etc/kevintech/privanox
-            echo -e "${GREEN}Privanox Bot eliminado.${NC}"
+            bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/privanox-code/main/install_go.sh)
             ;;
         *)
             echo -e "${YELLOW}Cancelado.${NC}"
@@ -94,12 +89,12 @@ privanox_menu() {
         echo -e "${CYAN}====================================${NC}"
         status_privanox
         echo
-        echo -e "${WHITE} 1.${NC} Instalar Privanox Bot"
+        echo -e "${WHITE} 1.${NC} Instalar / Actualizar Bot"
         echo -e "${WHITE} 2.${NC} Iniciar Bot"
         echo -e "${WHITE} 3.${NC} Detener Bot"
         echo -e "${WHITE} 4.${NC} Reiniciar Bot"
         echo -e "${WHITE} 5.${NC} Ver Estado"
-        echo -e "${WHITE} 6.${NC} Desinstalar Bot"
+        echo -e "${WHITE} 6.${NC} Ejecutar instalador original (desinstalar)"
         echo -e "${WHITE} 0.${NC} Volver"
         echo
         read -rp "Selecciona una opción: " op
