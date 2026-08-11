@@ -455,7 +455,16 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
 
     # Instalar SSL Tunnel
     bash /etc/kevintech/protocolos/ssl.sh --auto
-
+    
+        # Instalar v2ray xray
+    bash /etc/kevintech/protocolos/v2ray.sh --auto
+    
+    # Instalar udphiateria
+    bash /etc/kevintech/protocolos/udphisteria.sh --auto
+    
+        # Instalar openvpn
+    bash /etc/kevintech/protocolos/openvpn.sh --auto
+    
     echo "✅ Protocolos instalados automáticamente."
     sleep 2
 fi
