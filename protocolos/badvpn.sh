@@ -19,7 +19,9 @@ PORT1="7300"
 PORT2="7200"                      
                       
 BIN="/usr/local/bin/badvpn-udpgw"                   
-install_badvpn() {              
+install_badvpn() {   
+    cd /root || cd /
+    
     apt update -y >/dev/null 2>&1              
     apt install -y git cmake build-essential >/dev/null 2>&1              
               
