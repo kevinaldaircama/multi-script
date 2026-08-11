@@ -19,29 +19,26 @@ PORT1="7300"
 PORT2="7200"                      
                       
 BIN="/usr/local/bin/badvpn-udpgw"                   
-install_badvpn() {              
-    apt update -y >/dev/null 2>&1              
-    apt install -y git cmake build-essential >/dev/null 2>&1              
-              
-    rm -rf /tmp/badvpn              
-    git clone -q https://github.com/ambrop72/badvpn.git /tmp/badvpn              
-              
-    cd /tmp/badvpn || return 1              
-    mkdir -p build              
-    cd build || return 1              
-              
-    cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 >/dev/null 2>&1              
-    make -j$(nproc) >/dev/null 2>&1              
-              
-    if [[ ! -f "udpgw/badvpn-udpgw" ]]; then              
-        return 1              
-    fi              
-              
-    cp udpgw/badvpn-udpgw "$BIN"              
-    chmod +x "$BIN"              
-              
-    cat > /etc/systemd/system/$SERVICE1.service <<EOF              
-[Unicat > /etc/systemd/system/$SERVICE1.service <<EOF
+install_badvpn() {
+    apt update -y >/dev/null 2>&1
+    apt install -y git cmake build-essential >/dev/null 2>&1
+
+    rm -rf /tmp/badvpn
+    git clone -q https://github.com/ambrop72/badvpn.git /tmp/badvpn
+
+    cd /tmp/badvpn || return 1
+    mkdir -p build
+    cd build || return 1
+
+    cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 >/dev/null 2>&1
+    make -j$(nproc) >/dev/null 2>&1
+
+    [[ ! -f "udpgw/badvpn-udpgw" ]] && return 1
+
+    cp udpgw/badvpn-udpgw "$BIN"
+    chmod +x "$BIN"
+
+    cat > /etc/systemd/system/$SERVICE1.service <<EOF
 [Unit]
 Description=BadVPN UDPGW Puerto 7300
 After=network.target
@@ -56,7 +53,7 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/$SERVICE2.service <<EOF
+    cat > /etc/systemd/system/$SERVICE2.service <<EOF
 [Unit]
 Description=BadVPN UDPGW Puerto 7200
 After=network.target
@@ -70,17 +67,17 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
-              
-    systemctl daemon-reload              
-    systemctl enable $SERVICE1 $SERVICE2 >/dev/null 2>&1              
-    systemctl restart $SERVICE1 $SERVICE2              
-              
-    if grep -q '^BADVPN=' "$CONFIG"; then        
-    sed -i 's/^BADVPN=.*/BADVPN=ON/' "$CONFIG"        
-else        
-    echo "BADVPN=ON" >> "$CONFIG"        
-fi             
-}                 
+
+    systemctl daemon-reload
+    systemctl enable $SERVICE1 $SERVICE2 >/dev/null 2>&1
+    systemctl restart $SERVICE1 $SERVICE2
+
+    if grep -q '^BADVPN=' "$CONFIG"; then
+        sed -i 's/^BADVPN=.*/BADVPN=ON/' "$CONFIG"
+    else
+        echo "BADVPN=ON" >> "$CONFIG"
+    fi
+}
 # ==== MODO AUTOMÁTICO ====        
 if [[ "$1" == "--auto" ]]; then        
     echo "🚀 Instalando BadVPN automáticamente..."        
