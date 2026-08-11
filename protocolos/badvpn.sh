@@ -40,20 +40,36 @@ install_badvpn() {
     cp udpgw/badvpn-udpgw "$BIN"              
     chmod +x "$BIN"              
               
-    cat > /etc/systemd/system/$SERVICE1.service <<EOF              
-[Unit]              
-Description=BadVPN UDPGW Puerto 7300              
-After=network.target              
-              
-[Service]              
-Type=simple              
-ExecStart=$BIN --listen-addr 127.0.0.1:$PORT1 --max-clients 999 --max-connections-for-client 10              
-Restart=always              
-RestartSec=3              
-              
-[Install]              
-WantedBy=multi-user.target              
-EOF              
+    cat > /etc/systemd/system/$SERVICE1.service <<EOF
+[Unit]
+Description=BadVPN UDPGW Puerto 7300
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$BIN --listen-addr 127.0.0.1:$PORT1 --max-clients 999 --max-connections-for-client 10
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/$SERVICE2.service <<EOF
+[Unit]
+Description=BadVPN UDPGW Puerto 7200
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$BIN --listen-addr 127.0.0.1:$PORT2 --max-clients 999 --max-connections-for-client 10
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
               
     cat > /etc/systemd/system/$SERVICE2.service <<EOF              
 [Unit]              
