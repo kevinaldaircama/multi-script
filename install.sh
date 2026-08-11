@@ -447,23 +447,26 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     # Instalar BadVPN
     bash /etc/kevintech/protocolos/badvpn.sh --auto
 
-    # Instalar Dropbear
-    bash /etc/kevintech/protocolos/dropbear.sh --auto
-
-    # Instalar UDP Custom
-    bash /etc/kevintech/protocolos/udpcustom.sh --auto
-
     # Instalar SSL Tunnel
     bash /etc/kevintech/protocolos/ssl.sh --auto
     
-        # Instalar v2ray xray
-    bash /etc/kevintech/protocolos/v2ray.sh --auto
+        # Instalar zipvpn
+    bash /etc/kevintech/protocolos/zipvpn.sh --auto
     
     # Instalar udphiateria
     bash /etc/kevintech/protocolos/udphisteria.sh --auto
     
         # Instalar openvpn
     bash /etc/kevintech/protocolos/openvpn.sh --auto
+
+    # Instalar v2ray xray
+    bash /etc/kevintech/protocolos/v2ray.sh --auto
+
+    # Instalar Dropbear
+    bash /etc/kevintech/protocolos/dropbear.sh --auto
+
+    # Instalar UDP Custom
+    bash /etc/kevintech/protocolos/udpcustom.sh --auto
     
     echo "✅ Protocolos instalados automáticamente."
     sleep 2
