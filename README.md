@@ -1,169 +1,149 @@
-# 🛡️ KevinTech Multi Script
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white">
-  <img src="https://img.shields.io/badge/Bash-Script-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white">
-  <img src="https://img.shields.io/github/stars/kevinaldaircama/multi-script?style=for-the-badge">
-  <img src="https://img.shields.io/github/forks/kevinaldaircama/multi-script?style=for-the-badge">
-  <img src="https://img.shields.io/github/license/kevinaldaircama/multi-script?style=for-the-badge">
-</p>
-
-<p align="center">
-Administrador completo para VPS Ubuntu con instalación automática de protocolos VPN, herramientas y servicios desde un único panel.
-</p>
-
----
-
-# ✨ Características
-
-- 🚀 Instalación automática
-- 🔐 OpenSSH
-- 🌐 System DNS
-- 🔄 WebSocket
-- 📦 ZIPVPN
-- 🛡️ Dropbear
-- 🔒 SSL/TLS
-- ⚡ BadVPN
-- 🚀 UDP Custom
-- 🌐 V2Ray / Xray
-- 🔥 Firewall
-- 📊 Speedtest
-- 📁 Archivo Online
-- 🚫 Block Torrent
-- 🚫 Block Ads
-- 🔄 Reinicio de servicios
-- 👥 Gestión de usuarios
-- 🔑 Cambio de contraseña Root
-- 📋 Información del VPS
-
----
-
-# 💻 Compatibilidad
-
-todas las versiones de Ubuntu 
----
-
-# 📥 Instalación
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/install.sh)
-```
-
----
-
-# ▶ Acceder al Script
-
-Una vez finalizada la instalación, ejecuta:
-
-```bash
-menu
-```
-
----
-
-# 📦 Protocolos Disponibles
-
-| Protocolo | Estado |
-|-----------|:------:|
-| OpenSSH | ✅ |
-| System DNS | ✅ |
-| WebSocket | ✅ |
-| ZIPVPN | ✅ |
-| Dropbear | ✅ |
-| SSL/TLS | ✅ |
-| BadVPN | ✅ |
-| UDP Custom | ✅ |
-| V2Ray / Xray | ✅ |
-| SlowDNS | ✅ |
-
----
-
-# 🛠 Herramientas
-
-- 🔥 Firewall
-- 📊 Speedtest
-- 📁 Archivo Online
-- 🚫 Block Torrent
-- 🚫 Block Ads
-- 🔄 Reiniciar Servicios
-- 📋 Información del VPS
-- 🔑 Cambiar contraseña Root
-
----
-
-# 🔄 Actualizar
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/update.sh)
-```
-
----
-
-## Seguridad
-
-El instalador configura automáticamente:
-
-• Fail2Ban
-  - Protección para SSH y Dropbear.
-  - Bloqueo automático después de 3 intentos fallidos.
-  - Tiempo de baneo: 1 hora.
-  - Recidiva: 1 semana.
-
-• RKHunter
-  - Escaneo de rootkits.
-  - Verificación de binarios modificados.
-  - Base de datos actualizada automáticamente.
-
-• Chkrootkit
-  - Detección de rootkits conocidos.
-  - Escaneo rápido del sistema.
-
-• Lynis
-  - Auditoría completa de seguridad.
-  - Recomendaciones de hardening.
-  - Índice de seguridad del servidor.
-
-• Monitoreo de Consumo
-  - Snapshot automático cada minuto mediante Cron y Systemd.
-  - Registro del consumo de red.
-  - Base de datos:
-    /etc/kevintech/sistema/network_state.conf
-
-Los límites de consumo pueden configurarse desde:
-
-Herramientas
- └── [10] Consumo de Red
-      └── [3] Configurar límites (GB)
-
-# 🤝 Contribuciones
-
-Las contribuciones son bienvenidas.
-
-1. Haz un Fork.
-2. Crea una rama para tus cambios.
-3. Realiza tus modificaciones.
-4. Envía un Pull Request.
-
----
-
-# ⭐ Apoya el proyecto
-
-Si este proyecto te fue útil:
-
-- ⭐ Dale una estrella al repositorio.
-- 🍴 Haz un Fork.
-- 📢 Compártelo con otros usuarios.
-
----
-
-# 👨‍💻 Autor
-
-**Kevin Aldair Camacho**
-
-- redes sociales: Kevin tech tutorials
-
----
-
-<p align="center">
-Hecho con ❤️ por <b>KevinTech Tutorials</b>
-</p>
+# 🛡️ KevinTech Multi Script          
+          
+<p align="center">          
+  <img src="https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white">          
+  <img src="https://img.shields.io/badge/Bash-Script-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white">          
+  <img src="https://img.shields.io/github/stars/kevinaldaircama/multi-script?style=for-the-badge">          
+  <img src="https://img.shields.io/github/forks/kevinaldaircama/multi-script?style=for-the-badge">          
+  <img src="https://img.shields.io/github/license/kevinaldaircama/multi-script?style=for-the-badge">          
+</p>          
+          
+<p align="center">          
+Administrador completo para VPS Ubuntu con instalación automática de protocolos VPN, herramientas y servicios desde un único panel.          
+</p>          
+          
+---          
+          
+# ✨ Características          
+          
+- 🚀 Instalación automática          
+- 🔐 OpenSSH          
+- 🌐 System DNS          
+- 🔄 WebSocket          
+- 📦 ZIPVPN          
+- 🛡️ Dropbear          
+- 🔒 SSL/TLS          
+- ⚡ BadVPN          
+- 🚀 UDP Custom          
+- 🌐 V2Ray / Xray          
+- 🔥 Firewall          
+- 📊 Speedtest          
+- 📁 Archivo Online          
+- 🚫 Block Torrent          
+- 🚫 Block Ads          
+- 🔄 Reinicio de servicios          
+- 👥 Gestión de usuarios          
+- 🔑 Cambio de contraseña Root          
+- 📋 Información del VPS          
+          
+---          
+          
+ # 💻 Compatibilidad
+ 
+Compatible con todas las versiones de Ubuntu soportadas oficialmente.      
+---          
+          
+# 📥 Instalación          
+          
+```bash          
+bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/install.sh)          
+```          
+          
+---          
+          
+# ▶ Acceder al Script          
+          
+Una vez finalizada la instalación, ejecuta:          
+          
+```bash          
+menu          
+```          
+          
+---          
+          
+# 📦 Protocolos Disponibles          
+          
+| Protocolo | Estado |          
+|-----------|:------:|          
+| OpenSSH | ✅ |          
+| System DNS | ✅ |          
+| WebSocket | ✅ |          
+| ZIPVPN | ✅ |          
+| Dropbear | ✅ |          
+| SSL/TLS | ✅ |          
+| BadVPN | ✅ |          
+| UDP Custom | ✅ |          
+| V2Ray / Xray | ✅ |          
+| SlowDNS | ✅ |          
+          
+---          
+          
+# 🛠 Herramientas          
+          
+- 🔥 Firewall          
+- 📊 Speedtest          
+- 📁 Archivo Online          
+- 🚫 Block Torrent          
+- 🚫 Block Ads          
+- 🔄 Reiniciar Servicios          
+- 📋 Información del VPS          
+- 🔑 Cambiar contraseña Root          
+          
+---          
+          
+# 🔄 Actualizar          
+          
+```bash          
+bash <(curl -fsSL https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/update.sh)          
+```          
+          
+---          
+          
+## Seguridad          
+          
+El instalador configura automáticamente:          
+          
+• Fail2Ban          
+  - Protección para SSH y Dropbear.          
+  - Bloqueo automático después de 3 intentos fallidos.          
+  - Tiempo de baneo: 1 hora.          
+  - Recidiva: 1 semana.          
+          
+• RKHunter          
+  - Escaneo de rootkits.          
+  - Verificación de binarios modificados.          
+  - Base de datos actualizada automáticamente.          
+          
+• Chkrootkit          
+  - Detección de rootkits conocidos.          
+  - Escaneo rápido del sistema.          
+          
+• Lynis          
+  - Auditoría completa de seguridad.          
+  - Recomendaciones de hardening.          
+  - Índice de seguridad del servidor.          
+          
+• Monitoreo de Consumo          
+  - Snapshot automático cada minuto mediante Cron y Systemd.          
+  - Registro del consumo de red.          
+  - Base de datos:          
+    /etc/kevintech/sistema/network_state.conf          
+          
+# 🔑 Generar Key
+ 
+Para generar una Key de instalación, hazlo directamente desde el bot oficial de Telegram:
+ 
+**@multiscriptkeygen_bot**
+---          
+          
+# 👨‍💻 Autor          
+          
+**Kevin Aldair Camacho**          
+          
+- redes sociales: Kevin tech tutorials          
+          
+---          
+          
+<p align="center">          
+Hecho con ❤️ por <b>KevinTech Tutorials</b>          
+</p>     
