@@ -169,27 +169,7 @@ echo -e "\e[1;92m✔ Configurando OpenSSH y seguridad\e[0m"
 echo    
 echo "📦 Instalando paquetes básicos..."    
     
-apt update -y >/dev/null 2>&1    
-    
-apt install -y \    
-curl \    
-wget \    
-git \    
-unzip \    
-zip \    
-tar \    
-sudo \    
-nano \    
-cron \    
-net-tools \    
-dnsutils \    
-lsof \    
-screen \    
-jq \    
-bc \    
-socat \    
-openssl \    
-ca-certificates >/dev/null 2>&1    
+apt install -y curl wget git unzip zip tar sudo nano cron net-tools dnsutils lsof screen jq bc socat openssl ca-certificates >/dev/null 2>&1
     
 echo "✅ Paquetes instalados."    
     
