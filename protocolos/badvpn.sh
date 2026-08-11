@@ -53,7 +53,7 @@ RestartSec=3
         
 [Install]        
 WantedBy=multi-user.target        
-EOF        
+EOF
         
     cat > /etc/systemd/system/$SERVICE2.service <<EOF        
 [Unit]        
@@ -68,7 +68,7 @@ RestartSec=3
         
 [Install]        
 WantedBy=multi-user.target        
-EOF        
+EOF
         
     systemctl daemon-reload        
     systemctl enable $SERVICE1 $SERVICE2 >/dev/null 2>&1        
@@ -128,7 +128,7 @@ else
 cat <<EOF                
  [1] ➮ Instalar BadVPN                
  [0] ➮ Regresar                
-EOF                
+EOF
 fi                
                 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                
@@ -210,7 +210,7 @@ RestartSec=3
                 
 [Install]                
 WantedBy=multi-user.target                
-EOF                
+EOF
                 
                 
 cat > /etc/systemd/system/$SERVICE2.service <<EOF                
@@ -226,7 +226,7 @@ RestartSec=3
                 
 [Install]                
 WantedBy=multi-user.target                
-EOF                
+EOF
                 
                 
 systemctl daemon-reload                
