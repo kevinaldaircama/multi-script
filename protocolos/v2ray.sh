@@ -1013,7 +1013,21 @@ esac
 done
 
 }
+#==================================================
+# MODO AUTOMÁTICO
+#==================================================
 
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando Xray automáticamente..."
+
+    if install_xray; then
+        echo "✅ Xray instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando Xray."
+        exit 1
+    fi
+fi
 #==================================================
 # Inicio
 #==================================================

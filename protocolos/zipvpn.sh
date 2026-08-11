@@ -759,6 +759,23 @@ system_info() {
 
 }
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+#               MODO AUTOMÁTICO                #
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando ZiVPN automáticamente..."
+
+    install_zivpn
+
+    if systemctl is-active --quiet zivpn; then
+        echo "✅ ZiVPN instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando ZiVPN."
+        exit 1
+    fi
+fi
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 #                 MENÚ PRINCIPAL               #
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 

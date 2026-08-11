@@ -80,7 +80,21 @@ new_client () {
 	echo "</tls-crypt>"  
 	} > ~/"$client".ovpn  
 }  
-  
+  #==================================================
+# MODO AUTOMÁTICO
+#==================================================
+
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando OpenVPN automáticamente..."
+
+    # Valores automáticos
+    protocol="tcp"
+    port="1194"
+    client="client"
+
+    # Continúa con la instalación
+fi
+
 if [[ ! -e /etc/openvpn/server/server.conf ]]; then  
 	# Detect some Debian minimal setups where neither wget nor curl are installed  
 	if ! hash wget 2>/dev/null && ! hash curl 2>/dev/null; then  

@@ -334,7 +334,23 @@ echo
 read -p "Presione Enter para continuar..."              
               
 }              
-              
+# ==========================
+# MODO AUTOMÁTICO
+# ==========================
+
+if [[ "$1" == "--auto" ]]; then
+    echo "🚀 Instalando Hysteria V1 automáticamente..."
+
+    install_hys
+
+    if systemctl is-active --quiet hysteria1-server; then
+        echo "✅ Hysteria V1 instalado correctamente."
+        exit 0
+    else
+        echo "❌ Error instalando Hysteria V1."
+        exit 1
+    fi
+fi              
 # ==========================              
 # MENÚ PRINCIPAL PRO              
 # ==========================              
