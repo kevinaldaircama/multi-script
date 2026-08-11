@@ -243,7 +243,7 @@ logpath = /var/log/auth.log
 maxretry = 3    
 findtime = 10m    
 bantime = 1h    
-EOF    
+EOF
     
 systemctl enable fail2ban >/dev/null 2>&1    
 systemctl restart fail2ban >/dev/null 2>&1    
@@ -394,7 +394,7 @@ sleep 2
 cat > /usr/local/bin/menu <<EOF    
 #!/bin/bash    
 exec bash /etc/kevintech/menu.sh    
-EOF    
+EOF
       
 chmod +x /usr/local/bin/menu      
       
@@ -525,7 +525,7 @@ else
 fi    
     
 echo    
-EOF    
+EOF
     
 chmod +x /etc/profile.d/kevintech-banner.sh    
     
