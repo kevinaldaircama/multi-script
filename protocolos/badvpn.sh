@@ -115,19 +115,19 @@ echo -e " Servicio    : BadVPN UDPGW"
 echo                      
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                      
                       
-if [[ "$BADVPN" == "ON" ]]; then                      
-cat <<EOF                      
- [1] ➮ Reinstalar BadVPN                      
- [2] ➮ Reiniciar Servicio                      
- [3] ➮ Ver Estado                      
- [4] ➮ Desinstalar                      
- [0] ➮ Regresar                      
-EOF                      
-else                      
-cat <<EOF                      
- [1] ➮ Instalar BadVPN                      
- [0] ➮ Regresar                      
-EOF                      
+if [[ "$BADVPN" == "ON" ]]; then
+cat <<EOF
+ [1] ➮ Reinstalar BadVPN
+ [2] ➮ Reiniciar Servicio
+ [3] ➮ Ver Estado
+ [4] ➮ Desinstalar
+ [0] ➮ Regresar
+EOF
+else
+cat <<EOF
+ [1] ➮ Instalar BadVPN
+ [0] ➮ Regresar
+EOF
 fi                      
                       
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"                      
