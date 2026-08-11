@@ -60,7 +60,6 @@ apt update -y >/dev/null 2>&1
 apt install -y curl wget ca-certificates >/dev/null 2>&1
 update-ca-certificates >/dev/null 2>&1 || true
 
-while true; do
 if [[ -z "$INSTALL_KEY" ]]; then
 while true; do
     echo ""
