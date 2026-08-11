@@ -52,8 +52,8 @@ echo -e "\e[1;97m             PASO 1 - LICENCIA\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
 echo -e "\e[1;93mLa Key la obtienes directamente desde el bot.\e[0m"
-echo -e "\e[1;93mSi no tienes acceso, escríbeme en Telegram:\e[0m"
-echo -e "\e[1;92m@ktt\e[0m"
+echo -e "\e[1;93mSi no tienes acceso, escríbeme en Telegram\e[0m"
+echo -e "\e[1;92m Gracias por la confianza y cariño que tienes\e[0m"
 echo
 
 apt update -y >/dev/null 2>&1
@@ -61,32 +61,34 @@ apt install -y curl wget ca-certificates >/dev/null 2>&1
 update-ca-certificates >/dev/null 2>&1 || true
 
 while true; do
-    echo ""    
-    read -p "Introduce tu Key de Instalación: " INSTALL_KEY    
-    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')    
-    
-    [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }    
-    
-    echo "Verificando licencia..."    
-    KEY_RESPONSE=$(
-    curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \
-    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"
-)    
-    if [ -z "$KEY_RESPONSE" ]; then    
-        echo "No fue posible conectar con el servidor de licencias."    
-        sleep 1    
-        continue    
-    fi    
-    
-    if [ "$KEY_RESPONSE" = "null" ]; then    
-        echo "La Key es inválida, ya fue utilizada o está vencida."    
-        sleep 1    
-        continue    
-    fi    
-    
-    echo "Licencia verificada correctamente."    
-    break    
-done    
+if [[ -z "$INSTALL_KEY" ]]; then
+while true; do
+    echo ""
+    read -p "Introduce tu Key de Instalación: " INSTALL_KEY
+    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')
+
+    [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }
+
+    echo "Verificando licencia..."
+
+    KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")
+
+    if [ -z "$KEY_RESPONSE" ]; then
+        echo "No fue posible conectar con el servidor de licencias."
+        sleep 1
+        continue
+    fi
+
+    if [ "$KEY_RESPONSE" = "null" ]; then
+        echo "La Key es inválida, ya fue utilizada o está vencida."
+        sleep 1
+        continue
+    fi
+
+    echo "Licencia verificada correctamente."
+    break
+done
+fi
     
     
 echo "🔥 Registrando activación..."    
