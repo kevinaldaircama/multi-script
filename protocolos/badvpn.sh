@@ -144,95 +144,17 @@ echo -e "${WHITE}        INSTALANDO BADVPN UDPGW${RESET}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo
 
-apt update -y >/dev/null 2>&1
-echo "📦 Instalando dependencias..."
-apt install -y git cmake build-essential >/dev/null 2>&1
-
-echo "⬇️ Descargando BadVPN..."
-rm -rf /tmp/badvpn
-git clone -q https://github.com/ambrop72/badvpn.git /tmp/badvpn
-
-echo "⚙️ Compilando..."
-cd /tmp/badvpn || exit 1
-mkdir -p build
-cd build || exit 1
-
-cmake .. -DBUILD_NOTHING_BY_DEFAULT=1 -DBUILD_UDPGW=1 >/dev/null 2>&1
-make -j$(nproc) >/dev/null 2>&1
-
-if [[ -f "udpgw/badvpn-udpgw" ]]; then
-    cp udpgw/badvpn-udpgw "$BIN"
-    chmod +x "$BIN"
-    echo "✅ Binario instalado."
+if install_badvpn; then
+    BADVPN="ON"
+    echo
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${GREEN}       ✅ BADVPN ACTIVADO${RESET}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
+    echo "🎮 Juegos      : Puerto $PORT1"
+    echo "📞 Videollamada: Puerto $PORT2"
 else
-    echo "❌ Error compilando BadVPN."
-    sleep 3
-    continue
-fi
-
-echo "⚙️ Creando servicios BadVPN..."
-
-cat > /etc/systemd/system/$SERVICE1.service <<EOF
-[Unit]
-Description=BadVPN UDPGW Puerto 7300
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$BIN --listen-addr 127.0.0.1:$PORT1 --max-clients 999 --max-connections-for-client 10
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-cat > /etc/systemd/system/$SERVICE2.service <<EOF
-[Unit]
-Description=BadVPN UDPGW Puerto 7200
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$BIN --listen-addr 127.0.0.1:$PORT2 --max-clients 999 --max-connections-for-client 10
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable $SERVICE1 $SERVICE2 >/dev/null 2>&1
-systemctl restart $SERVICE1 $SERVICE2
-
-if grep -q '^BADVPN=' "$CONFIG"; then
-    sed -i 's/^BADVPN=.*/BADVPN=ON/' "$CONFIG"
-else
-    echo "BADVPN=ON" >> "$CONFIG"
-fi
-
-BADVPN="ON"
-
-echo
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${GREEN}       ✅ BADVPN ACTIVADO${RESET}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo
-echo "🎮 Juegos      : Puerto $PORT1"
-echo "📞 Videollamada: Puerto $PORT2"
-echo
-
-read -rp "¿Iniciar después de reiniciar VPS? (s/n): " AUTO
-
-if [[ "$AUTO" =~ ^[Ss]$ ]]; then
-    systemctl enable $SERVICE1
-    systemctl enable $SERVICE2
-    echo "✅ Inicio automático activado."
-else
-    systemctl disable $SERVICE1
-    systemctl disable $SERVICE2
-    echo "ℹ️ Inicio automático desactivado."
+    echo -e "${RED}❌ Error instalando BadVPN.${RESET}"
 fi
 
 sleep 3
