@@ -453,7 +453,10 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     
     # Instalar UDP Custom    
     bash /etc/kevintech/protocolos/udpcustom.sh --auto    
-        
+
+    # Instalar SlowDNS
+    bash /etc/kevintech/protocolos/slowdns.sh --auto
+
     echo "✅ Protocolos instalados automáticamente."    
     sleep 2    
 fi    
