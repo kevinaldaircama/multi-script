@@ -68,10 +68,10 @@ while true; do
     [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }    
     
     echo "Verificando licencia..."    
-    
-    KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \    
-        || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")    
-    
+    KEY_RESPONSE=$(
+    curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \
+    || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json"
+)    
     if [ -z "$KEY_RESPONSE" ]; then    
         echo "No fue posible conectar con el servidor de licencias."    
         sleep 1    
