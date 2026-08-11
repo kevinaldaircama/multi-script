@@ -451,7 +451,7 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     bash /etc/kevintech/protocolos/dropbear.sh --auto
 
     # Instalar UDP Custom
-    bash /etc/kevintech/protocolos/udp-custom.sh --auto
+    bash /etc/kevintech/protocolos/udpcustom.sh --auto
 
     # Instalar SSL Tunnel
     bash /etc/kevintech/protocolos/ssl.sh --auto
