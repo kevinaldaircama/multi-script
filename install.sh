@@ -242,7 +242,17 @@ echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━
 echo -e "\e[1;97m        PASO 3 - CONFIGURAR DOMINIO\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
-read -p "🌐 Escribe el dominio que apunta a este VPS: " SERVER_DOMAIN   
+if [[ -z "$SERVER_DOMAIN" ]]; then
+    read -rp "🌐 Escribe el dominio que apunta a este VPS: " SERVER_DOMAIN
+fi
+
+SERVER_DOMAIN="$(echo "$SERVER_DOMAIN" | tr -d '\r\n')"
+
+if [[ -z "$SERVER_DOMAIN" ]]; then
+    echo "❌ El dominio no puede estar vacío."
+    exit 1
+fi
+
 INSTALL_PROTOCOLS="ON"
 
 clear
@@ -436,15 +446,6 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     # Instalar SSL Tunnel    
     bash /etc/kevintech/protocolos/ssl.sh --auto    
         
-        # Instalar zipvpn    
-    bash /etc/kevintech/protocolos/zipvpn.sh --auto    
-        
-    # Instalar udphiateria    
-    bash /etc/kevintech/protocolos/udphisteria.sh --auto    
-        
-        # Instalar openvpn    
-    bash /etc/kevintech/protocolos/openvpn.sh --auto    
-    
     # Instalar v2ray xray    
     bash /etc/kevintech/protocolos/v2ray.sh --auto    
     
@@ -453,10 +454,7 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     
     # Instalar UDP Custom    
     bash /etc/kevintech/protocolos/udpcustom.sh --auto    
-
-    # Instalar SlowDNS
-    bash /etc/kevintech/protocolos/slowdns.sh --auto
-
+    
     echo "✅ Protocolos instalados automáticamente."    
     sleep 2    
 fi    
