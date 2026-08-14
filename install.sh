@@ -533,11 +533,9 @@ echo
 
 # Si viene desde el bot, reiniciar automáticamente
 if [[ -n "$INSTALL_KEY" ]]; then
-    echo -e "\e[1;93mReiniciando VPS automáticamente...\e[0m"
-    sleep 5
-    reboot
+    echo -e "\e[1;92mInstalación finalizada correctamente.\e[0m"
+    echo -e "\e[1;93mEl bot reiniciará la VPS automáticamente.\e[0m"
 else
-    # Instalación manual
     echo -e "\e[1;93mEscribe: reboot\e[0m"
     echo -e "\e[1;93mpara reiniciar la VPS cuando lo desees.\e[0m"
 fi
