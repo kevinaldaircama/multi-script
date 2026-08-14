@@ -530,8 +530,10 @@ echo -e "\e[1;97mDNS     :\e[0m $DNS_PROVIDER"
 echo
 echo -e "\e[1;92mTodos los protocolos fueron instalados automáticamente.\e[0m"
 echo
-echo -e "\e[1;93mEl servidor se reiniciará en 10 segundos...\e[0m"
+echo -e "\e[1;92mLa instalación se completó correctamente.\e[0m"
+echo
+echo -e "\e[1;93mPresiona ENTER para reiniciar la VPS...\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 
-sleep 10
+read -r
 reboot
