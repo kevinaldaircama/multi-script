@@ -390,19 +390,25 @@ EOF
 chmod +x /usr/local/bin/menu      
       
  clear
+clear
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "\e[1;97m         PASO 5 - ACCESO ROOT\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
-echo -e "\e[1;93mSi tu VPS no tiene acceso root o deseas cambiar\e[0m"
-echo -e "\e[1;93mla contraseña de root, puedes hacerlo ahora.\e[0m"
-echo
-echo -e "\e[1;92mY = Crear o habilitar acceso root\e[0m"
-echo -e "\e[1;91mN = Continuar con la instalación\e[0m"
-echo
-read -rp "[Y/N]: " ROOT_ACCESS
 
-ROOT_ACCESS=$(echo "$ROOT_ACCESS" | tr '[:upper:]' '[:lower:]')
+# Si el instalador viene desde el bot, no preguntar
+if [[ -n "$INSTALL_KEY" ]]; then
+    ROOT_ACCESS="n"
+else
+    echo -e "\e[1;93mSi tu VPS no tiene acceso root o deseas cambiar\e[0m"
+    echo -e "\e[1;93mla contraseña de root, puedes hacerlo ahora.\e[0m"
+    echo
+    echo -e "\e[1;92mY = Crear o habilitar acceso root\e[0m"
+    echo -e "\e[1;91mN = Continuar con la instalación\e[0m"
+    echo
+    read -rp "[Y/N]: " ROOT_ACCESS
+    ROOT_ACCESS=$(echo "$ROOT_ACCESS" | tr '[:upper:]' '[:lower:]')
+fi
 
 if [[ "$ROOT_ACCESS" == "y" ]]; then
     passwd root
@@ -410,7 +416,7 @@ if [[ "$ROOT_ACCESS" == "y" ]]; then
     systemctl restart ssh
     echo -e "\e[1;92mAcceso root habilitado correctamente.\e[0m"
     sleep 2
-fi   
+fi
 clear
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "\e[1;97m        PASO 6 - INSTALACIÓN FINAL\e[0m"
