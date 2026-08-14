@@ -530,10 +530,14 @@ echo -e "\e[1;97mDNS     :\e[0m $DNS_PROVIDER"
 echo
 echo -e "\e[1;92mTodos los protocolos fueron instalados automáticamente.\e[0m"
 echo
-echo -e "\e[1;92mLa instalación se completó correctamente.\e[0m"
-echo
-echo -e "\e[1;93mPresiona ENTER para reiniciar la VPS...\e[0m"
-echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 
-read -r
-reboot
+# Si viene desde el bot, reiniciar automáticamente
+if [[ -n "$INSTALL_KEY" ]]; then
+    echo -e "\e[1;93mReiniciando VPS automáticamente...\e[0m"
+    sleep 5
+    reboot
+else
+    # Instalación manual
+    echo -e "\e[1;93mEscribe: reboot\e[0m"
+    echo -e "\e[1;93mpara reiniciar la VPS cuando lo desees.\e[0m"
+fi
