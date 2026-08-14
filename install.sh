@@ -52,42 +52,41 @@ echo -e "\e[1;97m             PASO 1 - LICENCIA\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
 echo -e "\e[1;93mLa Key la obtienes directamente desde el bot.\e[0m"
-echo -e "\e[1;93mSi no tienes acceso, escríbeme en Telegram\e[0m"
-echo -e "\e[1;92m Gracias por la confianza y cariño que tienes\e[0m"
+echo -e "\e[1;93mSi no tienes acceso, escríbeme en Telegram:\e[0m"
+echo -e "\e[1;92m@ktt\e[0m"
 echo
 
 apt update -y >/dev/null 2>&1
 apt install -y curl wget ca-certificates >/dev/null 2>&1
 update-ca-certificates >/dev/null 2>&1 || true
 
-if [[ -z "$INSTALL_KEY" ]]; then
 while true; do
-    echo ""
-    read -p "Introduce tu Key de Instalación: " INSTALL_KEY
-    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')
-
-    [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }
-
-    echo "Verificando licencia..."
-
-    KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")
-
-    if [ -z "$KEY_RESPONSE" ]; then
-        echo "No fue posible conectar con el servidor de licencias."
-        sleep 1
-        continue
-    fi
-
-    if [ "$KEY_RESPONSE" = "null" ]; then
-        echo "La Key es inválida, ya fue utilizada o está vencida."
-        sleep 1
-        continue
-    fi
-
-    echo "Licencia verificada correctamente."
-    break
-done
-fi
+    echo ""    
+    read -p "Introduce tu Key de Instalación: " INSTALL_KEY    
+    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')    
+    
+    [ -z "$INSTALL_KEY" ] && { echo "La Key no puede estar vacía."; continue; }    
+    
+    echo "Verificando licencia..."    
+    
+    KEY_RESPONSE=$(curl -k -4 -s -m 10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" \    
+        || wget --no-check-certificate -qO- --timeout=10 "${FIREBASE_URL}/keys/${INSTALL_KEY}.json")    
+    
+    if [ -z "$KEY_RESPONSE" ]; then    
+        echo "No fue posible conectar con el servidor de licencias."    
+        sleep 1    
+        continue    
+    fi    
+    
+    if [ "$KEY_RESPONSE" = "null" ]; then    
+        echo "La Key es inválida, ya fue utilizada o está vencida."    
+        sleep 1    
+        continue    
+    fi    
+    
+    echo "Licencia verificada correctamente."    
+    break    
+done    
     
     
 echo "🔥 Registrando activación..."    
@@ -103,24 +102,24 @@ OS_NAME=$(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
 HOSTNAME=$(hostname)    
 DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")    
     
-# Guardar activación
-curl -4 -s -X POST \
--H "Content-Type: application/json" \
--d "{
-\"owner\":\"$OWNER\",
-\"reseller\":\"$RESELLER\",
-\"token\":\"$INSTALL_KEY\",
-\"ip\":\"$CLIENT_IP\",
-\"hostname\":\"$HOSTNAME\",
-\"os\":\"$OS_NAME\",
-\"date\":\"$DATE_NOW\",
-\"notified\":false
-}" \
-"${FIREBASE_URL}/activations.json" >/dev/null
-
-# Eliminar la Key
-curl -4 -s -X DELETE \
-"${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null
+# Guardar activación    
+curl -4 -s -X POST \    
+-H "Content-Type: application/json" \    
+-d "{    
+\"owner\":\"$OWNER\",    
+\"reseller\":\"$RESELLER\",    
+\"token\":\"$INSTALL_KEY\",    
+\"ip\":\"$CLIENT_IP\",    
+\"hostname\":\"$HOSTNAME\",    
+\"os\":\"$OS_NAME\",    
+\"date\":\"$DATE_NOW\",    
+\"notified\":false    
+}" \    
+"${FIREBASE_URL}/activations.json" >/dev/null    
+    
+# Eliminar la Key    
+curl -4 -s -X DELETE \    
+"${FIREBASE_URL}/keys/${INSTALL_KEY}.json" >/dev/null    
     
 sleep 1    
 clear    
@@ -170,7 +169,27 @@ echo -e "\e[1;92m✔ Configurando OpenSSH y seguridad\e[0m"
 echo    
 echo "📦 Instalando paquetes básicos..."    
     
-apt install -y curl wget git unzip zip tar sudo nano cron net-tools dnsutils lsof screen jq bc socat openssl ca-certificates >/dev/null 2>&1
+apt update -y >/dev/null 2>&1    
+    
+apt install -y \    
+curl \    
+wget \    
+git \    
+unzip \    
+zip \    
+tar \    
+sudo \    
+nano \    
+cron \    
+net-tools \    
+dnsutils \    
+lsof \    
+screen \    
+jq \    
+bc \    
+socat \    
+openssl \    
+ca-certificates >/dev/null 2>&1    
     
 echo "✅ Paquetes instalados."    
     
@@ -224,7 +243,7 @@ logpath = /var/log/auth.log
 maxretry = 3    
 findtime = 10m    
 bantime = 1h    
-EOF
+EOF    
     
 systemctl enable fail2ban >/dev/null 2>&1    
 systemctl restart fail2ban >/dev/null 2>&1    
@@ -242,17 +261,7 @@ echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━
 echo -e "\e[1;97m        PASO 3 - CONFIGURAR DOMINIO\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
-if [[ -z "$SERVER_DOMAIN" ]]; then
-    read -rp "🌐 Escribe el dominio que apunta a este VPS: " SERVER_DOMAIN
-fi
-
-SERVER_DOMAIN="$(echo "$SERVER_DOMAIN" | tr -d '\r\n')"
-
-if [[ -z "$SERVER_DOMAIN" ]]; then
-    echo "❌ El dominio no puede estar vacío."
-    exit 1
-fi
-
+read -p "🌐 Escribe el dominio que apunta a este VPS: " SERVER_DOMAIN   
 INSTALL_PROTOCOLS="ON"
 
 clear
@@ -379,36 +388,34 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
       
 sleep 2      
       
+# permisos      
+      
+chmod -R 755 $BASE      
+    
       
 # comando menu      
       
 cat > /usr/local/bin/menu <<EOF    
 #!/bin/bash    
 exec bash /etc/kevintech/menu.sh    
-EOF
+EOF    
       
 chmod +x /usr/local/bin/menu      
       
  clear
-clear
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "\e[1;97m         PASO 5 - ACCESO ROOT\e[0m"
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo
+echo -e "\e[1;93mSi tu VPS no tiene acceso root o deseas cambiar\e[0m"
+echo -e "\e[1;93mla contraseña de root, puedes hacerlo ahora.\e[0m"
+echo
+echo -e "\e[1;92mY = Crear o habilitar acceso root\e[0m"
+echo -e "\e[1;91mN = Continuar con la instalación\e[0m"
+echo
+read -rp "[Y/N]: " ROOT_ACCESS
 
-# Si el instalador viene desde el bot, no preguntar
-if [[ -n "$INSTALL_KEY" ]]; then
-    ROOT_ACCESS="n"
-else
-    echo -e "\e[1;93mSi tu VPS no tiene acceso root o deseas cambiar\e[0m"
-    echo -e "\e[1;93mla contraseña de root, puedes hacerlo ahora.\e[0m"
-    echo
-    echo -e "\e[1;92mY = Crear o habilitar acceso root\e[0m"
-    echo -e "\e[1;91mN = Continuar con la instalación\e[0m"
-    echo
-    read -rp "[Y/N]: " ROOT_ACCESS
-    ROOT_ACCESS=$(echo "$ROOT_ACCESS" | tr '[:upper:]' '[:lower:]')
-fi
+ROOT_ACCESS=$(echo "$ROOT_ACCESS" | tr '[:upper:]' '[:lower:]')
 
 if [[ "$ROOT_ACCESS" == "y" ]]; then
     passwd root
@@ -416,7 +423,7 @@ if [[ "$ROOT_ACCESS" == "y" ]]; then
     systemctl restart ssh
     echo -e "\e[1;92mAcceso root habilitado correctamente.\e[0m"
     sleep 2
-fi
+fi   
 clear
 echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "\e[1;97m        PASO 6 - INSTALACIÓN FINAL\e[0m"
@@ -431,11 +438,10 @@ git clone -q https://github.com/kevinaldaircama/multi-script.git /tmp/multi-scri
     exit 1    
 }    
     
-mkdir -p /etc/kevintech
-cp -a /tmp/multi-script/. /etc/kevintech/
-chmod -R 755 /etc/kevintech
-find /etc/kevintech -type f -name "*.sh" -exec chmod +x {} \;
-rm -rf /tmp/multi-script
+mkdir -p /etc/kevintech    
+cp -a /tmp/multi-script/. /etc/kevintech/    
+chmod -R +x /etc/kevintech    
+rm -rf /tmp/multi-script    
 echo -e "\e[1;92mConfigurando módulos...\e[0m"
 echo -e "\e[1;92mInstalando protocolos...\e[0m"
 sleep 2
@@ -452,6 +458,15 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     # Instalar SSL Tunnel    
     bash /etc/kevintech/protocolos/ssl.sh --auto    
         
+        # Instalar zipvpn    
+    bash /etc/kevintech/protocolos/zipvpn.sh --auto    
+        
+    # Instalar udphiateria    
+    bash /etc/kevintech/protocolos/udphisteria.sh --auto    
+        
+        # Instalar openvpn    
+    bash /etc/kevintech/protocolos/openvpn.sh --auto    
+    
     # Instalar v2ray xray    
     bash /etc/kevintech/protocolos/v2ray.sh --auto    
     
@@ -460,7 +475,7 @@ if [[ "$INSTALL_PROTOCOLS" == "ON" ]]; then
     
     # Instalar UDP Custom    
     bash /etc/kevintech/protocolos/udpcustom.sh --auto    
-    
+        
     echo "✅ Protocolos instalados automáticamente."    
     sleep 2    
 fi    
@@ -513,7 +528,7 @@ else
 fi    
     
 echo    
-EOF
+EOF    
     
 chmod +x /etc/profile.d/kevintech-banner.sh    
     
@@ -530,12 +545,8 @@ echo -e "\e[1;97mDNS     :\e[0m $DNS_PROVIDER"
 echo
 echo -e "\e[1;92mTodos los protocolos fueron instalados automáticamente.\e[0m"
 echo
+echo -e "\e[1;93mEl servidor se reiniciará en 10 segundos...\e[0m"
+echo -e "\e[1;96m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 
-# Si viene desde el bot, reiniciar automáticamente
-if [[ -n "$INSTALL_KEY" ]]; then
-    echo -e "\e[1;92mInstalación finalizada correctamente.\e[0m"
-    echo -e "\e[1;93mEl bot reiniciará la VPS automáticamente.\e[0m"
-else
-    echo -e "\e[1;93mEscribe: reboot\e[0m"
-    echo -e "\e[1;93mpara reiniciar la VPS cuando lo desees.\e[0m"
-fi
+sleep 10
+reboot
