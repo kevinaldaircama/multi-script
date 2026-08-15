@@ -252,9 +252,10 @@ for FILE in "$LIMIT_DIR"/*; do
     # 0 = ilimitado
     [ "$LIMIT" = "0" ] && continue
 
-    # Contar IPs únicas conectadas por SSH / Dropbear / WebSocket(SSH)
-    IPS=$(who | awk -v u="$USER" '$1==u {print $5}' | tr -d "()" | sort -u | wc -l)
-
+    # Contar IPs únicas conectadas por SSH, Dropbear y WebSocket
+IPS=$(ps -u "$USER" -o pid= | while read PID; do
+    ss -tnp 2>/dev/null | grep "pid=$PID,"
+done | awk '{print $5}' | cut -d: -f1 | sort -u | wc -l)
     if [ "$IPS" -gt "$LIMIT" ]; then
         pkill -KILL -u "$USER" 2>/dev/null
     fi
