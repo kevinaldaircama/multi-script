@@ -58,7 +58,66 @@ msg_info() {
 msg_warn() {      
     echo -e "${YELLOW}⚠ $1${RESET}"      
 }      
-      
+  #========================#
+# SINCRONIZAR CONTRASEÑA CON ZIVPN
+#========================#
+
+sync_zivpn_password() {
+
+    local PASS="$1"
+    local ZIVPN_CONFIG="/etc/zivpn/config.json"
+
+    # Si ZiVPN no está instalado, no hacer nada
+    [[ ! -f "$ZIVPN_CONFIG" ]] && return 0
+
+    # jq necesario
+    if ! command -v jq >/dev/null 2>&1; then
+        msg_warn "ZiVPN está instalado pero jq no está disponible."
+        return 1
+    fi
+
+    # Verificar JSON
+    if ! jq empty "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+        msg_error "El archivo de configuración de ZiVPN no es válido."
+        return 1
+    fi
+
+    # Comprobar si la contraseña ya existe
+    if jq -e --arg pass "$PASS" \
+        '.auth.config[]? | select(. == $pass)' \
+        "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+
+        msg_info "La contraseña ya existe en ZiVPN."
+        return 0
+    fi
+
+    local TMP
+    TMP=$(mktemp)
+
+    # Agregar contraseña
+    if jq --arg pass "$PASS" \
+        '.auth.config += [$pass]' \
+        "$ZIVPN_CONFIG" > "$TMP"; then
+
+        chmod 600 "$TMP"
+        mv "$TMP" "$ZIVPN_CONFIG"
+
+        # Reiniciar ZiVPN para aplicar cambios
+        systemctl restart zivpn >/dev/null 2>&1
+
+        if systemctl is-active --quiet zivpn; then
+            msg_ok "Contraseña sincronizada con ZiVPN."
+        else
+            msg_warn "Contraseña agregada, pero ZiVPN no está activo."
+        fi
+
+    else
+
+        rm -f "$TMP"
+        msg_error "No se pudo agregar la contraseña a ZiVPN."
+        return 1
+    fi
+}    
 titulo() {      
       
 clear      
@@ -225,6 +284,11 @@ if [[ $? -ne 0 ]]; then
     sleep 2
     continue
 fi
+#========================#
+# SINCRONIZAR CON ZIVPN
+#========================#
+
+sync_zivpn_password "$PASS"
 
 #========================#
 # GUARDAR LÍMITE DEL USUARIO
@@ -389,9 +453,21 @@ HYSTERIA_PORT=$(grep -oP '"listen":\s*":\K[0-9]+' /etc/hysteria/config.json 2>/d
 HYSTERIA_OBFS=$(grep -oP '"obfs":\s*"\K[^"]+' /etc/hysteria/config.json 2>/dev/null)  
 [[ -z "$HYSTERIA_OBFS" ]] && HYSTERIA_OBFS="No configurado"  
   
-# Detectar puerto ZiVPN  
-ZIVPN_PORT=$(ss -ltnu 2>/dev/null | awk '/20254|5667/ {split($5,a,":"); print a[length(a)]}' | head -n1)  
-[[ -z "$ZIVPN_PORT" ]] && ZIVPN_PORT="No instalado"  
+#========================#
+# DETECTAR PUERTO ZIVPN
+#========================#
+
+if [[ -f /etc/zivpn/config.json ]] && command -v jq >/dev/null 2>&1; then
+
+    ZIVPN_PORT=$(jq -r '.listen // empty' /etc/zivpn/config.json 2>/dev/null | tr -d ':')
+
+else
+
+    ZIVPN_PORT=""
+
+fi
+
+[[ -z "$ZIVPN_PORT" ]] && ZIVPN_PORT="No instalado"
   
 HOST="${SERVER_DOMAIN:-$IP}"  
   
