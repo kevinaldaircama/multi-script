@@ -218,11 +218,9 @@ cat >/etc/zivpn/config.json <<EOF
     "cert": "/etc/zivpn/zivpn.crt",
     "key": "/etc/zivpn/zivpn.key",
     "max_conn": 0,
-    "auth": {
-        "mode": "passwords",
-        "config": [
-            "1"
-        ]
+   "auth": {
+    "mode": "passwords",
+    "config": []
     }
 }
 EOF
@@ -497,6 +495,44 @@ remove_zivpn() {
 
     pause
 
+}
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+#       SINCRONIZAR CUENTA SSH CON ZIVPN       #
+#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+sync_zivpn_password() {
+
+    local USER="$1"
+    local PASS="$2"
+
+    [[ -z "$USER" || -z "$PASS" ]] && return 1
+
+    [[ ! -f /etc/zivpn/config.json ]] && return 1
+
+    # Si ya existe, no duplicar
+    if jq -e --arg pass "$PASS" \
+        '.auth.config[] | select(. == $pass)' \
+        /etc/zivpn/config.json >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local TMP
+    TMP=$(mktemp)
+
+    if jq --arg pass "$PASS" \
+        '.auth.config += [$pass]' \
+        /etc/zivpn/config.json > "$TMP"; then
+
+        mv "$TMP" /etc/zivpn/config.json
+        chmod 600 /etc/zivpn/config.json
+
+        systemctl restart zivpn >/dev/null 2>&1
+
+        return 0
+    fi
+
+    rm -f "$TMP"
+    return 1
 }
 #━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 #            AGREGAR CONTRASEÑA                #
