@@ -7,6 +7,7 @@
 BASE="/etc/kevintech"
 TMP="/tmp/kevintech_update"
 REPO="https://github.com/kevinaldaircama/multi-script.git"
+VERSION_FILE="$BASE/version.txt"
 
 #=========================================================
 # COLORES
@@ -34,6 +35,7 @@ LIME="\e[38;5;154m"
 #=========================================================
 
 titulo() {
+
     clear
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
@@ -41,6 +43,7 @@ titulo() {
     echo -e "${CYAN}║${RESET} ${GRAY}                 MULTI SCRIPT PREMIUM${RESET}              ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
+
 }
 
 ok() {
@@ -68,6 +71,7 @@ echo ""
 info "Preparando actualización..."
 echo -e " ${GRAY}➜${RESET} Repositorio: ${SKY}$REPO${RESET}"
 echo -e " ${GRAY}➜${RESET} Destino:     ${SKY}$BASE${RESET}"
+
 echo ""
 
 #=========================================================
@@ -77,12 +81,36 @@ echo ""
 if [[ ! -d "$BASE" ]]; then
 
     error "No existe el directorio $BASE"
+
     echo ""
     echo -e "${YELLOW}⚠${RESET} ${WHITE}El script principal no parece estar instalado.${RESET}"
     echo ""
 
     exit 1
+
 fi
+
+#=========================================================
+# VERSIÓN INSTALADA
+#=========================================================
+
+VERSION_ACTUAL="No disponible"
+
+if [[ -f "$VERSION_FILE" ]]; then
+
+    VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" | tr -d '\r')
+
+fi
+
+[[ -z "$VERSION_ACTUAL" ]] && VERSION_ACTUAL="No disponible"
+
+echo -e "${BLUE}${BOLD}◆ INFORMACIÓN DE VERSIÓN${RESET}"
+echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo ""
+
+echo -e " ${YELLOW}Versión instalada:${RESET} ${WHITE}${VERSION_ACTUAL}${RESET}"
+
+echo ""
 
 #=========================================================
 # LIMPIAR TEMPORAL
@@ -122,16 +150,40 @@ if ! git clone --depth 1 "$REPO" "$TMP"; then
     rm -rf "$TMP"
 
     exit 1
+
 fi
 
 echo ""
 ok "Actualización descargada correctamente."
 
 #=========================================================
+# LEER NUEVA VERSIÓN
+#=========================================================
+
+NUEVA_VERSION="No disponible"
+
+if [[ -f "$TMP/version.txt" ]]; then
+
+    NUEVA_VERSION=$(head -n1 "$TMP/version.txt" | tr -d '\r')
+
+fi
+
+[[ -z "$NUEVA_VERSION" ]] && NUEVA_VERSION="No disponible"
+
+echo ""
+echo -e "${PURPLE}${BOLD}◆ CONTROL DE VERSIÓN${RESET}"
+echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo ""
+
+echo -e " ${YELLOW}Versión actual:${RESET} ${WHITE}${VERSION_ACTUAL}${RESET}"
+echo -e " ${GREEN}Nueva versión:${RESET}  ${LIME}${NUEVA_VERSION}${RESET}"
+
+echo ""
+
+#=========================================================
 # INSTALAR ARCHIVOS
 #=========================================================
 
-echo ""
 echo -e "${BLUE}${BOLD}◆ INSTALANDO ARCHIVOS${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
@@ -147,9 +199,27 @@ if ! cp -rf "$TMP"/. "$BASE/"; then
     rm -rf "$TMP"
 
     exit 1
+
 fi
 
 ok "Archivos instalados correctamente."
+
+#=========================================================
+# GUARDAR VERSIÓN
+#=========================================================
+
+if [[ -f "$TMP/version.txt" ]]; then
+
+    cp -f "$TMP/version.txt" "$VERSION_FILE"
+
+    ok "Versión instalada: ${NUEVA_VERSION}"
+
+else
+
+    echo ""
+    echo -e "${YELLOW}⚠${RESET} ${WHITE}No se encontró version.txt en la actualización.${RESET}"
+
+fi
 
 #=========================================================
 # PERMISOS
@@ -180,10 +250,16 @@ ok "Limpieza completada."
 #=========================================================
 
 echo ""
+
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}          ✅ ACTUALIZACIÓN COMPLETADA${RESET}              ${GREEN}║${RESET}"
 echo -e "${GREEN}║${RESET} ${GRAY}          Kevin Tech Multi Script Premium${RESET}           ${GREEN}║${RESET}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+echo ""
+
+echo -e " ${CYAN}◆${RESET} ${WHITE}Versión anterior:${RESET} ${GRAY}${VERSION_ACTUAL}${RESET}"
+echo -e " ${CYAN}◆${RESET} ${WHITE}Versión instalada:${RESET} ${GREEN}${NUEVA_VERSION}${RESET}"
 
 echo ""
 echo -e "${CYAN}🚀${RESET} ${WHITE}Reiniciando panel...${RESET}"
