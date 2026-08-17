@@ -56,22 +56,33 @@ if [[ -n "$SERVER_DOMAIN" ]]; then
         CLOUDFLARE_STATUS="OFF"                    
     fi                    
 fi                    
-#=========================================================                    
-# Colores Premium                    
-#=========================================================                    
-                    
-RESET="\e[0m"                    
-                    
-RED="\e[1;91m"                    
-GREEN="\e[1;92m"                    
-YELLOW="\e[1;93m"                    
-BLUE="\e[1;94m"                    
-MAGENTA="\e[1;95m"                    
-CYAN="\e[1;96m"                    
-WHITE="\e[1;97m"                    
-GRAY="\e[1;90m"                    
-                    
+#=========================================================
+# COLORES PREMIUM
+#=========================================================
 
+RESET="\e[0m"
+
+RED="\e[1;91m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+BLUE="\e[1;94m"
+MAGENTA="\e[1;95m"
+CYAN="\e[1;96m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
+
+# Colores adicionales para interfaz
+ORANGE="\e[38;5;214m"
+PINK="\e[38;5;213m"
+PURPLE="\e[38;5;141m"
+SKY="\e[38;5;117m"
+LIME="\e[38;5;154m"
+GOLD="\e[38;5;220m"
+
+# Efectos
+BOLD="\e[1m"
+DIM="\e[2m"
+BLINK="\e[5m"
 #=========================================================                    
 # Información VPS                    
 #=========================================================                    
@@ -91,79 +102,76 @@ DISK=$(df -h / | awk 'NR==2 {print $5}')
                     
 UPTIME=$(uptime -p | sed 's/up //')                                      
         
-#=========================================================                    
-# MENÚ PRINCIPAL                    
-#=========================================================                    
-                    
-clear  
-  
-echo -e "${CYAN}┌──────────────────────────────────────────────┐${RESET}"  
-echo -e "${CYAN}│${WHITE}         KEVIN TECH CONTROL PANEL             ${CYAN}│${RESET}"  
-echo -e "${CYAN}└──────────────────────────────────────────────┘${RESET}"  
-  
-echo -e " ${YELLOW}OS${RESET}      : ${WHITE}$OS${RESET}"  
-echo -e " ${YELLOW}UPTIME${RESET}  : ${WHITE}$UPTIME${RESET}"  
-echo -e " ${YELLOW}IP/DOM${RESET}  : ${WHITE}$IP${RESET} ${GRAY}/${RESET} ${WHITE}${SERVER_DOMAIN:-sin-dominio}${RESET}"  
-echo -e " ${YELLOW}DISCO${RESET}   : ${WHITE}$DISK usado${RESET}"  
-echo -e " ${YELLOW}CPU${RESET}     : ${WHITE}${CPU_USE}%${RESET} ${GRAY}|${RESET} ${WHITE}Cores: $CPU${RESET}"  
-echo -e " ${YELLOW}RAM${RESET}     : ${WHITE}${USED_RAM}/${TOTAL_RAM}${RESET} ${GRAY}|${RESET} ${WHITE}Libre: ${FREE_RAM}${RESET}"  
-  
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
-echo -e "${MAGENTA} PROTOCOLOS${RESET}"  
-  
-[[ "$OPENSSH" == "ON" ]] && echo -e "   ${GREEN}●${RESET} SSH            ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(22)${RESET}"  
-[[ "$DROPBEAR" == "ON" ]] && echo -e "   ${GREEN}●${RESET} Dropbear       ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(${DROPBEAR_PORT:-90})${RESET}"  
-[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && echo -e "   ${GREEN}●${RESET} SSL Tunnel     ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(80,443,8080)${RESET}"  
-[[ "$ZIPVPN" == "ON" ]] && echo -e "   ${GREEN}●${RESET} ZiVPN          ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(${ZIPVPN_PORT:-Desconocido})${RESET}"  
-[[ "$BADVPN" == "ON" ]] && echo -e "   ${GREEN}●${RESET} BadVPN         ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(7200,7300)${RESET}"  
-[[ "$UDP_CUSTOM" == "ON" ]] && echo -e "   ${GREEN}●${RESET} UDP Custom     ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(36712)${RESET}"  
-[[ "$SLOWDNS" == "ON" ]] && echo -e "   ${GREEN}●${RESET} SlowDNS        ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(53)${RESET}"  
-[[ "$XRAY" == "ON" ]] && echo -e "   ${GREEN}●${RESET} Xray/V2Ray     ${GRAY}:${RESET} ${GREEN}ON${RESET} ${GRAY}(443)${RESET}"  
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
 #=========================================================
-# Contadores de cuentas
+# MENÚ PRINCIPAL
 #=========================================================
 
-# SSH
-SSH_COUNT=$(awk -F: '$3 >= 1000 && $1 != "nobody" {c++} END {print c+0}' /etc/passwd)
+clear
 
-# V2Ray (VMess)
-if [[ -f /usr/local/etc/xray/config.json ]]; then
-    V2RAY_COUNT=$(jq '.inbounds[0].settings.clients | length' /usr/local/etc/xray/config.json 2>/dev/null)
-else
-    V2RAY_COUNT=0
-fi
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${RESET} ${BOLD}${WHITE}             KEVIN TECH CONTROL PANEL${RESET}             ${CYAN}║${RESET}"
+echo -e "${CYAN}║${RESET} ${GRAY}                  PREMIUM EDITION${RESET}                  ${CYAN}║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-# Hysteria
-if [[ -f /etc/hysteria/config.json ]]; then
-    HYSTERIA_COUNT=1
-else
-    HYSTERIA_COUNT=0
-fi
+echo ""
+echo -e " ${GOLD}◆${RESET} ${YELLOW}OS${RESET}      ${GRAY}:${RESET} ${WHITE}$OS${RESET}"
+echo -e " ${GOLD}◆${RESET} ${YELLOW}UPTIME${RESET}  ${GRAY}:${RESET} ${WHITE}$UPTIME${RESET}"
+echo -e " ${GOLD}◆${RESET} ${YELLOW}IP/DOM${RESET}  ${GRAY}:${RESET} ${SKY}$IP${RESET} ${GRAY}/${RESET} ${PINK}${SERVER_DOMAIN:-sin-dominio}${RESET}"
+echo -e " ${GOLD}◆${RESET} ${YELLOW}DISCO${RESET}   ${GRAY}:${RESET} ${WHITE}$DISK usado${RESET}"
+echo -e " ${GOLD}◆${RESET} ${YELLOW}CPU${RESET}     ${GRAY}:${RESET} ${LIME}${CPU_USE}%${RESET} ${GRAY}|${RESET} ${WHITE}Cores: $CPU${RESET}"
+echo -e " ${GOLD}◆${RESET} ${YELLOW}RAM${RESET}     ${GRAY}:${RESET} ${LIME}${USED_RAM}/${TOTAL_RAM}${RESET} ${GRAY}|${RESET} ${WHITE}Libre: $FREE_RAM${RESET}"
 
-# OpenVPN
-if [[ -d /etc/openvpn/server/easy-rsa/pki/issued ]]; then
-    OPENVPN_COUNT=$(find /etc/openvpn/server/easy-rsa/pki/issued -name '*.crt' ! -name 'server.crt' | wc -l)
-else
-    OPENVPN_COUNT=0
-fi
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e " ${MAGENTA}${BOLD}◆ PROTOCOLOS ACTIVOS${RESET}"
+echo ""
 
-echo -e " ${BLUE}CUENTAS${RESET} : SSH:${WHITE}${SSH_COUNT}${RESET}  V2Ray:${WHITE}${V2RAY_COUNT}${RESET}  Histeria:${WHITE}${HYSTERIA_COUNT}${RESET}  OpenVPN:${WHITE}${OPENVPN_COUNT}${RESET}"
+[[ "$OPENSSH" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}SSH${RESET}            ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(22)${RESET}"
 
-echo -e " ${BLUE}ESTADO${RESET}  : SSH:${GREEN}${OPENSSH:-OFF}${RESET}  V2Ray:${GREEN}${XRAY:-OFF}${RESET}  Histeria:${GREEN}${HYSTERIA:-OFF}${RESET}  OpenVPN:${GREEN}${OPENVPN:-OFF}${RESET}"
+[[ "$DROPBEAR" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}Dropbear${RESET}       ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(${DROPBEAR_PORT:-90})${RESET}"
 
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
+[[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}SSL Tunnel${RESET}     ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(80,443,8080)${RESET}"
 
-echo -e " ${YELLOW}[01]${RESET}👥Usuarios SSH      ${YELLOW}[05]${RESET}📦Instalar protocolos"  
-echo -e " ${YELLOW}[02]${RESET}🛩️ Optimizar VPS     ${YELLOW}[06]${RESET} 🔄 Update / Remove"  
-echo -e " ${YELLOW}[03]${RESET}🌐 Cambiar dominio   ${YELLOW}[00]${RESET} Salir"  
-echo -e " ${YELLOW}[04]${RESET}⚒️ Auto inicio"  
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
-echo -e "${WHITE}         Kevin Tech Multi Script v2.0${RESET}"  
-echo -e "${CYAN}────────────────────────────────────────────────${RESET}"  
-echo  
-  
-echo -ne "${CYAN}Seleccione una opción:${RESET} "
+[[ "$ZIPVPN" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}ZiVPN${RESET}          ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(${ZIPVPN_PORT:-Desconocido})${RESET}"
+
+[[ "$BADVPN" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}BadVPN${RESET}         ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(7200,7300)${RESET}"
+
+[[ "$UDP_CUSTOM" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}UDP Custom${RESET}     ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(36712)${RESET}"
+
+[[ "$SLOWDNS" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}SlowDNS${RESET}        ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(53)${RESET}"
+
+[[ "$XRAY" == "ON" ]] && \
+echo -e "   ${GREEN}●${RESET} ${WHITE}Xray/V2Ray${RESET}     ${GRAY}:${RESET} ${GREEN}${BOLD}ON${RESET} ${GRAY}(443)${RESET}"
+
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e " ${BLUE}${BOLD}◆ CUENTAS${RESET} ${GRAY}:${RESET} SSH:${WHITE}${SSH_COUNT}${RESET}  V2Ray:${WHITE}${V2RAY_COUNT}${RESET}  Histeria:${WHITE}${HYSTERIA_COUNT}${RESET}  OpenVPN:${WHITE}${OPENVPN_COUNT}${RESET}"
+
+echo -e " ${BLUE}${BOLD}◆ ESTADO ${RESET} ${GRAY}:${RESET} SSH:${GREEN}${OPENSSH:-OFF}${RESET}  V2Ray:${GREEN}${XRAY:-OFF}${RESET}  Histeria:${GREEN}${HYSTERIA:-OFF}${RESET}  OpenVPN:${GREEN}${OPENVPN:-OFF}${RESET}"
+
+echo ""
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo -e " ${GOLD}${BOLD}[01]${RESET} ${WHITE}👥 Usuarios SSH${RESET}        ${GOLD}${BOLD}[05]${RESET} ${WHITE}📦 Instalar protocolos${RESET}"
+echo -e " ${GOLD}${BOLD}[02]${RESET} ${WHITE}🛩️ Optimizar VPS${RESET}       ${GOLD}${BOLD}[06]${RESET} ${WHITE}🔄 Update / Remove${RESET}"
+echo -e " ${GOLD}${BOLD}[03]${RESET} ${WHITE}🌐 Cambiar dominio${RESET}     ${GOLD}${BOLD}[00]${RESET} ${WHITE}🚪 Salir${RESET}"
+echo -e " ${GOLD}${BOLD}[04]${RESET} ${WHITE}⚒️ Auto inicio${RESET}"
+
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${PURPLE}${BOLD}              Kevin Tech Multi Script v2.0${RESET}"
+echo -e "${GRAY}                  Premium Control Panel${RESET}"
+echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+echo ""
+echo -ne "${CYAN}${BOLD}➜${RESET} ${WHITE}Seleccione una opción ${GRAY}➤${RESET} "
 read -r OPCION
 #=========================================================                    
 # CASE PRINCIPAL                    
@@ -438,78 +446,68 @@ esac
 ;;                    
                     
 #=========================================================                    
-                    
-2)                    
-                    
-clear                    
-                    
-echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"                    
-echo -e "${WHITE}║                 🔄 ACTUALIZANDO SCRIPT                      ║${RESET}"                    
-echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"                    
-                    
-echo ""                    
-                    
-TMP="/tmp/kevintech_update"                    
-                    
-rm -rf "$TMP"                    
-                    
-echo -e "${CYAN}📥 Descargando actualización...${RESET}"                    
-                    
-sleep 1                    
-                    
-git clone https://github.com/kevinaldaircama/multi-script.git "$TMP" >/dev/null 2>&1                    
-                    
-if [[ $? -ne 0 ]]; then                    
-                    
-    echo ""                    
-    echo -e "${RED}❌ No se pudo descargar la actualización.${RESET}"                    
-                    
-    sleep 3                    
-                    
-    exec menu                    
-                    
-fi                    
-                    
-echo -e "${CYAN}📦 Instalando archivos...${RESET}"                    
-                    
-sleep 1                    
-                    
-cp -rf "$TMP"/* /etc/kevintech/                    
-                    
-chmod -R +x /etc/kevintech                    
-                    
-echo -e "${CYAN}🧹 Limpiando archivos temporales...${RESET}"                    
-                    
-sleep 1                    
-                    
-rm -rf "$TMP"                    
-                    
-clear                    
-                    
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"                    
-echo -e "${WHITE}║                ✅ ACTUALIZACIÓN COMPLETADA                  ║${RESET}"                    
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"                    
-                    
-echo ""                    
-echo -e "${GREEN}✔️ Kevin Tech Multi Script actualizado.${RESET}"                    
-echo ""                    
-echo -e "${CYAN}🚀 Reiniciando panel...${RESET}"                    
-                    
-sleep 2                    
-                    
-exec menu                    
-                    
-;;                    
-                    
-*)                    
-                    
-echo -e "${RED}❌ Opción inválida.${RESET}"                    
-                    
-sleep 2                    
-                    
-exec menu                    
-                    
-;;                    
+2)
+
+clear
+
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}                 🔄 ACTUALIZANDO SCRIPT${RESET}              ${CYAN}║${RESET}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+echo ""
+echo -e "${CYAN}◆${RESET} ${WHITE}Preparando actualización...${RESET}"
+echo ""
+
+UPDATE="/etc/kevintech/update.sh"
+
+if [[ ! -f "$UPDATE" ]]; then
+
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}║${RESET} ${WHITE}❌ No se encontró update.sh${RESET}                            ${RED}║${RESET}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo ""
+    echo -e "${YELLOW}Ubicación esperada:${RESET}"
+    echo -e " ${GRAY}➜${RESET} ${WHITE}$UPDATE${RESET}"
+
+    sleep 3
+    exec menu
+
+fi
+
+chmod +x "$UPDATE"
+
+echo -e "${CYAN}◆${RESET} ${WHITE}Ejecutando actualizador...${RESET}"
+echo ""
+
+bash "$UPDATE"
+
+STATUS=$?
+
+echo ""
+
+if [[ $STATUS -eq 0 ]]; then
+
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}        ✅ ACTUALIZACIÓN COMPLETADA CORRECTAMENTE${RESET}      ${GREEN}║${RESET}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+else
+
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}║${RESET} ${WHITE}${BOLD}              ❌ ERROR EN LA ACTUALIZACIÓN${RESET}             ${RED}║${RESET}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+fi
+
+echo ""
+echo -e "${CYAN}🚀${RESET} ${WHITE}Regresando al panel...${RESET}"
+
+sleep 2
+
+exec menu
+
+;;
                     
 esac                    
                     
