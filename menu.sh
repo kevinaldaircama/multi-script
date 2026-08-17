@@ -85,13 +85,20 @@ DIM="\e[2m"
 BLINK="\e[5m"
 
 #=========================================================
-# VERSIONES
+# VERSION DEL SCRIPT
 #=========================================================
 
-VERSION_ACTUAL="v2.0"
-
+VERSION_FILE="$BASE/version.txt"
 VERSION_URL="https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/version.txt"
 
+# Versión instalada
+if [[ -f "$VERSION_FILE" ]]; then
+    VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" | tr -d '\r')
+else
+    VERSION_ACTUAL="v2.0"
+fi
+
+# Consultar versión disponible en GitHub
 NUEVA_VERSION=$(curl -fsSL --max-time 5 "$VERSION_URL" 2>/dev/null | head -n1 | tr -d '\r')
 
 [[ -z "$NUEVA_VERSION" ]] && NUEVA_VERSION="No disponible"
