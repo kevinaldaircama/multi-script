@@ -83,6 +83,18 @@ GOLD="\e[38;5;220m"
 BOLD="\e[1m"
 DIM="\e[2m"
 BLINK="\e[5m"
+
+#=========================================================
+# VERSIONES
+#=========================================================
+
+VERSION_ACTUAL="v2.0"
+
+VERSION_URL="https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/version.txt"
+
+NUEVA_VERSION=$(curl -fsSL --max-time 5 "$VERSION_URL" 2>/dev/null | head -n1 | tr -d '\r')
+
+[[ -z "$NUEVA_VERSION" ]] && NUEVA_VERSION="No disponible"
 #=========================================================                    
 # Información VPS                    
 #=========================================================                    
@@ -165,10 +177,24 @@ echo -e " ${GOLD}${BOLD}[02]${RESET} ${WHITE}🛩️ Optimizar VPS${RESET}      
 echo -e " ${GOLD}${BOLD}[03]${RESET} ${WHITE}🌐 Cambiar dominio${RESET}     ${GOLD}${BOLD}[00]${RESET} ${WHITE}🚪 Salir${RESET}"
 echo -e " ${GOLD}${BOLD}[04]${RESET} ${WHITE}⚒️ Auto inicio${RESET}"
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${PURPLE}${BOLD}              Kevin Tech Multi Script v2.0${RESET}"
-echo -e "${GRAY}                  Premium Control Panel${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
+
+if [[ "$NUEVA_VERSION" != "No disponible" && "$NUEVA_VERSION" != "$VERSION_ACTUAL" ]]; then
+
+    echo -e "${YELLOW}  ⚡ NUEVA VERSIÓN DISPONIBLE: ${GREEN}${NUEVA_VERSION}${RESET}"
+    echo -e "${GRAY}  Versión instalada: ${WHITE}${VERSION_ACTUAL}${RESET}"
+
+else
+
+    echo -e "${GREEN}  ✔ SISTEMA ACTUALIZADO${RESET}"
+    echo -e "${GRAY}  Versión: ${WHITE}${VERSION_ACTUAL}${RESET}"
+
+fi
+
+echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
+echo -e "${WHITE}         Kevin Tech Multi Script${RESET}"
+echo -e "${GRAY}              Premium Edition${RESET}"
+echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
 
 echo ""
 echo -ne "${CYAN}${BOLD}➜${RESET} ${WHITE}Seleccione una opción ${GRAY}➤${RESET} "
