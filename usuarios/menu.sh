@@ -1,17 +1,16 @@
 #!/bin/bash
 
 # =========================================================
-#       🛡️ KEVINTECH MULTI SCRIPT - SSH PANEL
-#       KevinTech Tutorials • Privanox VPN
+#             KEVINTECH MULTI SCRIPT
+#              SSH ADMINISTRATION PANEL
 # =========================================================
 
 BASE="/etc/kevintech"
 VERSION="2.0"
-PANEL_NAME="KevinTech Multi Script"
 
-# =========================================================
+# =========================
 # COLORES
-# =========================================================
+# =========================
 
 RESET="\e[0m"
 BOLD="\e[1m"
@@ -25,374 +24,329 @@ RED="\e[1;91m"
 WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 
-# =========================================================
-# CONFIGURACIÓN
-# =========================================================
-
-WIDTH=68
-
-# =========================================================
-# FUNCIONES GENERALES
-# =========================================================
-
-pause() {
-    echo
-    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
-}
+# =========================
+# FUNCIONES
+# =========================
 
 line() {
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════════╣${RESET}"
-}
-
-top_line() {
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════╗${RESET}"
-}
-
-bottom_line() {
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════╝${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 }
 
 title() {
     echo -e "${CYAN}║${RESET} ${MAGENTA}${BOLD}$1${RESET}"
 }
 
-# =========================================================
-# INFORMACIÓN DEL SISTEMA
-# =========================================================
-
-get_cpu() {
-    CPU=$(top -bn1 | awk -F'id,' '/Cpu/ {
-        split($1,a,",")
-        idle=a[length(a)]
-        gsub(/ /,"",idle)
-        printf "%.0f",100-idle
-    }')
-
-    echo "${CPU}%"
-}
-
-get_ram() {
-    free -h | awk '/Mem:/ {print $3 "/" $2}'
-}
-
-get_ram_free() {
-    free -h | awk '/Mem:/ {print $7}'
-}
-
-get_disk() {
-    df -h / | awk 'NR==2 {print $3 "/" $2}'
-}
-
-get_disk_percent() {
-    df -h / | awk 'NR==2 {print $5}'
-}
-
-get_uptime() {
-    uptime -p 2>/dev/null | sed 's/up //'
-}
-
-get_load() {
-    awk '{print $1}' /proc/loadavg
-}
-
-get_users() {
-    awk -F: '$3 >= 1000 && $7 !~ /(nologin|false)$/ {count++} END {print count+0}' /etc/passwd
-}
-
-get_online() {
-    who | wc -l
-}
-
-# =========================================================
-# BARRA DE ESTADO
-# =========================================================
-
-status_bar() {
-
-    CPU=$(get_cpu)
-    RAM=$(get_ram)
-    FREE_RAM=$(get_ram_free)
-    DISK=$(get_disk)
-    DISK_P=$(get_disk_percent)
-    LOAD=$(get_load)
-    USERS=$(get_users)
-    ONLINE=$(get_online)
-
-    echo -e "${CYAN}║${RESET} ${BLUE}⚡ CPU${RESET}: ${GREEN}${CPU}${RESET}   ${BLUE}🧠 RAM${RESET}: ${GREEN}${RAM}${RESET}"
-    echo -e "${CYAN}║${RESET} ${BLUE}💾 DISCO${RESET}: ${GREEN}${DISK} (${DISK_P})${RESET}"
-    echo -e "${CYAN}║${RESET} ${BLUE}📈 LOAD${RESET}: ${GREEN}${LOAD}${RESET}   ${BLUE}⏱️ UPTIME${RESET}: ${GREEN}$(get_uptime)${RESET}"
-    echo -e "${CYAN}║${RESET} ${BLUE}👤 CUENTAS${RESET}: ${GREEN}${USERS}${RESET}   ${BLUE}🟢 ONLINE${RESET}: ${GREEN}${ONLINE}${RESET}"
-}
-
-# =========================================================
-# ENCABEZADO
-# =========================================================
-
-header() {
-
-    clear
-
-    top_line
-
-    echo -e "${CYAN}║${RESET}                                                                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}       ${MAGENTA}${BOLD}🛡️  KEVINTECH MULTI SCRIPT${RESET}                         ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}              ${WHITE}SSH ADMINISTRATION PANEL${RESET}                     ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                                                                  ${CYAN}║${RESET}"
-
-    line
-
-    status_bar
-
-    line
-}
-
-# =========================================================
-# MENÚ
-# =========================================================
-
-menu() {
-
-    echo -e "${CYAN}║${RESET} ${YELLOW}${BOLD}👤 GESTIÓN DE USUARIOS SSH${RESET}                              ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[01]${RESET} 👤 ${WHITE}Crear Usuario SSH${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[02]${RESET} 🗑️  ${WHITE}Eliminar Usuario${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[03]${RESET} ♻️  ${WHITE}Renovar / Editar Usuario${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[04]${RESET} 📋 ${WHITE}Lista de Usuarios${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[05]${RESET} 🌐 ${WHITE}Usuarios Conectados${RESET}"
-    echo -e "${CYAN}║${RESET}  ${GREEN}[06]${RESET} 🔒 ${WHITE}Bloquear / Desbloquear${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    
-    line
-
-    echo -e "${CYAN}║${RESET} ${YELLOW}${BOLD}⚙️  CONFIGURACIÓN SSH${RESET}                                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}  ${BLUE}[07]${RESET} 📢 ${WHITE}Banner SSH / Dropbear${RESET}"
-    echo -e "${CYAN}║${RESET}  ${BLUE}[08]${RESET} 💾 ${WHITE}Backup de Usuarios${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    
-    line
-
-    echo -e "${CYAN}║${RESET} ${YELLOW}${BOLD}🛠️  SISTEMA${RESET}                                            ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}  ${MAGENTA}[09]${RESET} 📊 ${WHITE}Información del Sistema${RESET}"
-    echo -e "${CYAN}║${RESET}  ${MAGENTA}[10]${RESET} 🔄 ${WHITE}Actualizar Panel${RESET}"
-    echo -e "${CYAN}║${RESET}"
-    
-    line
-
-    echo -e "${CYAN}║${RESET}  ${RED}[00]${RESET} 🚪 ${WHITE}Volver al Menú Principal${RESET}"
-    
-    bottom_line
-
+pause() {
     echo
+    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
 }
 
-# =========================================================
-# EJECUTAR SCRIPT
-# =========================================================
+run_module() {
 
-run_script() {
+    local file="$1"
 
-    SCRIPT="$1"
-
-    if [[ ! -f "$SCRIPT" ]]; then
-
+    if [[ ! -f "$BASE/usuarios/$file" ]]; then
         echo
-        echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${RED}║${RESET} ${RED}✘ ERROR: Script no encontrado${RESET}"
-        echo -e "${RED}║${RESET}"
-        echo -e "${RED}║${RESET} ${WHITE}$SCRIPT${RESET}"
-        echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-        sleep 3
+        echo -e "${RED}✘ Módulo no encontrado:${RESET}"
+        echo -e "${GRAY}$BASE/usuarios/$file${RESET}"
+        pause
         return
     fi
 
-    clear
+    bash "$BASE/usuarios/$file"
 
     echo
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET} ${GREEN}▶ Ejecutando KevinTech Module...${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    bash "$SCRIPT"
-
-    echo
-    echo -e "${GREEN}✔ Módulo finalizado.${RESET}"
-
     pause
 }
 
-# =========================================================
-# INFORMACIÓN DEL SISTEMA
-# =========================================================
+# =========================
+# INFORMACIÓN DEL SERVIDOR
+# =========================
 
-system_info() {
+get_cpu() {
 
-    clear
+    local cpu
+
+    cpu=$(top -bn1 2>/dev/null |
+        awk '/Cpu\(s\)/ {
+            for(i=1;i<=NF;i++) {
+                if($i ~ /id,/) {
+                    gsub(",", "", $(i-1))
+                    printf "%.0f", 100-$(i-1)
+                    exit
+                }
+            }
+        }')
+
+    [[ -z "$cpu" ]] && cpu="0"
+
+    echo "${cpu}%"
+}
+
+get_ram() {
+
+    free -h 2>/dev/null |
+        awk '/Mem:/ {print $3 "/" $2}'
+}
+
+get_disk() {
+
+    df -h / 2>/dev/null |
+        awk 'NR==2 {print $5}'
+}
+
+get_users() {
+
+    who 2>/dev/null | wc -l
+}
+
+get_ip() {
+
+    hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+get_uptime() {
+
+    uptime -p 2>/dev/null |
+        sed 's/^up //'
+}
+
+# =========================
+# ESTADO DEL SERVICIO
+# =========================
+
+service_status() {
+
+    local service="$1"
+
+    if systemctl is-active --quiet "$service" 2>/dev/null; then
+        echo -e "${GREEN}● ACTIVO${RESET}"
+    else
+        echo -e "${RED}● INACTIVO${RESET}"
+    fi
+}
+
+# =========================
+# CABECERA
+# =========================
+
+show_header() {
+
+    local hostname
+    local ip
+    local ram
+    local cpu
+    local disk
+    local users
+    local uptime
+
+    hostname=$(hostname 2>/dev/null)
+    ip=$(get_ip)
+    ram=$(get_ram)
+    cpu=$(get_cpu)
+    disk=$(get_disk)
+    users=$(get_users)
+    uptime=$(get_uptime)
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}📊 INFORMACIÓN DEL SISTEMA${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}             ${MAGENTA}${BOLD}🛡️  KEVINTECH MULTI SCRIPT${RESET}             ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}                  ${GRAY}SSH ADMIN PANEL${RESET}                  ${CYAN}║${RESET}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
-    echo -e "${CYAN}║${RESET} 🖥️  Hostname     : ${GREEN}$(hostname)${RESET}"
-    echo -e "${CYAN}║${RESET} 🐧 Sistema       : ${GREEN}$(. /etc/os-release && echo "$PRETTY_NAME")${RESET}"
-    echo -e "${CYAN}║${RESET} 🔧 Kernel        : ${GREEN}$(uname -r)${RESET}"
-    echo -e "${CYAN}║${RESET} 🏗️  Arquitectura  : ${GREEN}$(uname -m)${RESET}"
-    echo -e "${CYAN}║${RESET} ⚡ CPU           : ${GREEN}$(get_cpu)${RESET}"
-    echo -e "${CYAN}║${RESET} 🧠 RAM           : ${GREEN}$(get_ram)${RESET}"
-    echo -e "${CYAN}║${RESET} 💾 Disco         : ${GREEN}$(get_disk)${RESET}"
-    echo -e "${CYAN}║${RESET} 📈 Carga         : ${GREEN}$(get_load)${RESET}"
-    echo -e "${CYAN}║${RESET} ⏱️  Uptime        : ${GREEN}$(get_uptime)${RESET}"
-    echo -e "${CYAN}║${RESET} 👤 Usuarios      : ${GREEN}$(get_users)${RESET}"
-    echo -e "${CYAN}║${RESET} 🟢 Conectados    : ${GREEN}$(get_online)${RESET}"
+    printf "${CYAN}║${RESET} ${WHITE}🖥 SERVIDOR${RESET} %-18s ${WHITE}🌐 IP${RESET} %-18s${CYAN}║${RESET}\n" \
+        "${hostname:0:18}" "${ip:0:18}"
+
+    printf "${CYAN}║${RESET} ${WHITE}⏱ UPTIME${RESET}  %-18s ${WHITE}👥 SSH${RESET} %-18s${CYAN}║${RESET}\n" \
+        "${uptime:0:18}" "$users"
+
+    line
+
+    printf "${CYAN}║${RESET} ${WHITE}💾 RAM${RESET} %-10s ${WHITE}⚡ CPU${RESET} %-7s ${WHITE}💿 DISCO${RESET} %-7s ${CYAN}║${RESET}\n" \
+        "$ram" "$cpu" "$disk"
 
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    pause
 }
 
-# =========================================================
-# ACTUALIZAR PANEL
-# =========================================================
+# =========================
+# OPCIÓN
+# =========================
 
-update_panel() {
+option() {
 
-    clear
-
-    echo
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🔄 ACTUALIZANDO PANEL${RESET}                       ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    if [[ -f "$BASE/update.sh" ]]; then
-        bash "$BASE/update.sh"
-    else
-        echo -e "${YELLOW}⚠ No se encontró:${RESET} $BASE/update.sh"
-        sleep 2
-    fi
-
-    pause
+    printf "  ${GREEN}${BOLD}[%02d]${RESET} ${WHITE}%-3s %-35s${RESET}\n" \
+        "$1" "$2" "$3"
 }
 
-# =========================================================
-# CTRL + C
-# =========================================================
-
-trap '
-echo
-echo -e "${YELLOW}⚠ Usa la opción [00] para salir correctamente.${RESET}"
-sleep 1
-' INT
-
-# =========================================================
-# COMPROBAR ROOT
-# =========================================================
+# =========================
+# VERIFICAR ROOT
+# =========================
 
 if [[ $EUID -ne 0 ]]; then
+
     clear
+
     echo
-    echo -e "${RED}✘ Este panel debe ejecutarse como ROOT.${RESET}"
+    echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
     echo
-    echo -e "${YELLOW}Ejemplo:${RESET}"
-    echo -e "${WHITE}sudo bash $0${RESET}"
+    echo -e "${WHITE}Este panel requiere permisos de root.${RESET}"
     echo
+    echo -e "${YELLOW}Ejecuta:${RESET}"
+    echo -e "${GREEN}sudo bash $0${RESET}"
+    echo
+
     exit 1
 fi
 
-# =========================================================
-# COMPROBAR BASE
-# =========================================================
-
-if [[ ! -d "$BASE" ]]; then
-
-    echo
-    echo -e "${RED}✘ Error: No existe el directorio:${RESET}"
-    echo -e "${WHITE}$BASE${RESET}"
-    echo
-    exit 1
-
-fi
-
-# =========================================================
-# BUCLE PRINCIPAL
-# =========================================================
+# =========================
+# MENÚ PRINCIPAL
+# =========================
 
 while true; do
 
-    header
-    menu
+    clear
 
-    read -rp "$(echo -e "${GREEN}➜ Seleccione una opción [00-10]: ${RESET}")" OP
+    show_header
 
-    case "$OP" in
+    echo
+    echo -e "${BLUE}${BOLD}  🔐 GESTIÓN DE USUARIOS SSH${RESET}"
+    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
 
-        1|01)
-            run_script "$BASE/usuarios/add.sh"
+    option 1  "👤" "Crear Usuario SSH"
+    option 2  "🗑️" "Eliminar Usuario"
+    option 3  "♻️" "Renovar / Editar Usuario"
+    option 4  "📋" "Lista de Usuarios"
+    option 5  "🌐" "Usuarios Conectados"
+
+    echo
+    echo -e "${BLUE}${BOLD}  🛡️ SEGURIDAD Y CONFIGURACIÓN${RESET}"
+    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
+
+    option 6  "📢" "Banner SSH / Dropbear"
+    option 7  "🔒" "Bloquear / Desbloquear"
+    option 8  "💾" "Backup de Usuarios"
+
+    echo
+    echo -e "${BLUE}${BOLD}  ⚙️ SISTEMA${RESET}"
+    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
+
+    option 9  "🔄" "Actualizar KevinTech"
+    option 10 "📊" "Información del Servidor"
+
+    echo
+    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
+
+    echo -e "  ${RED}${BOLD}[00]${RESET} 🚪 ${WHITE}Volver al Menú Principal${RESET}"
+
+    echo
+    echo -e "${GRAY}  KevinTech • Privanox VPN • v${VERSION}${RESET}"
+    echo
+
+    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción:${RESET} ")" op
+
+    case "$op" in
+
+        1)
+            run_module "add.sh"
             ;;
 
-        2|02)
-            run_script "$BASE/usuarios/delete.sh"
+        2)
+            run_module "delete.sh"
             ;;
 
-        3|03)
-            run_script "$BASE/usuarios/edit.sh"
+        3)
+            run_module "edit.sh"
             ;;
 
-        4|04)
-            run_script "$BASE/usuarios/list.sh"
+        4)
+            run_module "list.sh"
             ;;
 
-        5|05)
-            run_script "$BASE/usuarios/online.sh"
+        5)
+            run_module "online.sh"
             ;;
 
-        6|06)
-            run_script "$BASE/usuarios/block.sh"
+        6)
+            run_module "banner.sh"
             ;;
 
-        7|07)
-            run_script "$BASE/usuarios/banner.sh"
+        7)
+            run_module "block.sh"
             ;;
 
-        8|08)
-            run_script "$BASE/usuarios/backup.sh"
+        8)
+            run_module "backup.sh"
             ;;
 
-        9|09)
-            system_info
-            ;;
+        9)
 
-        10)
-            update_panel
-            ;;
-
-        0|00)
             clear
 
             echo
             echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-            echo -e "${CYAN}║${RESET} ${GREEN}✔ Saliendo de KevinTech Multi Script...${RESET}"
-            echo -e "${CYAN}║${RESET} ${GRAY}Gracias por utilizar KevinTech.${RESET}"
+            echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🔄 ACTUALIZADOR KEVINTECH${RESET}              ${CYAN}║${RESET}"
+            echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+            echo
+
+            if [[ -f "$BASE/update.sh" ]]; then
+                bash "$BASE/update.sh"
+            else
+                echo -e "${YELLOW}⚠ El actualizador no está instalado.${RESET}"
+            fi
+
+            pause
+            ;;
+
+        10)
+
+            clear
+
+            echo
+            echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+            echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}📊 INFORMACIÓN DEL SERVIDOR${RESET}             ${CYAN}║${RESET}"
+            echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+            echo -e "${WHITE}🖥 Hostname     :${RESET} ${GREEN}$(hostname)${RESET}"
+            echo -e "${WHITE}🌐 IP           :${RESET} ${GREEN}$(get_ip)${RESET}"
+            echo -e "${WHITE}🧠 Kernel       :${RESET} ${GREEN}$(uname -r)${RESET}"
+            echo -e "${WHITE}💻 Arquitectura :${RESET} ${GREEN}$(uname -m)${RESET}"
+            echo -e "${WHITE}🐧 Sistema      :${RESET} ${GREEN}$(. /etc/os-release && echo "$PRETTY_NAME")${RESET}"
+            echo -e "${WHITE}⏱ Uptime       :${RESET} ${GREEN}$(get_uptime)${RESET}"
+            echo -e "${WHITE}💾 RAM          :${RESET} ${GREEN}$(get_ram)${RESET}"
+            echo -e "${WHITE}⚡ CPU          :${RESET} ${GREEN}$(get_cpu)${RESET}"
+            echo -e "${WHITE}💿 Disco        :${RESET} ${GREEN}$(get_disk)${RESET}"
+            echo -e "${WHITE}👥 SSH Online   :${RESET} ${GREEN}$(get_users)${RESET}"
+
+            echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+            echo -e "${WHITE}🔐 SSH:${RESET}      $(service_status ssh)"
+            echo -e "${WHITE}🛡️ Dropbear:${RESET} $(service_status dropbear)"
+
+            echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+            pause
+            ;;
+
+        0)
+
+            clear
+
+            echo
+            echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+            echo -e "${CYAN}║${RESET} ${GREEN}${BOLD}        ✔ SALIENDO DE KEVINTECH MULTI SCRIPT${RESET}        ${CYAN}║${RESET}"
+            echo -e "${CYAN}║${RESET}              ${GRAY}Gracias por utilizar el panel${RESET}              ${CYAN}║${RESET}"
             echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
             echo
 
             sleep 1
 
-            if [[ -f "$BASE/menu.sh" ]]; then
-                exec bash "$BASE/menu.sh"
-            else
-                exit 0
-            fi
+            exec bash "$BASE/menu.sh"
             ;;
 
         *)
+
             echo
-            echo -e "${RED}✘ Opción inválida.${RESET}"
-            echo -e "${GRAY}Seleccione una opción entre 00 y 10.${RESET}"
-            sleep 2
+            echo -e "  ${RED}${BOLD}✘ Opción inválida${RESET}"
+            sleep 1
             ;;
 
     esac
