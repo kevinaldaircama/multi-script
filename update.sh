@@ -3,19 +3,23 @@
 #=========================================================
 #        KEVIN TECH MULTI SCRIPT - UPDATER
 #        Sistema de actualización + Licencia KEY
+#        LICENSE API v2.1
+#=========================================================
+
+set -o pipefail
+
+#=========================================================
+# VARIABLES
 #=========================================================
 
 BASE="/etc/kevintech"
 TMP="/tmp/kevintech_update"
+
 REPO="https://github.com/kevinaldaircama/multi-script.git"
+
 VERSION_FILE="$BASE/version.txt"
 
-#=========================================================
-# CONFIGURACIÓN DE LICENCIA
-#=========================================================
-
-FIREBASE_URL_B64="aHR0cHM6Ly9rZXlnZW5icHQtZGVmYXVsdC1ydGRiLmZpcmViYXNlaW8uY29t"
-FIREBASE_URL=$(echo "$FIREBASE_URL_B64" | base64 -d 2>/dev/null)
+LICENSE_API="https://usa.socialstreaming.xyz"
 
 #=========================================================
 # COLORES
@@ -39,18 +43,41 @@ PURPLE="\e[38;5;141m"
 LIME="\e[38;5;154m"
 
 #=========================================================
+# VARIABLES DE LICENCIA
+#=========================================================
+
+INSTALL_KEY=""
+
+LICENSE_OWNER=""
+LICENSE_RESELLER=""
+LICENSE_TYPE="normal"
+LICENSE_DELETE_AT=""
+
+#=========================================================
+# VARIABLES DEL SERVIDOR
+#=========================================================
+
+CLIENT_IP=""
+OS_NAME=""
+HOSTNAME_SERVER=""
+DATE_NOW=""
+
+VERSION_ACTUAL="No disponible"
+NUEVA_VERSION="No disponible"
+
+#=========================================================
 # FUNCIONES
 #=========================================================
 
 titulo() {
 
-    clear
+    clear 2>/dev/null || true
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}              KEVIN TECH UPDATER${RESET}                  ${CYAN}║${RESET}"
     echo -e "${CYAN}║${RESET} ${GRAY}                 MULTI SCRIPT PREMIUM${RESET}              ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
+    echo
 
 }
 
@@ -66,39 +93,89 @@ error() {
     echo -e " ${RED}✘${RESET} ${WHITE}$1${RESET}"
 }
 
+warning() {
+    echo -e " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
+}
+
 #=========================================================
-# COMPROBAR DEPENDENCIAS
+# ERROR
 #=========================================================
 
-if [[ $EUID -ne 0 ]]; then
+error_exit() {
+
+    echo
+    error "$1"
+    echo
+
+    rm -rf "$TMP"
+
+    exit 1
+}
+
+#=========================================================
+# ROOT
+#=========================================================
+
+if [[ "$EUID" -ne 0 ]]; then
 
     echo -e "${RED}❌ Este actualizador necesita ejecutarse como root.${RESET}"
-    echo ""
+    echo
 
     if command -v sudo >/dev/null 2>&1; then
+
         exec sudo bash "$0" "$@"
+
     else
+
         exit 1
+
     fi
 
 fi
 
 #=========================================================
-# DEPENDENCIAS DE LICENCIA
+# COMPROBAR INSTALACIÓN
 #=========================================================
 
-if ! command -v curl >/dev/null 2>&1 ||
-   ! command -v jq >/dev/null 2>&1; then
+if [[ ! -d "$BASE" ]]; then
 
-    echo -e "${CYAN}◆ Instalando dependencias necesarias...${RESET}"
+    error "No existe el directorio $BASE."
 
-    apt-get update -y >/dev/null 2>&1
+    echo
+    echo -e "${YELLOW}⚠ El sistema KevinTech no parece estar instalado.${RESET}"
+    echo
+
+    exit 1
+
+fi
+
+#=========================================================
+# DEPENDENCIAS
+#=========================================================
+
+MISSING=""
+
+command -v curl >/dev/null 2>&1 || MISSING+=" curl"
+command -v jq >/dev/null 2>&1 || MISSING+=" jq"
+command -v git >/dev/null 2>&1 || MISSING+=" git"
+
+if [[ -n "$MISSING" ]]; then
+
+    echo -e "${CYAN}◆ Instalando dependencias:${RESET}${WHITE}$MISSING${RESET}"
+    echo
+
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update -y >/dev/null 2>&1 || \
+        error_exit "No se pudieron actualizar los repositorios."
 
     apt-get install -y \
         curl \
         jq \
+        git \
         ca-certificates \
-        git >/dev/null 2>&1
+        >/dev/null 2>&1 || \
+        error_exit "No se pudieron instalar las dependencias."
 
 fi
 
@@ -110,234 +187,398 @@ titulo
 
 echo -e "${GOLD}${BOLD}◆ ACTUALIZACIÓN DEL SISTEMA${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
 info "Preparando actualización..."
+
 echo -e " ${GRAY}➜${RESET} Repositorio: ${SKY}$REPO${RESET}"
 echo -e " ${GRAY}➜${RESET} Destino:     ${SKY}$BASE${RESET}"
+echo -e " ${GRAY}➜${RESET} License API: ${SKY}$LICENSE_API${RESET}"
 
-echo ""
-
-#=========================================================
-# VERIFICAR DIRECTORIO
-#=========================================================
-
-if [[ ! -d "$BASE" ]]; then
-
-    error "No existe el directorio $BASE"
-
-    echo ""
-    echo -e "${YELLOW}⚠${RESET} ${WHITE}El script principal no parece estar instalado.${RESET}"
-    echo ""
-
-    exit 1
-
-fi
+echo
 
 #=========================================================
 # VERSIÓN INSTALADA
 #=========================================================
 
-VERSION_ACTUAL="No disponible"
-
 if [[ -f "$VERSION_FILE" ]]; then
 
-    VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" | tr -d '\r')
+    VERSION_ACTUAL="$(
+        head -n1 "$VERSION_FILE" |
+        tr -d '\r'
+    )"
 
 fi
 
-[[ -z "$VERSION_ACTUAL" ]] && VERSION_ACTUAL="No disponible"
+[[ -z "$VERSION_ACTUAL" ]] && \
+    VERSION_ACTUAL="No disponible"
 
 echo -e "${BLUE}${BOLD}◆ INFORMACIÓN DE VERSIÓN${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
 echo -e " ${YELLOW}Versión instalada:${RESET} ${WHITE}${VERSION_ACTUAL}${RESET}"
 
-echo ""
+echo
 
 #=========================================================
-# LICENCIA KEY
+# VERIFICAR SERVIDOR DE LICENCIAS
+#=========================================================
+
+echo -e "${GOLD}${BOLD}◆ SERVIDOR DE LICENCIAS${RESET}"
+echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo
+
+info "Comprobando API..."
+
+HEALTH_RESPONSE="$(
+    curl \
+        --silent \
+        --show-error \
+        --connect-timeout 5 \
+        --max-time 15 \
+        -4 \
+        -w '\n%{http_code}' \
+        "${LICENSE_API}/health" \
+        2>/dev/null
+)"
+
+HEALTH_HTTP="$(
+    printf '%s\n' "$HEALTH_RESPONSE" |
+    tail -n1
+)"
+
+HEALTH_BODY="$(
+    printf '%s\n' "$HEALTH_RESPONSE" |
+    sed '$d'
+)"
+
+if [[ "$HEALTH_HTTP" != "200" ]]; then
+
+    error "Servidor de licencias no disponible."
+
+    echo
+    echo -e "${GRAY}HTTP: $HEALTH_HTTP${RESET}"
+    echo
+
+    exit 1
+
+fi
+
+if ! echo "$HEALTH_BODY" |
+    jq -e '.ok == true' >/dev/null 2>&1; then
+
+    error "La API de licencias devolvió un estado inválido."
+
+    echo
+    echo "$HEALTH_BODY"
+    echo
+
+    exit 1
+
+fi
+
+ok "Servidor de licencias disponible."
+
+echo
+
+#=========================================================
+# LICENCIA
 #=========================================================
 
 echo -e "${GOLD}${BOLD}◆ AUTORIZACIÓN DE ACTUALIZACIÓN${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
 echo -e " ${YELLOW}🔐 Esta actualización requiere una Key válida.${RESET}"
-echo -e " ${GRAY}La Key se obtiene desde el sistema de licencias.${RESET}"
-echo ""
+echo -e " ${GRAY}La Key será validada mediante la API pública.${RESET}"
+echo
 
 while true; do
 
-    read -rp " 🔑 Introduce tu Key de Instalación: " INSTALL_KEY
+    read -r -p " 🔑 Introduce tu Key de Instalación: " INSTALL_KEY
 
-    # Eliminar espacios, CR y LF
-    INSTALL_KEY=$(echo "$INSTALL_KEY" | tr -d '\r\n ')
+    INSTALL_KEY="$(
+        printf '%s' "$INSTALL_KEY" |
+        tr -d '[:space:]'
+    )"
 
     if [[ -z "$INSTALL_KEY" ]]; then
 
         error "La Key no puede estar vacía."
-        echo ""
+        echo
+
         continue
 
     fi
 
-    echo ""
+    echo
 
     info "Verificando licencia..."
 
-    KEY_RESPONSE=""
+    #=====================================================
+    # JSON
+    #=====================================================
 
-    #-----------------------------------------------------
-    # CONSULTAR FIREBASE
-    #-----------------------------------------------------
+    VALIDATE_JSON="$(
+        jq -n \
+            --arg key "$INSTALL_KEY" \
+            '{
+                key: $key
+            }'
+    )"
 
-    KEY_RESPONSE=$(curl \
-        -4 \
-        -s \
-        -k \
-        --connect-timeout 10 \
-        --max-time 15 \
-        "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" 2>/dev/null)
+    #=====================================================
+    # API VALIDATE
+    #=====================================================
 
-    #-----------------------------------------------------
-    # COMPROBAR CONEXIÓN
-    #-----------------------------------------------------
+    VALIDATE_RESPONSE="$(
+        curl \
+            --silent \
+            --show-error \
+            --connect-timeout 5 \
+            --max-time 15 \
+            -4 \
+            -w '\n%{http_code}' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data "$VALIDATE_JSON" \
+            "${LICENSE_API}/api/public/validate" \
+            2>/dev/null
+    )"
 
-    if [[ -z "$KEY_RESPONSE" ]]; then
+    CURL_STATUS=$?
 
-        error "No fue posible conectar con el servidor de licencias."
-        echo ""
+    VALIDATE_HTTP="$(
+        printf '%s\n' "$VALIDATE_RESPONSE" |
+        tail -n1
+    )"
 
-        echo -e " ${YELLOW}⚠${RESET} Comprueba tu conexión a Internet."
-        echo ""
+    VALIDATE_BODY="$(
+        printf '%s\n' "$VALIDATE_RESPONSE" |
+        sed '$d'
+    )"
+
+    #=====================================================
+    # ERROR DE CONEXIÓN
+    #=====================================================
+
+    if [[ "$CURL_STATUS" -ne 0 ]]; then
+
+        error "No fue posible conectar con la API."
+
+        echo
+        echo -e "${YELLOW}Comprueba la conexión a Internet.${RESET}"
+        echo
 
         sleep 2
+
         continue
 
     fi
 
-    #-----------------------------------------------------
-    # KEY INEXISTENTE
-    #-----------------------------------------------------
+    #=====================================================
+    # JSON VÁLIDO
+    #=====================================================
 
-    if [[ "$KEY_RESPONSE" == "null" ]]; then
+    if ! echo "$VALIDATE_BODY" |
+        jq empty >/dev/null 2>&1; then
 
-        error "La Key es inválida, ya fue utilizada o no existe."
-        echo ""
+        error "La API devolvió una respuesta inválida."
+
+        echo
+        echo -e "${GRAY}HTTP: $VALIDATE_HTTP${RESET}"
+        echo
 
         sleep 2
+
         continue
 
     fi
 
-    #-----------------------------------------------------
-    # COMPROBAR QUE SEA JSON VÁLIDO
-    #-----------------------------------------------------
+    #=====================================================
+    # RESULTADO
+    #=====================================================
 
-    if ! echo "$KEY_RESPONSE" | jq empty >/dev/null 2>&1; then
+    VALID="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.valid // false'
+    )"
 
-        error "El servidor de licencias devolvió una respuesta inválida."
-        echo ""
+    ERROR_CODE="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.error // empty'
+    )"
+
+    #=====================================================
+    # KEY INVÁLIDA
+    #=====================================================
+
+    if [[ "$VALID" != "true" ]]; then
+
+        echo
+
+        case "$ERROR_CODE" in
+
+            key_not_found)
+
+                error "La Key no existe."
+
+                ;;
+
+            key_used)
+
+                error "La Key ya fue utilizada."
+
+                ;;
+
+            key_expired)
+
+                error "La Key ha expirado."
+
+                ;;
+
+            key_required)
+
+                error "No se recibió una Key."
+
+                ;;
+
+            *)
+
+                error "La Key no es válida."
+
+                ;;
+
+        esac
+
+        echo
+        echo -e "${YELLOW}La actualización no continuará.${RESET}"
+        echo
 
         sleep 2
+
         continue
 
     fi
 
-    #-----------------------------------------------------
-    # OBTENER DATOS DE LA KEY
-    #-----------------------------------------------------
+    #=====================================================
+    # DATOS
+    #=====================================================
 
-    OWNER=$(echo "$KEY_RESPONSE" | jq -r '.owner // empty')
-    RESELLER=$(echo "$KEY_RESPONSE" | jq -r '.reseller // empty')
+    LICENSE_OWNER="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.owner // "Desconocido"'
+    )"
 
-    #-----------------------------------------------------
-    # COMPROBAR ESTADO
-    #-----------------------------------------------------
+    LICENSE_RESELLER="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.reseller // "Desconocido"'
+    )"
 
-    KEY_STATUS=$(echo "$KEY_RESPONSE" | jq -r '.status // "active"')
+    LICENSE_TYPE="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.type // "normal"'
+    )"
 
-    if [[ "$KEY_STATUS" != "active" ]]; then
+    LICENSE_DELETE_AT="$(
+        echo "$VALIDATE_BODY" |
+        jq -r '.deleteAt // empty'
+    )"
 
-        error "La Key no está activa."
-        echo -e " ${GRAY}Estado:${RESET} ${YELLOW}$KEY_STATUS${RESET}"
-        echo ""
+    #=====================================================
+    # MOSTRAR LICENCIA
+    #=====================================================
 
-        sleep 2
-        continue
+    echo
+
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${GREEN}              ✅ LICENCIA VÁLIDA${RESET}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+
+    echo -e " ${GRAY}Propietario:${RESET} ${WHITE}${LICENSE_OWNER}${RESET}"
+    echo -e " ${GRAY}Revendedor :${RESET} ${WHITE}${LICENSE_RESELLER}${RESET}"
+    echo -e " ${GRAY}Tipo       :${RESET} ${WHITE}${LICENSE_TYPE}${RESET}"
+
+    if [[ -n "$LICENSE_DELETE_AT" &&
+          "$LICENSE_DELETE_AT" != "null" ]]; then
+
+        echo -e " ${GRAY}Expira     :${RESET} ${WHITE}${LICENSE_DELETE_AT}${RESET}"
 
     fi
 
-    #-----------------------------------------------------
-    # KEY CORRECTA
-    #-----------------------------------------------------
+    echo
 
-    echo ""
-    ok "Licencia verificada correctamente."
+    ok "Licencia autorizada para continuar."
 
-    echo ""
-
-    echo -e " ${GRAY}Propietario:${RESET} ${WHITE}${OWNER:-No definido}${RESET}"
-    echo -e " ${GRAY}Reseller:${RESET}    ${WHITE}${RESELLER:-No definido}${RESET}"
-
-    echo ""
+    echo
 
     break
 
 done
 
 #=========================================================
-# INFORMACIÓN DEL SERVIDOR
+# INFORMACIÓN SERVIDOR
 #=========================================================
 
 info "Recopilando información del servidor..."
 
-CLIENT_IP=$(curl \
-    -4 \
-    -s \
-    --connect-timeout 5 \
-    --max-time 10 \
-    ifconfig.me 2>/dev/null)
+CLIENT_IP="$(
+    curl \
+        --silent \
+        --show-error \
+        --connect-timeout 5 \
+        --max-time 10 \
+        -4 \
+        https://api.ipify.org \
+        2>/dev/null
+)"
 
 if [[ -z "$CLIENT_IP" ]]; then
     CLIENT_IP="Desconocida"
 fi
 
-OS_NAME=$(grep '^PRETTY_NAME=' /etc/os-release |
-    cut -d'"' -f2)
+OS_NAME="$(
+    grep '^PRETTY_NAME=' /etc/os-release |
+    cut -d'"' -f2
+)"
 
-[[ -z "$OS_NAME" ]] && OS_NAME="Desconocido"
+[[ -z "$OS_NAME" ]] && \
+    OS_NAME="Desconocido"
 
-HOSTNAME_SERVER=$(hostname)
+HOSTNAME_SERVER="$(hostname)"
 
-DATE_NOW=$(date "+%Y-%m-%d %H:%M:%S")
+DATE_NOW="$(
+    date -u '+%Y-%m-%dT%H:%M:%SZ'
+)"
 
-echo ""
+echo
 
-echo -e "${CYAN}${BOLD}◆ INFORMACIÓN DE ACTIVACIÓN${RESET}"
+echo -e "${CYAN}${BOLD}◆ INFORMACIÓN DEL SERVIDOR${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
-echo -e " ${GRAY}IP:${RESET}       ${WHITE}$CLIENT_IP${RESET}"
-echo -e " ${GRAY}Hostname:${RESET} ${WHITE}$HOSTNAME_SERVER${RESET}"
+echo -e " ${GRAY}IP:${RESET}        ${WHITE}$CLIENT_IP${RESET}"
+echo -e " ${GRAY}Hostname:${RESET}  ${WHITE}$HOSTNAME_SERVER${RESET}"
 echo -e " ${GRAY}Sistema:${RESET}   ${WHITE}$OS_NAME${RESET}"
 echo -e " ${GRAY}Fecha:${RESET}     ${WHITE}$DATE_NOW${RESET}"
 
-echo ""
+echo
 
 #=========================================================
-# LIMPIAR TEMPORAL
+# TEMPORAL
 #=========================================================
 
 info "Preparando archivos temporales..."
 
 rm -rf "$TMP"
 
-mkdir -p "$TMP"
+mkdir -p "$TMP" || \
+    error_exit "No se pudo crear el directorio temporal."
 
-echo ""
+echo
 
 #=========================================================
 # DESCARGAR ACTUALIZACIÓN
@@ -345,22 +586,26 @@ echo ""
 
 echo -e "${MAGENTA}${BOLD}◆ DESCARGANDO ACTUALIZACIÓN${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
 echo -e " ${CYAN}⬇${RESET} ${WHITE}Conectando con GitHub...${RESET}"
+echo
 
-if ! git clone --depth 1 "$REPO" "$TMP"; then
+if ! git clone \
+    --depth 1 \
+    "$REPO" \
+    "$TMP"; then
 
-    echo ""
+    echo
 
     error "No se pudo descargar la actualización."
 
-    echo ""
-    echo -e " ${YELLOW}⚠${RESET} ${WHITE}Comprueba:${RESET}"
+    echo
+    echo -e " ${YELLOW}⚠${RESET} Comprueba:"
     echo -e "   ${GRAY}•${RESET} Conexión a Internet"
     echo -e "   ${GRAY}•${RESET} Acceso a GitHub"
-    echo -e "   ${GRAY}•${RESET} Que el repositorio esté disponible"
-    echo ""
+    echo -e "   ${GRAY}•${RESET} Disponibilidad del repositorio"
+    echo
 
     rm -rf "$TMP"
 
@@ -368,52 +613,91 @@ if ! git clone --depth 1 "$REPO" "$TMP"; then
 
 fi
 
-echo ""
+echo
+
 ok "Actualización descargada correctamente."
 
 #=========================================================
-# LEER NUEVA VERSIÓN
+# NUEVA VERSIÓN
 #=========================================================
-
-NUEVA_VERSION="No disponible"
 
 if [[ -f "$TMP/version.txt" ]]; then
 
-    NUEVA_VERSION=$(head -n1 "$TMP/version.txt" | tr -d '\r')
+    NUEVA_VERSION="$(
+        head -n1 "$TMP/version.txt" |
+        tr -d '\r'
+    )"
 
 fi
 
-[[ -z "$NUEVA_VERSION" ]] && NUEVA_VERSION="No disponible"
+[[ -z "$NUEVA_VERSION" ]] && \
+    NUEVA_VERSION="No disponible"
 
-echo ""
+echo
 
 echo -e "${PURPLE}${BOLD}◆ CONTROL DE VERSIÓN${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
 echo -e " ${YELLOW}Versión actual:${RESET} ${WHITE}${VERSION_ACTUAL}${RESET}"
 echo -e " ${GREEN}Nueva versión:${RESET}  ${LIME}${NUEVA_VERSION}${RESET}"
 
-echo ""
+echo
 
 #=========================================================
-# INSTALAR ARCHIVOS
+# BACKUP
+#=========================================================
+
+echo -e "${BLUE}${BOLD}◆ COPIA DE SEGURIDAD${RESET}"
+echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo
+
+BACKUP_DIR="${BASE}/backup"
+
+mkdir -p "$BACKUP_DIR" || \
+    error_exit "No se pudo crear el directorio de backup."
+
+BACKUP_FILE="$BACKUP_DIR/backup_$(date '+%Y%m%d_%H%M%S').tar.gz"
+
+info "Creando copia de seguridad..."
+
+if tar \
+    -czf "$BACKUP_FILE" \
+    -C "$BASE" \
+    --exclude="./backup" \
+    . >/dev/null 2>&1; then
+
+    ok "Backup creado."
+
+    echo -e " ${GRAY}➜${RESET} $BACKUP_FILE"
+
+else
+
+    warning "No se pudo crear el backup completo."
+    echo -e "${YELLOW}La actualización continuará.${RESET}"
+
+fi
+
+echo
+
+#=========================================================
+# INSTALAR
 #=========================================================
 
 echo -e "${BLUE}${BOLD}◆ INSTALANDO ARCHIVOS${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
-info "Copiando nuevos archivos..."
+info "Copiando archivos..."
 
-if ! cp -rf "$TMP"/. "$BASE/"; then
+if ! cp -a "$TMP"/. "$BASE"/; then
 
-    echo ""
+    echo
 
     error "No se pudieron copiar los archivos."
 
-    echo ""
-    echo -e "${YELLOW}⚠${RESET} La Key NO será eliminada."
+    echo
+    warning "La Key NO será consumida."
 
     rm -rf "$TMP"
 
@@ -421,22 +705,23 @@ if ! cp -rf "$TMP"/. "$BASE/"; then
 
 fi
 
-ok "Archivos instalados correctamente."
+ok "Archivos actualizados correctamente."
 
 #=========================================================
-# GUARDAR VERSIÓN
+# VERSIÓN
 #=========================================================
 
 if [[ -f "$TMP/version.txt" ]]; then
 
-    cp -f "$TMP/version.txt" "$VERSION_FILE"
+    cp -f \
+        "$TMP/version.txt" \
+        "$VERSION_FILE"
 
     ok "Versión instalada: ${NUEVA_VERSION}"
 
 else
 
-    echo ""
-    echo -e "${YELLOW}⚠${RESET} ${WHITE}No se encontró version.txt en la actualización.${RESET}"
+    warning "No se encontró version.txt."
 
 fi
 
@@ -444,92 +729,202 @@ fi
 # PERMISOS
 #=========================================================
 
-echo ""
+echo
 
 info "Aplicando permisos..."
 
-chmod -R +x "$BASE"
+chmod -R 755 "$BASE" >/dev/null 2>&1 || true
+
+if [[ -f "$BASE/license.conf" ]]; then
+
+    chmod 600 "$BASE/license.conf" >/dev/null 2>&1 || true
+
+fi
 
 ok "Permisos actualizados."
 
 #=========================================================
-# REGISTRAR ACTIVACIÓN
+# ACTIVACIÓN
 #=========================================================
 
-echo ""
+echo
 
-echo -e "${GOLD}${BOLD}◆ REGISTRANDO ACTIVACIÓN${RESET}"
+echo -e "${GOLD}${BOLD}◆ REGISTRANDO ACTUALIZACIÓN${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo ""
+echo
 
-info "Enviando información al servidor de licencias..."
+info "Registrando actualización en License API..."
 
-ACTIVATION_RESPONSE=$(curl \
-    -4 \
-    -s \
-    -k \
-    --connect-timeout 10 \
-    --max-time 15 \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "$(jq -n \
-        --arg owner "$OWNER" \
-        --arg reseller "$RESELLER" \
-        --arg token "$INSTALL_KEY" \
+ACTIVATION_JSON="$(
+    jq -n \
+        --arg key "$INSTALL_KEY" \
         --arg ip "$CLIENT_IP" \
         --arg hostname "$HOSTNAME_SERVER" \
         --arg os "$OS_NAME" \
         --arg date "$DATE_NOW" \
+        --arg version "$NUEVA_VERSION" \
         '{
-            owner: $owner,
-            reseller: $reseller,
-            token: $token,
+            key: $key,
             ip: $ip,
             hostname: $hostname,
             os: $os,
             date: $date,
-            notified: false,
-            version: "UPDATE"
-        }')" \
-    "${FIREBASE_URL}/activations.json" 2>/dev/null)
+            version: $version
+        }'
+)"
 
-#=========================================================
-# ELIMINAR KEY
-#=========================================================
-
-if [[ -n "$ACTIVATION_RESPONSE" ]]; then
-
-    echo ""
-
-    info "Finalizando licencia..."
-
-    DELETE_RESPONSE=$(curl \
-        -4 \
-        -s \
-        -k \
-        --connect-timeout 10 \
+ACTIVATE_RESPONSE="$(
+    curl \
+        --silent \
+        --show-error \
+        --connect-timeout 5 \
         --max-time 15 \
-        -X DELETE \
-        "${FIREBASE_URL}/keys/${INSTALL_KEY}.json" 2>/dev/null)
+        -4 \
+        -w '\n%{http_code}' \
+        -X POST \
+        -H "Content-Type: application/json" \
+        --data "$ACTIVATION_JSON" \
+        "${LICENSE_API}/api/public/activate" \
+        2>/dev/null
+)"
 
-    ok "Key consumida correctamente."
+ACTIVATE_STATUS=$?
 
-else
+ACTIVATE_HTTP="$(
+    printf '%s\n' "$ACTIVATE_RESPONSE" |
+    tail -n1
+)"
 
-    echo ""
+ACTIVATE_BODY="$(
+    printf '%s\n' "$ACTIVATE_RESPONSE" |
+    sed '$d'
+)"
 
-    error "No se pudo registrar la activación."
+#=========================================================
+# ERROR CONEXIÓN
+#=========================================================
 
-    echo -e " ${YELLOW}⚠${RESET} La actualización ya fue instalada."
-    echo -e " ${YELLOW}⚠${RESET} La Key NO fue eliminada."
+if [[ "$ACTIVATE_STATUS" -ne 0 ]]; then
+
+    echo
+
+    error "No se pudo conectar con la API de activación."
+
+    echo
+    warning "La actualización fue instalada."
+    warning "La Key NO fue marcada como utilizada."
+
+    echo
+    echo -e "${YELLOW}IMPORTANTE:${RESET}"
+    echo -e "${WHITE}La actualización necesita ser registrada manualmente.${RESET}"
+    echo
+
+    rm -rf "$TMP"
+
+    exit 1
 
 fi
+
+#=========================================================
+# JSON
+#=========================================================
+
+if ! echo "$ACTIVATE_BODY" |
+    jq empty >/dev/null 2>&1; then
+
+    error "La API devolvió una respuesta inválida."
+
+    echo
+    echo -e "${GRAY}HTTP: $ACTIVATE_HTTP${RESET}"
+    echo
+    echo "$ACTIVATE_BODY"
+    echo
+
+    rm -rf "$TMP"
+
+    exit 1
+
+fi
+
+#=========================================================
+# RESULTADO
+#=========================================================
+
+ACTIVATE_OK="$(
+    echo "$ACTIVATE_BODY" |
+    jq -r '.ok // false'
+)"
+
+ACTIVATE_ERROR="$(
+    echo "$ACTIVATE_BODY" |
+    jq -r '.error // empty'
+)"
+
+if [[ "$ACTIVATE_OK" != "true" ]]; then
+
+    echo
+
+    error "No se pudo registrar la actualización."
+
+    echo
+    echo -e "${YELLOW}Código: ${ACTIVATE_ERROR:-desconocido}${RESET}"
+    echo -e "${YELLOW}HTTP  : $ACTIVATE_HTTP${RESET}"
+
+    echo
+
+    echo "$ACTIVATE_BODY"
+
+    echo
+
+    warning "La actualización ya fue instalada."
+    warning "La Key NO fue consumida."
+
+    echo
+
+    rm -rf "$TMP"
+
+    exit 1
+
+fi
+
+#=========================================================
+# ACTIVACIÓN CORRECTA
+#=========================================================
+
+ACTIVATION_ID="$(
+    echo "$ACTIVATE_BODY" |
+    jq -r '.activationId // empty'
+)"
+
+echo
+
+ok "Actualización registrada correctamente."
+
+if [[ -n "$ACTIVATION_ID" ]]; then
+
+    echo
+    echo -e " ${GRAY}Activation ID:${RESET} ${WHITE}$ACTIVATION_ID${RESET}"
+
+fi
+
+echo
+ok "La API marcó la Key como utilizada."
+
+#=========================================================
+# LIMPIAR MEMORIA
+#=========================================================
+
+unset INSTALL_KEY
+unset ACTIVATION_JSON
+unset ACTIVATE_RESPONSE
+unset VALIDATE_JSON
+unset VALIDATE_RESPONSE
 
 #=========================================================
 # LIMPIEZA
 #=========================================================
 
-echo ""
+echo
 
 info "Limpiando archivos temporales..."
 
@@ -541,27 +936,27 @@ ok "Limpieza completada."
 # FINAL
 #=========================================================
 
-echo ""
+echo
 
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}          ✅ ACTUALIZACIÓN COMPLETADA${RESET}              ${GREEN}║${RESET}"
 echo -e "${GREEN}║${RESET} ${GRAY}          Kevin Tech Multi Script Premium${RESET}           ${GREEN}║${RESET}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-echo ""
+echo
 
 echo -e " ${CYAN}◆${RESET} ${WHITE}Versión anterior:${RESET} ${GRAY}${VERSION_ACTUAL}${RESET}"
 echo -e " ${CYAN}◆${RESET} ${WHITE}Versión instalada:${RESET} ${GREEN}${NUEVA_VERSION}${RESET}"
 
-echo ""
+echo
 
-echo -e " ${CYAN}◆${RESET} ${WHITE}Licencia:${RESET} ${GREEN}VERIFICADA${RESET}"
-echo -e " ${CYAN}◆${RESET} ${WHITE}Propietario:${RESET} ${WHITE}${OWNER:-No definido}${RESET}"
-echo -e " ${CYAN}◆${RESET} ${WHITE}Reseller:${RESET} ${WHITE}${RESELLER:-No definido}${RESET}"
+echo -e " ${CYAN}◆${RESET} ${WHITE}Licencia:${RESET} ${GREEN}ACTIVADA${RESET}"
+echo -e " ${CYAN}◆${RESET} ${WHITE}Propietario:${RESET} ${WHITE}${LICENSE_OWNER}${RESET}"
+echo -e " ${CYAN}◆${RESET} ${WHITE}Revendedor:${RESET} ${WHITE}${LICENSE_RESELLER}${RESET}"
 
-echo ""
+echo
 
-echo -e "${CYAN}🚀${RESET} ${WHITE}Reiniciando panel...${RESET}"
+echo -e "${CYAN}🚀${RESET} ${WHITE}Regresando al panel...${RESET}"
 
 sleep 2
 
@@ -569,4 +964,18 @@ sleep 2
 # REGRESAR AL MENÚ
 #=========================================================
 
-exec "$BASE/menu.sh"
+if [[ -f "$BASE/menu.sh" ]]; then
+
+    exec bash "$BASE/menu.sh"
+
+else
+
+    echo
+    warning "No se encontró menu.sh."
+    echo
+    echo -e "${CYAN}Escribe:${RESET} menu"
+    echo
+
+fi
+
+exit 0
