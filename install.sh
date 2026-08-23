@@ -71,7 +71,7 @@ DNS_PROVIDER="Desconocido"
 SSL_TUNNEL="OFF"
 PROXY_STATUS="OFF"
 
-INSTALL_KEY=""
+INSTALL_KEY="${INSTALL_KEY:-}"
 LICENSE_OWNER=""
 LICENSE_RESELLER=""
 LICENSE_TYPE="normal"
@@ -343,7 +343,15 @@ echo
 
 while true; do
 
-    read -r -p "$(echo -e "${GOLD}🔑 Key de Instalación:${RESET} ")" INSTALL_KEY
+    if [[ -z "${INSTALL_KEY:-}" ]]; then
+
+        read -r -p "$(echo -e "${GOLD}🔑 Key de Instalación:${RESET} ")" INSTALL_KEY
+
+    else
+
+        echo -e "${GOLD}🔑 Key de Instalación:${RESET} ${INSTALL_KEY}"
+
+    fi
 
     INSTALL_KEY="$(
         printf '%s' "$INSTALL_KEY" |
@@ -418,9 +426,9 @@ while true; do
     fi
 
     VALID="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.valid // false'
-    )"
+    echo "$VALIDATE_BODY" |
+    jq -r '.ok // false'
+)"
 
     ERROR_CODE="$(
         echo "$VALIDATE_BODY" |
