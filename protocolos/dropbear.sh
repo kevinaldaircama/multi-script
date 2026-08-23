@@ -1,147 +1,331 @@
 #!/bin/bash
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#           KEVINTECH MULTI SCRIPT             #
-#             DROPBEAR MANAGER                 #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+#              🛡️ KEVINTECH MULTI SCRIPT
+#                    DROPBEAR MANAGER
+# ==============================================================
+# Servicio : dropbear_custom
+# Puertos  : 90 / 143 / 109
+# Config   : /etc/kevintech/config.conf
+# ==============================================================
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
-
-[[ ! -f "$CONFIG" ]] && {
-    echo "No se encontró el archivo de configuración."
-    exit 1
-}
-
-source "$CONFIG"
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#                  COLORES                     #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-CYAN="\e[1;96m"
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-RESET="\e[0m"
+VERSION="2.0"
 
 SERVICE="dropbear_custom"
+SERVICE_FILE="/etc/systemd/system/${SERVICE}.service"
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#                  FUNCIONES                   #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+PORTS="90,143,109"
+BIN="/usr/sbin/dropbear"
+
+DROPBEAR_DIR="/etc/dropbear"
+BANNER_FILE="/etc/issue.net"
+
+# ==============================================================
+# COLORES
+# ==============================================================
+
+RESET="\e[0m"
+BOLD="\e[1m"
+
+CYAN="\e[1;96m"
+BLUE="\e[1;94m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+RED="\e[1;91m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
+
+# ==============================================================
+# ROOT
+# ==============================================================
+
+if [[ $EUID -ne 0 ]]; then
+    clear
+
+    echo
+    echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
+    echo
+    echo -e "${WHITE}Dropbear Manager requiere permisos de root.${RESET}"
+    echo
+
+    exit 1
+fi
+
+# ==============================================================
+# CONFIGURACIÓN
+# ==============================================================
+
+if [[ ! -f "$CONFIG" ]]; then
+
+    clear
+
+    echo
+    echo -e "${RED}${BOLD}✘ CONFIGURACIÓN NO ENCONTRADA${RESET}"
+    echo
+    echo -e "${WHITE}Archivo:${RESET}"
+    echo -e "${YELLOW}$CONFIG${RESET}"
+    echo
+
+    exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CONFIG" 2>/dev/null
+
+# ==============================================================
+# FUNCIONES VISUALES
+# ==============================================================
 
 line() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+}
+
+pause() {
+    echo
+    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
 }
 
 ok() {
     echo -e "${GREEN}✔ $1${RESET}"
 }
 
-error() {
+error_msg() {
     echo -e "${RED}✘ $1${RESET}"
+}
+
+warning() {
+    echo -e "${YELLOW}⚠ $1${RESET}"
 }
 
 info() {
     echo -e "${CYAN}➜ $1${RESET}"
 }
 
-pause() {
-    echo ""
-    read -n1 -r -p "Presione una tecla para continuar..."
+# ==============================================================
+# CONFIG.CONF
+# ==============================================================
+
+set_config() {
+
+    local VALUE="$1"
+
+    if grep -q '^DROPBEAR=' "$CONFIG"; then
+        sed -i "s/^DROPBEAR=.*/DROPBEAR=$VALUE/" "$CONFIG"
+    else
+        echo "DROPBEAR=$VALUE" >> "$CONFIG"
+    fi
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             OBTENER INFORMACIÓN              #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+set_ports_config() {
+
+    local VALUE="$1"
+
+    if grep -q '^DROPBEAR_PORT=' "$CONFIG"; then
+        sed -i "s/^DROPBEAR_PORT=.*/DROPBEAR_PORT=\"$VALUE\"/" "$CONFIG"
+    else
+        echo "DROPBEAR_PORT=\"$VALUE\"" >> "$CONFIG"
+    fi
+}
+
+remove_ports_config() {
+    sed -i '/^DROPBEAR_PORT=/d' "$CONFIG"
+}
+
+# ==============================================================
+# SERVICIO
+# ==============================================================
+
+service_exists() {
+    systemctl cat "$SERVICE" &>/dev/null
+}
+
+service_active() {
+    systemctl is-active --quiet "$SERVICE" 2>/dev/null
+}
+
+# ==============================================================
+# ESTADO
+# ==============================================================
 
 get_status() {
 
-    if systemctl is-active --quiet "$SERVICE"; then
-        STATUS="${GREEN}🟢 ACTIVO${RESET}"
+    if ! command -v dropbear >/dev/null 2>&1 &&
+       ! service_exists; then
+
+        echo -e "${GRAY}● NO INSTALADO${RESET}"
+
+    elif service_active; then
+
+        echo -e "${GREEN}● ACTIVO${RESET}"
+
+    elif service_exists; then
+
+        echo -e "${RED}● DETENIDO${RESET}"
+
     else
-        STATUS="${RED}🔴 DETENIDO${RESET}"
+
+        echo -e "${YELLOW}● CONFIGURADO${RESET}"
     fi
-
 }
 
-get_ports() {
+# ==============================================================
+# PUERTOS
+# ==============================================================
 
-    PORTS=$(systemctl cat "$SERVICE" 2>/dev/null | \
-        grep ExecStart | \
-        grep -oP '(?<=-p )\d+' | \
-        paste -sd "," -)
+port_in_use() {
 
-    [[ -z "$PORTS" ]] && PORTS="-"
+    local PORT="$1"
 
+    ss -H -lnt 2>/dev/null |
+        awk -v port=":$PORT" '
+            $4 ~ port"$" {
+                found=1
+            }
+            END {
+                exit !found
+            }
+        '
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             INSTALAR DROPBEAR                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+port_listening() {
 
-install_dropbear() {
+    local PORT="$1"
 
-    clear
-    line
-    echo -e "${WHITE}        INSTALAR DROPBEAR${RESET}"
-    line
+    if port_in_use "$PORT"; then
+        echo -e "${GREEN}● ESCUCHANDO${RESET}"
+    else
+        echo -e "${RED}● CERRADO${RESET}"
+    fi
+}
 
-    # Puertos predeterminados
-    PORTS="90,143,109"
+check_install_ports() {
+
+    local PORT
 
     IFS=',' read -ra PORT_ARRAY <<< "$PORTS"
 
     for PORT in "${PORT_ARRAY[@]}"; do
 
-        if ss -lnt | awk '{print $4}' | grep -q ":$PORT$"; then
-            error "El puerto $PORT ya está en uso."
-            pause
-            return
+        if port_in_use "$PORT"; then
+
+            error_msg "El puerto $PORT ya está siendo utilizado."
+
+            echo
+            echo -e "${GRAY}Puedes comprobarlo con:${RESET}"
+            echo -e "${WHITE}ss -lntp | grep :$PORT${RESET}"
+
+            return 1
         fi
 
     done
 
+    return 0
+}
+
+# ==============================================================
+# GENERAR CLAVES
+# ==============================================================
+
+generate_keys() {
+
+    mkdir -p "$DROPBEAR_DIR"
+
+    chmod 700 "$DROPBEAR_DIR"
+
+    if [[ ! -f "$DROPBEAR_DIR/dropbear_rsa_host_key" ]]; then
+
+        info "Generando clave RSA..."
+
+        if ! dropbearkey \
+            -t rsa \
+            -f "$DROPBEAR_DIR/dropbear_rsa_host_key" \
+            >/dev/null 2>&1; then
+
+            error_msg "No se pudo generar la clave RSA."
+            return 1
+        fi
+    fi
+
+    if [[ ! -f "$DROPBEAR_DIR/dropbear_ecdsa_host_key" ]]; then
+
+        info "Generando clave ECDSA..."
+
+        if ! dropbearkey \
+            -t ecdsa \
+            -f "$DROPBEAR_DIR/dropbear_ecdsa_host_key" \
+            >/dev/null 2>&1; then
+
+            error_msg "No se pudo generar la clave ECDSA."
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+# ==============================================================
+# INSTALAR DEPENDENCIAS
+# ==============================================================
+
+install_package() {
+
     info "Actualizando repositorios..."
-    apt-get update
+
+    if ! apt-get update -y >/dev/null 2>&1; then
+        error_msg "No se pudo actualizar APT."
+        return 1
+    fi
 
     info "Instalando Dropbear..."
-    apt-get install -y dropbear
 
-    mkdir -p /etc/dropbear
-
-    if [[ ! -f /etc/dropbear/dropbear_rsa_host_key ]]; then
-        info "Generando llave RSA..."
-        dropbearkey -t rsa \
-            -f /etc/dropbear/dropbear_rsa_host_key
+    if ! apt-get install -y dropbear >/dev/null 2>&1; then
+        error_msg "No se pudo instalar Dropbear."
+        return 1
     fi
 
-    if [[ ! -f /etc/dropbear/dropbear_ecdsa_host_key ]]; then
-        info "Generando llave ECDSA..."
-        dropbearkey -t ecdsa \
-            -f /etc/dropbear/dropbear_ecdsa_host_key
+    if ! command -v dropbear >/dev/null 2>&1; then
+        error_msg "El binario de Dropbear no está disponible."
+        return 1
     fi
 
-   
+    ok "Dropbear instalado."
 
-    systemctl stop dropbear 2>/dev/null
-    systemctl disable dropbear 2>/dev/null
+    return 0
+}
 
-    EXEC="/usr/sbin/dropbear -F"
+# ==============================================================
+# CREAR SERVICIO
+# ==============================================================
+
+create_service() {
+
+    local EXEC="$BIN -F"
+
+    local PORT
+
+    IFS=',' read -ra PORT_ARRAY <<< "$PORTS"
 
     for PORT in "${PORT_ARRAY[@]}"; do
         EXEC="$EXEC -p $PORT"
     done
 
-    EXEC="$EXEC -W 65536 -b /etc/issue.net"
+    EXEC="$EXEC -W 65536"
 
-cat > /etc/systemd/system/dropbear_custom.service <<EOF
+    if [[ -f "$BANNER_FILE" ]]; then
+        EXEC="$EXEC -b $BANNER_FILE"
+    fi
+
+    info "Creando servicio systemd..."
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=KevinTech Dropbear Multi-Port
-After=network.target
+Documentation=https://matt.ucc.asn.au/dropbear/dropbear.html
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -149,352 +333,532 @@ ExecStart=$EXEC
 Restart=always
 RestartSec=3
 KillMode=process
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable dropbear_custom
-    systemctl restart dropbear_custom
 
-    if systemctl is-active --quiet dropbear_custom; then
+    if ! systemctl enable "$SERVICE" >/dev/null 2>&1; then
+        error_msg "No se pudo habilitar $SERVICE."
+        return 1
+    fi
 
-        if grep -q "^DROPBEAR=" "$CONFIG"; then
-            sed -i 's/^DROPBEAR=.*/DROPBEAR=ON/' "$CONFIG"
-        else
-            echo "DROPBEAR=ON" >> "$CONFIG"
-        fi
+    return 0
+}
 
-        if grep -q "^DROPBEAR_PORT=" "$CONFIG"; then
-            sed -i "s/^DROPBEAR_PORT=.*/DROPBEAR_PORT=\"$PORTS\"/" "$CONFIG"
-        else
-            echo "DROPBEAR_PORT=\"$PORTS\"" >> "$CONFIG"
-        fi
+# ==============================================================
+# INSTALAR DROPBEAR
+# ==============================================================
 
-        source "$CONFIG"
+install_dropbear() {
 
-        line
-        ok "Dropbear instalado correctamente."
-        echo ""
-        echo " Servicio : dropbear_custom"
-        echo " Puertos  : $PORTS"
-        echo " Banner   : $BANNER"
-        line
+    clear
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🚀 INSTALAR DROPBEAR${RESET}                   ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}                    ${GRAY}v$VERSION${RESET}                              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    echo -e "${WHITE}Puertos:${RESET} ${CYAN}$PORTS${RESET}"
+    echo
+
+    if ! check_install_ports; then
+        pause
+        return 1
+    fi
+
+    if ! install_package; then
+        pause
+        return 1
+    fi
+
+    if ! generate_keys; then
+        pause
+        return 1
+    fi
+
+    systemctl stop dropbear 2>/dev/null
+    systemctl disable dropbear 2>/dev/null
+
+    if ! create_service; then
+        pause
+        return 1
+    fi
+
+    info "Iniciando Dropbear..."
+
+    systemctl restart "$SERVICE"
+
+    sleep 1
+
+    if service_active; then
+
+        set_config "ON"
+        set_ports_config "$PORTS"
+
+        # Recargar variables
+        # shellcheck disable=SC1090
+        source "$CONFIG" 2>/dev/null
+
+        echo
+        echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${GREEN}║${RESET}              ${BOLD}✔ DROPBEAR ACTIVADO${RESET}                    ${GREEN}║${RESET}"
+        echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${GREEN}║${RESET}  Servicio : $SERVICE"
+        echo -e "${GREEN}║${RESET}  Puertos  : $PORTS"
+        echo -e "${GREEN}║${RESET}  Banner   : $BANNER_FILE"
+        echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+        return 0
 
     else
 
-        error "No fue posible iniciar Dropbear."
+        set_config "OFF"
 
+        echo
+        error_msg "Dropbear no pudo iniciarse."
+
+        echo
+        info "Últimos registros del servicio:"
+        journalctl -u "$SERVICE" -n 15 --no-pager 2>/dev/null
+
+        return 1
     fi
-
-    pause
-
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            REINICIAR SERVICIO                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# REINICIAR
+# ==============================================================
 
 restart_dropbear() {
 
-    systemctl restart dropbear_custom
+    clear
 
-    if systemctl is-active --quiet dropbear_custom; then
-        ok "Servicio reiniciado correctamente."
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}♻️ REINICIAR DROPBEAR${RESET}                   ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    if ! service_exists; then
+        error_msg "El servicio $SERVICE no está instalado."
+        pause
+        return
+    fi
+
+    info "Reiniciando servicio..."
+
+    systemctl restart "$SERVICE"
+
+    sleep 1
+
+    if service_active; then
+
+        set_config "ON"
+
+        ok "Dropbear está funcionando correctamente."
+
     else
-        error "No fue posible reiniciar el servicio."
+
+        set_config "OFF"
+
+        error_msg "Dropbear no pudo reiniciarse."
+
+        echo
+        journalctl -u "$SERVICE" -n 15 --no-pager 2>/dev/null
     fi
 
     pause
-
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             INFORMACIÓN COMPLETA             #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# ESTADO DETALLADO
+# ==============================================================
 
 status_dropbear() {
 
     clear
 
-    get_status
-    get_ports
+    local PORT
+    local PORT_STATUS
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}               ${MAGENTA}${BOLD}📊 DROPBEAR STATUS${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    echo -e "${WHITE}Estado:${RESET}       $(get_status)"
+    echo -e "${WHITE}Servicio:${RESET}     ${CYAN}$SERVICE${RESET}"
+    echo -e "${WHITE}Binario:${RESET}      ${CYAN}$BIN${RESET}"
+    echo -e "${WHITE}Banner:${RESET}       ${CYAN}$BANNER_FILE${RESET}"
+    echo -e "${WHITE}Configuración:${RESET} ${CYAN}${DROPBEAR:-OFF}${RESET}"
 
     line
-    echo -e "${WHITE}          ESTADO DROPBEAR${RESET}"
+
+    echo -e "${WHITE}Puertos:${RESET}"
+
+    IFS=',' read -ra PORT_ARRAY <<< "$PORTS"
+
+    for PORT in "${PORT_ARRAY[@]}"; do
+        printf "  ${GREEN}%-6s${RESET} %b\n" \
+            "$PORT" \
+            "$(port_listening "$PORT")"
+    done
+
     line
 
-    echo "Estado      : $STATUS"
-    echo "Servicio    : dropbear_custom"
-    echo "Puertos     : $PORTS"
-    echo "Banner      : /etc/issue.net"
+    if service_exists; then
 
-    echo ""
+        echo -e "${WHITE}Estado systemd:${RESET}"
+        systemctl is-active "$SERVICE" 2>/dev/null || true
 
-    echo "Proceso"
+        echo
+        echo -e "${WHITE}Arranque automático:${RESET}"
+        systemctl is-enabled "$SERVICE" 2>/dev/null || true
 
-    systemctl status dropbear_custom --no-pager -l
-
-    pause
-
-}
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            DESINSTALAR DROPBEAR              #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-remove_dropbear() {
-
-    clear
-    line
-    echo -e "${WHITE}       DESINSTALAR DROPBEAR${RESET}"
-    line
-    echo ""
-
-    read -rp "¿Desea continuar? [s/N]: " R
-
-    [[ ! "$R" =~ ^[Ss]$ ]] && return
-
-    info "Deteniendo servicios..."
-
-    systemctl stop dropbear_custom 2>/dev/null
-    systemctl disable dropbear_custom 2>/dev/null
-
-    systemctl stop dropbear 2>/dev/null
-    systemctl disable dropbear 2>/dev/null
-
-    info "Eliminando servicio personalizado..."
-
-    rm -f /etc/systemd/system/dropbear_custom.service
-
-    systemctl daemon-reload
-    systemctl reset-failed
-
-    info "Desinstalando paquete..."
-
-    apt-get purge -y dropbear
-
-    apt-get autoremove -y
-
-    info "Limpiando archivos..."
-
-    rm -rf /etc/dropbear
-    
-
-    if grep -q "^DROPBEAR=" "$CONFIG"; then
-        sed -i 's/^DROPBEAR=.*/DROPBEAR=OFF/' "$CONFIG"
     else
-        echo "DROPBEAR=OFF" >> "$CONFIG"
+
+        echo -e "${GRAY}El servicio personalizado no existe.${RESET}"
+
     fi
 
-    sed -i '/^DROPBEAR_PORT=/d' "$CONFIG"
-
-    source "$CONFIG"
-
-    line
-    ok "Dropbear fue eliminado correctamente."
-    line
+    echo
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     pause
-
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#          VERIFICAR CONFIGURACIÓN             #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# DIAGNÓSTICO
+# ==============================================================
 
 check_dropbear() {
 
     clear
 
-    line
-    echo -e "${WHITE}      DIAGNÓSTICO DROPBEAR${RESET}"
-    line
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}             ${MAGENTA}${BOLD}🔎 DIAGNÓSTICO DROPBEAR${RESET}                  ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 
-    echo ""
+    echo -e "${WHITE}Componentes:${RESET}"
+    echo
 
+    # Binario
     if command -v dropbear >/dev/null 2>&1; then
-        ok "Dropbear instalado"
+        ok "Binario Dropbear encontrado"
     else
-        error "Dropbear no instalado"
+        error_msg "Binario Dropbear no encontrado"
     fi
 
-    if systemctl is-active --quiet dropbear_custom; then
-        ok "Servicio activo"
-    else
-        error "Servicio detenido"
-    fi
-
-    if [[ -f /etc/systemd/system/dropbear_custom.service ]]; then
+    # Servicio
+    if service_exists; then
         ok "Servicio personalizado encontrado"
     else
-        error "Servicio personalizado no existe"
+        error_msg "Servicio personalizado inexistente"
     fi
 
-    if [[ -f /etc/dropbear/dropbear_rsa_host_key ]]; then
-        ok "Llave RSA encontrada"
+    # Servicio activo
+    if service_active; then
+        ok "Servicio activo"
     else
-        error "Llave RSA inexistente"
+        error_msg "Servicio detenido"
     fi
 
-    if [[ -f /etc/dropbear/dropbear_ecdsa_host_key ]]; then
-        ok "Llave ECDSA encontrada"
+    # RSA
+    if [[ -f "$DROPBEAR_DIR/dropbear_rsa_host_key" ]]; then
+        ok "Clave RSA encontrada"
     else
-        error "Llave ECDSA inexistente"
+        error_msg "Clave RSA inexistente"
     fi
 
-    if [[ -f /etc/issue.net ]]; then
+    # ECDSA
+    if [[ -f "$DROPBEAR_DIR/dropbear_ecdsa_host_key" ]]; then
+        ok "Clave ECDSA encontrada"
+    else
+        error_msg "Clave ECDSA inexistente"
+    fi
+
+    # Banner
+    if [[ -f "$BANNER_FILE" ]]; then
         ok "Banner encontrado"
     else
-        error "Banner inexistente"
+        warning "Banner /etc/issue.net no encontrado"
     fi
 
-    echo ""
-    info "Puertos escuchando"
+    echo
+    echo -e "${WHITE}Puertos:${RESET}"
 
-    ss -lntp | grep dropbear
+    IFS=',' read -ra PORT_ARRAY <<< "$PORTS"
+
+    for PORT in "${PORT_ARRAY[@]}"; do
+
+        if port_in_use "$PORT"; then
+            ok "Puerto $PORT escuchando"
+        else
+            error_msg "Puerto $PORT no está escuchando"
+        fi
+
+    done
+
+    echo
+    echo -e "${WHITE}Procesos Dropbear:${RESET}"
+
+    if pgrep -a dropbear 2>/dev/null; then
+        :
+    else
+        echo -e "${GRAY}No se encontraron procesos.${RESET}"
+    fi
+
+    echo
+    echo -e "${WHITE}Puertos detectados:${RESET}"
+
+    ss -lntp 2>/dev/null |
+        grep -E ':(90|109|143)([[:space:]]|$)' ||
+        echo -e "${GRAY}No se detectaron puertos Dropbear.${RESET}"
 
     pause
-
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#          VER INFORMACIÓN DEL SISTEMA         #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# INFORMACIÓN DEL SERVIDOR
+# ==============================================================
 
 system_info() {
 
     clear
 
-    line
-    echo -e "${WHITE}        INFORMACIÓN DEL SERVIDOR${RESET}"
-    line
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}             ${MAGENTA}${BOLD}📊 INFORMACIÓN DEL SERVIDOR${RESET}                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 
-    echo ""
+    echo -e "${WHITE}Hostname:${RESET}    ${GREEN}$(hostname)${RESET}"
+    echo -e "${WHITE}Kernel:${RESET}      ${GREEN}$(uname -r)${RESET}"
+    echo -e "${WHITE}Arquitectura:${RESET} ${GREEN}$(uname -m)${RESET}"
 
-    echo "Hostname : $(hostname)"
-    echo "Kernel   : $(uname -r)"
-    echo "Sistema  : $(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')"
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck disable=SC1091
+        source /etc/os-release
+        echo -e "${WHITE}Sistema:${RESET}     ${GREEN}${PRETTY_NAME}${RESET}"
+    fi
 
-    echo ""
+    echo
+    echo -e "${WHITE}IP:${RESET}"
+    hostname -I 2>/dev/null
 
-    echo "IP Local"
-
-    hostname -I
-
-    echo ""
-
-    echo "Uso de memoria"
-
+    echo
+    echo -e "${WHITE}Memoria:${RESET}"
     free -h
 
-    echo ""
-
-    echo "Espacio en disco"
-
+    echo
+    echo -e "${WHITE}Disco:${RESET}"
     df -h /
 
     pause
-
 }
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#               MODO AUTOMÁTICO                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+# ==============================================================
+# DESINSTALAR
+# ==============================================================
+
+remove_dropbear() {
+
+    clear
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}              ${RED}${BOLD}🗑️ DESINSTALAR DROPBEAR${RESET}                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    warning "Esta operación eliminará Dropbear y su servicio personalizado."
+    echo
+
+    read -rp "$(echo -e "${RED}¿Continuar? [s/N]: ${RESET}")" CONFIRM
+
+    if [[ ! "$CONFIRM" =~ ^[SsYy]$ ]]; then
+        warning "Operación cancelada."
+        sleep 1
+        return
+    fi
+
+    echo
+
+    info "Deteniendo servicio personalizado..."
+
+    systemctl stop "$SERVICE" 2>/dev/null
+
+    info "Deshabilitando servicio personalizado..."
+
+    systemctl disable "$SERVICE" 2>/dev/null
+
+    info "Eliminando servicio systemd..."
+
+    rm -f "$SERVICE_FILE"
+
+    systemctl daemon-reload
+    systemctl reset-failed "$SERVICE" 2>/dev/null
+
+    info "Deteniendo servicio oficial de Dropbear..."
+
+    systemctl stop dropbear 2>/dev/null
+    systemctl disable dropbear 2>/dev/null
+
+    info "Desinstalando paquete..."
+
+    if apt-get purge -y dropbear >/dev/null 2>&1; then
+        ok "Paquete Dropbear eliminado."
+    else
+        warning "APT informó un problema al eliminar Dropbear."
+    fi
+
+    apt-get autoremove -y >/dev/null 2>&1
+
+    info "Limpiando archivos..."
+
+    rm -rf "$DROPBEAR_DIR"
+
+    set_config "OFF"
+    remove_ports_config
+
+    # shellcheck disable=SC1090
+    source "$CONFIG" 2>/dev/null
+
+    echo
+
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}║${RESET}              ${BOLD}✔ DROPBEAR ELIMINADO${RESET}                   ${GREEN}║${RESET}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    pause
+}
+
+# ==============================================================
+# MODO AUTOMÁTICO
+# ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
-    echo "🚀 Instalando Dropbear automáticamente..."
 
-    install_dropbear
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${MAGENTA}${BOLD}             🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
+    echo -e "${WHITE}                    DROPBEAR${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
 
-    if systemctl is-active --quiet dropbear_custom; then
-        echo "✅ Dropbear instalado correctamente."
+    if install_dropbear; then
+
+        echo
+        ok "Dropbear instalado correctamente."
+
         exit 0
+
     else
-        echo "❌ Error instalando Dropbear."
+
+        echo
+        error_msg "La instalación automática de Dropbear falló."
+
         exit 1
     fi
 fi
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#                  MENÚ                        #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+# ==============================================================
+# MENÚ PRINCIPAL
+# ==============================================================
 
 while true; do
 
     clear
 
-    get_status
-    get_ports
+    # Recargar configuración
+    # shellcheck disable=SC1090
+    source "$CONFIG" 2>/dev/null
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🔐 DROPBEAR MANAGER${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}                 ${GRAY}SSH GATEWAY v$VERSION${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    echo -e "${WHITE}Estado:${RESET}       $(get_status)"
+    echo -e "${WHITE}Servicio:${RESET}     ${CYAN}$SERVICE${RESET}"
+    echo -e "${WHITE}Puertos:${RESET}      ${GREEN}$PORTS${RESET}"
+    echo -e "${WHITE}Configuración:${RESET} ${CYAN}${DROPBEAR:-OFF}${RESET}"
 
     line
-    echo -e "${WHITE}            🔐 DROPBEAR MANAGER${RESET}"
-    line
 
-    echo -e " Estado     : $STATUS"
-    echo -e " Servicio   : $SERVICE"
-    echo -e " Puertos    : $PORTS"
-    echo -e " Instalado  : ${DROPBEAR:-OFF}"
+    if service_exists || command -v dropbear >/dev/null 2>&1; then
 
-    line
-
-    if [[ "$DROPBEAR" == "ON" ]]; then
-
-        cat <<EOF
- [1] Reinstalar Dropbear
- [2] Reiniciar Servicio
- [3] Estado del Servicio
- [4] Diagnóstico
- [5] Información del Servidor
- [6] Desinstalar Dropbear
- [0] Regresar
-EOF
+        echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN DROPBEAR${RESET}"
+        echo
+        echo -e "  ${GREEN}${BOLD}[01]${RESET} 🔄 Reinstalar / Actualizar"
+        echo -e "  ${GREEN}${BOLD}[02]${RESET} ♻️  Reiniciar Servicio"
+        echo -e "  ${GREEN}${BOLD}[03]${RESET} 📊 Estado Detallado"
+        echo -e "  ${GREEN}${BOLD}[04]${RESET} 🔎 Diagnóstico"
+        echo -e "  ${GREEN}${BOLD}[05]${RESET} 🖥️  Información del Servidor"
+        echo -e "  ${GREEN}${BOLD}[06]${RESET} 🗑️  Desinstalar Dropbear"
 
     else
 
-        cat <<EOF
- [1] Instalar Dropbear
- [0] Regresar
-EOF
+        echo -e "${BLUE}${BOLD}  🚀 INSTALACIÓN${RESET}"
+        echo
+        echo -e "  ${GREEN}${BOLD}[01]${RESET} 🚀 Instalar Dropbear"
 
     fi
 
-    line
+    echo
+    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
+    echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar al Menú de Protocolos${RESET}"
 
-    read -rp " ► Opción: " OP
+    echo
+    echo -e "${GRAY}  KevinTech Multi Script • Privanox VPN • v${VERSION}${RESET}"
+    echo
 
-case "$OP" in
+    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
 
-1)
-    install_dropbear
-;;
+    case "$OP" in
 
-2)
-    restart_dropbear
-;;
+        1)
+            install_dropbear
+            pause
+            ;;
 
-3)
-    status_dropbear
-;;
+        2)
+            restart_dropbear
+            ;;
 
-4)
-    check_dropbear
-;;
+        3)
+            status_dropbear
+            ;;
 
-5)
-    system_info
-;;
+        4)
+            check_dropbear
+            ;;
 
-6)
-    remove_dropbear
-;;
+        5)
+            system_info
+            ;;
 
-0)
-    exec bash "$BASE/protocolos/menu.sh"
-;;
+        6)
+            remove_dropbear
+            ;;
 
-*)
-    error "Opción inválida."
-    sleep 2
-;;
+        0)
+            clear
+            exec bash "$BASE/protocolos/menu.sh"
+            ;;
 
-esac
+        "")
+            ;;
+
+        *)
+            echo
+            error_msg "Opción inválida."
+            sleep 1
+            ;;
+
+    esac
+
 done
