@@ -283,8 +283,6 @@ echo -e " ${CYAN}🤖 Telegram:${RESET} ${PINK}${BOLD}${LICENSE_BOT}${RESET}"
 echo
 echo -e "${GRAY}La validación se realiza automáticamente.${RESET}"
 echo
-echo -e "${WHITE} basado del bot de @Dan3651 tg:${RESET}"
-echo
 loading "Comprobando sistema de licencias"
 
 HEALTH_RESPONSE="$(
