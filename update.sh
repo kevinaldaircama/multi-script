@@ -3,7 +3,7 @@
 #=========================================================
 #        KEVIN TECH MULTI SCRIPT - UPDATER
 #        Sistema de actualización + Licencia KEY
-#        LICENSE API v2.1
+#        LICENSE API v2.2
 #=========================================================
 
 set -o pipefail
@@ -378,6 +378,25 @@ while true; do
     fi
 
     #=====================================================
+    # HTTP
+    #=====================================================
+
+    if [[ "$VALIDATE_HTTP" != "200" ]]; then
+
+        error "La API respondió con HTTP $VALIDATE_HTTP."
+
+        echo
+        echo -e "${GRAY}Respuesta:${RESET}"
+        echo "$VALIDATE_BODY"
+        echo
+
+        sleep 2
+
+        continue
+
+    fi
+
+    #=====================================================
     # JSON VÁLIDO
     #=====================================================
 
@@ -402,7 +421,7 @@ while true; do
 
     VALID="$(
         echo "$VALIDATE_BODY" |
-        jq -r '.valid // false'
+        jq -r '.ok // false'
     )"
 
     ERROR_CODE="$(
@@ -818,6 +837,30 @@ if [[ "$ACTIVATE_STATUS" -ne 0 ]]; then
     echo -e "${YELLOW}IMPORTANTE:${RESET}"
     echo -e "${WHITE}La actualización necesita ser registrada manualmente.${RESET}"
     echo
+
+    rm -rf "$TMP"
+
+    exit 1
+
+fi
+
+#=========================================================
+# HTTP ACTIVACIÓN
+#=========================================================
+
+if [[ "$ACTIVATE_HTTP" != "200" ]]; then
+
+    echo
+
+    error "La API de activación respondió con HTTP $ACTIVATE_HTTP."
+
+    echo
+    echo -e "${GRAY}Respuesta:${RESET}"
+    echo "$ACTIVATE_BODY"
+    echo
+
+    warning "La actualización fue instalada."
+    warning "La Key NO fue marcada como utilizada."
 
     rm -rf "$TMP"
 
