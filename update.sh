@@ -378,12 +378,12 @@ while true; do
     fi
 
     #=====================================================
-    # HTTP
+    # HTTP VALIDACIÓN
     #=====================================================
 
     if [[ "$VALIDATE_HTTP" != "200" ]]; then
 
-        error "La API respondió con HTTP $VALIDATE_HTTP."
+        error "La API de validación respondió con HTTP $VALIDATE_HTTP."
 
         echo
         echo -e "${GRAY}Respuesta:${RESET}"
@@ -421,7 +421,7 @@ while true; do
 
     VALID="$(
         echo "$VALIDATE_BODY" |
-        jq -r '.ok // false'
+        jq -r '.ok // .valid // false'
     )"
 
     ERROR_CODE="$(
@@ -845,30 +845,6 @@ if [[ "$ACTIVATE_STATUS" -ne 0 ]]; then
 fi
 
 #=========================================================
-# HTTP ACTIVACIÓN
-#=========================================================
-
-if [[ "$ACTIVATE_HTTP" != "200" ]]; then
-
-    echo
-
-    error "La API de activación respondió con HTTP $ACTIVATE_HTTP."
-
-    echo
-    echo -e "${GRAY}Respuesta:${RESET}"
-    echo "$ACTIVATE_BODY"
-    echo
-
-    warning "La actualización fue instalada."
-    warning "La Key NO fue marcada como utilizada."
-
-    rm -rf "$TMP"
-
-    exit 1
-
-fi
-
-#=========================================================
 # JSON
 #=========================================================
 
@@ -890,7 +866,7 @@ if ! echo "$ACTIVATE_BODY" |
 fi
 
 #=========================================================
-# RESULTADO
+# RESULTADO API
 #=========================================================
 
 ACTIVATE_OK="$(
@@ -902,6 +878,17 @@ ACTIVATE_ERROR="$(
     echo "$ACTIVATE_BODY" |
     jq -r '.error // empty'
 )"
+
+#=========================================================
+# VALIDACIÓN DE ACTIVACIÓN
+#
+# La API puede devolver:
+#
+# HTTP 200 = correcto
+# HTTP 201 = activación creada correctamente
+#
+# La respuesta {"ok":true} tiene prioridad.
+#=========================================================
 
 if [[ "$ACTIVATE_OK" != "true" ]]; then
 
@@ -915,6 +902,7 @@ if [[ "$ACTIVATE_OK" != "true" ]]; then
 
     echo
 
+    echo -e "${GRAY}Respuesta:${RESET}"
     echo "$ACTIVATE_BODY"
 
     echo
@@ -938,6 +926,11 @@ ACTIVATION_ID="$(
     echo "$ACTIVATE_BODY" |
     jq -r '.activationId // empty'
 )"
+
+echo
+
+ok "Servidor de activación respondió correctamente."
+echo -e " ${GRAY}HTTP:${RESET} ${GREEN}${ACTIVATE_HTTP}${RESET}"
 
 echo
 
