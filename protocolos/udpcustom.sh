@@ -1,105 +1,348 @@
 #!/bin/bash
 
+# ==============================================================
+#              🛡️ KEVINTECH MULTI SCRIPT
+#                 UDP CUSTOM MANAGER v2.0
+# ==============================================================
+
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-[[ ! -f "$CONFIG" ]] && {
-    echo "❌ No existe configuración KevinTech"
-    exit 1
-}
-
-source "$CONFIG"
-
-CYAN="\e[1;96m"
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-WHITE="\e[1;97m"
-RESET="\e[0m"
-
-
 SERVICE="udp-custom"
 PORT="2100"
+
 BIN="/usr/bin/udp"
-CONFIG_UDP="/usr/bin/config.json"
+UDP_CONFIG="/usr/bin/config.json"
+SERVICE_FILE="/etc/systemd/system/${SERVICE}.service"
 
+VERSION="2.0"
 
-set_udp_status(){
+# ==============================================================
+# COLORES
+# ==============================================================
 
-if systemctl is-active --quiet "$SERVICE"; then
-    STATUS="${GREEN}🟢 ACTIVO${RESET}"
-else
-    STATUS="${RED}🔴 DETENIDO${RESET}"
+RESET="\e[0m"
+BOLD="\e[1m"
+
+CYAN="\e[1;96m"
+BLUE="\e[1;94m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+RED="\e[1;91m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
+
+# ==============================================================
+# VERIFICAR ROOT
+# ==============================================================
+
+if [[ $EUID -ne 0 ]]; then
+
+    echo
+    echo -e "${RED}${BOLD}✘ Este administrador requiere root.${RESET}"
+    echo
+
+    exit 1
 fi
 
+# ==============================================================
+# VERIFICAR CONFIG
+# ==============================================================
+
+if [[ ! -f "$CONFIG" ]]; then
+
+    echo
+    echo -e "${RED}${BOLD}✘ No existe la configuración KevinTech.${RESET}"
+    echo
+    echo -e "${WHITE}Archivo:${RESET} $CONFIG"
+    echo
+
+    exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CONFIG" 2>/dev/null
+
+# ==============================================================
+# FUNCIONES VISUALES
+# ==============================================================
+
+line() {
+
+    echo -e \
+        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 }
 
+header() {
 
-install_udp(){
+    clear
 
-clear
+    echo -e \
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       🚀 INSTALANDO UDP CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e \
+        "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🚀 UDP CUSTOM MANAGER${RESET}                    ${CYAN}║${RESET}"
 
+    echo -e \
+        "${CYAN}║${RESET}                   ${GRAY}KevinTech v$VERSION${RESET}                       ${CYAN}║${RESET}"
 
-apt update -y
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-apt install -y curl wget iptables libpam0g
+    echo
+}
 
+ok() {
 
-echo "⚙️ Activando IP Forward..."
+    echo -e "${GREEN}✔ $1${RESET}"
+}
 
-sysctl -w net.ipv4.ip_forward=1
+error_msg() {
 
-grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || \
-echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    echo -e "${RED}✘ $1${RESET}"
+}
 
+warning() {
 
-ARCH=$(uname -m)
+    echo -e "${YELLOW}⚠ $1${RESET}"
+}
 
+info() {
 
-case "$ARCH" in
+    echo -e "${CYAN}➜ $1${RESET}"
+}
 
-x86_64)
-URL="https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-amd64"
-;;
+pause() {
 
-aarch64)
-URL="https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-arm"
-;;
+    echo
 
-*)
-echo "❌ Arquitectura no soportada: $ARCH"
-return
-;;
+    read -rp \
+        "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+}
 
-esac
+# ==============================================================
+# CONFIG.CONF
+# ==============================================================
 
+set_config() {
 
-echo "⬇️ Descargando UDP..."
+    local KEY="$1"
+    local VALUE="$2"
 
-curl -L -s -f "$URL" -o "$BIN"
+    if grep -q "^${KEY}=" "$CONFIG"; then
 
+        sed -i \
+            "s/^${KEY}=.*/${KEY}=${VALUE}/" \
+            "$CONFIG"
 
-if [[ ! -f "$BIN" ]]; then
+    else
 
-echo "❌ Error descargando UDP"
+        echo "${KEY}=${VALUE}" >> "$CONFIG"
 
-return
+    fi
+}
 
-fi
+# ==============================================================
+# ESTADO REAL DEL SERVICIO
+# ==============================================================
 
+udp_installed() {
 
-chmod +x "$BIN"
+    [[ -x "$BIN" &&
+       -f "$SERVICE_FILE" &&
+       -f "$UDP_CONFIG" ]]
+}
 
+udp_active() {
 
+    systemctl is-active \
+        --quiet "$SERVICE" 2>/dev/null
+}
 
-echo "📝 Creando configuración..."
+# ==============================================================
+# DETECTAR ARQUITECTURA
+# ==============================================================
 
-cat > "$CONFIG_UDP" <<EOF
+get_udp_url() {
+
+    local ARCH
+
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+
+        x86_64|amd64)
+
+            echo \
+                "https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-amd64"
+
+            ;;
+
+        aarch64|arm64)
+
+            echo \
+                "https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-arm"
+
+            ;;
+
+        armv7l|armv7)
+
+            echo \
+                "https://github.com/Depwisescript/UDP/raw/main/udp-custom-linux-arm"
+
+            ;;
+
+        *)
+
+            return 1
+
+            ;;
+
+    esac
+}
+
+# ==============================================================
+# DEPENDENCIAS
+# ==============================================================
+
+install_dependencies() {
+
+    info "Actualizando repositorios..."
+
+    if ! apt-get update -y >/dev/null 2>&1; then
+
+        error_msg "No se pudo actualizar APT."
+
+        return 1
+    fi
+
+    info "Instalando dependencias..."
+
+    if ! apt-get install -y \
+        curl \
+        wget \
+        ca-certificates \
+        iptables \
+        iproute2 \
+        libpam0g \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudieron instalar las dependencias."
+
+        return 1
+    fi
+
+    ok "Dependencias instaladas."
+
+    return 0
+}
+
+# ==============================================================
+# IP FORWARD
+# ==============================================================
+
+enable_ip_forward() {
+
+    info "Activando IPv4 Forward..."
+
+    sysctl -w net.ipv4.ip_forward=1 \
+        >/dev/null 2>&1
+
+    if grep -q \
+        "^net.ipv4.ip_forward=" \
+        /etc/sysctl.conf; then
+
+        sed -i \
+            's/^net.ipv4.ip_forward=.*/net.ipv4.ip_forward=1/' \
+            /etc/sysctl.conf
+
+    else
+
+        echo \
+            "net.ipv4.ip_forward=1" \
+            >> /etc/sysctl.conf
+    fi
+
+    ok "IPv4 Forward habilitado."
+}
+
+# ==============================================================
+# DESCARGAR BINARIO
+# ==============================================================
+
+download_udp() {
+
+    local URL
+
+    URL=$(get_udp_url)
+
+    if [[ -z "$URL" ]]; then
+
+        error_msg \
+            "Arquitectura no compatible: $(uname -m)"
+
+        return 1
+    fi
+
+    info "Arquitectura: $(uname -m)"
+
+    info "Descargando UDP Custom..."
+
+    local TMP
+
+    TMP=$(mktemp)
+
+    if ! curl \
+        -fL \
+        --connect-timeout 15 \
+        --retry 3 \
+        "$URL" \
+        -o "$TMP"; then
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo descargar UDP Custom."
+
+        return 1
+    fi
+
+    if [[ ! -s "$TMP" ]]; then
+
+        rm -f "$TMP"
+
+        error_msg "El archivo descargado está vacío."
+
+        return 1
+    fi
+
+    install -m 755 "$TMP" "$BIN"
+
+    rm -f "$TMP"
+
+    if [[ ! -x "$BIN" ]]; then
+
+        error_msg "El binario no quedó instalado."
+
+        return 1
+    fi
+
+    ok "Binario UDP instalado."
+
+    return 0
+}
+
+# ==============================================================
+# CONFIGURACIÓN UDP
+# ==============================================================
+
+create_udp_config() {
+
+    info "Creando configuración UDP..."
+
+    cat > "$UDP_CONFIG" <<EOF
 {
-    "listen": ":2100",
+    "listen": ":$PORT",
     "stream_buffer": 33554432,
     "receive_buffer": 83886080,
     "auth": {
@@ -108,398 +351,976 @@ cat > "$CONFIG_UDP" <<EOF
 }
 EOF
 
+    chmod 600 "$UDP_CONFIG"
 
+    if ! command -v jq >/dev/null 2>&1; then
 
-echo "⚙️ Creando servicio..."
+        apt-get install -y jq \
+            >/dev/null 2>&1
+    fi
 
+    if command -v jq >/dev/null 2>&1; then
 
-cat > /etc/systemd/system/$SERVICE.service <<EOF
+        if ! jq empty "$UDP_CONFIG" \
+            >/dev/null 2>&1; then
+
+            error_msg \
+                "config.json contiene errores."
+
+            return 1
+        fi
+    fi
+
+    ok "Configuración creada."
+
+    return 0
+}
+
+# ==============================================================
+# SERVICIO SYSTEMD
+# ==============================================================
+
+create_udp_service() {
+
+    info "Creando servicio systemd..."
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=UDP Custom Server KevinTech
-After=network.target
+Description=KevinTech UDP Custom Server
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/usr/bin
-ExecStart=/usr/bin/udp server -exclude 2200,7300,7200,7100,323,10008,10004 /usr/bin/config.json
+ExecStart=$BIN server -exclude 2200,7300,7200,7100,323,10008,10004 $UDP_CONFIG
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
+
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+    systemctl daemon-reload
 
-systemctl daemon-reload
+    systemctl enable "$SERVICE" \
+        >/dev/null 2>&1
 
-systemctl enable "$SERVICE"
+    ok "Servicio creado."
 
-systemctl restart "$SERVICE"
-
-
-
-if systemctl is-active --quiet "$SERVICE"; then
-
-echo "UDP_CUSTOM=ON" >> "$CONFIG"
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ UDP CUSTOM INSTALADO"
-echo "Puerto: $PORT"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-else
-
-echo "❌ UDP no inició"
-journalctl -u "$SERVICE" --no-pager -n 20
-
-fi
-
-
-sleep 3
-
-}
-remove_udp(){
-
-clear
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       🗑️ ELIMINAR UDP CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-
-read -rp "¿Eliminar UDP Custom? (s/n): " CONFIRM
-
-
-if [[ ! "$CONFIRM" =~ ^[Ss]$ ]]; then
-
-echo "❌ Cancelado"
-sleep 2
-return
-
-fi
-
-
-
-echo "⏳ Deteniendo servicio..."
-
-
-systemctl stop "$SERVICE" 2>/dev/null
-
-systemctl disable "$SERVICE" 2>/dev/null
-
-
-
-echo "🧹 Eliminando archivos..."
-
-
-rm -f "/etc/systemd/system/$SERVICE.service"
-
-rm -f "$BIN"
-
-rm -f "$CONFIG_UDP"
-
-
-
-systemctl daemon-reload
-
-
-
-echo "🧹 Limpiando reglas temporales..."
-
-
-DEV=$(ip -4 route show default | awk '{print $5}' | head -1)
-
-
-
-if [[ -n "$DEV" ]]; then
-
-
-iptables -t nat -S PREROUTING 2>/dev/null \
-| grep "2100" \
-| sed 's/-A/-D/' \
-| while read RULE
-do
-iptables -t nat $RULE 2>/dev/null
-done
-
-
-
-iptables -S INPUT 2>/dev/null \
-| grep "2100" \
-| sed 's/-A/-D/' \
-| while read RULE
-do
-iptables $RULE 2>/dev/null
-done
-
-
-fi
-
-
-
-sed -i '/^UDPCUSTOM=/d' "$CONFIG"
-
-echo "UDP_CUSTOM=OFF" >> "$CONFIG"
-
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ UDP CUSTOM ELIMINADO"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-
-sleep 3
-
+    return 0
 }
 
+# ==============================================================
+# BACKUP
+# ==============================================================
 
+backup_udp_config() {
 
-restart_udp(){
+    [[ ! -f "$UDP_CONFIG" ]] && return 0
 
+    local BACKUP_DIR="$BASE/backups/udp"
 
-clear
+    mkdir -p "$BACKUP_DIR"
 
+    local FILE
 
-echo "🔄 Reiniciando UDP Custom..."
+    FILE="$BACKUP_DIR/config-$(date '+%Y%m%d-%H%M%S').json"
 
+    cp -f "$UDP_CONFIG" "$FILE"
 
-systemctl restart "$SERVICE"
+    chmod 600 "$FILE"
 
-
-
-sleep 2
-
-
-
-if systemctl is-active --quiet "$SERVICE"; then
-
-echo "✅ Servicio activo"
-
-else
-
-echo "❌ No pudo iniciar"
-
-journalctl -u "$SERVICE" --no-pager -n 15
-
-fi
-
-
-sleep 3
-
-
+    echo "$FILE"
 }
 
+# ==============================================================
+# INSTALAR UDP
+# ==============================================================
 
+install_udp() {
 
-status_udp(){
+    header
 
+    echo -e \
+        "${WHITE}${BOLD}              INSTALACIÓN UDP CUSTOM${RESET}"
 
-clear
+    line
 
+    echo
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "       📊 ESTADO UDP CUSTOM"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    install_dependencies || {
+        pause
+        return 1
+    }
 
+    enable_ip_forward
 
-echo ""
+    echo
 
+    download_udp || {
+        pause
+        return 1
+    }
 
-systemctl status "$SERVICE" --no-pager
+    create_udp_config || {
+        pause
+        return 1
+    }
 
+    create_udp_service || {
+        pause
+        return 1
+    }
 
+    echo
 
-echo ""
+    info "Iniciando UDP Custom..."
 
-echo "Puerto interno: $PORT"
+    systemctl restart "$SERVICE"
 
+    sleep 2
 
-echo ""
+    if udp_active; then
 
-echo "Escuchando UDP:"
+        set_config "UDP_CUSTOM" "ON"
 
+        echo
 
-ss -ulnp | grep ":$PORT"
+        ok "UDP Custom instalado correctamente."
 
+        echo
+        echo -e \
+            "${WHITE}Puerto:${RESET} ${GREEN}$PORT/UDP${RESET}"
 
+        echo -e \
+            "${WHITE}Servicio:${RESET} ${GREEN}$SERVICE${RESET}"
 
-echo ""
+    else
 
-read -n1 -r -p "Presiona una tecla para continuar..."
+        set_config "UDP_CUSTOM" "OFF"
 
+        error_msg "UDP Custom no pudo iniciar."
+
+        echo
+
+        journalctl \
+            -u "$SERVICE" \
+            -n 25 \
+            --no-pager 2>/dev/null
+
+        pause
+
+        return 1
+    fi
+
+    pause
+
+    return 0
 }
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#               MODO AUTOMÁTICO                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+# ==============================================================
+# REINSTALAR
+# ==============================================================
+
+reinstall_udp() {
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}             🔄 REINSTALAR UDP CUSTOM${RESET}"
+
+    line
+
+    echo
+
+    warning "El binario será reemplazado."
+
+    if [[ -f "$UDP_CONFIG" ]]; then
+
+        local BACKUP
+
+        BACKUP=$(backup_udp_config)
+
+        if [[ -n "$BACKUP" ]]; then
+
+            ok "Backup creado:"
+            echo -e "  ${GRAY}$BACKUP${RESET}"
+
+        fi
+    fi
+
+    echo
+
+    read -rp \
+        "$(echo -e "${YELLOW}¿Continuar? [s/N]: ${RESET}")" \
+        CONFIRM
+
+    if [[ ! "$CONFIRM" =~ ^[Ss]$ ]]; then
+
+        warning "Operación cancelada."
+
+        sleep 1
+
+        return
+    fi
+
+    systemctl stop "$SERVICE" 2>/dev/null
+
+    install_dependencies || {
+        pause
+        return 1
+    }
+
+    download_udp || {
+        pause
+        return 1
+    }
+
+    create_udp_config || {
+        pause
+        return 1
+    }
+
+    create_udp_service || {
+        pause
+        return 1
+    }
+
+    systemctl restart "$SERVICE"
+
+    sleep 2
+
+    if udp_active; then
+
+        set_config "UDP_CUSTOM" "ON"
+
+        ok "UDP Custom reinstalado correctamente."
+
+    else
+
+        set_config "UDP_CUSTOM" "OFF"
+
+        error_msg "UDP Custom no pudo iniciar."
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# REINICIAR
+# ==============================================================
+
+restart_udp() {
+
+    clear
+
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo -e \
+        "${WHITE}${BOLD}                  ♻️ REINICIAR UDP${RESET}"
+
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+
+    if ! udp_installed; then
+
+        error_msg "UDP Custom no está instalado."
+
+        pause
+
+        return
+    fi
+
+    info "Reiniciando servicio..."
+
+    systemctl restart "$SERVICE"
+
+    sleep 2
+
+    if udp_active; then
+
+        set_config "UDP_CUSTOM" "ON"
+
+        ok "UDP Custom reiniciado correctamente."
+
+    else
+
+        set_config "UDP_CUSTOM" "OFF"
+
+        error_msg "UDP Custom no pudo iniciar."
+
+        echo
+
+        journalctl \
+            -u "$SERVICE" \
+            -n 20 \
+            --no-pager 2>/dev/null
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# PUERTO
+# ==============================================================
+
+udp_port_status() {
+
+    if ss -H -u -l 2>/dev/null |
+        awk -v P=":$PORT" '$5 ~ P"$"' |
+        grep -q .; then
+
+        echo -e "${GREEN}🟢 ESCUCHANDO${RESET}"
+
+    else
+
+        echo -e "${RED}🔴 CERRADO${RESET}"
+
+    fi
+}
+
+# ==============================================================
+# ESTADO
+# ==============================================================
+
+status_udp() {
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}                📊 ESTADO UDP CUSTOM${RESET}"
+
+    line
+
+    echo
+
+    if udp_active; then
+
+        STATUS="${GREEN}🟢 ACTIVO${RESET}"
+
+    elif udp_installed; then
+
+        STATUS="${RED}🔴 DETENIDO${RESET}"
+
+    else
+
+        STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
+
+    fi
+
+    echo -e \
+        "${WHITE}Estado:${RESET}       $STATUS"
+
+    echo -e \
+        "${WHITE}Servicio:${RESET}     ${GREEN}$SERVICE${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto:${RESET}       ${GREEN}$PORT/UDP${RESET}"
+
+    echo -e \
+        "${WHITE}Binario:${RESET}      ${GREEN}$BIN${RESET}"
+
+    echo -e \
+        "${WHITE}Configuración:${RESET} ${GREEN}$UDP_CONFIG${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto socket:${RESET} $(udp_port_status)"
+
+    echo
+
+    if [[ -f "$SERVICE_FILE" ]]; then
+
+        ok "Servicio systemd encontrado."
+
+    else
+
+        error_msg "Servicio systemd inexistente."
+
+    fi
+
+    if [[ -x "$BIN" ]]; then
+
+        ok "Binario encontrado."
+
+    else
+
+        error_msg "Binario inexistente."
+
+    fi
+
+    if [[ -f "$UDP_CONFIG" ]]; then
+
+        ok "Configuración encontrada."
+
+    else
+
+        error_msg "Configuración inexistente."
+
+    fi
+
+    echo
+
+    info "Conexiones UDP:"
+
+    ss -ulnp 2>/dev/null |
+        grep -E ":${PORT}[[:space:]]|:${PORT}$" ||
+        echo "No se encontraron conexiones."
+
+    pause
+}
+
+# ==============================================================
+# DIAGNÓSTICO
+# ==============================================================
+
+diagnostic_udp() {
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}                 🔎 DIAGNÓSTICO UDP${RESET}"
+
+    line
+
+    echo
+
+    if [[ -x "$BIN" ]]; then
+        ok "Binario instalado"
+    else
+        error_msg "Binario no instalado"
+    fi
+
+    if [[ -f "$UDP_CONFIG" ]]; then
+        ok "config.json encontrado"
+    else
+        error_msg "config.json no encontrado"
+    fi
+
+    if [[ -f "$SERVICE_FILE" ]]; then
+        ok "Servicio systemd encontrado"
+    else
+        error_msg "Servicio systemd inexistente"
+    fi
+
+    if udp_active; then
+        ok "Servicio activo"
+    else
+        error_msg "Servicio detenido"
+    fi
+
+    if sysctl -n \
+        net.ipv4.ip_forward 2>/dev/null |
+        grep -q '^1$'; then
+
+        ok "IPv4 Forward activo"
+
+    else
+
+        error_msg "IPv4 Forward desactivado"
+
+    fi
+
+    echo
+
+    echo -e "${WHITE}Puerto UDP $PORT:${RESET}"
+
+    ss -ulnp 2>/dev/null |
+        grep -E ":${PORT}[[:space:]]|:${PORT}$" ||
+        echo "No está escuchando."
+
+    echo
+
+    echo -e "${WHITE}Últimos registros:${RESET}"
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 20 \
+        --no-pager 2>/dev/null
+
+    pause
+}
+
+# ==============================================================
+# LOGS
+# ==============================================================
+
+show_udp_logs() {
+
+    clear
+
+    echo -e \
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
+    echo -e \
+        "${CYAN}║${RESET}                  ${MAGENTA}${BOLD}📜 UDP CUSTOM LOGS${RESET}                    ${CYAN}║${RESET}"
+
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 40 \
+        --no-pager 2>/dev/null
+
+    pause
+}
+
+# ==============================================================
+# DESINSTALAR
+# ==============================================================
+
+remove_udp() {
+
+    header
+
+    echo -e \
+        "${RED}${BOLD}                 🗑️ DESINSTALAR UDP${RESET}"
+
+    line
+
+    echo
+
+    warning "Se eliminará UDP Custom."
+
+    warning "También se eliminarán el binario y la configuración."
+
+    echo
+
+    read -rp \
+        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+        CONFIRM
+
+    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
+
+        warning "Operación cancelada."
+
+        sleep 1
+
+        return
+    fi
+
+    echo
+
+    if [[ -f "$UDP_CONFIG" ]]; then
+
+        local BACKUP
+
+        BACKUP=$(backup_udp_config)
+
+        if [[ -n "$BACKUP" ]]; then
+
+            ok "Backup creado:"
+            echo -e "  ${GRAY}$BACKUP${RESET}"
+
+        fi
+    fi
+
+    info "Deteniendo servicio..."
+
+    systemctl stop "$SERVICE" 2>/dev/null
+    systemctl disable "$SERVICE" 2>/dev/null
+
+    info "Eliminando servicio..."
+
+    rm -f "$SERVICE_FILE"
+
+    info "Eliminando archivos..."
+
+    rm -f "$BIN"
+    rm -f "$UDP_CONFIG"
+
+    systemctl daemon-reload
+    systemctl reset-failed "$SERVICE" \
+        2>/dev/null
+
+    # ----------------------------------------------------------
+    # Eliminar reglas relacionadas con puerto 2100
+    # ----------------------------------------------------------
+
+    info "Limpiando reglas relacionadas con $PORT..."
+
+    while read -r RULE; do
+
+        [[ -z "$RULE" ]] && continue
+
+        iptables \
+            -t nat \
+            $RULE \
+            2>/dev/null
+
+    done < <(
+        iptables -t nat -S 2>/dev/null |
+        grep -E -- "--dport $PORT|--dports .*${PORT}" |
+        sed 's/^-A/-D/'
+    )
+
+    while read -r RULE; do
+
+        [[ -z "$RULE" ]] && continue
+
+        iptables \
+            $RULE \
+            2>/dev/null
+
+    done < <(
+        iptables -S 2>/dev/null |
+        grep -E -- "--dport $PORT|--dports .*${PORT}" |
+        sed 's/^-A/-D/'
+    )
+
+    set_config "UDP_CUSTOM" "OFF"
+
+    # Compatibilidad con posibles instalaciones antiguas
+    sed -i '/^UDPCUSTOM=/d' "$CONFIG"
+
+    echo
+
+    ok "UDP Custom eliminado correctamente."
+
+    pause
+}
+
+# ==============================================================
+# INFORMACIÓN DEL SERVIDOR
+# ==============================================================
+
+server_info() {
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}             🖥️ INFORMACIÓN DEL SERVIDOR${RESET}"
+
+    line
+
+    echo
+
+    echo -e \
+        "${WHITE}Hostname:${RESET} $(hostname)"
+
+    echo -e \
+        "${WHITE}Arquitectura:${RESET} $(uname -m)"
+
+    echo -e \
+        "${WHITE}Kernel:${RESET} $(uname -r)"
+
+    echo -e \
+        "${WHITE}IPv4:${RESET} $(hostname -I 2>/dev/null)"
+
+    echo
+
+    echo -e "${WHITE}Memoria:${RESET}"
+
+    free -h
+
+    echo
+
+    echo -e "${WHITE}Disco:${RESET}"
+
+    df -h /
+
+    pause
+}
+
+# ==============================================================
+# MODO AUTOMÁTICO
+# ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
-    echo "🚀 Instalando UDP Custom automáticamente..."
 
-    install_udp
+    echo
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-    if systemctl is-active --quiet "$SERVICE"; then
-        echo "✅ UDP Custom instalado correctamente."
-        exit 0
-    else
-        echo "❌ Error instalando UDP Custom."
-        exit 1
+    echo -e \
+        "${MAGENTA}${BOLD}              🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
+
+    echo -e \
+        "${WHITE}                    UDP CUSTOM${RESET}"
+
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+
+    if install_udp >/dev/null 2>&1; then
+
+        if udp_active; then
+
+            echo
+            echo -e \
+                "${GREEN}✔ UDP Custom instalado correctamente.${RESET}"
+
+            exit 0
+
+        fi
+
     fi
-fi
-while true
-do
 
-clear
+    echo
+    echo -e \
+        "${RED}✘ Error instalando UDP Custom.${RESET}"
 
-source "$CONFIG"
-
-
-set_udp_status
-
-
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}             🚀 UDP CUSTOM MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-
-echo -e " Estado   : $STATUS"
-echo -e " Puerto   : $PORT"
-echo -e " Servicio : udp-custom"
-
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-
-if [[ "$UDP_CUSTOM" == "ON" ]]; then
-
-
-cat <<EOF
-
- [1] ➮ Desinstalar UDP Custom
- [2] ➮ Reiniciar Servicio
- [3] ➮ Ver Estado
-
- [0] ➮ Regresar
-
-EOF
-
-
-else
-
-
-cat <<EOF
-
- [1] ➮ Instalar UDP Custom
-
- [0] ➮ Regresar
-
-EOF
-
-
+    exit 1
 fi
 
+# ==============================================================
+# MENÚ
+# ==============================================================
 
+udp_menu() {
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    while true; do
 
+        # shellcheck disable=SC1090
+        source "$CONFIG" 2>/dev/null
 
-read -rp " ► Opción: " OP
+        clear
 
+        if udp_active; then
 
+            STATUS="${GREEN}🟢 ACTIVO${RESET}"
 
-case "$OP" in
+        elif udp_installed; then
 
+            STATUS="${RED}🔴 DETENIDO${RESET}"
 
-1)
+        else
 
+            STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
 
-if [[ "$UDP_CUSTOM" == "ON" ]]; then
+        fi
 
-remove_udp
+        echo -e \
+            "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 
-else
+        echo -e \
+            "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🚀 UDP CUSTOM MANAGER${RESET}                    ${CYAN}║${RESET}"
 
-install_udp
+        echo -e \
+            "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                           ${CYAN}║${RESET}"
 
-fi
+        echo -e \
+            "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
-;;
+        echo -e \
+            "${WHITE}Estado:${RESET}       $STATUS"
 
+        echo -e \
+            "${WHITE}Servicio:${RESET}     ${GREEN}$SERVICE${RESET}"
 
+        echo -e \
+            "${WHITE}Puerto:${RESET}       ${GREEN}$PORT/UDP${RESET}"
 
-2)
+        echo -e \
+            "${WHITE}Binario:${RESET}      ${GRAY}$BIN${RESET}"
 
+        echo -e \
+            "${WHITE}IPv4 Forward:${RESET} $(sysctl -n net.ipv4.ip_forward 2>/dev/null)"
 
-if [[ "$UDP_CUSTOM" == "ON" ]]; then
+        echo
 
-restart_udp
+        if udp_installed; then
 
-else
+            echo -e \
+                "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN${RESET}"
 
-echo "❌ UDP Custom no está instalado"
+            echo
 
-sleep 2
+            echo -e \
+                "  ${GREEN}[01]${RESET} 🔄 Reinstalar UDP Custom"
 
-fi
+            echo -e \
+                "  ${GREEN}[02]${RESET} ♻️  Reiniciar Servicio"
 
-;;
+            echo -e \
+                "  ${GREEN}[03]${RESET} 📊 Estado"
 
+            echo -e \
+                "  ${GREEN}[04]${RESET} 🔎 Diagnóstico"
 
+            echo -e \
+                "  ${GREEN}[05]${RESET} 📜 Ver Logs"
 
-3)
+            echo -e \
+                "  ${GREEN}[06]${RESET} 🖥️ Información VPS"
 
+            echo -e \
+                "  ${RED}[07]${RESET} 🗑️  Desinstalar"
 
-if [[ "$UDP_CUSTOM" == "ON" ]]; then
+        else
 
-status_udp
+            echo -e \
+                "${BLUE}${BOLD}  🚀 INSTALACIÓN${RESET}"
 
-else
+            echo
 
-echo "❌ UDP Custom no está instalado"
+            echo -e \
+                "  ${GREEN}[01]${RESET} 🚀 Instalar UDP Custom"
 
-sleep 2
+            echo -e \
+                "  ${GREEN}[02]${RESET} 🔎 Diagnóstico"
 
-fi
+            echo -e \
+                "  ${GREEN}[03]${RESET} 🖥️ Información VPS"
 
-;;
+        fi
 
+        echo
 
+        echo -e \
+            "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
 
-0)
+        echo -e \
+            "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar${RESET}"
 
+        echo
 
-if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+        echo -e \
+            "${GRAY}  KevinTech Multi Script • Privanox VPN • v$VERSION${RESET}"
 
-exec bash "$BASE/protocolos/menu.sh"
+        echo
 
-else
+        read -rp \
+            "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" \
+            OP
 
-clear
+        case "$OP" in
 
-echo "❌ Menú principal no encontrado"
+            1)
 
-sleep 2
+                if udp_installed; then
+                    reinstall_udp
+                else
+                    install_udp
+                fi
 
-exit
+                ;;
 
-fi
+            2)
 
-;;
+                if udp_installed; then
 
+                    restart_udp
 
+                else
 
-*)
+                    error_msg "UDP Custom no está instalado."
 
-echo "❌ Opción inválida"
+                    sleep 1
+                fi
 
-sleep 2
+                ;;
 
-;;
+            3)
 
+                if udp_installed; then
 
-esac
+                    status_udp
 
+                else
 
-done
+                    error_msg "UDP Custom no está instalado."
+
+                    sleep 1
+                fi
+
+                ;;
+
+            4)
+
+                diagnostic_udp
+
+                ;;
+
+            5)
+
+                if udp_installed; then
+
+                    show_udp_logs
+
+                else
+
+                    error_msg "UDP Custom no está instalado."
+
+                    sleep 1
+                fi
+
+                ;;
+
+            6)
+
+                server_info
+
+                ;;
+
+            7)
+
+                if udp_installed; then
+
+                    remove_udp
+
+                else
+
+                    error_msg "UDP Custom no está instalado."
+
+                    sleep 1
+                fi
+
+                ;;
+
+            0)
+
+                if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+
+                    clear
+
+                    exec bash \
+                        "$BASE/protocolos/menu.sh"
+
+                else
+
+                    error_msg \
+                        "Menú de protocolos no encontrado."
+
+                    sleep 2
+
+                    exit 1
+                fi
+
+                ;;
+
+            "")
+
+                ;;
+
+            *)
+
+                error_msg "Opción inválida."
+
+                sleep 1
+
+                ;;
+
+        esac
+
+    done
+}
+
+# ==============================================================
+# INICIO
+# ==============================================================
+
+udp_menu
