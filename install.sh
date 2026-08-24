@@ -1181,8 +1181,8 @@ echo -e "${PURPLE}╔═══════════════════�
 echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}                       ⭐ CRÉDITOS ⭐${RESET}                   ${PURPLE}║${RESET}"
 echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${PURPLE}║${RESET} ${GRAY}Proyecto :${RESET} ${PINK}KevinTech Multi Script${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin Aldair Camacho Serna${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Edición  :${RESET} ${SKY}Premium Server Edition${RESET}"
+echo -e "${PURPLE}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin tech tutorials${RESET}"
+echo -e "${PURPLE}║${RESET} ${GRAY} infraestructura :${RESET} ${SKY}@Dan3651 (tg)${RESET}"
 echo -e "${PURPLE}║${RESET} ${GRAY}Soporte  :${RESET} ${MAGENTA}@multiscriptkeygen_bot${RESET}"
 echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
