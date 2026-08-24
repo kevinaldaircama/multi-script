@@ -1106,6 +1106,30 @@ instalar_modulo \
     "BadVPN UDPGW" \
     "$BASE/protocolos/badvpn.sh" \
     "BADVPN"
+#=========================================================
+# ZIVPN
+#=========================================================
+
+instalar_modulo \
+    "ZiVPN" \
+    "$BASE/protocolos/zivpn.sh" \
+    "ZIPVPN"
+#=========================================================
+# SLOWDNS
+#=========================================================
+
+instalar_modulo \
+    "SlowDNS" \
+    "$BASE/protocolos/slowdns.sh" \
+    "SLOWDNS"
+#=========================================================
+# OPENVPN
+#=========================================================
+
+instalar_modulo \
+    "OpenVPN" \
+    "$BASE/protocolos/openvpn.sh" \
+    "OPENVPN"
 
 #=========================================================
 # PROTOCOLOS AÚN NO DISPONIBLES
