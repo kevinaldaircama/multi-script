@@ -1416,9 +1416,9 @@ echo -e "${CYAN}╔════════════════════�
 echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}                     ⭐ CRÉDITOS ⭐${RESET}                    ${CYAN}║${RESET}"
 echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${CYAN}║${RESET} ${GRAY}Proyecto :${RESET} ${PINK}KevinTech Multi Script${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin Aldair Camacho Serna${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY}Edición  :${RESET} ${SKY}Premium Server Edition${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY}Soporte  :${RESET} ${MAGENTA}${LICENSE_BOT}${RESET}"
+echo -e "${CYAN}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin tech tutorials${RESET}"
+echo -e "${CYAN}║${RESET} ${GRAY} dueño de la infraestructura:${RESET} ${SKY}@Dan3651${RESET}"
+echo -e "${CYAN}║${RESET} ${GRAY} bot de key:${RESET} ${MAGENTA}${LICENSE_BOT}${RESET}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 echo
