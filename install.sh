@@ -1075,6 +1075,16 @@ instalar_modulo \
     "$BASE/protocolos/udpcustom.sh" \
     "UDP_CUSTOM"
 
+
+#=========================================================
+# BADVPN UDPGW
+#=========================================================
+
+instalar_modulo \
+    "BadVPN UDPGW" \
+    "$BASE/protocolos/badvpn.sh" \
+    "BADVPN"
+
 #=========================================================
 # PROTOCOLOS AÚN NO DISPONIBLES
 #=========================================================
