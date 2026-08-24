@@ -1,504 +1,1568 @@
 #!/bin/bash
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            KEVINTECH MULTI SCRIPT            #
-#              ZIVPN AUTO INSTALLER            #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+#              🛡️ KEVINTECH MULTI SCRIPT
+#                    ZIVPN MANAGER
+# ==============================================================
+# Servicio : zivpn
+# Puerto   : UDP automático 20000-29999
+# Config   : /etc/zivpn/config.json
+# Estado   : /etc/kevintech/config.conf
+# ==============================================================
+
+set -o pipefail
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-[[ -f "$CONFIG" ]] && source "$CONFIG"
-
-CYAN="\e[1;96m"
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-WHITE="\e[1;97m"
-BLUE="\e[1;94m"
-MAGENTA="\e[1;95m"
-RESET="\e[0m"
+VERSION="3.0"
 
 SERVICE="zivpn"
+BIN="/usr/local/bin/zivpn"
+ZIVPN_DIR="/etc/zivpn"
+ZIVPN_CONFIG="$ZIVPN_DIR/config.json"
+ZIVPN_KEY="$ZIVPN_DIR/zivpn.key"
+ZIVPN_CERT="$ZIVPN_DIR/zivpn.crt"
+SERVICE_FILE="/etc/systemd/system/${SERVICE}.service"
+
+PORT_MIN="20000"
+PORT_MAX="29999"
+
+BIN_BASE_URL="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9"
+
+# ==============================================================
+# COLORES
+# ==============================================================
+
+RESET="\e[0m"
+BOLD="\e[1m"
+
+CYAN="\e[1;96m"
+BLUE="\e[1;94m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+RED="\e[1;91m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
+
+# ==============================================================
+# ROOT
+# ==============================================================
+
+if [[ "$EUID" -ne 0 ]]; then
+
+    echo
+    echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
+    echo
+    echo -e "${WHITE}Este administrador requiere permisos de root.${RESET}"
+    echo
+
+    exit 1
+fi
+
+# ==============================================================
+# CONFIGURACIÓN KEVINTECH
+# ==============================================================
+
+if [[ ! -f "$CONFIG" ]]; then
+
+    echo
+    echo -e "${RED}${BOLD}✘ CONFIGURACIÓN NO ENCONTRADA${RESET}"
+    echo
+    echo -e "${WHITE}Archivo:${RESET} $CONFIG"
+    echo
+
+    exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$CONFIG" 2>/dev/null
+
+# ==============================================================
+# FUNCIONES VISUALES
+# ==============================================================
 
 line() {
-    printf "${CYAN}%0.s═" {1..55}
-    echo -e "${RESET}"
+
+    echo -e \
+        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 }
 
-title() {
+header() {
+
     clear
-    line
-    echo -e "${WHITE}           🚀 KEVINTECH ZIVPN MANAGER${RESET}"
-    line
+
+    echo -e \
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
+    echo -e \
+        "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🚀 ZIVPN MANAGER${RESET}                      ${CYAN}║${RESET}"
+
+    echo -e \
+        "${CYAN}║${RESET}                  ${GRAY}KevinTech v$VERSION${RESET}                     ${CYAN}║${RESET}"
+
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
 }
 
 ok() {
+
     echo -e "${GREEN}✔${RESET} $1"
 }
 
-error() {
+error_msg() {
+
     echo -e "${RED}✘${RESET} $1"
 }
 
-info() {
-    echo -e "${CYAN}➜${RESET} $1"
-}
+warning() {
 
-warn() {
     echo -e "${YELLOW}⚠${RESET} $1"
 }
 
-pause() {
-    echo
-    read -n1 -rsp "Presione cualquier tecla para continuar..."
-    echo
+info() {
+
+    echo -e "${CYAN}➜${RESET} $1"
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#        BUSCAR PUERTO LIBRE AUTOMÁTICO        #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+pause() {
+
+    echo
+
+    read -rp \
+        "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+}
+
+# ==============================================================
+# CONFIG.CONF
+# ==============================================================
+
+set_config() {
+
+    local KEY="$1"
+    local VALUE="$2"
+
+    if grep -q "^${KEY}=" "$CONFIG"; then
+
+        sed -i \
+            "s/^${KEY}=.*/${KEY}=${VALUE}/" \
+            "$CONFIG"
+
+    else
+
+        echo "${KEY}=${VALUE}" >> "$CONFIG"
+
+    fi
+}
+
+set_port_config() {
+
+    local PORT="$1"
+
+    if grep -q '^ZIPVPN_PORT=' "$CONFIG"; then
+
+        sed -i \
+            "s/^ZIPVPN_PORT=.*/ZIPVPN_PORT=\"$PORT\"/" \
+            "$CONFIG"
+
+    else
+
+        echo "ZIPVPN_PORT=\"$PORT\"" >> "$CONFIG"
+
+    fi
+}
+
+remove_port_config() {
+
+    sed -i '/^ZIPVPN_PORT=/d' "$CONFIG"
+}
+
+# ==============================================================
+# DETECCIÓN DE RED
+# ==============================================================
+
+get_network_interface() {
+
+    ip route |
+        awk '/default/ {print $5; exit}'
+}
+
+# ==============================================================
+# PUERTO UDP
+# ==============================================================
+
+udp_port_in_use() {
+
+    local PORT="$1"
+
+    ss -H -lun 2>/dev/null |
+        awk -v p=":$PORT" '
+            $5 == p || $5 ~ p"$" {
+                found=1
+            }
+            END {
+                exit !found
+            }
+        '
+}
 
 find_free_port() {
 
-    local port
+    local PORT
+    local COUNT=0
 
-    for port in $(shuf -i 20000-29999); do
-        if ! ss -lunH | awk '{print $5}' | grep -q ":${port}$"; then
-            echo "$port"
+    while [[ "$COUNT" -lt 10000 ]]; do
+
+        PORT=$(
+            shuf \
+                -i "${PORT_MIN}-${PORT_MAX}" \
+                -n 1
+        )
+
+        if ! udp_port_in_use "$PORT"; then
+
+            echo "$PORT"
             return 0
+
         fi
+
+        COUNT=$((COUNT + 1))
+
     done
 
     return 1
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#           DETECTAR INTERFAZ DE RED           #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# DETECTAR ARQUITECTURA
+# ==============================================================
 
-get_network_interface() {
+get_binary_url() {
 
-    local dev
+    case "$(uname -m)" in
 
-    dev=$(ip route | awk '/default/ {print $5; exit}')
+        x86_64|amd64)
 
-    [[ -z "$dev" ]] && \
-    dev=$(ip link show up | awk -F': ' '/state UP/ && $2!="lo"{print $2;exit}')
+            echo \
+                "${BIN_BASE_URL}/udp-zivpn-linux-amd64"
 
-    echo "$dev"
+            ;;
+
+        aarch64|arm64)
+
+            echo \
+                "${BIN_BASE_URL}/udp-zivpn-linux-arm64"
+
+            ;;
+
+        *)
+
+            return 1
+
+            ;;
+
+    esac
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#         COMPROBAR REQUISITOS DEL VPS         #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# DEPENDENCIAS
+# ==============================================================
 
-check_system() {
+install_dependencies() {
 
-    title
-
-    info "Comprobando sistema..."
-
-    [[ $EUID -ne 0 ]] && {
-        error "Ejecute el script como root."
-        pause
-        return 1
-    }
-
-    command -v curl >/dev/null || {
-        error "curl no está instalado."
-        pause
-        return 1
-    }
-
-    command -v openssl >/dev/null || {
-        error "openssl no está instalado."
-        pause
-        return 1
-    }
-
-    ok "Sistema compatible."
-
-}
-
-install_zivpn() {
-
-if systemctl is-active --quiet zivpn; then
-    warn "ZiVPN ya está instalado."
-    pause
-    return
-fi
-    title
-
-    check_system || return
-
-    info "Buscando puerto UDP disponible..."
-
-    PORT=$(find_free_port)
-
-    [[ -z "$PORT" ]] && {
-        error "No se encontró un puerto libre entre 20000 y 29999."
-        pause
-        return
-    }
-
-    ok "Puerto asignado automáticamente: $PORT"
-
-    echo
     info "Actualizando repositorios..."
-    apt-get update -y
 
-    echo
+    if ! apt-get update -y >/dev/null 2>&1; then
+
+        error_msg "No se pudo actualizar APT."
+
+        return 1
+    fi
+
     info "Instalando dependencias..."
 
-    apt-get install -y \
+    if ! apt-get install -y \
         curl \
         wget \
         jq \
         openssl \
         iptables \
-        libc6-i386 >/dev/null 2>&1
+        iproute2 \
+        ca-certificates \
+        >/dev/null 2>&1; then
 
-    sysctl -w net.ipv4.ip_forward=1 >/dev/null
+        error_msg "No se pudieron instalar las dependencias."
 
-    grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf || \
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+        return 1
+    fi
 
-    ARCH=$(uname -m)
+    ok "Dependencias instaladas."
 
-    case "$ARCH" in
-        x86_64)
-            BIN_URL="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-amd64"
-        ;;
-        aarch64|arm64)
-            BIN_URL="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-arm64"
-        ;;
-        *)
-            error "Arquitectura no soportada: $ARCH"
-            pause
-            return
-        ;;
-    esac
+    return 0
+}
 
-    mkdir -p /etc/zivpn
+# ==============================================================
+# IPV4 FORWARD
+# ==============================================================
 
-    echo
+enable_ip_forward() {
+
+    info "Activando IPv4 Forward..."
+
+    sysctl -w \
+        net.ipv4.ip_forward=1 \
+        >/dev/null 2>&1
+
+    if grep -q '^net.ipv4.ip_forward=' /etc/sysctl.conf; then
+
+        sed -i \
+            's/^net.ipv4.ip_forward=.*/net.ipv4.ip_forward=1/' \
+            /etc/sysctl.conf
+
+    else
+
+        echo \
+            'net.ipv4.ip_forward=1' \
+            >> /etc/sysctl.conf
+
+    fi
+
+    ok "IPv4 Forward habilitado."
+}
+
+# ==============================================================
+# DESCARGAR BINARIO
+# ==============================================================
+
+download_binary() {
+
+    local URL
+    local TMP
+
+    URL=$(get_binary_url)
+
+    if [[ -z "$URL" ]]; then
+
+        error_msg \
+            "Arquitectura no compatible: $(uname -m)"
+
+        return 1
+    fi
+
+    info "Arquitectura: $(uname -m)"
+
     info "Descargando ZiVPN..."
 
-    curl -L --retry 3 --connect-timeout 10 "$BIN_URL" -o /usr/local/bin/zivpn
-if [[ $? -ne 0 ]]; then
-    error "No se pudo descargar ZiVPN."
-    pause
-    return
-fi
-    chmod +x /usr/local/bin/zivpn
+    TMP=$(mktemp)
 
-    [[ ! -x /usr/local/bin/zivpn ]] && {
-        error "No fue posible descargar ZiVPN."
-        pause
-        return
-    }
+    if ! curl \
+        -fL \
+        --connect-timeout 15 \
+        --max-time 300 \
+        --retry 3 \
+        --retry-delay 2 \
+        "$URL" \
+        -o "$TMP"; then
 
-    echo
+        rm -f "$TMP"
+
+        error_msg "No se pudo descargar ZiVPN."
+
+        return 1
+    fi
+
+    if [[ ! -s "$TMP" ]]; then
+
+        rm -f "$TMP"
+
+        error_msg "El archivo descargado está vacío."
+
+        return 1
+    fi
+
+    if ! install -m 755 \
+        "$TMP" \
+        "$BIN"; then
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo instalar el binario."
+
+        return 1
+    fi
+
+    rm -f "$TMP"
+
+    if [[ ! -x "$BIN" ]]; then
+
+        error_msg "El binario no quedó ejecutable."
+
+        return 1
+    fi
+
+    ok "Binario ZiVPN instalado."
+
+    return 0
+}
+
+# ==============================================================
+# CERTIFICADOS
+# ==============================================================
+
+generate_certificates() {
+
     info "Generando certificados SSL..."
 
-    openssl req \
-        -new \
-        -newkey rsa:4096 \
-        -nodes \
-        -x509 \
-        -days 3650 \
-        -subj "/C=US/ST=CA/L=LA/O=ZiVPN/CN=zivpn" \
-        -keyout /etc/zivpn/zivpn.key \
-        -out /etc/zivpn/zivpn.crt
+    mkdir -p "$ZIVPN_DIR"
 
-cat >/etc/zivpn/config.json <<EOF
+    if [[ ! -f "$ZIVPN_KEY" ||
+          ! -f "$ZIVPN_CERT" ]]; then
+
+        if ! openssl req \
+            -new \
+            -newkey rsa:2048 \
+            -nodes \
+            -x509 \
+            -days 3650 \
+            -subj "/C=US/ST=CA/L=Server/O=KevinTech/CN=zivpn" \
+            -keyout "$ZIVPN_KEY" \
+            -out "$ZIVPN_CERT" \
+            >/dev/null 2>&1; then
+
+            error_msg "No se pudieron generar los certificados."
+
+            return 1
+        fi
+
+    else
+
+        info "Certificados existentes conservados."
+
+    fi
+
+    chmod 600 "$ZIVPN_KEY"
+    chmod 644 "$ZIVPN_CERT"
+
+    ok "Certificados SSL preparados."
+
+    return 0
+}
+
+# ==============================================================
+# CONFIGURACIÓN ZIVPN
+# ==============================================================
+
+create_config() {
+
+    local PORT="$1"
+
+    info "Creando configuración ZiVPN..."
+
+    cat > "$ZIVPN_CONFIG" <<EOF
 {
     "listen": ":$PORT",
-    "cert": "/etc/zivpn/zivpn.crt",
-    "key": "/etc/zivpn/zivpn.key",
+    "cert": "$ZIVPN_CERT",
+    "key": "$ZIVPN_KEY",
     "max_conn": 0,
-   "auth": {
-    "mode": "passwords",
-    "config": []
+    "auth": {
+        "mode": "passwords",
+        "config": []
     }
 }
 EOF
 
-cat >/etc/systemd/system/zivpn.service <<EOF
+    chmod 600 "$ZIVPN_CONFIG"
+
+    if ! jq empty "$ZIVPN_CONFIG" \
+        >/dev/null 2>&1; then
+
+        error_msg "config.json contiene errores."
+
+        return 1
+    fi
+
+    ok "Configuración creada."
+
+    return 0
+}
+
+# ==============================================================
+# SYSTEMD
+# ==============================================================
+
+create_service() {
+
+    info "Creando servicio systemd..."
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=ZiVPN UDP Server
-After=network.target
+Description=KevinTech ZiVPN UDP Server
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/etc/zivpn
-ExecStart=/usr/local/bin/zivpn server -c /etc/zivpn/config.json
+WorkingDirectory=$ZIVPN_DIR
+ExecStart=$BIN server -c $ZIVPN_CONFIG
 Restart=always
-RestartSec=2
+RestartSec=3
 LimitNOFILE=1048576
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=false
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-jq empty /etc/zivpn/config.json || {
-    error "Error en config.json"
-    pause
-    return
-}
-
-chmod 600 /etc/zivpn/config.json
-chmod 600 /etc/zivpn/zivpn.key
-chmod 644 /etc/zivpn/zivpn.crt
-
     systemctl daemon-reload
-    systemctl enable zivpn >/dev/null 2>&1
-    systemctl restart zivpn
 
-    configure_zivpn_firewall "$PORT"
-if command -v netfilter-persistent >/dev/null 2>&1; then
-    netfilter-persistent save >/dev/null 2>&1
-elif command -v iptables-save >/dev/null 2>&1; then
-    iptables-save >/etc/iptables.rules
-fi
-    if grep -q "^ZIPVPN=" "$CONFIG"; then
-        sed -i 's/^ZIPVPN=.*/ZIPVPN=ON/' "$CONFIG"
-    else
-        echo "ZIPVPN=ON" >> "$CONFIG"
+    if ! systemctl enable "$SERVICE" \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudo habilitar el servicio."
+
+        return 1
     fi
 
-    if grep -q "^ZIPVPN_PORT=" "$CONFIG"; then
-        sed -i "s/^ZIPVPN_PORT=.*/ZIPVPN_PORT=\"$PORT\"/" "$CONFIG"
-    else
-        echo "ZIPVPN_PORT=\"$PORT\"" >> "$CONFIG"
-    fi
+    ok "Servicio systemd configurado."
 
-    source "$CONFIG"
-
-    sleep 2
-
-    if systemctl is-active --quiet zivpn; then
-
-        title
-
-        ok "ZiVPN instalado correctamente."
-
-        echo
-        echo " Servicio : zivpn"
-        echo " Estado   : Activo"
-        echo " Puerto   : $PORT"
-        echo " Rango    : 20000-29999"
-        echo " Config   : /etc/zivpn/config.json"
-        echo " SSL      : Habilitado"
-
-    else
-
-        error "El servicio no pudo iniciarse."
-
-        journalctl -u zivpn --no-pager -n 20
-
-    fi
-
-    pause
+    return 0
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#           CONFIGURAR IPTABLES                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# FIREWALL
+# ==============================================================
 
 configure_zivpn_firewall() {
 
     local PORT="$1"
+    local DEV
 
     info "Configurando firewall..."
 
     DEV=$(get_network_interface)
 
-    [[ -z "$DEV" ]] && {
-        error "No fue posible detectar la interfaz de red."
+    if [[ -z "$DEV" ]]; then
+
+        error_msg "No se pudo detectar la interfaz de red."
+
         return 1
-    }
+    fi
 
     ok "Interfaz detectada: $DEV"
 
-    # Eliminar reglas anteriores
-    while iptables -t nat -C PREROUTING -i "$DEV" -p udp --dport 20000:29999 -j REDIRECT --to-port "$PORT" &>/dev/null; do
-        iptables -t nat -D PREROUTING -i "$DEV" -p udp --dport 20000:29999 -j REDIRECT --to-port "$PORT"
-    done
+    # ----------------------------------------------------------
+    # Eliminar reglas antiguas de esta instalación
+    # ----------------------------------------------------------
 
-    while iptables -C INPUT -p udp --dport 20000:29999 -j ACCEPT &>/dev/null; do
-        iptables -D INPUT -p udp --dport 20000:29999 -j ACCEPT
-    done
-
-    while iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT &>/dev/null; do
-        iptables -D INPUT -p udp --dport "$PORT" -j ACCEPT
-    done
-
-    iptables -t nat -D POSTROUTING -o "$DEV" -j MASQUERADE 2>/dev/null
-
-    # Agregar reglas
-    iptables -t nat -A PREROUTING \
+    while iptables \
+        -t nat \
+        -C PREROUTING \
         -i "$DEV" \
         -p udp \
-        --dport 20000:29999 \
+        --dport "$PORT_MIN:$PORT_MAX" \
+        -j REDIRECT \
+        --to-port "$PORT" \
+        2>/dev/null; do
+
+        iptables \
+            -t nat \
+            -D PREROUTING \
+            -i "$DEV" \
+            -p udp \
+            --dport "$PORT_MIN:$PORT_MAX" \
+            -j REDIRECT \
+            --to-port "$PORT"
+
+    done
+
+    while iptables \
+        -C INPUT \
+        -p udp \
+        --dport "$PORT" \
+        -j ACCEPT \
+        2>/dev/null; do
+
+        iptables \
+            -D INPUT \
+            -p udp \
+            --dport "$PORT" \
+            -j ACCEPT
+
+    done
+
+    while iptables \
+        -C INPUT \
+        -p udp \
+        --dport "$PORT_MIN:$PORT_MAX" \
+        -j ACCEPT \
+        2>/dev/null; do
+
+        iptables \
+            -D INPUT \
+            -p udp \
+            --dport "$PORT_MIN:$PORT_MAX" \
+            -j ACCEPT
+
+    done
+
+    # ----------------------------------------------------------
+    # Agregar reglas
+    # ----------------------------------------------------------
+
+    iptables \
+        -t nat \
+        -A PREROUTING \
+        -i "$DEV" \
+        -p udp \
+        --dport "$PORT_MIN:$PORT_MAX" \
         -j REDIRECT \
         --to-port "$PORT"
 
-    iptables -A INPUT \
+    iptables \
+        -A INPUT \
         -p udp \
         --dport "$PORT" \
         -j ACCEPT
 
-    iptables -A INPUT \
+    iptables \
+        -A INPUT \
         -p udp \
-        --dport 20000:29999 \
+        --dport "$PORT_MIN:$PORT_MAX" \
         -j ACCEPT
 
-    iptables -t nat -A POSTROUTING \
-        -o "$DEV" \
-        -j MASQUERADE
+    ok "Firewall configurado."
 
-    ok "Firewall configurado correctamente."
-
+    return 0
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            REINICIAR SERVICIO                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# GUARDAR IPTABLES
+# ==============================================================
 
-restart_zivpn() {
+save_firewall() {
 
-    title
+    if command -v netfilter-persistent >/dev/null 2>&1; then
 
-    info "Reiniciando ZiVPN..."
+        netfilter-persistent save \
+            >/dev/null 2>&1 || true
 
-    systemctl restart zivpn
+    elif command -v iptables-save >/dev/null 2>&1; then
+
+        iptables-save \
+            > /etc/iptables.rules \
+            2>/dev/null || true
+
+    fi
+}
+
+# ==============================================================
+# INSTALAR ZIVPN
+# ==============================================================
+
+install_zivpn() {
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}             🚀 INSTALACIÓN ZIVPN${RESET}"
+
+    line
+
+    echo
+
+    # ----------------------------------------------------------
+    # Si existe y está funcionando
+    # ----------------------------------------------------------
+
+    if systemctl is-active --quiet "$SERVICE"; then
+
+        warning "ZiVPN ya está instalado y activo."
+
+        echo
+
+        show_installed_info
+
+        pause
+
+        return 0
+    fi
+
+    install_dependencies || {
+        pause
+        return 1
+    }
+
+    enable_ip_forward
+
+    echo
+
+    info "Buscando puerto UDP disponible..."
+
+    local PORT
+
+    PORT=$(find_free_port)
+
+    if [[ -z "$PORT" ]]; then
+
+        error_msg \
+            "No se encontró un puerto libre entre $PORT_MIN y $PORT_MAX."
+
+        pause
+
+        return 1
+    fi
+
+    ok "Puerto asignado: $PORT/UDP"
+
+    echo
+
+    download_binary || {
+        pause
+        return 1
+    }
+
+    generate_certificates || {
+        pause
+        return 1
+    }
+
+    create_config "$PORT" || {
+        pause
+        return 1
+    }
+
+    create_service || {
+        pause
+        return 1
+    }
+
+    echo
+
+    configure_zivpn_firewall "$PORT" || {
+
+        warning "No se pudo configurar completamente el firewall."
+
+        warning "El servicio continuará instalándose."
+
+    }
+
+    save_firewall
+
+    echo
+
+    info "Iniciando ZiVPN..."
+
+    systemctl restart "$SERVICE"
 
     sleep 2
 
-    if systemctl is-active --quiet zivpn; then
-        ok "Servicio reiniciado correctamente."
-    else
-        error "No fue posible reiniciar ZiVPN."
+    if systemctl is-active --quiet "$SERVICE"; then
+
+        set_config "ZIPVPN" "ON"
+        set_port_config "$PORT"
+
+        source "$CONFIG" 2>/dev/null
+
+        echo
+
+        echo -e \
+            "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET}              ${BOLD}✔ ZIVPN INSTALADO${RESET}                       ${GREEN}║${RESET}"
+
+        echo -e \
+            "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} Servicio : ${CYAN}$SERVICE${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} Estado   : ${GREEN}ACTIVO${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} Puerto   : ${CYAN}$PORT/UDP${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} Rango    : ${CYAN}$PORT_MIN-$PORT_MAX${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} SSL      : ${GREEN}HABILITADO${RESET}"
+
+        echo -e \
+            "${GREEN}║${RESET} Config   : ${GRAY}$ZIVPN_CONFIG${RESET}"
+
+        echo -e \
+            "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+        pause
+
+        return 0
+
     fi
+
+    set_config "ZIPVPN" "OFF"
+
+    error_msg "ZiVPN no pudo iniciar."
+
+    echo
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 30 \
+        --no-pager \
+        2>/dev/null
 
     pause
 
+    return 1
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#               ESTADO DEL SERVICIO            #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# INFORMACIÓN INSTALADA
+# ==============================================================
+
+show_installed_info() {
+
+    local PORT="-"
+
+    if [[ -f "$ZIVPN_CONFIG" ]] &&
+       command -v jq >/dev/null 2>&1; then
+
+        PORT=$(
+            jq -r '.listen // "-" ' \
+                "$ZIVPN_CONFIG" 2>/dev/null |
+            sed 's/^://'
+        )
+
+    fi
+
+    echo -e \
+        "${WHITE}Servicio:${RESET} $SERVICE"
+
+    echo -e \
+        "${WHITE}Estado:${RESET} $(systemctl is-active "$SERVICE" 2>/dev/null)"
+
+    echo -e \
+        "${WHITE}Puerto:${RESET} ${PORT}/UDP"
+
+    echo -e \
+        "${WHITE}Configuración:${RESET} $ZIVPN_CONFIG"
+}
+
+# ==============================================================
+# REINICIAR
+# ==============================================================
+
+restart_zivpn() {
+
+    header
+
+    if [[ ! -f "$SERVICE_FILE" ]]; then
+
+        error_msg "ZiVPN no está instalado."
+
+        pause
+
+        return
+    fi
+
+    info "Reiniciando ZiVPN..."
+
+    systemctl restart "$SERVICE"
+
+    sleep 2
+
+    if systemctl is-active --quiet "$SERVICE"; then
+
+        set_config "ZIPVPN" "ON"
+
+        ok "ZiVPN reiniciado correctamente."
+
+    else
+
+        set_config "ZIPVPN" "OFF"
+
+        error_msg "ZiVPN no pudo reiniciarse."
+
+        echo
+
+        journalctl \
+            -u "$SERVICE" \
+            -n 20 \
+            --no-pager \
+            2>/dev/null
+    fi
+
+    pause
+}
+
+# ==============================================================
+# ESTADO
+# ==============================================================
 
 status_zivpn() {
 
-    title
+    header
 
-    if systemctl is-active --quiet zivpn; then
+    local STATUS
+    local PORT="-"
+
+    if systemctl is-active --quiet "$SERVICE"; then
+
         STATUS="${GREEN}🟢 ACTIVO${RESET}"
-    else
+
+    elif [[ -f "$SERVICE_FILE" ]]; then
+
         STATUS="${RED}🔴 DETENIDO${RESET}"
+
+    else
+
+        STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
+
     fi
 
-    PORT="-"
+    if [[ -f "$ZIVPN_CONFIG" ]]; then
 
-    [[ -f /etc/zivpn/config.json ]] && \
-    PORT=$(jq -r '.listen' /etc/zivpn/config.json | tr -d ':')
+        PORT=$(
+            jq -r '.listen // "-"' \
+                "$ZIVPN_CONFIG" 2>/dev/null |
+            sed 's/^://'
+        )
+
+    fi
+
+    echo -e \
+        "${WHITE}Estado:${RESET}       $STATUS"
+
+    echo -e \
+        "${WHITE}Servicio:${RESET}     $SERVICE"
+
+    echo -e \
+        "${WHITE}Puerto UDP:${RESET}   ${GREEN}${PORT}${RESET}"
+
+    echo -e \
+        "${WHITE}Rango:${RESET}        ${PORT_MIN}-${PORT_MAX}"
+
+    echo -e \
+        "${WHITE}Binario:${RESET}      $BIN"
+
+    echo -e \
+        "${WHITE}Configuración:${RESET} $ZIVPN_CONFIG"
+
+    line
+
+    if [[ -f "$SERVICE_FILE" ]]; then
+
+        systemctl \
+            --no-pager \
+            --full \
+            status "$SERVICE" \
+            2>/dev/null
+
+    else
+
+        echo -e "${GRAY}Servicio no instalado.${RESET}"
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# AGREGAR CONTRASEÑA
+# ==============================================================
+
+add_zivpn_password() {
+
+    header
+
+    if [[ ! -f "$ZIVPN_CONFIG" ]]; then
+
+        error_msg "ZiVPN no está instalado."
+
+        pause
+
+        return
+    fi
+
+    read -r -p \
+        "$(echo -e "${CYAN}Nueva contraseña: ${RESET}")" \
+        PASS
+
+    if [[ -z "$PASS" ]]; then
+
+        error_msg "La contraseña no puede estar vacía."
+
+        pause
+
+        return
+    fi
+
+    if jq -e \
+        --arg pass "$PASS" \
+        '.auth.config[]? | select(. == $pass)' \
+        "$ZIVPN_CONFIG" \
+        >/dev/null 2>&1; then
+
+        error_msg "La contraseña ya existe."
+
+        pause
+
+        return
+    fi
+
+    local TMP
+
+    TMP=$(mktemp)
+
+    if jq \
+        --arg pass "$PASS" \
+        '.auth.config += [$pass]' \
+        "$ZIVPN_CONFIG" > "$TMP"; then
+
+        mv "$TMP" "$ZIVPN_CONFIG"
+
+        chmod 600 "$ZIVPN_CONFIG"
+
+        systemctl restart "$SERVICE"
+
+        if systemctl is-active --quiet "$SERVICE"; then
+
+            ok "Contraseña agregada correctamente."
+
+        else
+
+            error_msg \
+                "La contraseña fue agregada, pero el servicio no inició."
+
+        fi
+
+    else
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo modificar la configuración."
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# ELIMINAR CONTRASEÑA
+# ==============================================================
+
+remove_zivpn_password() {
+
+    header
+
+    if [[ ! -f "$ZIVPN_CONFIG" ]]; then
+
+        error_msg "ZiVPN no está instalado."
+
+        pause
+
+        return
+    fi
+
+    mapfile -t PASSLIST < <(
+        jq -r '.auth.config[]?' "$ZIVPN_CONFIG"
+    )
+
+    if [[ ${#PASSLIST[@]} -eq 0 ]]; then
+
+        warning "No existen contraseñas registradas."
+
+        pause
+
+        return
+    fi
 
     echo
-    echo -e " Estado     : $STATUS"
-    echo -e " Servicio   : zivpn"
-    echo -e " Puerto UDP : $PORT"
-    echo -e " Rango UDP  : 20000-29999"
+
+    for ((i=0; i<${#PASSLIST[@]}; i++)); do
+
+        printf \
+            " ${GREEN}[%02d]${RESET} %s\n" \
+            "$((i + 1))" \
+            "${PASSLIST[$i]}"
+
+    done
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${CYAN}Seleccione una contraseña: ${RESET}")" \
+        OP
+
+    if [[ ! "$OP" =~ ^[0-9]+$ ]]; then
+
+        error_msg "Opción inválida."
+
+        pause
+
+        return
+    fi
+
+    local INDEX=$((OP - 1))
+
+    if (( INDEX < 0 || INDEX >= ${#PASSLIST[@]} )); then
+
+        error_msg "Opción inválida."
+
+        pause
+
+        return
+    fi
+
+    local PASS="${PASSLIST[$INDEX]}"
+    local TMP
+
+    TMP=$(mktemp)
+
+    if jq \
+        --arg pass "$PASS" \
+        '.auth.config |= map(select(. != $pass))' \
+        "$ZIVPN_CONFIG" > "$TMP"; then
+
+        mv "$TMP" "$ZIVPN_CONFIG"
+
+        chmod 600 "$ZIVPN_CONFIG"
+
+        systemctl restart "$SERVICE"
+
+        ok "Contraseña eliminada correctamente."
+
+    else
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo modificar la configuración."
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# LISTAR CONTRASEÑAS
+# ==============================================================
+
+list_zivpn_passwords() {
+
+    header
+
+    if [[ ! -f "$ZIVPN_CONFIG" ]]; then
+
+        error_msg "ZiVPN no está instalado."
+
+        pause
+
+        return
+    fi
+
+    local TOTAL
+
+    TOTAL=$(
+        jq \
+            '.auth.config | length' \
+            "$ZIVPN_CONFIG" \
+            2>/dev/null
+    )
+
+    echo
+
+    echo -e \
+        "${WHITE}Total de contraseñas:${RESET} ${GREEN}${TOTAL:-0}${RESET}"
+
+    line
+
+    if [[ "${TOTAL:-0}" -gt 0 ]]; then
+
+        jq -r \
+            '.auth.config[]' \
+            "$ZIVPN_CONFIG" |
+        nl -w2 -s". "
+
+    else
+
+        echo -e \
+            "${GRAY}No existen contraseñas.${RESET}"
+
+    fi
+
+    line
+
+    pause
+}
+
+# ==============================================================
+# LOGS
+# ==============================================================
+
+view_zivpn_logs() {
+
+    header
+
+    info "Últimos 50 registros de ZiVPN..."
+
+    line
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 50 \
+        --no-pager \
+        2>/dev/null
+
+    line
+
+    pause
+}
+
+# ==============================================================
+# DIAGNÓSTICO
+# ==============================================================
+
+check_zivpn() {
+
+    header
+
+    echo -e "${WHITE}${BOLD}Componentes:${RESET}"
+    echo
+
+    if [[ -x "$BIN" ]]; then
+        ok "Binario ZiVPN encontrado"
+    else
+        error_msg "Binario ZiVPN no encontrado"
+    fi
+
+    if [[ -f "$ZIVPN_CONFIG" ]]; then
+        ok "config.json encontrado"
+    else
+        error_msg "config.json no encontrado"
+    fi
+
+    if [[ -f "$ZIVPN_CERT" ]]; then
+        ok "Certificado SSL encontrado"
+    else
+        error_msg "Certificado SSL no encontrado"
+    fi
+
+    if [[ -f "$ZIVPN_KEY" ]]; then
+        ok "Llave privada encontrada"
+    else
+        error_msg "Llave privada no encontrada"
+    fi
+
+    if [[ -f "$SERVICE_FILE" ]]; then
+        ok "Servicio systemd encontrado"
+    else
+        error_msg "Servicio systemd no encontrado"
+    fi
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        ok "Servicio activo"
+    else
+        error_msg "Servicio detenido"
+    fi
+
+    if [[ -f "$ZIVPN_CONFIG" ]] &&
+       jq empty "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+
+        ok "JSON válido"
+
+    else
+
+        error_msg "JSON inválido"
+
+    fi
+
+    local PORT="-"
+
+    if [[ -f "$ZIVPN_CONFIG" ]]; then
+
+        PORT=$(
+            jq -r '.listen // "-"' \
+                "$ZIVPN_CONFIG" 2>/dev/null |
+            sed 's/^://'
+        )
+
+    fi
+
     echo
 
     line
 
-    systemctl --no-pager --full status zivpn
+    echo -e \
+        "${WHITE}Puerto configurado:${RESET} ${CYAN}$PORT${RESET}"
+
+    echo
+
+    echo -e \
+        "${WHITE}Puerto escuchando:${RESET}"
+
+    if [[ "$PORT" != "-" ]] &&
+       ss -lunp 2>/dev/null |
+       grep -q ":${PORT}"; then
+
+        ok "UDP $PORT está escuchando."
+
+    else
+
+        error_msg "UDP $PORT no está escuchando."
+
+    fi
+
+    line
+
+    echo -e "${WHITE}Últimos registros:${RESET}"
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 15 \
+        --no-pager \
+        2>/dev/null
 
     pause
-
 }
 
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             DESINSTALAR ZIVPN                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+# ==============================================================
+# INFORMACIÓN VPS
+# ==============================================================
+
+system_info() {
+
+    header
+
+    local HOST
+    local IP
+    local OS
+    local KERNEL
+    local UPTIME
+    local RAM
+    local DISK
+    local CPU
+    local CORES
+
+    HOST=$(hostname)
+
+    IP=$(
+        curl \
+            -4 \
+            -s \
+            --connect-timeout 5 \
+            https://api.ipify.org \
+            2>/dev/null
+    )
+
+    OS=$(
+        grep '^PRETTY_NAME=' \
+            /etc/os-release |
+        cut -d= -f2 |
+        tr -d '"'
+    )
+
+    KERNEL=$(uname -r)
+    UPTIME=$(uptime -p)
+
+    RAM=$(
+        free -h |
+        awk '/Mem:/ {print $3" / "$2}'
+    )
+
+    DISK=$(
+        df -h / |
+        awk 'NR==2 {print $3" / "$2" ("$5")"}'
+    )
+
+    CPU=$(
+        awk -F: '
+            /model name/ {
+                print $2
+                exit
+            }
+        ' /proc/cpuinfo |
+        sed 's/^ *//'
+    )
+
+    CORES=$(nproc)
+
+    echo
+    echo -e "${WHITE}Hostname:${RESET}    $HOST"
+    echo -e "${WHITE}Sistema:${RESET}     $OS"
+    echo -e "${WHITE}Kernel:${RESET}      $KERNEL"
+    echo -e "${WHITE}CPU:${RESET}         ${CPU:-Desconocida}"
+    echo -e "${WHITE}Núcleos:${RESET}     $CORES"
+    echo -e "${WHITE}Memoria:${RESET}     $RAM"
+    echo -e "${WHITE}Disco:${RESET}       $DISK"
+    echo -e "${WHITE}Uptime:${RESET}      $UPTIME"
+    echo -e "${WHITE}IPv4:${RESET}        ${IP:-No disponible}"
+
+    line
+
+    echo -e "${WHITE}Carga:${RESET}"
+
+    uptime
+
+    line
+
+    pause
+}
+
+# ==============================================================
+# DESINSTALAR
+# ==============================================================
 
 remove_zivpn() {
 
-    title
+    header
 
-    warn "Se eliminará completamente ZiVPN."
+    warning "Se eliminará ZiVPN."
 
     echo
+    echo -e "${GRAY}Se eliminarán:${RESET}"
+    echo "  • Servicio systemd"
+    echo "  • Binario ZiVPN"
+    echo "  • Certificados"
+    echo "  • Configuración"
+    echo "  • Reglas firewall de ZiVPN"
+    echo
 
-    read -rp "¿Continuar? [s/N]: " R
+    read -r -p \
+        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+        CONFIRM
 
-    [[ ! "$R" =~ ^[Ss]$ ]] && return
+    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
 
-    PORT=$(jq -r '.listen' /etc/zivpn/config.json 2>/dev/null | tr -d ':')
+        warning "Operación cancelada."
+
+        sleep 1
+
+        return
+    fi
+
+    local PORT
+    local DEV
+
+    PORT=""
+
+    if [[ -f "$ZIVPN_CONFIG" ]]; then
+
+        PORT=$(
+            jq -r '.listen // empty' \
+                "$ZIVPN_CONFIG" 2>/dev/null |
+            sed 's/^://'
+        )
+
+    fi
 
     DEV=$(get_network_interface)
 
-    systemctl stop zivpn 2>/dev/null
-    systemctl disable zivpn 2>/dev/null
+    info "Deteniendo ZiVPN..."
 
-    rm -f /etc/systemd/system/zivpn.service
-    rm -rf /etc/zivpn
-    rm -f /usr/local/bin/zivpn
+    systemctl stop "$SERVICE" 2>/dev/null
+
+    systemctl disable "$SERVICE" 2>/dev/null
+
+    info "Eliminando servicio..."
+
+    rm -f "$SERVICE_FILE"
+
+    systemctl daemon-reload
+
+    info "Eliminando firewall..."
 
     if [[ -n "$DEV" ]]; then
 
-        iptables -t nat -D PREROUTING \
+        while iptables \
+            -t nat \
+            -C PREROUTING \
             -i "$DEV" \
             -p udp \
-            --dport 20000:29999 \
+            --dport "$PORT_MIN:$PORT_MAX" \
             -j REDIRECT \
-            --to-port "$PORT" 2>/dev/null
+            --to-port "$PORT" \
+            2>/dev/null; do
 
-        iptables -D INPUT \
+            iptables \
+                -t nat \
+                -D PREROUTING \
+                -i "$DEV" \
+                -p udp \
+                --dport "$PORT_MIN:$PORT_MAX" \
+                -j REDIRECT \
+                --to-port "$PORT"
+
+        done
+
+        if [[ -n "$PORT" ]]; then
+
+            while iptables \
+                -C INPUT \
+                -p udp \
+                --dport "$PORT" \
+                -j ACCEPT \
+                2>/dev/null; do
+
+                iptables \
+                    -D INPUT \
+                    -p udp \
+                    --dport "$PORT" \
+                    -j ACCEPT
+
+            done
+
+        fi
+
+        while iptables \
+            -C INPUT \
             -p udp \
-            --dport "$PORT" \
-            -j ACCEPT 2>/dev/null
+            --dport "$PORT_MIN:$PORT_MAX" \
+            -j ACCEPT \
+            2>/dev/null; do
 
-        iptables -D INPUT \
-            -p udp \
-            --dport 20000:29999 \
-            -j ACCEPT 2>/dev/null
+            iptables \
+                -D INPUT \
+                -p udp \
+                --dport "$PORT_MIN:$PORT_MAX" \
+                -j ACCEPT
 
-        iptables -t nat -D POSTROUTING \
-            -o "$DEV" \
-            -j MASQUERADE 2>/dev/null
+        done
 
     fi
 
-    systemctl daemon-reload
-    systemctl reset-failed
+    save_firewall
 
-    if grep -q "^ZIPVPN=" "$CONFIG"; then
-        sed -i 's/^ZIPVPN=.*/ZIPVPN=OFF/' "$CONFIG"
-    else
-        echo "ZIPVPN=OFF" >> "$CONFIG"
-    fi
+    info "Eliminando archivos..."
 
-    sed -i '/^ZIPVPN_PORT=/d' "$CONFIG"
+    rm -rf "$ZIVPN_DIR"
+    rm -f "$BIN"
 
-    source "$CONFIG"
+    systemctl reset-failed "$SERVICE" \
+        2>/dev/null
+
+    set_config "ZIPVPN" "OFF"
+    remove_port_config
+
+    source "$CONFIG" 2>/dev/null
 
     echo
 
-    ok "ZiVPN fue eliminado correctamente."
+    ok "ZiVPN eliminado correctamente."
 
     pause
-
 }
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#       SINCRONIZAR CUENTA SSH CON ZIVPN       #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
+
+# ==============================================================
+# SINCRONIZAR CONTRASEÑA
+# ==============================================================
 
 sync_zivpn_password() {
 
@@ -506,428 +1570,327 @@ sync_zivpn_password() {
     local PASS="$2"
 
     [[ -z "$USER" || -z "$PASS" ]] && return 1
+    [[ ! -f "$ZIVPN_CONFIG" ]] && return 1
 
-    [[ ! -f /etc/zivpn/config.json ]] && return 1
+    if jq -e \
+        --arg pass "$PASS" \
+        '.auth.config[]? | select(. == $pass)' \
+        "$ZIVPN_CONFIG" \
+        >/dev/null 2>&1; then
 
-    # Si ya existe, no duplicar
-    if jq -e --arg pass "$PASS" \
-        '.auth.config[] | select(. == $pass)' \
-        /etc/zivpn/config.json >/dev/null 2>&1; then
         return 0
     fi
 
     local TMP
+
     TMP=$(mktemp)
 
-    if jq --arg pass "$PASS" \
+    if jq \
+        --arg pass "$PASS" \
         '.auth.config += [$pass]' \
-        /etc/zivpn/config.json > "$TMP"; then
+        "$ZIVPN_CONFIG" > "$TMP"; then
 
-        mv "$TMP" /etc/zivpn/config.json
-        chmod 600 /etc/zivpn/config.json
+        mv "$TMP" "$ZIVPN_CONFIG"
 
-        systemctl restart zivpn >/dev/null 2>&1
+        chmod 600 "$ZIVPN_CONFIG"
+
+        systemctl restart "$SERVICE" \
+            >/dev/null 2>&1
 
         return 0
     fi
 
     rm -f "$TMP"
+
     return 1
 }
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            AGREGAR CONTRASEÑA                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
 
-add_zivpn_password() {
+# ==============================================================
+# MODO AUTOMÁTICO
+# ==============================================================
 
-    title
+if [[ "$1" == "--auto" ]]; then
 
-    [[ ! -f /etc/zivpn/config.json ]] && {
-        error "ZiVPN no está instalado."
-        pause
-        return
-    }
+    echo
 
-    read -rp "Ingrese la nueva contraseña: " PASS
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-    [[ -z "$PASS" ]] && {
-        error "La contraseña no puede estar vacía."
-        pause
-        return
-    }
+    echo -e \
+        "${MAGENTA}${BOLD}              🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
 
-    if jq -e --arg pass "$PASS" '.auth.config[] | select(.==$pass)' \
-        /etc/zivpn/config.json >/dev/null; then
+    echo -e \
+        "${WHITE}                         ZIVPN${RESET}"
 
-        error "La contraseña ya existe."
-        pause
-        return
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo
+
+    if install_zivpn >/dev/null 2>&1; then
+
+        if systemctl is-active --quiet "$SERVICE"; then
+
+            echo
+            echo -e \
+                "${GREEN}✔ ZiVPN instalado y activo correctamente.${RESET}"
+
+            exit 0
+
+        fi
 
     fi
 
-    TMP=$(mktemp)
+    echo
 
-    jq --arg pass "$PASS" \
-        '.auth.config += [$pass]' \
-        /etc/zivpn/config.json > "$TMP"
-
-    mv "$TMP" /etc/zivpn/config.json
-
-    systemctl restart zivpn
-
-    ok "Contraseña agregada correctamente."
-
-    pause
-
-}
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#            ELIMINAR CONTRASEÑA               #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-remove_zivpn_password() {
-
-    title
-
-    [[ ! -f /etc/zivpn/config.json ]] && {
-        error "ZiVPN no está instalado."
-        pause
-        return
-    }
-
-    mapfile -t PASSLIST < <(
-        jq -r '.auth.config[]' /etc/zivpn/config.json
-    )
-
-    [[ ${#PASSLIST[@]} -eq 0 ]] && {
-        error "No existen contraseñas registradas."
-        pause
-        return
-    }
+    echo -e \
+        "${RED}✘ Error instalando ZiVPN.${RESET}"
 
     echo
 
-    for ((i=0;i<${#PASSLIST[@]};i++)); do
-        printf " [%02d] %s\n" "$((i+1))" "${PASSLIST[$i]}"
-    done
+    journalctl \
+        -u "$SERVICE" \
+        -n 20 \
+        --no-pager \
+        2>/dev/null
 
-    echo
+    exit 1
+fi
 
-    read -rp "Seleccione una contraseña: " OP
+# ==============================================================
+# MENÚ
+# ==============================================================
 
-    [[ ! "$OP" =~ ^[0-9]+$ ]] && {
-        error "Opción inválida."
-        pause
-        return
-    }
+while true; do
 
-    INDEX=$((OP-1))
+    header
 
-    [[ $INDEX -lt 0 || $INDEX -ge ${#PASSLIST[@]} ]] && {
-        error "Opción inválida."
-        pause
-        return
-    }
+    # Recargar configuración
+    # shellcheck disable=SC1090
+    source "$CONFIG" 2>/dev/null
 
-    PASS="${PASSLIST[$INDEX]}"
+    if systemctl is-active --quiet "$SERVICE"; then
 
-    TMP=$(mktemp)
+        STATUS="${GREEN}🟢 ACTIVO${RESET}"
 
-    jq --arg pass "$PASS" \
-        '.auth.config |= map(select(. != $pass))' \
-        /etc/zivpn/config.json > "$TMP"
+    elif [[ -f "$SERVICE_FILE" ]]; then
 
-    mv "$TMP" /etc/zivpn/config.json
+        STATUS="${RED}🔴 DETENIDO${RESET}"
 
-    systemctl restart zivpn
-
-    ok "Contraseña eliminada correctamente."
-
-    pause
-
-}
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             LISTAR CONTRASEÑAS               #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-list_zivpn_passwords() {
-
-    title
-
-    [[ ! -f /etc/zivpn/config.json ]] && {
-        error "ZiVPN no está instalado."
-        pause
-        return
-    }
-
-    echo
-
-    TOTAL=$(jq '.auth.config | length' /etc/zivpn/config.json)
-
-    echo " Total de contraseñas : $TOTAL"
-
-    line
-
-    jq -r '.auth.config[]' /etc/zivpn/config.json | nl -w2 -s". "
-
-    line
-
-    pause
-
-}
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#               VER LOGS ZIVPN                 #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-view_zivpn_logs() {
-
-    title
-
-    info "Últimos 50 registros del servicio"
-
-    line
-
-    journalctl -u zivpn --no-pager -n 50
-
-    line
-
-    pause
-
-}
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#             DIAGNÓSTICO ZIVPN                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-check_zivpn() {
-
-    title
-
-    [[ -x /usr/local/bin/zivpn ]] \
-        && ok "Binario ZiVPN" \
-        || error "Binario ZiVPN"
-
-    [[ -f /etc/zivpn/config.json ]] \
-        && ok "Archivo config.json" \
-        || error "Archivo config.json"
-
-    [[ -f /etc/zivpn/zivpn.crt ]] \
-        && ok "Certificado SSL" \
-        || error "Certificado SSL"
-
-    [[ -f /etc/zivpn/zivpn.key ]] \
-        && ok "Llave privada" \
-        || error "Llave privada"
-
-    if systemctl is-active --quiet zivpn; then
-        ok "Servicio ejecutándose"
     else
-        error "Servicio detenido"
+
+        STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
+
     fi
 
     PORT="-"
 
-    [[ -f /etc/zivpn/config.json ]] && \
-    PORT=$(jq -r '.listen' /etc/zivpn/config.json | tr -d ':')
+    if [[ -f "$ZIVPN_CONFIG" ]]; then
 
-    echo
-    line
-    echo "Puerto UDP : $PORT"
-    echo "Proceso"
-    line
+        PORT=$(
+            jq -r '.listen // "-"' \
+                "$ZIVPN_CONFIG" 2>/dev/null |
+            sed 's/^://'
+        )
 
-    ss -lunp | grep "$PORT"
-
-    line
-
-    pause
-
-}
-
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#          INFORMACIÓN DEL SERVIDOR            #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-system_info() {
-
-    title
-
-    HOST=$(hostname)
-
-    IP=$(curl -4 -s ipv4.icanhazip.com 2>/dev/null)
-
-    OS=$(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')
-
-    KERNEL=$(uname -r)
-
-    UPTIME=$(uptime -p)
-
-    RAM=$(free -h | awk '/Mem:/ {print $3" / "$2}')
-
-    DISK=$(df -h / | awk 'NR==2 {print $3" / "$2" ("$5")"}')
-
-    CPU=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | sed 's/^ //')
-
-    CORES=$(nproc)
-
-    echo
-    echo " Hostname : $HOST"
-    echo " Sistema  : $OS"
-    echo " Kernel   : $KERNEL"
-    echo " CPU      : $CPU"
-    echo " Núcleos  : $CORES"
-    echo " Memoria  : $RAM"
-    echo " Disco    : $DISK"
-    echo " Uptime   : $UPTIME"
-    echo " IPv4     : ${IP:-No disponible}"
-
-    line
-
-    echo "Carga del sistema"
-
-    uptime
-
-    line
-
-    pause
-
-}
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#               MODO AUTOMÁTICO                #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-if [[ "$1" == "--auto" ]]; then
-    echo "🚀 Instalando ZiVPN automáticamente..."
-
-    install_zivpn
-
-    if systemctl is-active --quiet zivpn; then
-        echo "✅ ZiVPN instalado correctamente."
-        exit 0
-    else
-        echo "❌ Error instalando ZiVPN."
-        exit 1
-    fi
-fi
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-#                 MENÚ PRINCIPAL               #
-#━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━#
-
-while true; do
-
-    title
-
-    if systemctl is-active --quiet zivpn; then
-        STATUS="${GREEN}🟢 ACTIVO${RESET}"
-    else
-        STATUS="${RED}🔴 DETENIDO${RESET}"
-    fi
-
-    if [[ -f /etc/zivpn/config.json ]]; then
-        PORT=$(jq -r '.listen' /etc/zivpn/config.json | tr -d ':')
-    else
-        PORT="No instalado"
-    fi
-
-    VERSION="-"
-
-    if [[ -x /usr/local/bin/zivpn ]]; then
-        VERSION=$(/usr/local/bin/zivpn version 2>/dev/null | head -n1)
-        [[ -z "$VERSION" ]] && VERSION="1.4.9"
     fi
 
     ARCH=$(uname -m)
-printf "${CYAN}║${RESET} Estado       : %-29b ${CYAN}║${RESET}\n" "$STATUS"
-printf "${CYAN}║${RESET} Servicio     : %-29s ${CYAN}║${RESET}\n" "zivpn"
-printf "${CYAN}║${RESET} Puerto UDP   : %-29s ${CYAN}║${RESET}\n" "$PORT"
-printf "${CYAN}║${RESET} Rango UDP    : %-29s ${CYAN}║${RESET}\n" "20000-29999"
-printf "${CYAN}║${RESET} Arquitectura : %-29s ${CYAN}║${RESET}\n" "$ARCH"
-printf "${CYAN}║${RESET} Versión      : %-29s ${CYAN}║${RESET}\n" "$VERSION"
-echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
-    echo
+    echo -e \
+        "${WHITE}Estado:${RESET}       $STATUS"
 
-    if [[ "$ZIPVPN" == "ON" ]]; then
+    echo -e \
+        "${WHITE}Servicio:${RESET}     ${CYAN}$SERVICE${RESET}"
 
-cat <<EOF
- [1] Reinstalar ZiVPN
- [2] Reiniciar Servicio
- [3] Estado del Servicio
- [4] Agregar Contraseña
- [5] Eliminar Contraseña
- [6] Listar Contraseñas
- [7] Ver Logs
- [8] Diagnóstico
- [9] Información del Servidor
- [10] Desinstalar ZiVPN
- [0] Regresar
-EOF
+    echo -e \
+        "${WHITE}Puerto UDP:${RESET}   ${GREEN}$PORT${RESET}"
 
-    else
+    echo -e \
+        "${WHITE}Rango UDP:${RESET}    ${CYAN}$PORT_MIN-$PORT_MAX${RESET}"
 
-cat <<EOF
- [1] Instalar ZiVPN
- [0] Regresar
-EOF
+    echo -e \
+        "${WHITE}Arquitectura:${RESET} ${CYAN}$ARCH${RESET}"
 
-    fi
+    echo -e \
+        "${WHITE}Binario:${RESET}      ${GRAY}$BIN${RESET}"
 
     line
 
-    read -rp "Seleccione una opción: " OP
+    if [[ -f "$SERVICE_FILE" ]] ||
+       [[ -x "$BIN" ]]; then
+
+        echo -e \
+            "${BLUE}${BOLD}⚙️ ADMINISTRACIÓN${RESET}"
+
+        echo
+
+        echo -e \
+            " ${GREEN}[01]${RESET} 🔄 Reinstalar / Actualizar"
+
+        echo -e \
+            " ${GREEN}[02]${RESET} ♻️  Reiniciar Servicio"
+
+        echo -e \
+            " ${GREEN}[03]${RESET} 📊 Estado"
+
+        echo -e \
+            " ${GREEN}[04]${RESET} 🔐 Agregar Contraseña"
+
+        echo -e \
+            " ${GREEN}[05]${RESET} 🗑️  Eliminar Contraseña"
+
+        echo -e \
+            " ${GREEN}[06]${RESET} 📋 Listar Contraseñas"
+
+        echo -e \
+            " ${GREEN}[07]${RESET} 📜 Ver Logs"
+
+        echo -e \
+            " ${GREEN}[08]${RESET} 🔎 Diagnóstico"
+
+        echo -e \
+            " ${GREEN}[09]${RESET} 🖥️  Información VPS"
+
+        echo -e \
+            " ${RED}[10]${RESET} 🗑️  Desinstalar ZiVPN"
+
+    else
+
+        echo -e \
+            "${BLUE}${BOLD}🚀 INSTALACIÓN${RESET}"
+
+        echo
+
+        echo -e \
+            " ${GREEN}[01]${RESET} 🚀 Instalar ZiVPN"
+
+        echo -e \
+            " ${GREEN}[02]${RESET} 🔎 Diagnóstico"
+
+        echo -e \
+            " ${GREEN}[03]${RESET} 🖥️  Información VPS"
+
+    fi
+
+    echo
+
+    echo -e \
+        "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
+
+    echo -e \
+        " ${RED}[00]${RESET} ↩️  Regresar al Menú de Protocolos"
+
+    echo
+
+    echo -e \
+        "${GRAY}KevinTech Multi Script • ZiVPN Manager v$VERSION${RESET}"
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" \
+        OP
 
     case "$OP" in
 
         1)
+
             install_zivpn
-        ;;
+
+            ;;
 
         2)
-            restart_zivpn
-        ;;
+
+            if [[ -f "$SERVICE_FILE" ]]; then
+
+                restart_zivpn
+
+            else
+
+                check_zivpn
+
+            fi
+
+            ;;
 
         3)
-            status_zivpn
-        ;;
+
+            if [[ -f "$SERVICE_FILE" ]]; then
+
+                status_zivpn
+
+            else
+
+                error_msg "ZiVPN no está instalado."
+
+                sleep 1
+            fi
+
+            ;;
 
         4)
+
             add_zivpn_password
-        ;;
+
+            ;;
 
         5)
+
             remove_zivpn_password
-        ;;
+
+            ;;
 
         6)
+
             list_zivpn_passwords
-        ;;
+
+            ;;
 
         7)
+
             view_zivpn_logs
-        ;;
+
+            ;;
 
         8)
+
             check_zivpn
-        ;;
+
+            ;;
 
         9)
+
             system_info
-        ;;
+
+            ;;
 
         10)
+
             remove_zivpn
-        ;;
+
+            ;;
 
         0)
-            exec bash "$BASE/protocolos/menu.sh"
-        ;;
+
+            clear
+
+            exec bash \
+                "$BASE/protocolos/menu.sh"
+
+            ;;
+
+        "")
+
+            ;;
 
         *)
-            error "Opción inválida."
-            sleep 2
-        ;;
+
+            error_msg "Opción inválida."
+
+            sleep 1
+
+            ;;
 
     esac
 
