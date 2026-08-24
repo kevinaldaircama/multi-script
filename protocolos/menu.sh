@@ -323,16 +323,13 @@ while true; do
     printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
         "OpenVPN Pro" "$OPENVPN_STATUS"
 
-    printf "  ${GREEN}${BOLD}[11]${RESET} 🔰 %-19s %b\n" \
-        "Hysteria v1" "$HYSTERIA_STATUS"
-
     echo
     echo -e "${BLUE}${BOLD}  🛠️ ADMINISTRACIÓN DEL SISTEMA${RESET}"
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
 
-    echo -e "  ${GREEN}${BOLD}[12]${RESET} 🧰 Herramientas"
-    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔄 Reiniciar Servicios"
-    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔥 Firewall"
+    echo -e "  ${GREEN}${BOLD}[11]${RESET} 🧰 Herramientas"
+    echo -e "  ${GREEN}${BOLD}[12]${RESET} 🔄 Reiniciar Servicios"
+    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔥 Firewall"
 
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
@@ -387,18 +384,14 @@ while true; do
             ;;
 
         11)
-            run_module "$BASE/protocolos/udphisteria.sh"
-            ;;
-
-        12)
             run_module "$BASE/herramientas/menu.sh"
             ;;
 
-        13)
+        12)
             run_module "$BASE/herramientas/reiniciar.sh"
             ;;
 
-        14)
+        13)
             run_module "$BASE/herramientas/firewall.sh"
             ;;
 
