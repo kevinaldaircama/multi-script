@@ -6,6 +6,7 @@
 # ==============================================================
 # Servicio principal : slowdns
 # Servicio DNS       : dnsdist
+#
 # DNS público        : UDP 53
 # DNSDist interno    : UDP 5380
 # SlowDNS / DNSTT    : UDP 5300
@@ -15,6 +16,10 @@
 # • HTTP Custom
 # • UDP Custom
 # • TLS Tunnel
+#
+# Dominio:
+# • Se solicita durante la instalación
+# • Compatible con NS de Cloudflare
 #
 # Configuración:
 # /etc/kevintech/config.conf
@@ -47,7 +52,7 @@ DNS_PORT="53"
 DNSDIST_PORT="5380"
 SLOWDNS_PORT="5300"
 
-VERSION="3.0"
+VERSION="4.0"
 
 # ==============================================================
 # COLORES
@@ -110,7 +115,7 @@ line() {
 
 header() {
 
-    clear
+    clear 2>/dev/null || true
 
     echo -e \
         "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
@@ -164,10 +169,10 @@ set_config() {
     local KEY="$1"
     local VALUE="$2"
 
-    if grep -q "^${KEY}=" "$CONFIG"; then
+    if grep -q "^${KEY}=" "$CONFIG" 2>/dev/null; then
 
         sed -i \
-            "s/^${KEY}=.*/${KEY}=${VALUE}/" \
+            "s|^${KEY}=.*|${KEY}=${VALUE}|" \
             "$CONFIG"
 
     else
@@ -182,15 +187,15 @@ set_port_config() {
     local KEY="$1"
     local VALUE="$2"
 
-    if grep -q "^${KEY}=" "$CONFIG"; then
+    if grep -q "^${KEY}=" "$CONFIG" 2>/dev/null; then
 
         sed -i \
-            "s/^${KEY}=.*/${KEY}=\"$VALUE\"/" \
+            "s|^${KEY}=.*|${KEY}=\"${VALUE}\"|" \
             "$CONFIG"
 
     else
 
-        echo "${KEY}=\"$VALUE\"" >> "$CONFIG"
+        echo "${KEY}=\"${VALUE}\"" >> "$CONFIG"
 
     fi
 }
@@ -214,7 +219,18 @@ valid_domain() {
 
     [[ -z "$DOMAIN" ]] && return 1
 
-    [[ "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] ||
+    # Dominio DNS normal.
+    # Permite:
+    # ns-prueba.socialstreaming.xyz
+    # sub.dominio.com
+    # ns1.example.net
+
+    [[ "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] ||
+        return 1
+
+    # No permitir dos puntos consecutivos.
+
+    [[ "$DOMAIN" != *..* ]] ||
         return 1
 
     return 0
@@ -245,6 +261,8 @@ install_dependencies() {
         iproute2 \
         dnsutils \
         ca-certificates \
+        netfilter-persistent \
+        iptables-persistent \
         >/dev/null 2>&1; then
 
         error_msg "No se pudieron instalar las dependencias."
@@ -253,6 +271,7 @@ install_dependencies() {
     fi
 
     mkdir -p "$DIR"
+    mkdir -p /etc/dnsdist
 
     ok "Dependencias instaladas."
 
@@ -268,43 +287,35 @@ get_binary_name() {
     case "$(uname -m)" in
 
         x86_64|amd64)
-
             echo "dnstt-server-linux-amd64"
-
             ;;
 
         aarch64|arm64)
-
             echo "dnstt-server-linux-arm64"
-
             ;;
 
         i386|i686)
-
             echo "dnstt-server-linux-386"
-
             ;;
 
         *)
-
             return 1
-
             ;;
 
     esac
 }
 
 # ==============================================================
-# INSTALAR BINARIO
+# INSTALAR BINARIO SLOWDNS
 # ==============================================================
 
 install_slowdns_binary() {
 
     local BIN_NAME
     local URL
-    local TMP
+    local TMP_FILE
 
-    BIN_NAME=$(get_binary_name)
+    BIN_NAME="$(get_binary_name)"
 
     if [[ -z "$BIN_NAME" ]]; then
 
@@ -326,18 +337,16 @@ install_slowdns_binary() {
         "https://dnstt.network/$BIN_NAME"
 
         "https://github.com/bugfloyd/dnstt-deploy/raw/main/bin/$BIN_NAME"
-
-        "https://raw.githubusercontent.com/Dan3651/scripts/main/slowdns-server"
-
     )
 
     info "Descargando SlowDNS Server..."
 
-    TMP=$(mktemp)
+    TMP_FILE="$(mktemp)"
 
     for URL in "${MIRRORS[@]}"; do
 
         echo
+
         echo -e \
             "${GRAY}Probando:${RESET} $URL"
 
@@ -347,37 +356,40 @@ install_slowdns_binary() {
             --max-time 180 \
             --retry 2 \
             "$URL" \
-            -o "$TMP" \
+            -o "$TMP_FILE" \
             >/dev/null 2>&1; then
 
-            if [[ -s "$TMP" ]]; then
+            if [[ -s "$TMP_FILE" ]]; then
 
-                chmod +x "$TMP"
+                chmod +x "$TMP_FILE"
 
-                if "$TMP" -h \
+                if "$TMP_FILE" -h \
                     >/dev/null 2>&1; then
 
                     install \
                         -m 755 \
-                        "$TMP" \
+                        "$TMP_FILE" \
                         "$BIN"
 
-                    rm -f "$TMP"
+                    rm -f "$TMP_FILE"
 
                     if [[ -x "$BIN" ]]; then
 
                         ok "SlowDNS Server instalado."
 
                         return 0
-
                     fi
                 fi
             fi
         fi
 
-        rm -f "$TMP"
+        rm -f "$TMP_FILE"
+
+        TMP_FILE="$(mktemp)"
 
     done
+
+    rm -f "$TMP_FILE"
 
     error_msg \
         "No fue posible descargar SlowDNS Server."
@@ -439,27 +451,24 @@ generate_keys() {
 # ==============================================================
 # CONFIGURAR DNSDIST
 # ==============================================================
+#
+# IMPORTANTE:
+# No usamos RegexRule() con el dominio.
+#
+# El error anterior:
+#
+# invalid escape sequence
+#
+# era causado por la construcción de la expresión Lua.
+#
+# DNSDist escucha en 5380 y reenvía las consultas al backend.
+# ==============================================================
 
 configure_dnsdist() {
-
-    local DOMAIN="$1"
-    local ESCAPED_DOMAIN
-
-    if [[ -z "$DOMAIN" ]]; then
-
-        error_msg "Dominio vacío."
-
-        return 1
-    fi
 
     info "Configurando DNSDist..."
 
     mkdir -p /etc/dnsdist
-
-    ESCAPED_DOMAIN=$(
-        printf '%s' "$DOMAIN" |
-        sed 's/[.[\*^$()+?{|\\]/\\&/g'
-    )
 
     cat > "$DNSDIST_CONFIG" <<EOF
 -- =========================================================
@@ -476,29 +485,39 @@ newServer({
 })
 
 addAction(
-    RegexRule("${ESCAPED_DOMAIN}"),
+    AllRule(),
     PoolAction("slowdns")
 )
 EOF
 
     if ! dnsdist \
         --check-config \
-        "$DNSDIST_CONFIG" \
+        --config="$DNSDIST_CONFIG" \
         >/dev/null 2>&1; then
 
-        error_msg "La configuración de DNSDist es inválida."
+        error_msg \
+            "La configuración de DNSDist es inválida."
+
+        echo
 
         dnsdist \
             --check-config \
-            "$DNSDIST_CONFIG" \
+            --config="$DNSDIST_CONFIG" \
             2>&1
+
+        echo
+
+        echo -e \
+            "${YELLOW}Configuración generada:${RESET}"
+
+        cat "$DNSDIST_CONFIG"
 
         return 1
     fi
 
     systemctl daemon-reload
 
-    ok "DNSDist configurado."
+    ok "DNSDist configurado correctamente."
 
     return 0
 }
@@ -528,7 +547,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+
 User=root
+
 WorkingDirectory=$DIR
 
 ExecStart=$BIN -udp :$SLOWDNS_PORT -privkey-file $PRIVKEY $DOMAIN 127.0.0.1:22
@@ -582,7 +603,10 @@ check_required_ports() {
 
     local PORT
 
-    for PORT in "$DNS_PORT" "$DNSDIST_PORT" "$SLOWDNS_PORT"; do
+    for PORT in \
+        "$DNS_PORT" \
+        "$DNSDIST_PORT" \
+        "$SLOWDNS_PORT"; do
 
         if port_udp_in_use "$PORT"; then
 
@@ -613,76 +637,43 @@ open_dns_port() {
     # IPv4
     # ----------------------------------------------------------
 
-    while iptables \
+    iptables \
         -t nat \
         -C PREROUTING \
         -p udp \
         --dport "$DNS_PORT" \
-        -m u32 \
-        --u32 "0>>22&0x3C@12=0x00010000" \
         -j REDIRECT \
         --to-ports "$DNSDIST_PORT" \
-        2>/dev/null; do
+        2>/dev/null ||
 
-        iptables \
-            -t nat \
-            -D PREROUTING \
-            -p udp \
-            --dport "$DNS_PORT" \
-            -m u32 \
-            --u32 "0>>22&0x3C@12=0x00010000" \
-            -j REDIRECT \
-            --to-ports "$DNSDIST_PORT"
+    iptables \
+        -t nat \
+        -A PREROUTING \
+        -p udp \
+        --dport "$DNS_PORT" \
+        -j REDIRECT \
+        --to-ports "$DNSDIST_PORT" \
+        2>/dev/null || {
 
-    done
+        error_msg "No se pudo configurar IPv4."
+
+        return 1
+    }
 
     # ----------------------------------------------------------
     # IPv6
     # ----------------------------------------------------------
 
-    while ip6tables \
-        -t nat \
-        -C PREROUTING \
-        -p udp \
-        --dport "$DNS_PORT" \
-        -j REDIRECT \
-        --to-ports "$DNSDIST_PORT" \
-        2>/dev/null; do
+    if command -v ip6tables >/dev/null 2>&1; then
 
         ip6tables \
             -t nat \
-            -D PREROUTING \
+            -C PREROUTING \
             -p udp \
             --dport "$DNS_PORT" \
             -j REDIRECT \
-            --to-ports "$DNSDIST_PORT"
-
-    done
-
-    # ----------------------------------------------------------
-    # Agregar IPv4
-    # ----------------------------------------------------------
-
-    if ! iptables \
-        -t nat \
-        -A PREROUTING \
-        -p udp \
-        --dport "$DNS_PORT" \
-        -m u32 \
-        --u32 "0>>22&0x3C@12=0x00010000" \
-        -j REDIRECT \
-        --to-ports "$DNSDIST_PORT"; then
-
-        error_msg "No se pudo agregar la regla IPv4."
-
-        return 1
-    fi
-
-    # ----------------------------------------------------------
-    # Agregar IPv6
-    # ----------------------------------------------------------
-
-    if command -v ip6tables >/dev/null 2>&1; then
+            --to-ports "$DNSDIST_PORT" \
+            2>/dev/null ||
 
         ip6tables \
             -t nat \
@@ -709,15 +700,74 @@ save_firewall() {
     if command -v netfilter-persistent >/dev/null 2>&1; then
 
         netfilter-persistent save \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1 ||
+            true
 
     elif command -v iptables-save >/dev/null 2>&1; then
 
         iptables-save \
             > /etc/iptables.rules \
-            2>/dev/null || true
-
+            2>/dev/null ||
+            true
     fi
+}
+
+# ==============================================================
+# CONFIGURAR DOMINIO
+# ==============================================================
+
+ask_domain() {
+
+    local DOMAIN=""
+
+    echo
+
+    echo -e \
+        "${WHITE}${BOLD}🌐 CONFIGURACIÓN DEL DOMINIO NS${RESET}"
+
+    echo
+
+    echo -e \
+        "${GRAY}Introduce el dominio NS que tienes configurado en Cloudflare.${RESET}"
+
+    echo
+
+    echo -e \
+        "${GRAY}Ejemplo:${RESET} ${CYAN}ns-prueba.socialstreaming.xyz${RESET}"
+
+    echo
+
+    while true; do
+
+        read -r -p \
+            "$(echo -e "${CYAN}🌐 Dominio NS: ${RESET}")" \
+            DOMAIN
+
+        DOMAIN="$(
+            printf '%s' "$DOMAIN" |
+            tr -d '[:space:]'
+        )"
+
+        if valid_domain "$DOMAIN"; then
+
+            break
+        fi
+
+        error_msg \
+            "Dominio inválido."
+
+        echo
+    done
+
+    printf '%s\n' "$DOMAIN" > "$DOMAIN_FILE"
+
+    chmod 600 "$DOMAIN_FILE"
+
+    echo
+
+    ok "Dominio NS guardado: $DOMAIN"
+
+    return 0
 }
 
 # ==============================================================
@@ -735,47 +785,25 @@ install_slowdns() {
 
     echo
 
-    if systemctl is-active --quiet "$SERVICE" &&
-       systemctl is-active --quiet "$DNSDIST_SERVICE"; then
-
-        warning "SlowDNS ya está instalado y activo."
-
-        show_status_short
-
-        pause
-
-        return 0
-    fi
-
     # ----------------------------------------------------------
     # Dominio
     # ----------------------------------------------------------
 
-    read -r -p \
-        "$(echo -e "${CYAN}🌐 Dominio NS: ${RESET}")" \
-        DOMAIN
+    mkdir -p "$DIR"
 
-    DOMAIN=$(
-        printf '%s' "$DOMAIN" |
-        tr -d '[:space:]'
-    )
+    ask_domain || return 1
 
-    if ! valid_domain "$DOMAIN"; then
+    local DOMAIN
 
-        error_msg "Dominio inválido."
-
-        pause
-
-        return 1
-    fi
+    DOMAIN="$(
+        tr -d '[:space:]' < "$DOMAIN_FILE"
+    )"
 
     # ----------------------------------------------------------
     # Dependencias
     # ----------------------------------------------------------
 
     install_dependencies || {
-
-        pause
 
         return 1
     }
@@ -789,8 +817,6 @@ install_slowdns() {
         error_msg \
             "Uno de los puertos necesarios está ocupado."
 
-        pause
-
         return 1
     fi
 
@@ -799,8 +825,6 @@ install_slowdns() {
     # ----------------------------------------------------------
 
     install_slowdns_binary || {
-
-        pause
 
         return 1
     }
@@ -813,17 +837,11 @@ install_slowdns() {
 
     chmod 700 "$DIR"
 
-    printf '%s\n' "$DOMAIN" > "$DOMAIN_FILE"
-
-    chmod 600 "$DOMAIN_FILE"
-
     # ----------------------------------------------------------
     # Claves
     # ----------------------------------------------------------
 
     generate_keys || {
-
-        pause
 
         return 1
     }
@@ -832,20 +850,19 @@ install_slowdns() {
     # DNSDist
     # ----------------------------------------------------------
 
-    configure_dnsdist "$DOMAIN" || {
+    configure_dnsdist || {
 
-        pause
+        error_msg \
+            "SlowDNS se detuvo porque DNSDist no pasó la validación."
 
         return 1
     }
 
     # ----------------------------------------------------------
-    # SlowDNS
+    # Servicio
     # ----------------------------------------------------------
 
     create_slowdns_service "$DOMAIN" || {
-
-        pause
 
         return 1
     }
@@ -858,13 +875,12 @@ install_slowdns() {
 
         warning \
             "No se pudo configurar completamente el firewall."
-
     }
 
     save_firewall
 
     # ----------------------------------------------------------
-    # Iniciar servicios
+    # DNSDist
     # ----------------------------------------------------------
 
     echo
@@ -889,8 +905,6 @@ install_slowdns() {
             2>/dev/null
 
         set_config "SLOWDNS" "OFF"
-
-        pause
 
         return 1
     fi
@@ -922,8 +936,6 @@ install_slowdns() {
 
         set_config "SLOWDNS" "OFF"
 
-        pause
-
         return 1
     fi
 
@@ -935,10 +947,17 @@ install_slowdns() {
 
     set_config "SLOWDNS" "ON"
 
-    set_port_config "SLOWDNS_PORT" "$SLOWDNS_PORT"
-    set_port_config "DNSDIST_PORT" "$DNSDIST_PORT"
+    set_port_config \
+        "SLOWDNS_PORT" \
+        "$SLOWDNS_PORT"
 
-    source "$CONFIG" 2>/dev/null
+    set_port_config \
+        "DNSDIST_PORT" \
+        "$DNSDIST_PORT"
+
+    set_port_config \
+        "SLOWDNS_DOMAIN" \
+        "$DOMAIN"
 
     # ----------------------------------------------------------
     # Resultado
@@ -978,14 +997,16 @@ install_slowdns() {
 
     echo
 
-    echo -e "${WHITE}${BOLD}🔑 PUBLIC KEY${RESET}"
-    line
-
-    cat "$PUBKEY"
+    echo -e \
+        "${WHITE}${BOLD}🔑 PUBLIC KEY${RESET}"
 
     line
 
-    pause
+    if [[ -f "$PUBKEY" ]]; then
+        cat "$PUBKEY"
+    fi
+
+    line
 
     return 0
 }
@@ -1002,6 +1023,7 @@ show_status_short() {
         DOMAIN=$(cat "$DOMAIN_FILE")
 
     echo
+
     echo -e \
         "${WHITE}Dominio:${RESET} ${CYAN}$DOMAIN${RESET}"
 
@@ -1044,21 +1066,25 @@ remove_slowdns() {
     info "Deteniendo SlowDNS..."
 
     systemctl stop "$SERVICE" \
-        2>/dev/null
+        2>/dev/null ||
+        true
 
     systemctl disable "$SERVICE" \
-        2>/dev/null
+        2>/dev/null ||
+        true
 
     info "Deteniendo DNSDist..."
 
     systemctl stop "$DNSDIST_SERVICE" \
-        2>/dev/null
+        2>/dev/null ||
+        true
 
     systemctl disable "$DNSDIST_SERVICE" \
-        2>/dev/null
+        2>/dev/null ||
+        true
 
     # ----------------------------------------------------------
-    # Firewall IPv4
+    # IPv4
     # ----------------------------------------------------------
 
     while iptables \
@@ -1066,8 +1092,6 @@ remove_slowdns() {
         -C PREROUTING \
         -p udp \
         --dport "$DNS_PORT" \
-        -m u32 \
-        --u32 "0>>22&0x3C@12=0x00010000" \
         -j REDIRECT \
         --to-ports "$DNSDIST_PORT" \
         2>/dev/null; do
@@ -1077,15 +1101,15 @@ remove_slowdns() {
             -D PREROUTING \
             -p udp \
             --dport "$DNS_PORT" \
-            -m u32 \
-            --u32 "0>>22&0x3C@12=0x00010000" \
             -j REDIRECT \
-            --to-ports "$DNSDIST_PORT"
+            --to-ports "$DNSDIST_PORT" \
+            2>/dev/null ||
+            break
 
     done
 
     # ----------------------------------------------------------
-    # Firewall IPv6
+    # IPv6
     # ----------------------------------------------------------
 
     if command -v ip6tables >/dev/null 2>&1; then
@@ -1105,7 +1129,9 @@ remove_slowdns() {
                 -p udp \
                 --dport "$DNS_PORT" \
                 -j REDIRECT \
-                --to-ports "$DNSDIST_PORT"
+                --to-ports "$DNSDIST_PORT" \
+                2>/dev/null ||
+                break
 
         done
 
@@ -1129,18 +1155,22 @@ remove_slowdns() {
     systemctl daemon-reload
 
     systemctl reset-failed "$SERVICE" \
-        2>/dev/null || true
+        2>/dev/null ||
+        true
+
+    systemctl reset-failed "$DNSDIST_SERVICE" \
+        2>/dev/null ||
+        true
 
     # ----------------------------------------------------------
-    # Configuración KevinTech
+    # Configuración
     # ----------------------------------------------------------
 
     set_config "SLOWDNS" "OFF"
 
     remove_config_key "SLOWDNS_PORT"
     remove_config_key "DNSDIST_PORT"
-
-    source "$CONFIG" 2>/dev/null
+    remove_config_key "SLOWDNS_DOMAIN"
 
     echo
 
@@ -1163,7 +1193,7 @@ restart_slowdns() {
 
         pause
 
-        return
+        return 1
     fi
 
     info "Reiniciando DNSDist..."
@@ -1275,7 +1305,8 @@ status_slowdns() {
     ss -lunp 2>/dev/null |
         grep -E \
             "(:${DNS_PORT}|:${DNSDIST_PORT}|:${SLOWDNS_PORT})" ||
-        echo -e "${GRAY}No se encontraron puertos.${RESET}"
+        echo -e \
+            "${GRAY}No se encontraron puertos.${RESET}"
 
     line
 
@@ -1361,14 +1392,35 @@ check_slowdns() {
 
     if [[ -f "$DOMAIN_FILE" ]]; then
         ok "Dominio configurado"
+
+        echo -e \
+            " ${GRAY}Dominio:${RESET} $(cat "$DOMAIN_FILE")"
+
     else
+
         error_msg "Dominio no configurado"
     fi
 
     if [[ -f "$DNSDIST_CONFIG" ]]; then
+
         ok "Configuración DNSDist encontrada"
+
+        if dnsdist \
+            --check-config \
+            --config="$DNSDIST_CONFIG" \
+            >/dev/null 2>&1; then
+
+            ok "Configuración DNSDist válida"
+
+        else
+
+            error_msg "Configuración DNSDist inválida"
+        fi
+
     else
+
         error_msg "Configuración DNSDist no encontrada"
+
     fi
 
     if [[ -f "$SERVICE_FILE" ]]; then
@@ -1408,7 +1460,8 @@ check_slowdns() {
 
         else
 
-            warning "UDP $PORT no está escuchando"
+            warning \
+                "UDP $PORT no está escuchando"
 
         fi
 
@@ -1438,7 +1491,7 @@ check_slowdns() {
 }
 
 # ==============================================================
-# INFORMACIÓN DEL SERVIDOR
+# INFORMACIÓN VPS
 # ==============================================================
 
 system_info() {
@@ -1496,17 +1549,35 @@ system_info() {
     )
 
     CORES=$(nproc)
+
     UPTIME=$(uptime -p)
 
-    echo -e "${WHITE}Hostname:${RESET} $HOST"
-    echo -e "${WHITE}Sistema:${RESET}  $OS"
-    echo -e "${WHITE}Kernel:${RESET}   $KERNEL"
-    echo -e "${WHITE}CPU:${RESET}      ${CPU:-Desconocida}"
-    echo -e "${WHITE}Núcleos:${RESET}  $CORES"
-    echo -e "${WHITE}RAM:${RESET}      $RAM"
-    echo -e "${WHITE}Disco:${RESET}    $DISK"
-    echo -e "${WHITE}Uptime:${RESET}   $UPTIME"
-    echo -e "${WHITE}IPv4:${RESET}     ${IP:-No disponible}"
+    echo -e \
+        "${WHITE}Hostname:${RESET} $HOST"
+
+    echo -e \
+        "${WHITE}Sistema:${RESET}  $OS"
+
+    echo -e \
+        "${WHITE}Kernel:${RESET}   $KERNEL"
+
+    echo -e \
+        "${WHITE}CPU:${RESET}      ${CPU:-Desconocida}"
+
+    echo -e \
+        "${WHITE}Núcleos:${RESET}  $CORES"
+
+    echo -e \
+        "${WHITE}RAM:${RESET}      $RAM"
+
+    echo -e \
+        "${WHITE}Disco:${RESET}    $DISK"
+
+    echo -e \
+        "${WHITE}Uptime:${RESET}   $UPTIME"
+
+    echo -e \
+        "${WHITE}IPv4:${RESET}     ${IP:-No disponible}"
 
     line
 
@@ -1541,12 +1612,19 @@ if [[ "$1" == "--auto" ]]; then
 
     echo
 
-    if install_slowdns >/dev/null 2>&1; then
+    # IMPORTANTE:
+    # No ocultamos la salida.
+    #
+    # El instalador principal necesita que el usuario pueda
+    # introducir el dominio NS.
+
+    if install_slowdns; then
 
         if systemctl is-active --quiet "$SERVICE" &&
            systemctl is-active --quiet "$DNSDIST_SERVICE"; then
 
             echo
+
             echo -e \
                 "${GREEN}✔ SlowDNS instalado y activo correctamente.${RESET}"
 
@@ -1561,17 +1639,34 @@ if [[ "$1" == "--auto" ]]; then
 
     echo
 
+    echo -e \
+        "${YELLOW}Estado DNSDist:${RESET}"
+
+    systemctl \
+        --no-pager \
+        --full \
+        status "$DNSDIST_SERVICE" \
+        2>/dev/null
+
+    echo
+
+    echo -e \
+        "${YELLOW}Últimos logs DNSDist:${RESET}"
+
     journalctl \
-        -u "$SERVICE" \
-        -n 20 \
+        -u "$DNSDIST_SERVICE" \
+        -n 30 \
         --no-pager \
         2>/dev/null
 
     echo
 
+    echo -e \
+        "${YELLOW}Últimos logs SlowDNS:${RESET}"
+
     journalctl \
-        -u "$DNSDIST_SERVICE" \
-        -n 20 \
+        -u "$SERVICE" \
+        -n 30 \
         --no-pager \
         2>/dev/null
 
@@ -1587,6 +1682,7 @@ while true; do
     header
 
     # Recargar configuración
+
     # shellcheck disable=SC1090
     source "$CONFIG" 2>/dev/null
 
