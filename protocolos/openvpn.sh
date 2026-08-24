@@ -1,442 +1,1776 @@
 #!/bin/bash
-#========================================
-# KevinTech Multi Script
-# OpenVPN Manager
-# Basado en Nyr OpenVPN Installer
-#==================================================
-  BASE="/etc/kevintech"
+
+# ==============================================================
+#              🛡️ KEVINTECH MULTI SCRIPT
+#                    OPENVPN MANAGER
+#                         v3.0
+# ==============================================================
+# Compatible con:
+# • Ubuntu
+# • KevinTech Multi Script
+# • Instalación automática --auto
+#
+# Puerto por defecto : 1194
+# Protocolo           : TCP
+# Red VPN             : 10.8.0.0/24
+# Configuración       : /etc/kevintech/config.conf
+# ==============================================================
+
+set -o pipefail
+
+# ==============================================================
+# VARIABLES
+# ==============================================================
+
+BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-[[ -f "$CONFIG" ]] && source "$CONFIG"
-if [[ -z "$SERVER_DOMAIN" ]]; then
-    echo "❌ No hay un dominio configurado."
-    echo "👉 Configúralo primero desde el menú principal."
-    exit 1
-fi
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-CYAN="\e[1;96m"
+VERSION="3.0"
+
+OPENVPN_DIR="/etc/openvpn/server"
+EASYRSA_DIR="$OPENVPN_DIR/easy-rsa"
+
+SERVICE="openvpn-server@server.service"
+IPTABLES_SERVICE="openvpn-iptables.service"
+
+SERVER_CONF="$OPENVPN_DIR/server.conf"
+CLIENT_COMMON="$OPENVPN_DIR/client-common.txt"
+TC_KEY="$OPENVPN_DIR/tc.key"
+CRL_FILE="$OPENVPN_DIR/crl.pem"
+
+PORT="${OPENVPN_PORT:-1194}"
+PROTOCOL="${OPENVPN_PROTOCOL:-tcp}"
+VPN_NETWORK="10.8.0.0"
+VPN_NETMASK="255.255.255.0"
+
+CLIENT_DEFAULT="client"
+
+# ==============================================================
+# COLORES
+# ==============================================================
+
 RESET="\e[0m"
+BOLD="\e[1m"
+
+RED="\e[1;91m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+BLUE="\e[1;94m"
 MAGENTA="\e[1;95m"
+CYAN="\e[1;96m"
 WHITE="\e[1;97m"
+GRAY="\e[1;90m"
 
-# Verificar que se ejecute con bash
-if readlink /proc/$$/exe | grep -q "dash"; then  
-	echo "❌ Este instalador debe ejecutarse con bash y no con sh."  
-	exit  
-fi  
-  
-# Discard stdin. Needed when running from an one-liner which includes a newline  
-read -N 999999 -t 0.001  
-  
+# ==============================================================
+# CONFIGURACIÓN
+# ==============================================================
 
-#==================================================
-# Detectar Ubuntu (todas las versiones)
-#==================================================
-source /etc/os-release
-
-if [[ "$ID" != "ubuntu" ]]; then
-    clear
-    echo "❌ KevinTech OpenVPN solo es compatible con Ubuntu."
-    exit 1
+if [[ -f "$CONFIG" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG" 2>/dev/null
 fi
 
-group_name="nogroup"
-  
-# Detect environments where $PATH does not include the sbin directories  
-if ! grep -q sbin <<< "$PATH"; then  
-	echo "❌ El PATH no incluye sbin."
-echo "👉 Ejecuta: su -"  
-	exit  
-fi  
-  
-if [[ "$EUID" -ne 0 ]]; then  
-	echo "❌ Debes ejecutar este script como root."  
-	exit  
-fi  
-  
-if [[ ! -e /dev/net/tun ]] || ! ( exec 7<>/dev/net/tun ) 2>/dev/null; then  
-	echo "❌ El dispositivo TUN no está habilitado."
-echo "👉 Activa TUN antes de instalar OpenVPN."
-	exit  
-fi  
-  
-new_client () {  
-	# Generates the custom client.ovpn  
-	{  
-	cat /etc/openvpn/server/client-common.txt  
-	echo "<ca>"  
-	cat /etc/openvpn/server/easy-rsa/pki/ca.crt  
-	echo "</ca>"  
-	echo "<cert>"  
-	sed -ne '/BEGIN CERTIFICATE/,$ p' /etc/openvpn/server/easy-rsa/pki/issued/"$client".crt  
-	echo "</cert>"  
-	echo "<key>"  
-	cat /etc/openvpn/server/easy-rsa/pki/private/"$client".key  
-	echo "</key>"  
-	echo "<tls-crypt>"  
-	sed -ne '/BEGIN OpenVPN Static key/,$ p' /etc/openvpn/server/tc.key  
-	echo "</tls-crypt>"  
-	} > ~/"$client".ovpn  
-}  
-  #==================================================
+SERVER_DOMAIN="${SERVER_DOMAIN:-}"
+
+# ==============================================================
+# FUNCIONES
+# ==============================================================
+
+clear_screen() {
+    clear 2>/dev/null || true
+}
+
+line() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+title() {
+
+    clear_screen
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🛡️ KEVINTECH OPENVPN${RESET}                  ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}                 ${GRAY}VPN MANAGER v${VERSION}${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+}
+
+section() {
+
+    echo
+    echo -e "${MAGENTA}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${MAGENTA}║${RESET} ${WHITE}${BOLD}$1${RESET}"
+    echo -e "${MAGENTA}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+}
+
+ok() {
+    echo -e "${GREEN}✔${RESET} $1"
+}
+
+error_msg() {
+    echo -e "${RED}✘${RESET} $1"
+}
+
+warning() {
+    echo -e "${YELLOW}⚠${RESET} $1"
+}
+
+info() {
+    echo -e "${CYAN}➜${RESET} $1"
+}
+
+pause() {
+    echo
+    read -r -p "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+}
+
+# ==============================================================
+# ROOT
+# ==============================================================
+
+check_root() {
+
+    if [[ "$EUID" -ne 0 ]]; then
+        error_msg "Este administrador requiere permisos de root."
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================
+# CONFIG
+# ==============================================================
+
+set_config() {
+
+    local KEY="$1"
+    local VALUE="$2"
+
+    [[ ! -f "$CONFIG" ]] && return 1
+
+    if grep -q "^${KEY}=" "$CONFIG"; then
+
+        sed -i \
+            "s|^${KEY}=.*|${KEY}=${VALUE}|" \
+            "$CONFIG"
+
+    else
+
+        echo "${KEY}=${VALUE}" >> "$CONFIG"
+
+    fi
+}
+
+# ==============================================================
+# COMPROBAR UBUNTU
+# ==============================================================
+
+check_ubuntu() {
+
+    [[ ! -f /etc/os-release ]] && {
+        error_msg "No se pudo detectar el sistema operativo."
+        return 1
+    }
+
+    # shellcheck disable=SC1091
+    source /etc/os-release
+
+    if [[ "$ID" != "ubuntu" ]]; then
+        error_msg "KevinTech OpenVPN requiere Ubuntu."
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================
+# COMPROBAR TUN
+# ==============================================================
+
+check_tun() {
+
+    if [[ ! -e /dev/net/tun ]]; then
+        error_msg "El dispositivo TUN no existe."
+        echo
+        echo -e "${YELLOW}Activa TUN en tu VPS antes de instalar OpenVPN.${RESET}"
+        return 1
+    fi
+
+    if ! (exec 7<>/dev/net/tun) 2>/dev/null; then
+        error_msg "No se puede acceder al dispositivo TUN."
+        return 1
+    fi
+
+    exec 7>&-
+
+    return 0
+}
+
+# ==============================================================
+# DEPENDENCIAS
+# ==============================================================
+
+install_dependencies() {
+
+    info "Actualizando repositorios..."
+
+    if ! apt-get update -y >/dev/null 2>&1; then
+        error_msg "No se pudieron actualizar los repositorios."
+        return 1
+    fi
+
+    info "Instalando dependencias..."
+
+    if ! apt-get install -y \
+        openvpn \
+        openssl \
+        ca-certificates \
+        iptables \
+        curl \
+        wget \
+        tar \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudieron instalar las dependencias."
+        return 1
+    fi
+
+    if ! command -v openvpn >/dev/null 2>&1; then
+        error_msg "OpenVPN no quedó instalado."
+        return 1
+    fi
+
+    ok "Dependencias instaladas."
+
+    return 0
+}
+
+# ==============================================================
+# OBTENER IP DEL SERVIDOR
+# ==============================================================
+
+get_server_ip() {
+
+    local IP=""
+
+    IP="$(
+        curl \
+            -4 \
+            --silent \
+            --connect-timeout 5 \
+            --max-time 10 \
+            https://api.ipify.org \
+            2>/dev/null
+    )"
+
+    if [[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "$IP"
+        return 0
+    fi
+
+    ip -4 route get 1.1.1.1 2>/dev/null |
+        awk '
+            /src/ {
+                for(i=1;i<=NF;i++)
+                    if($i=="src")
+                        print $(i+1)
+            }
+        ' |
+        head -n1
+}
+
+# ==============================================================
+# OBTENER INTERFAZ
+# ==============================================================
+
+get_interface() {
+
+    ip route get 1.1.1.1 2>/dev/null |
+        awk '
+            /dev/ {
+                for(i=1;i<=NF;i++)
+                    if($i=="dev")
+                        print $(i+1)
+            }
+        ' |
+        head -n1
+}
+
+# ==============================================================
+# COMPROBAR PUERTO
+# ==============================================================
+
+port_available() {
+
+    local P="$1"
+
+    if ss -H -lntup 2>/dev/null |
+        awk -v p=":$P" '$0 ~ p"([[:space:]]|$)"' |
+        grep -q .; then
+
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================
+# DESCARGAR EASY-RSA
+# ==============================================================
+
+install_easy_rsa() {
+
+    local URL
+
+    URL="https://github.com/OpenVPN/easy-rsa/releases/download/v3.2.1/EasyRSA-3.2.1.tgz"
+
+    info "Instalando Easy-RSA..."
+
+    rm -rf "$EASYRSA_DIR"
+
+    mkdir -p "$EASYRSA_DIR"
+
+    if ! {
+        wget -qO- "$URL" 2>/dev/null ||
+        curl -fsSL "$URL"
+    } |
+        tar xz \
+            -C "$EASYRSA_DIR" \
+            --strip-components=1; then
+
+        error_msg "No se pudo descargar Easy-RSA."
+        return 1
+    fi
+
+    if [[ ! -x "$EASYRSA_DIR/easyrsa" ]]; then
+        error_msg "Easy-RSA no quedó instalado correctamente."
+        return 1
+    fi
+
+    chown -R root:root "$EASYRSA_DIR"
+
+    ok "Easy-RSA instalado."
+
+    return 0
+}
+
+# ==============================================================
+# CREAR PKI
+# ==============================================================
+
+create_pki() {
+
+    cd "$EASYRSA_DIR" || return 1
+
+    info "Creando PKI..."
+
+    ./easyrsa --batch init-pki >/dev/null 2>&1 ||
+        return 1
+
+    info "Generando autoridad certificadora..."
+
+    ./easyrsa \
+        --batch \
+        build-ca nopass \
+        >/dev/null 2>&1 ||
+        return 1
+
+    info "Generando certificado del servidor..."
+
+    ./easyrsa \
+        --batch \
+        --days=3650 \
+        build-server-full server nopass \
+        >/dev/null 2>&1 ||
+        return 1
+
+    info "Generando CRL..."
+
+    ./easyrsa \
+        --batch \
+        --days=3650 \
+        gen-crl \
+        >/dev/null 2>&1 ||
+        return 1
+
+    cp pki/ca.crt "$OPENVPN_DIR/"
+    cp pki/private/ca.key "$OPENVPN_DIR/"
+    cp pki/issued/server.crt "$OPENVPN_DIR/"
+    cp pki/private/server.key "$OPENVPN_DIR/"
+    cp pki/crl.pem "$CRL_FILE"
+
+    chown root:root \
+        "$OPENVPN_DIR/ca.crt" \
+        "$OPENVPN_DIR/ca.key" \
+        "$OPENVPN_DIR/server.crt" \
+        "$OPENVPN_DIR/server.key" \
+        "$CRL_FILE"
+
+    chown nobody:nogroup "$CRL_FILE" 2>/dev/null || true
+
+    chmod 600 "$OPENVPN_DIR/ca.key"
+    chmod 600 "$OPENVPN_DIR/server.key"
+    chmod 644 "$OPENVPN_DIR/ca.crt"
+    chmod 644 "$OPENVPN_DIR/server.crt"
+
+    chmod 644 "$CRL_FILE"
+
+    ok "PKI creada correctamente."
+
+    return 0
+}
+
+# ==============================================================
+# TLS CRYPT
+# ==============================================================
+
+generate_tls_key() {
+
+    info "Generando clave TLS..."
+
+    if ! openvpn \
+        --genkey secret "$TC_KEY" \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudo generar la clave TLS."
+        return 1
+    fi
+
+    chmod 600 "$TC_KEY"
+
+    ok "TLS-Crypt activado."
+
+    return 0
+}
+
+# ==============================================================
+# CONFIGURAR OPENVPN
+# ==============================================================
+
+create_server_config() {
+
+    local SERVER_IP="$1"
+
+    info "Creando server.conf..."
+
+    cat > "$SERVER_CONF" <<EOF
+# ==========================================================
+# KevinTech Multi Script - OpenVPN
+# ==========================================================
+
+port $PORT
+proto $PROTOCOL
+
+dev tun
+
+ca ca.crt
+cert server.crt
+key server.key
+dh none
+
+topology subnet
+
+server $VPN_NETWORK $VPN_NETMASK
+
+ifconfig-pool-persist ipp.txt
+
+push "redirect-gateway def1 bypass-dhcp"
+
+push "dhcp-option DNS 1.1.1.1"
+push "dhcp-option DNS 1.0.0.1"
+
+auth SHA256
+
+tls-crypt tc.key
+
+keepalive 10 120
+
+user nobody
+group nogroup
+
+persist-key
+persist-tun
+
+status openvpn-status.log
+
+verb 3
+
+crl-verify crl.pem
+
+client-to-client
+
+duplicate-cn
+
+EOF
+
+    if [[ "$PROTOCOL" == "udp" ]]; then
+        echo "explicit-exit-notify" >> "$SERVER_CONF"
+    fi
+
+    chmod 644 "$SERVER_CONF"
+
+    ok "Configuración del servidor creada."
+
+    return 0
+}
+
+# ==============================================================
+# CONFIGURAR FORWARDING
+# ==============================================================
+
+configure_forwarding() {
+
+    info "Activando IP forwarding..."
+
+    cat > /etc/sysctl.d/99-kevintech-openvpn.conf <<'EOF'
+net.ipv4.ip_forward=1
+EOF
+
+    sysctl --system >/dev/null 2>&1 || true
+
+    echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
+
+    ok "IP forwarding activado."
+}
+
+# ==============================================================
+# CREAR SERVICIO IPTABLES
+# ==============================================================
+
+create_iptables_service() {
+
+    local SERVER_IP="$1"
+    local DEV="$2"
+    local IPTABLES
+
+    IPTABLES="$(command -v iptables)"
+
+    [[ -z "$IPTABLES" ]] && {
+        error_msg "No se encontró iptables."
+        return 1
+    }
+
+    info "Configurando NAT..."
+
+    cat > "/etc/systemd/system/$IPTABLES_SERVICE" <<EOF
+[Unit]
+Description=KevinTech OpenVPN Firewall
+Before=openvpn-server@server.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+ExecStart=$IPTABLES -t nat -C POSTROUTING -s $VPN_NETWORK/24 ! -d $VPN_NETWORK/24 -o $DEV -j MASQUERADE
+ExecStart=$IPTABLES -t nat -A POSTROUTING -s $VPN_NETWORK/24 ! -d $VPN_NETWORK/24 -o $DEV -j MASQUERADE
+
+ExecStart=$IPTABLES -C INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
+ExecStart=$IPTABLES -I INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
+
+ExecStart=$IPTABLES -C FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+ExecStart=$IPTABLES -I FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+
+ExecStart=$IPTABLES -C FORWARD -d $VPN_NETWORK/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+ExecStart=$IPTABLES -I FORWARD -d $VPN_NETWORK/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+RemainAfterExit=yes
+
+ExecStop=$IPTABLES -t nat -D POSTROUTING -s $VPN_NETWORK/24 ! -d $VPN_NETWORK/24 -o $DEV -j MASQUERADE
+ExecStop=$IPTABLES -D INPUT -p $PROTOCOL --dport $PORT -j ACCEPT
+ExecStop=$IPTABLES -D FORWARD -s $VPN_NETWORK/24 -j ACCEPT
+ExecStop=$IPTABLES -D FORWARD -d $VPN_NETWORK/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+
+    systemctl enable "$IPTABLES_SERVICE" >/dev/null 2>&1
+
+    # Las reglas ExecStart -C pueden impedir que systemd continúe.
+    # Aplicamos las reglas de forma idempotente aquí.
+    iptables -t nat -C POSTROUTING \
+        -s "$VPN_NETWORK/24" \
+        ! -d "$VPN_NETWORK/24" \
+        -o "$DEV" \
+        -j MASQUERADE \
+        2>/dev/null ||
+    iptables -t nat -A POSTROUTING \
+        -s "$VPN_NETWORK/24" \
+        ! -d "$VPN_NETWORK/24" \
+        -o "$DEV" \
+        -j MASQUERADE
+
+    iptables -C INPUT \
+        -p "$PROTOCOL" \
+        --dport "$PORT" \
+        -j ACCEPT \
+        2>/dev/null ||
+    iptables -I INPUT \
+        -p "$PROTOCOL" \
+        --dport "$PORT" \
+        -j ACCEPT
+
+    iptables -C FORWARD \
+        -s "$VPN_NETWORK/24" \
+        -j ACCEPT \
+        2>/dev/null ||
+    iptables -I FORWARD \
+        -s "$VPN_NETWORK/24" \
+        -j ACCEPT
+
+    iptables -C FORWARD \
+        -d "$VPN_NETWORK/24" \
+        -m conntrack \
+        --ctstate RELATED,ESTABLISHED \
+        -j ACCEPT \
+        2>/dev/null ||
+    iptables -I FORWARD \
+        -d "$VPN_NETWORK/24" \
+        -m conntrack \
+        --ctstate RELATED,ESTABLISHED \
+        -j ACCEPT
+
+    systemctl start "$IPTABLES_SERVICE" >/dev/null 2>&1 || true
+
+    ok "NAT configurado."
+
+    return 0
+}
+
+# ==============================================================
+# CLIENT COMMON
+# ==============================================================
+
+create_client_common() {
+
+    local DOMAIN="$1"
+
+    info "Creando plantilla de clientes..."
+
+    cat > "$CLIENT_COMMON" <<EOF
+client
+dev tun
+proto $PROTOCOL
+remote $DOMAIN $PORT
+
+resolv-retry infinite
+nobind
+
+persist-key
+persist-tun
+
+remote-cert-tls server
+
+auth SHA256
+
+ignore-unknown-option block-outside-dns
+
+auth-user-pass
+
+verb 3
+EOF
+
+    chmod 644 "$CLIENT_COMMON"
+
+    ok "Plantilla de cliente creada."
+}
+
+# ==============================================================
+# GENERAR CLIENTE
+# ==============================================================
+
+new_client() {
+
+    local CLIENT="$1"
+
+    [[ -z "$CLIENT" ]] && return 1
+
+    if [[ ! -f "$EASYRSA_DIR/pki/issued/$CLIENT.crt" ]]; then
+        error_msg "El certificado del cliente no existe."
+        return 1
+    fi
+
+    {
+        cat "$CLIENT_COMMON"
+
+        echo "<ca>"
+        cat "$EASYRSA_DIR/pki/ca.crt"
+        echo "</ca>"
+
+        echo "<cert>"
+        sed -ne '/BEGIN CERTIFICATE/,$ p' \
+            "$EASYRSA_DIR/pki/issued/$CLIENT.crt"
+        echo "</cert>"
+
+        echo "<key>"
+        cat "$EASYRSA_DIR/pki/private/$CLIENT.key"
+        echo "</key>"
+
+        echo "<tls-crypt>"
+        cat "$TC_KEY"
+        echo "</tls-crypt>"
+
+    } > "/root/${CLIENT}.ovpn"
+
+    chmod 600 "/root/${CLIENT}.ovpn"
+
+    return 0
+}
+
+# ==============================================================
+# CREAR PRIMER CLIENTE
+# ==============================================================
+
+create_client_certificate() {
+
+    local CLIENT="$1"
+
+    [[ -z "$CLIENT" ]] && CLIENT="$CLIENT_DEFAULT"
+
+    CLIENT="$(
+        printf '%s' "$CLIENT" |
+        sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g'
+    )"
+
+    [[ -z "$CLIENT" ]] && CLIENT="$CLIENT_DEFAULT"
+
+    if [[ -f "$EASYRSA_DIR/pki/issued/$CLIENT.crt" ]]; then
+        error_msg "El cliente $CLIENT ya existe."
+        return 1
+    fi
+
+    cd "$EASYRSA_DIR" || return 1
+
+    info "Generando certificado para $CLIENT..."
+
+    if ! ./easyrsa \
+        --batch \
+        --days=3650 \
+        build-client-full "$CLIENT" nopass \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudo crear el cliente."
+        return 1
+    fi
+
+    if ! new_client "$CLIENT"; then
+        error_msg "No se pudo generar el archivo .ovpn."
+        return 1
+    fi
+
+    ok "Cliente $CLIENT creado."
+
+    return 0
+}
+
+# ==============================================================
+# INSTALACIÓN COMPLETA
+# ==============================================================
+
+install_openvpn() {
+
+    title
+
+    section "🚀 INSTALACIÓN DE OPENVPN"
+
+    if [[ -f "$SERVER_CONF" ]] &&
+       systemctl is-enabled "$SERVICE" >/dev/null 2>&1; then
+
+        warning "OpenVPN ya parece estar instalado."
+        pause
+        return 0
+    fi
+
+    check_root || return 1
+    check_ubuntu || return 1
+    check_tun || return 1
+
+    # ----------------------------------------------------------
+    # DOMINIO
+    # ----------------------------------------------------------
+
+    if [[ -z "$SERVER_DOMAIN" ]]; then
+
+        echo -e "${WHITE}No existe un dominio configurado.${RESET}"
+        echo
+
+        read -r -p \
+            "$(echo -e "${CYAN}🌐 Dominio para OpenVPN: ${RESET}")" \
+            SERVER_DOMAIN
+
+        SERVER_DOMAIN="$(
+            printf '%s' "$SERVER_DOMAIN" |
+            tr -d '[:space:]'
+        )"
+
+        if [[ -z "$SERVER_DOMAIN" ]]; then
+            error_msg "El dominio no puede estar vacío."
+            return 1
+        fi
+    fi
+
+    # ----------------------------------------------------------
+    # PUERTO
+    # ----------------------------------------------------------
+
+    if [[ ! "$PORT" =~ ^[0-9]+$ ]] ||
+       (( PORT < 1 || PORT > 65535 )); then
+
+        PORT="1194"
+    fi
+
+    if ! port_available "$PORT"; then
+        error_msg "El puerto TCP $PORT ya está ocupado."
+        return 1
+    fi
+
+    echo
+    echo -e "${WHITE}Dominio : ${CYAN}$SERVER_DOMAIN${RESET}"
+    echo -e "${WHITE}Puerto  : ${CYAN}$PORT${RESET}"
+    echo -e "${WHITE}Proto   : ${CYAN}$PROTOCOL${RESET}"
+    echo
+
+    # ----------------------------------------------------------
+    # DEPENDENCIAS
+    # ----------------------------------------------------------
+
+    install_dependencies || return 1
+
+    mkdir -p "$OPENVPN_DIR"
+
+    # ----------------------------------------------------------
+    # EASY-RSA
+    # ----------------------------------------------------------
+
+    install_easy_rsa || return 1
+
+    # ----------------------------------------------------------
+    # PKI
+    # ----------------------------------------------------------
+
+    create_pki || {
+        error_msg "No se pudo crear la PKI."
+        return 1
+    }
+
+    # ----------------------------------------------------------
+    # TLS
+    # ----------------------------------------------------------
+
+    generate_tls_key || return 1
+
+    # ----------------------------------------------------------
+    # IP
+    # ----------------------------------------------------------
+
+    local SERVER_IP
+    SERVER_IP="$(get_server_ip)"
+
+    if [[ -z "$SERVER_IP" ]]; then
+        error_msg "No se pudo detectar la IP pública."
+        return 1
+    fi
+
+    local DEV
+    DEV="$(get_interface)"
+
+    if [[ -z "$DEV" ]]; then
+        error_msg "No se pudo detectar la interfaz de red."
+        return 1
+    fi
+
+    ok "IP pública: $SERVER_IP"
+    ok "Interfaz: $DEV"
+
+    # ----------------------------------------------------------
+    # CONFIG
+    # ----------------------------------------------------------
+
+    create_server_config "$SERVER_IP" || return 1
+
+    configure_forwarding
+
+    create_iptables_service \
+        "$SERVER_IP" \
+        "$DEV" || return 1
+
+    create_client_common "$SERVER_DOMAIN" || return 1
+
+    # ----------------------------------------------------------
+    # SERVICIO
+    # ----------------------------------------------------------
+
+    info "Activando OpenVPN..."
+
+    systemctl daemon-reload
+
+    systemctl enable "$SERVICE" >/dev/null 2>&1
+
+    if ! systemctl restart "$SERVICE"; then
+        error_msg "No se pudo iniciar OpenVPN."
+        journalctl -u "$SERVICE" -n 30 --no-pager
+        return 1
+    fi
+
+    sleep 2
+
+    if ! systemctl is-active --quiet "$SERVICE"; then
+
+        error_msg "OpenVPN quedó detenido."
+
+        echo
+        journalctl -u "$SERVICE" -n 30 --no-pager
+
+        return 1
+    fi
+
+    # ----------------------------------------------------------
+    # CLIENTE INICIAL
+    # ----------------------------------------------------------
+
+    create_client_certificate "$CLIENT_DEFAULT" || {
+        error_msg "OpenVPN inició, pero no se pudo crear el cliente inicial."
+        return 1
+    }
+
+    # ----------------------------------------------------------
+    # CONFIG KEVINTECH
+    # ----------------------------------------------------------
+
+    if [[ -f "$CONFIG" ]]; then
+
+        set_config "OPENVPN" "ON"
+        set_config "OPENVPN_PORT" "\"$PORT\""
+        set_config "OPENVPN_PROTOCOL" "\"$PROTOCOL\""
+
+        # Recargar
+        # shellcheck disable=SC1090
+        source "$CONFIG" 2>/dev/null
+
+    fi
+
+    # ----------------------------------------------------------
+    # RESULTADO
+    # ----------------------------------------------------------
+
+    echo
+
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}║${RESET}             ${BOLD}✔ OPENVPN INSTALADO${RESET}                      ${GREEN}║${RESET}"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${GREEN}║${RESET}  Dominio : ${CYAN}$SERVER_DOMAIN${RESET}"
+    echo -e "${GREEN}║${RESET}  Puerto  : ${CYAN}$PORT${RESET}"
+    echo -e "${GREEN}║${RESET}  Protocolo: ${CYAN}$PROTOCOL${RESET}"
+    echo -e "${GREEN}║${RESET}  Red VPN : ${CYAN}$VPN_NETWORK/24${RESET}"
+    echo -e "${GREEN}║${RESET}  Cliente : ${CYAN}$CLIENT_DEFAULT${RESET}"
+    echo -e "${GREEN}║${RESET}  Archivo : ${CYAN}/root/${CLIENT_DEFAULT}.ovpn${RESET}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    return 0
+}
+
+# ==============================================================
+# REINICIAR
+# ==============================================================
+
+restart_openvpn() {
+
+    title
+
+    if [[ ! -f "$SERVER_CONF" ]]; then
+        error_msg "OpenVPN no está instalado."
+        pause
+        return
+    fi
+
+    info "Reiniciando firewall..."
+
+    systemctl restart "$IPTABLES_SERVICE" >/dev/null 2>&1 || true
+
+    info "Reiniciando OpenVPN..."
+
+    systemctl restart "$SERVICE"
+
+    sleep 2
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        ok "OpenVPN está funcionando correctamente."
+    else
+        error_msg "OpenVPN no pudo reiniciarse."
+        journalctl -u "$SERVICE" -n 20 --no-pager
+    fi
+
+    pause
+}
+
+# ==============================================================
+# LISTAR CLIENTES
+# ==============================================================
+
+list_clients() {
+
+    title
+
+    if [[ ! -d "$EASYRSA_DIR/pki/issued" ]]; then
+        error_msg "No existe la PKI."
+        pause
+        return
+    fi
+
+    section "👥 CLIENTES OPENVPN"
+
+    local FOUND=0
+
+    for CERT in "$EASYRSA_DIR"/pki/issued/*.crt; do
+
+        [[ ! -f "$CERT" ]] && continue
+
+        local NAME
+        NAME="$(basename "$CERT" .crt)"
+
+        [[ "$NAME" == "server" ]] && continue
+
+        FOUND=1
+
+        if grep -q "^V.*CN=$NAME" \
+            "$EASYRSA_DIR/pki/index.txt" 2>/dev/null; then
+
+            echo -e " ${GREEN}●${RESET} $NAME"
+
+        else
+
+            echo -e " ${RED}●${RESET} $NAME ${GRAY}(revocado)${RESET}"
+
+        fi
+    done
+
+    if [[ "$FOUND" -eq 0 ]]; then
+        echo -e "${GRAY}No existen clientes.${RESET}"
+    fi
+
+    pause
+}
+
+# ==============================================================
+# CREAR CLIENTE
+# ==============================================================
+
+create_client_menu() {
+
+    title
+
+    if [[ ! -f "$SERVER_CONF" ]]; then
+        error_msg "OpenVPN no está instalado."
+        pause
+        return
+    fi
+
+    section "👤 CREAR CLIENTE"
+
+    read -r -p \
+        "$(echo -e "${CYAN}Nombre del cliente: ${RESET}")" \
+        CLIENT
+
+    CLIENT="$(
+        printf '%s' "$CLIENT" |
+        sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g'
+    )"
+
+    if [[ -z "$CLIENT" ]]; then
+        error_msg "Nombre inválido."
+        pause
+        return
+    fi
+
+    if [[ -f "$EASYRSA_DIR/pki/issued/$CLIENT.crt" ]]; then
+        error_msg "Ese cliente ya existe."
+        pause
+        return
+    fi
+
+    if create_client_certificate "$CLIENT"; then
+
+        echo
+        ok "Cliente creado correctamente."
+        echo
+        echo -e "${WHITE}Archivo:${RESET}"
+        echo -e "${CYAN}/root/${CLIENT}.ovpn${RESET}"
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# REVOCAR CLIENTE
+# ==============================================================
+
+revoke_client() {
+
+    title
+
+    if [[ ! -f "$EASYRSA_DIR/pki/index.txt" ]]; then
+        error_msg "No existe la PKI."
+        pause
+        return
+    fi
+
+    section "❌ REVOCAR CLIENTE"
+
+    mapfile -t CLIENTS < <(
+        awk -F'=' '
+            $1 ~ /^V/ {
+                sub(/^.*CN=/,"",$NF)
+                print $NF
+            }
+        ' "$EASYRSA_DIR/pki/index.txt"
+    )
+
+    if [[ "${#CLIENTS[@]}" -eq 0 ]]; then
+        warning "No existen clientes activos."
+        pause
+        return
+    fi
+
+    local I
+
+    for I in "${!CLIENTS[@]}"; do
+        printf " ${GREEN}[%02d]${RESET} %s\n" \
+            "$((I+1))" \
+            "${CLIENTS[$I]}"
+    done
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${CYAN}Seleccione el cliente: ${RESET}")" \
+        NUM
+
+    if [[ ! "$NUM" =~ ^[0-9]+$ ]] ||
+       (( NUM < 1 || NUM > ${#CLIENTS[@]} )); then
+
+        error_msg "Selección inválida."
+        pause
+        return
+    fi
+
+    local CLIENT
+    CLIENT="${CLIENTS[$((NUM-1))]}"
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${YELLOW}¿Revocar $CLIENT? [s/N]: ${RESET}")" \
+        CONFIRM
+
+    if [[ ! "$CONFIRM" =~ ^[SsYy]$ ]]; then
+        warning "Operación cancelada."
+        pause
+        return
+    fi
+
+    cd "$EASYRSA_DIR" || return
+
+    info "Revocando certificado..."
+
+    if ! ./easyrsa \
+        --batch \
+        revoke "$CLIENT" \
+        >/dev/null 2>&1; then
+
+        error_msg "No se pudo revocar el cliente."
+        pause
+        return
+    fi
+
+    info "Regenerando CRL..."
+
+    ./easyrsa \
+        --batch \
+        --days=3650 \
+        gen-crl \
+        >/dev/null 2>&1
+
+    cp pki/crl.pem "$CRL_FILE"
+
+    chown nobody:nogroup "$CRL_FILE" 2>/dev/null || true
+    chmod 644 "$CRL_FILE"
+
+    rm -f "/root/${CLIENT}.ovpn"
+
+    systemctl restart "$SERVICE"
+
+    ok "Cliente $CLIENT revocado correctamente."
+
+    pause
+}
+
+# ==============================================================
+# ESTADO
+# ==============================================================
+
+status_openvpn() {
+
+    title
+
+    section "📊 ESTADO OPENVPN"
+
+    echo -e "${WHITE}Servicio:${RESET}"
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo -e "${GREEN}● ACTIVO${RESET}"
+    else
+        echo -e "${RED}● DETENIDO${RESET}"
+    fi
+
+    echo
+
+    echo -e "${WHITE}Arranque automático:${RESET}"
+    systemctl is-enabled "$SERVICE" 2>/dev/null || true
+
+    echo
+
+    echo -e "${WHITE}Puerto:${RESET} ${CYAN}$PORT${RESET}"
+    echo -e "${WHITE}Protocolo:${RESET} ${CYAN}$PROTOCOL${RESET}"
+    echo -e "${WHITE}Red VPN:${RESET} ${CYAN}$VPN_NETWORK/24${RESET}"
+
+    echo
+
+    echo -e "${WHITE}Puerto escuchando:${RESET}"
+
+    ss -lntup 2>/dev/null |
+        grep -E ":${PORT}[[:space:]]" ||
+        echo -e "${RED}No está escuchando.${RESET}"
+
+    echo
+
+    echo -e "${WHITE}Clientes conectados:${RESET}"
+
+    if [[ -f "$OPENVPN_DIR/openvpn-status.log" ]]; then
+
+        grep '^CLIENT_LIST' \
+            "$OPENVPN_DIR/openvpn-status.log" 2>/dev/null |
+            wc -l
+
+    else
+
+        echo "0"
+
+    fi
+
+    pause
+}
+
+# ==============================================================
+# DIAGNÓSTICO
+# ==============================================================
+
+diagnostic_openvpn() {
+
+    title
+
+    section "🔎 DIAGNÓSTICO OPENVPN"
+
+    if command -v openvpn >/dev/null 2>&1; then
+        ok "Binario OpenVPN"
+    else
+        error_msg "Binario OpenVPN no encontrado"
+    fi
+
+    if [[ -f "$SERVER_CONF" ]]; then
+        ok "server.conf"
+    else
+        error_msg "server.conf no encontrado"
+    fi
+
+    if [[ -f "$OPENVPN_DIR/ca.crt" ]]; then
+        ok "Certificado CA"
+    else
+        error_msg "CA no encontrada"
+    fi
+
+    if [[ -f "$OPENVPN_DIR/server.crt" ]]; then
+        ok "Certificado del servidor"
+    else
+        error_msg "Certificado del servidor no encontrado"
+    fi
+
+    if [[ -f "$OPENVPN_DIR/server.key" ]]; then
+        ok "Clave del servidor"
+    else
+        error_msg "Clave del servidor no encontrada"
+    fi
+
+    if [[ -f "$TC_KEY" ]]; then
+        ok "TLS-Crypt"
+    else
+        error_msg "TLS-Crypt no encontrado"
+    fi
+
+    if [[ -f "$CRL_FILE" ]]; then
+        ok "CRL"
+    else
+        error_msg "CRL no encontrada"
+    fi
+
+    if [[ -e /dev/net/tun ]]; then
+        ok "Dispositivo TUN"
+    else
+        error_msg "Dispositivo TUN"
+    fi
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        ok "Servicio OpenVPN activo"
+    else
+        error_msg "Servicio OpenVPN detenido"
+    fi
+
+    echo
+
+    echo -e "${WHITE}Últimos registros:${RESET}"
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 15 \
+        --no-pager \
+        2>/dev/null
+
+    pause
+}
+
+# ==============================================================
+# LOGS
+# ==============================================================
+
+view_logs() {
+
+    title
+
+    section "📜 LOGS OPENVPN"
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 50 \
+        --no-pager
+
+    pause
+}
+
+# ==============================================================
+# INFORMACIÓN
+# ==============================================================
+
+system_info() {
+
+    title
+
+    section "🖥️ INFORMACIÓN DEL SERVIDOR"
+
+    local HOST
+    local IP
+    local OS
+    local KERNEL
+    local CPU
+    local RAM
+    local DISK
+    local UPTIME
+
+    HOST="$(hostname)"
+
+    IP="$(get_server_ip)"
+    OS="$(
+        grep '^PRETTY_NAME=' /etc/os-release |
+        cut -d '"' -f2
+    )"
+
+    KERNEL="$(uname -r)"
+
+    CPU="$(
+        grep -m1 "model name" /proc/cpuinfo |
+        cut -d: -f2 |
+        sed 's/^ //'
+    )"
+
+    RAM="$(
+        free -h |
+        awk '/Mem:/ {print $3 " / " $2}'
+    )"
+
+    DISK="$(
+        df -h / |
+        awk 'NR==2 {print $3 " / " $2 " (" $5 ")"}'
+    )"
+
+    UPTIME="$(uptime -p)"
+
+    echo -e "${WHITE}Hostname :${RESET} ${GREEN}$HOST${RESET}"
+    echo -e "${WHITE}Sistema  :${RESET} ${GREEN}$OS${RESET}"
+    echo -e "${WHITE}Kernel   :${RESET} ${GREEN}$KERNEL${RESET}"
+    echo -e "${WHITE}CPU      :${RESET} ${GREEN}${CPU:-Desconocida}${RESET}"
+    echo -e "${WHITE}RAM      :${RESET} ${GREEN}${RAM:-Desconocida}${RESET}"
+    echo -e "${WHITE}Disco    :${RESET} ${GREEN}${DISK:-Desconocido}${RESET}"
+    echo -e "${WHITE}Uptime   :${RESET} ${GREEN}${UPTIME:-Desconocido}${RESET}"
+    echo -e "${WHITE}IPv4     :${RESET} ${CYAN}${IP:-Desconocida}${RESET}"
+
+    pause
+}
+
+# ==============================================================
+# DESINSTALAR
+# ==============================================================
+
+remove_openvpn() {
+
+    title
+
+    section "🗑️ DESINSTALAR OPENVPN"
+
+    warning "Se eliminarán OpenVPN, certificados, clientes y reglas NAT."
+    echo
+
+    read -r -p \
+        "$(echo -e "${RED}¿Continuar? [s/N]: ${RESET}")" \
+        CONFIRM
+
+    [[ ! "$CONFIRM" =~ ^[SsYy]$ ]] && {
+        warning "Operación cancelada."
+        pause
+        return
+    }
+
+    local DEV
+    DEV="$(get_interface)"
+
+    info "Deteniendo OpenVPN..."
+
+    systemctl disable --now "$SERVICE" 2>/dev/null || true
+    systemctl disable --now "$IPTABLES_SERVICE" 2>/dev/null || true
+
+    rm -f "/etc/systemd/system/$IPTABLES_SERVICE"
+    rm -f "/etc/systemd/system/openvpn-server@server.service.d/disable-limitnproc.conf"
+
+    # ----------------------------------------------------------
+    # ELIMINAR REGLAS
+    # ----------------------------------------------------------
+
+    if [[ -n "$DEV" ]]; then
+
+        while iptables -t nat -C POSTROUTING \
+            -s "$VPN_NETWORK/24" \
+            ! -d "$VPN_NETWORK/24" \
+            -o "$DEV" \
+            -j MASQUERADE \
+            2>/dev/null; do
+
+            iptables -t nat -D POSTROUTING \
+                -s "$VPN_NETWORK/24" \
+                ! -d "$VPN_NETWORK/24" \
+                -o "$DEV" \
+                -j MASQUERADE
+
+        done
+
+    fi
+
+    while iptables -C INPUT \
+        -p "$PROTOCOL" \
+        --dport "$PORT" \
+        -j ACCEPT \
+        2>/dev/null; do
+
+        iptables -D INPUT \
+            -p "$PROTOCOL" \
+            --dport "$PORT" \
+            -j ACCEPT
+
+    done
+
+    while iptables -C FORWARD \
+        -s "$VPN_NETWORK/24" \
+        -j ACCEPT \
+        2>/dev/null; do
+
+        iptables -D FORWARD \
+            -s "$VPN_NETWORK/24" \
+            -j ACCEPT
+
+    done
+
+    while iptables -C FORWARD \
+        -d "$VPN_NETWORK/24" \
+        -m conntrack \
+        --ctstate RELATED,ESTABLISHED \
+        -j ACCEPT \
+        2>/dev/null; do
+
+        iptables -D FORWARD \
+            -d "$VPN_NETWORK/24" \
+            -m conntrack \
+            --ctstate RELATED,ESTABLISHED \
+            -j ACCEPT
+
+    done
+
+    # ----------------------------------------------------------
+    # ARCHIVOS
+    # ----------------------------------------------------------
+
+    rm -rf "$OPENVPN_DIR"
+
+    rm -rf /etc/openvpn
+
+    # ----------------------------------------------------------
+    # PAQUETE
+    # ----------------------------------------------------------
+
+    apt-get purge -y openvpn >/dev/null 2>&1 || true
+    apt-get autoremove -y >/dev/null 2>&1 || true
+
+    # ----------------------------------------------------------
+    # CONFIG KEVINTECH
+    # ----------------------------------------------------------
+
+    if [[ -f "$CONFIG" ]]; then
+
+        set_config "OPENVPN" "OFF"
+
+        sed -i \
+            '/^OPENVPN_PORT=/d' \
+            "$CONFIG"
+
+        sed -i \
+            '/^OPENVPN_PROTOCOL=/d' \
+            "$CONFIG"
+
+    fi
+
+    systemctl daemon-reload
+    systemctl reset-failed 2>/dev/null || true
+
+    ok "OpenVPN fue eliminado correctamente."
+
+    pause
+}
+
+# ==============================================================
 # MODO AUTOMÁTICO
-#==================================================
+# ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
-    echo "🚀 Instalando OpenVPN automáticamente..."
+
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${MAGENTA}${BOLD}             🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
+    echo -e "${WHITE}                    OPENVPN${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
 
     # Valores automáticos
-    protocol="tcp"
-    port="1194"
-    client="client"
+    PORT="${OPENVPN_PORT:-1194}"
+    PROTOCOL="${OPENVPN_PROTOCOL:-tcp}"
 
-    # Continúa con la instalación
+    if install_openvpn; then
+        echo
+        ok "OpenVPN instalado correctamente."
+        exit 0
+    else
+        echo
+        error_msg "La instalación automática de OpenVPN falló."
+        exit 1
+    fi
+
 fi
 
-if [[ ! -e /etc/openvpn/server/server.conf ]]; then  
-	# Detect some Debian minimal setups where neither wget nor curl are installed  
-	if ! hash wget 2>/dev/null && ! hash curl 2>/dev/null; then  
-		echo "📦 Wget no está instalado."
-read -n1 -r -p "Presiona cualquier tecla para instalarlo..."
-		apt-get update  
-		apt-get install -y wget  
-	fi  
-	clear
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${MAGENTA} KevinTech Multi Script${RESET}"
-echo -e "${WHITE} OpenVPN Manager${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-	# If system has a single IPv4, it is selected automatically. Else, ask the user  
-	if [[ $(ip -4 addr | grep inet | grep -vEc '127(\.[0-9]{1,3}){3}') -eq 1 ]]; then  
-		ip=$(ip -4 addr | grep inet | grep -vE '127(\.[0-9]{1,3}){3}' | cut -d '/' -f 1 | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}')  
-	else  
-		number_of_ip=$(ip -4 addr | grep inet | grep -vEc '127(\.[0-9]{1,3}){3}')  
-		echo  
-		echo "Which IPv4 address should be used?"  
-		ip -4 addr | grep inet | grep -vE '127(\.[0-9]{1,3}){3}' | cut -d '/' -f 1 | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}' | nl -s ') '  
-		read -p "IPv4 address [1]: " ip_number  
-		until [[ -z "$ip_number" || "$ip_number" =~ ^[0-9]+$ && "$ip_number" -le "$number_of_ip" ]]; do  
-			echo "$ip_number: invalid selection."  
-			read -p "IPv4 address [1]: " ip_number  
-		done  
-		[[ -z "$ip_number" ]] && ip_number="1"  
-		ip=$(ip -4 addr | grep inet | grep -vE '127(\.[0-9]{1,3}){3}' | cut -d '/' -f 1 | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}' | sed -n "$ip_number"p)  
-	fi  
-	# If system has a single IPv6, it is selected automatically  
-	if [[ $(ip -6 addr | grep -c 'inet6 [23]') -eq 1 ]]; then  
-		ip6=$(ip -6 addr | grep 'inet6 [23]' | cut -d '/' -f 1 | grep -oE '([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}')  
-	fi  
-	# If system has multiple IPv6, ask the user to select one  
-	if [[ $(ip -6 addr | grep -c 'inet6 [23]') -gt 1 ]]; then  
-		number_of_ip6=$(ip -6 addr | grep -c 'inet6 [23]')  
-		echo  
-		echo "Which IPv6 address should be used?"  
-		ip -6 addr | grep 'inet6 [23]' | cut -d '/' -f 1 | grep -oE '([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}' | nl -s ') '  
-		read -p "IPv6 address [1]: " ip6_number  
-		until [[ -z "$ip6_number" || "$ip6_number" =~ ^[0-9]+$ && "$ip6_number" -le "$number_of_ip6" ]]; do  
-			echo "$ip6_number: invalid selection."  
-			read -p "IPv6 address [1]: " ip6_number  
-		done  
-		[[ -z "$ip6_number" ]] && ip6_number="1"  
-		ip6=$(ip -6 addr | grep 'inet6 [23]' | cut -d '/' -f 1 | grep -oE '([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}' | sed -n "$ip6_number"p)  
-	fi  
-	protocol="tcp"
-	port="1194"
-	echo  
-	echo "Nombre del primer cliente:"  
-	read -p "Name [client]: " unsanitized_client  
-	# Allow a limited set of characters to avoid conflicts  
-	client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client")  
-	[[ -z "$client" ]] && client="client"  
-	echo  
-	echo "✅ Todo listo para instalar OpenVPN."  
-	
-	read -n1 -r -p "Presiona cualquier tecla para continuar..."  
-	# If running inside a container, disable LimitNPROC to prevent conflicts   
-	if systemd-detect-virt -cq; then  
-		mkdir /etc/systemd/system/openvpn-server@server.service.d/ 2>/dev/null  
-		echo "[Service]  
-LimitNPROC=infinity" > /etc/systemd/system/openvpn-server@server.service.d/disable-limitnproc.conf  
-	fi  
-	apt-get update
-apt-get install -y --no-install-recommends \
-openvpn \
-openssl \
-ca-certificates \
-iptables \
-tar
-	
-	# Get easy-rsa  
-	easy_rsa_url='https://github.com/OpenVPN/easy-rsa/releases/download/v3.2.1/EasyRSA-3.2.1.tgz'  
-	mkdir -p /etc/openvpn/server/easy-rsa/  
-	{ wget -qO- "$easy_rsa_url" 2>/dev/null || curl -sL "$easy_rsa_url" ; } | tar xz -C /etc/openvpn/server/easy-rsa/ --strip-components 1  
-	chown -R root:root /etc/openvpn/server/easy-rsa/  
-	cd /etc/openvpn/server/easy-rsa/  
-	# Create the PKI, set up the CA and the server and client certificates  
-	./easyrsa --batch init-pki  
-	./easyrsa --batch build-ca nopass  
-	./easyrsa --batch --days=3650 build-server-full server nopass  
-	./easyrsa --batch --days=3650 build-client-full "$client" nopass  
-	./easyrsa --batch --days=3650 gen-crl  
-	# Move the stuff we need  
-	cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/crl.pem /etc/openvpn/server  
-	# CRL is read with each client connection, while OpenVPN is dropped to nobody  
-	chown nobody:"$group_name" /etc/openvpn/server/crl.pem  
-	# Without +x in the directory, OpenVPN can't run a stat() on the CRL file  
-	chmod o+x /etc/openvpn/server/  
-	# Generate key for tls-crypt  
-	openvpn --genkey secret /etc/openvpn/server/tc.key  
-	# Create the DH parameters file using the predefined ffdhe2048 group  
-	echo '-----BEGIN DH PARAMETERS-----  
-MIIBCAKCAQEA//////////+t+FRYortKmq/cViAnPTzx2LnFg84tNpWp4TZBFGQz  
-+8yTnc4kmz75fS/jY2MMddj2gbICrsRhetPfHtXV/WVhJDP1H18GbtCFY2VVPe0a  
-87VXE15/V8k1mE8McODmi3fipona8+/och3xWKE2rec1MKzKT0g6eXq8CrGCsyT7  
-YdEIqUuyyOP7uWrat2DX9GgdT0Kj3jlN9K5W7edjcrsZCwenyO4KbXCeAvzhzffi  
-7MA0BM0oNC9hkXL+nOmFg/+OTxIy7vKBg8P+OxtMb61zO7X8vC7CIAXFjvGDfRaD  
-ssbzSibBsu/6iGtCOGEoXJf//////////wIBAg==  
------END DH PARAMETERS-----' > /etc/openvpn/server/dh.pem  
-	# Generate server.conf  
-	echo "port $port  
-proto $protocol  
-dev tun  
-ca ca.crt  
-cert server.crt  
-key server.key  
-dh dh.pem  
-auth SHA512  
-tls-crypt tc.key  
-topology subnet  
-server 10.8.0.0 255.255.255.0" > /etc/openvpn/server/server.conf  
-	# IPv6  
-	if [[ -z "$ip6" ]]; then  
-		echo 'push "redirect-gateway def1 bypass-dhcp"' >> /etc/openvpn/server/server.conf  
-	else  
-		echo 'server-ipv6 fddd:1194:1194:1194::/64' >> /etc/openvpn/server/server.conf  
-		echo 'push "redirect-gateway def1 ipv6 bypass-dhcp"' >> /etc/openvpn/server/server.conf  
-	fi  
-	echo 'ifconfig-pool-persist ipp.txt' >> /etc/openvpn/server/server.conf  
-	# DNS  
-	echo 'push "dhcp-option DNS 1.1.1.1"' >> /etc/openvpn/server/server.conf
-echo 'push "dhcp-option DNS 1.0.0.1"' >> /etc/openvpn/server/server.conf
-	echo 'push "block-outside-dns"' >> /etc/openvpn/server/server.conf  
-	echo "keepalive 10 120  
-float  
-cipher AES-256-CBC  
-user nobody  
-group $group_name  
-persist-key  
-persist-tun  
-status openvpn-status.log  
-management localhost 7505  
-verb 3  
-crl-verify crl.pem  
-client-to-client    
-username-as-common-name
-plugin /usr/lib/x86_64-linux-gnu/openvpn/plugins/openvpn-plugin-auth-pam.so login
-duplicate-cn" >> /etc/openvpn/server/server.conf  
-	if [[ "$protocol" = "udp" ]]; then  
-		echo "explicit-exit-notify" >> /etc/openvpn/server/server.conf  
-	fi  
-	# Enable net.ipv4.ip_forward for the system  
-	echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-openvpn-forward.conf  
-	# Enable without waiting for a reboot or service restart  
-	echo 1 > /proc/sys/net/ipv4/ip_forward  
-	if [[ -n "$ip6" ]]; then  
-		# Enable net.ipv6.conf.all.forwarding for the system  
-		echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.d/99-openvpn-forward.conf  
-		# Enable without waiting for a reboot or service restart  
-		echo 1 > /proc/sys/net/ipv6/conf/all/forwarding  
-	fi   
-		# Create a service to set up persistent iptables rules  
-		iptables_path=$(command -v iptables)  
-		ip6tables_path=$(command -v ip6tables)  
-		# nf_tables is not available as standard in OVZ kernels. So use iptables-legacy  
-		# if we are in OVZ, with a nf_tables backend and iptables-legacy is available.  
-		if [[ $(systemd-detect-virt) == "openvz" ]] && readlink -f "$(command -v iptables)" | grep -q "nft" && hash iptables-legacy 2>/dev/null; then  
-			iptables_path=$(command -v iptables-legacy)  
-			ip6tables_path=$(command -v ip6tables-legacy)  
-		fi  
-		echo "[Unit]  
-Before=network.target  
-[Service]  
-Type=oneshot  
-ExecStart=$iptables_path -t nat -A POSTROUTING -s 10.8.0.0/24 ! -d 10.8.0.0/24 -j SNAT --to $ip  
-ExecStart=$iptables_path -I INPUT -p $protocol --dport $port -j ACCEPT  
-ExecStart=$iptables_path -I FORWARD -s 10.8.0.0/24 -j ACCEPT  
-ExecStart=$iptables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT  
-ExecStop=$iptables_path -t nat -D POSTROUTING -s 10.8.0.0/24 ! -d 10.8.0.0/24 -j SNAT --to $ip  
-ExecStop=$iptables_path -D INPUT -p $protocol --dport $port -j ACCEPT  
-ExecStop=$iptables_path -D FORWARD -s 10.8.0.0/24 -j ACCEPT  
-ExecStop=$iptables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" > /etc/systemd/system/openvpn-iptables.service  
-		if [[ -n "$ip6" ]]; then  
-			echo "ExecStart=$ip6tables_path -t nat -A POSTROUTING -s fddd:1194:1194:1194::/64 ! -d fddd:1194:1194:1194::/64 -j SNAT --to $ip6  
-ExecStart=$ip6tables_path -I FORWARD -s fddd:1194:1194:1194::/64 -j ACCEPT  
-ExecStart=$ip6tables_path -I FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT  
-ExecStop=$ip6tables_path -t nat -D POSTROUTING -s fddd:1194:1194:1194::/64 ! -d fddd:1194:1194:1194::/64 -j SNAT --to $ip6  
-ExecStop=$ip6tables_path -D FORWARD -s fddd:1194:1194:1194::/64 -j ACCEPT  
-ExecStop=$ip6tables_path -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT" >> /etc/systemd/system/openvpn-iptables.service  
-		fi  
-		echo "RemainAfterExit=yes  
-[Install]  
-WantedBy=multi-user.target" >> /etc/systemd/system/openvpn-iptables.service  
-		systemctl enable --now openvpn-iptables.service
-	# client-common.txt is created so we have a template to add further users later  
-	echo "client  
-dev tun  
-proto $protocol  
-remote $SERVER_DOMAIN $port  
-resolv-retry infinite  
-nobind  
-persist-key  
-persist-tun  
-remote-cert-tls server  
-auth SHA512  
-ignore-unknown-option block-outside-dns 
-auth-user-pass
-verb 3" > /etc/openvpn/server/client-common.txt  
-	# Enable and start the OpenVPN service  
-	systemctl enable --now openvpn-server@server.service  
-	if [[ -f "$CONFIG" ]]; then
-    sed -i '/^OPENVPN=/d' "$CONFIG"
-    echo "OPENVPN=ON" >> "$CONFIG"
+# ==============================================================
+# MENÚ
+# ==============================================================
+
+if [[ ! -f "$CONFIG" ]]; then
+
+    echo
+    error_msg "No existe $CONFIG"
+    exit 1
+
 fi
-	# Generates the custom client.ovpn  
-	new_client  
-	echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ OpenVPN instalado"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🌐 Dominio : $SERVER_DOMAIN"
-echo "🔒 Puerto  : $port"
-echo "👤 Cliente : $client"
-echo "📄 Archivo : /root/$client.ovpn"
-echo
-echo "💡 Puedes crear más clientes desde el menú OpenVPN."
-else  
-	clear
 
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${MAGENTA}          KevinTech Multi Script${RESET}"
-echo -e "${WHITE}             OPENVPN MANAGER${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+while true; do
 
-echo
-echo -e " ${GREEN}[01]${RESET} 👤 Crear Cliente"
-echo -e " ${GREEN}[02]${RESET} ❌ Revocar Cliente"
-echo -e " ${GREEN}[03]${RESET} 🗑 Desinstalar OpenVPN"
-echo -e " ${GREEN}[04]${RESET} 📊 Estado del Servicio"
+    # shellcheck disable=SC1090
+    source "$CONFIG" 2>/dev/null
 
-echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e " ${GREEN}[00]${RESET} ↩ Regresar"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    OPENVPN_STATUS="${OPENVPN:-OFF}"
 
-echo
-read -rp " ► Opción: " option
+    title
 
-until [[ "$option" =~ ^(0|1|2|3|4|01|02|03|04)$ ]]; do
-    echo -e "${RED}❌ Opción inválida.${RESET}"
-    read -rp " ► Opción: " option
+    echo -e "${WHITE}Estado:${RESET}"
+
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo -e "${GREEN}● ACTIVO${RESET}"
+    elif [[ "$OPENVPN_STATUS" == "ON" ]]; then
+        echo -e "${RED}● DETENIDO${RESET}"
+    else
+        echo -e "${GRAY}● NO INSTALADO${RESET}"
+    fi
+
+    echo
+
+    echo -e "${WHITE}Dominio:${RESET} ${CYAN}${SERVER_DOMAIN:-No configurado}${RESET}"
+    echo -e "${WHITE}Puerto:${RESET} ${CYAN}${OPENVPN_PORT:-1194}${RESET}"
+    echo -e "${WHITE}Protocolo:${RESET} ${CYAN}${OPENVPN_PROTOCOL:-tcp}${RESET}"
+    echo -e "${WHITE}Red VPN:${RESET} ${CYAN}${VPN_NETWORK}/24${RESET}"
+
+    line
+
+    if [[ "$OPENVPN_STATUS" == "ON" ]] &&
+       [[ -f "$SERVER_CONF" ]]; then
+
+        echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN OPENVPN${RESET}"
+        echo
+
+        echo -e " ${GREEN}[01]${RESET} 👤 Crear Cliente"
+        echo -e " ${GREEN}[02]${RESET} ❌ Revocar Cliente"
+        echo -e " ${GREEN}[03]${RESET} 👥 Listar Clientes"
+        echo -e " ${GREEN}[04]${RESET} ♻️  Reiniciar Servicio"
+        echo -e " ${GREEN}[05]${RESET} 📊 Estado Detallado"
+        echo -e " ${GREEN}[06]${RESET} 🔎 Diagnóstico"
+        echo -e " ${GREEN}[07]${RESET} 📜 Ver Logs"
+        echo -e " ${GREEN}[08]${RESET} 🖥️  Información del Servidor"
+        echo -e " ${GREEN}[09]${RESET} 🔄 Reinstalar / Actualizar"
+        echo -e " ${RED}[10]${RESET} 🗑️  Desinstalar OpenVPN"
+
+    else
+
+        echo -e "${BLUE}${BOLD}  🚀 INSTALACIÓN${RESET}"
+        echo
+
+        echo -e " ${GREEN}[01]${RESET} 🚀 Instalar OpenVPN"
+
+    fi
+
+    echo
+    echo -e "${GRAY} ────────────────────────────────────────────────────────────${RESET}"
+    echo -e " ${RED}[00]${RESET} ↩️  Regresar al Menú de Protocolos"
+    echo
+
+    read -r -p \
+        "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" \
+        OPTION
+
+    case "$OPTION" in
+
+        1|01)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]] &&
+               [[ -f "$SERVER_CONF" ]]; then
+
+                create_client_menu
+
+            else
+
+                install_openvpn
+                pause
+
+            fi
+
+            ;;
+
+        2|02)
+
+            [[ "$OPENVPN_STATUS" == "ON" ]] &&
+                revoke_client
+
+            ;;
+
+        3|03)
+
+            [[ "$OPENVPN_STATUS" == "ON" ]] &&
+                list_clients
+
+            ;;
+
+        4|04)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                restart_openvpn
+            fi
+
+            ;;
+
+        5|05)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                status_openvpn
+            fi
+
+            ;;
+
+        6|06)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                diagnostic_openvpn
+            fi
+
+            ;;
+
+        7|07)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                view_logs
+            fi
+
+            ;;
+
+        8|08)
+
+            system_info
+
+            ;;
+
+        9|09)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                install_openvpn
+                pause
+            fi
+
+            ;;
+
+        10)
+
+            if [[ "$OPENVPN_STATUS" == "ON" ]]; then
+                remove_openvpn
+            fi
+
+            ;;
+
+        0|00)
+
+            clear_screen
+
+            exec bash \
+                "$BASE/protocolos/menu.sh"
+
+            ;;
+
+        "")
+
+            ;;
+
+        *)
+
+            error_msg "Opción inválida."
+            sleep 1
+
+            ;;
+
+    esac
+
 done
-	case "$option" in  
-		1|01)  
-			echo  
-			echo "Introduce el nombre del cliente:"
-read -p "Nombre: " unsanitized_client 
-			client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client")  
-			while [[ -z "$client" || -e /etc/openvpn/server/easy-rsa/pki/issued/"$client".crt ]]; do  
-				echo "$client: invalid name."  
-				read -p "Name: " unsanitized_client  
-				client=$(sed 's/[^0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-]/_/g' <<< "$unsanitized_client")  
-			done  
-			cd /etc/openvpn/server/easy-rsa/  
-			./easyrsa --batch --days=3650 build-client-full "$client" nopass  
-			# Generates the custom client.ovpn  
-			new_client  
-			echo  
-			echo "✅ Cliente creado correctamente."
-echo "📄 Archivo: /root/$client.ovpn"
-			exit  
-		;;  
-		2|02)  
-			# This option could be documented a bit better and maybe even be simplified  
-			# ...but what can I say, I want some sleep too  
-			number_of_clients=$(tail -n +2 /etc/openvpn/server/easy-rsa/pki/index.txt | grep -c "^V")  
-			if [[ "$number_of_clients" = 0 ]]; then  
-				echo  
-				echo "❌ No existen clientes registrados."  
-				exit  
-			fi  
-			echo  
-			echo "Selecciona el cliente que deseas revocar:"  
-			tail -n +2 /etc/openvpn/server/easy-rsa/pki/index.txt | grep "^V" | cut -d '=' -f 2 | nl -s ') '  
-			read -p "Cliente: " client_number  
-			until [[ "$client_number" =~ ^[0-9]+$ && "$client_number" -le "$number_of_clients" ]]; do  
-				echo "$client_number: invalid selection."  
-				read -p "Cliente: " client_number  
-			done  
-			client=$(tail -n +2 /etc/openvpn/server/easy-rsa/pki/index.txt | grep "^V" | cut -d '=' -f 2 | sed -n "$client_number"p)  
-			echo  
-			read -p "¿Revocar el cliente $client? [s/N]: " revoke  
-			until [[ "$revoke" =~ ^[yYnN]*$ ]]; do  
-				echo "$revoke: invalid selection."  
-				read -p "¿Revocar el cliente $client? [s/N]: " revoke  
-			done  
-			if [[ "$revoke" =~ ^[sSyY]$ ]]; then  
-				cd /etc/openvpn/server/easy-rsa/  
-				./easyrsa --batch revoke "$client"  
-				./easyrsa --batch --days=3650 gen-crl  
-				rm -f /etc/openvpn/server/crl.pem  
-				cp /etc/openvpn/server/easy-rsa/pki/crl.pem /etc/openvpn/server/crl.pem  
-				# CRL is read with each client connection, when OpenVPN is dropped to nobody  
-				chown nobody:"$group_name" /etc/openvpn/server/crl.pem  
-				echo  
-				echo "✅ Cliente $client revocado correctamente."  
-			else  
-				echo  
-				echo "❌ Operación cancelada."  
-			fi  
-			exit  
-		;;  
-		3|03)  
-			echo  
-			read -p "¿Deseas desinstalar OpenVPN? [s/N]: " remove  
-			until [[ "$remove" =~ ^([sSnNyY]|si|SI|Sí|sí)?$ ]]; do  
-				echo "$remove: invalid selection."  
-				read -p "¿Deseas desinstalar OpenVPN? [s/N]: " remove  
-			done  
-			if [[ "$remove" =~ ^[sSyY]$ ]]; then
-
-    systemctl disable --now openvpn-iptables.service
-    rm -f /etc/systemd/system/openvpn-iptables.service
-
-    systemctl disable --now openvpn-server@server.service
-
-    rm -rf /etc/openvpn/server
-
-    apt-get remove --purge -y openvpn
-
-    sed -i 's/^OPENVPN=.*/OPENVPN=OFF/' "$CONFIG"
-
-    echo "OpenVPN eliminado."
-
-else
-
-    echo "Operación cancelada."
-
-fi
-			exit  
-		;;  
-	   4|04)
-        systemctl status openvpn-server@server --no-pager
-        read -n1 -r -p "Presione una tecla para continuar..."
-        exec "$0"
-    ;;
-
-    0|00)
-        exec bash "$BASE/protocolos/menu.sh"
-    ;;
-esac
-fi
