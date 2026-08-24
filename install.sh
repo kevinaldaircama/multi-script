@@ -1025,6 +1025,28 @@ else
 fi
 
 #=========================================================
+# DROPBEAR
+#=========================================================
+
+instalar_modulo \
+    "Dropbear" \
+    "$BASE/protocolos/dropbear.sh" \
+    "DROPBEAR"
+
+#=========================================================
+# SSL TUNNEL
+#=========================================================
+
+if instalar_modulo \
+    "SSL Tunnel" \
+    "$BASE/protocolos/ssl.sh" \
+    "SSL"; then
+
+    :
+
+fi
+
+#=========================================================
 # SSL TUNNEL
 #=========================================================
 
@@ -1095,8 +1117,6 @@ echo -e "${WHITE}${BOLD}PROTOCOLOS DISPONIBLES PARA INSTALACIÓN POSTERIOR${RESE
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 echo
-echo -e " ${GRAY}○${RESET} Dropbear"
-echo -e " ${GRAY}○${RESET} BadVPN"
 echo -e " ${GRAY}○${RESET} ZIPVPN"
 echo -e " ${GRAY}○${RESET} Hysteria"
 echo -e " ${GRAY}○${RESET} OpenVPN"
