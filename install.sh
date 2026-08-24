@@ -1,596 +1,161 @@
 #!/bin/bash
+# =============================================================
+# KEVINTECH MULTI SCRIPT INSTALLER v4.0
+# Premium Server Edition | Ubuntu
+# =============================================================
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-#=========================================================
-#        KEVINTECH MULTI SCRIPT INSTALLER
-#        LICENSE SYSTEM v3.0
-#        PREMIUM SERVER EDITION
-#=========================================================
-
-set -o pipefail
-
-#=========================================================
-# COLORES
-#=========================================================
-
-RESET="\e[0m"
-BOLD="\e[1m"
-DIM="\e[2m"
-
-BLACK="\e[1;30m"
-RED="\e[1;91m"
-GREEN="\e[1;92m"
-YELLOW="\e[1;93m"
-BLUE="\e[1;94m"
-MAGENTA="\e[1;95m"
-CYAN="\e[1;96m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-
-PINK="\e[38;5;213m"
-PURPLE="\e[38;5;141m"
-VIOLET="\e[38;5;177m"
-SKY="\e[38;5;117m"
-LIME="\e[38;5;154m"
-GOLD="\e[38;5;220m"
-ORANGE="\e[38;5;214m"
-AQUA="\e[38;5;159m"
-
-#=========================================================
-# VARIABLES
-#=========================================================
-
+VERSION="4.0"
 BASE="/etc/kevintech"
-TMP="/tmp/kevintech_install"
-
+CONFIG="$BASE/config.conf"
+LICENSE_CONF="$BASE/license.conf"
+TMP="/tmp/kevintech_install_$$"
 REPO="https://github.com/kevinaldaircama/multi-script.git"
-
 LICENSE_API="https://usa.socialstreaming.xyz"
 LICENSE_BOT="@multiscriptkeygen_bot"
+SSHD_CFG="/etc/ssh/sshd_config"
 
-INSTALL_PROTOCOLS="ON"
-
+INSTALL_KEY="${INSTALL_KEY:-}"
 SERVER_DOMAIN=""
 SERVER_IP=""
 DOMAIN_IP=""
 DOMAIN_IP_MATCH="NO"
 DNS_PROVIDER="Desconocido"
-
-SSL_TUNNEL="OFF"
-PROXY_STATUS="OFF"
-
-INSTALL_KEY="${INSTALL_KEY:-}"
-
 LICENSE_OWNER=""
 LICENSE_RESELLER=""
 LICENSE_TYPE="normal"
 LICENSE_DELETE_AT=""
 
-CLIENT_IP=""
-OS_NAME=""
-HOSTNAME_VALUE=""
-DATE_NOW=""
+RESET="\e[0m"; BOLD="\e[1m"
+RED="\e[1;91m"; GREEN="\e[1;92m"; YELLOW="\e[1;93m"
+BLUE="\e[1;94m"; MAGENTA="\e[1;95m"; CYAN="\e[1;96m"
+WHITE="\e[1;97m"; GRAY="\e[1;90m"
+PINK="\e[38;5;213m"; PURPLE="\e[38;5;141m"; SKY="\e[38;5;117m"; GOLD="\e[38;5;220m"
 
-#=========================================================
-# FUNCIONES VISUALES
-#=========================================================
+cleanup(){ rm -rf "$TMP" 2>/dev/null || true; }
+trap cleanup EXIT
 
-clear_screen() {
-    clear 2>/dev/null || true
+ok(){ echo -e " ${GREEN}✔${RESET} $1"; }
+info(){ echo -e " ${CYAN}◆${RESET} $1"; }
+warn(){ echo -e " ${YELLOW}⚠${RESET} $1"; }
+fail(){ echo -e " ${RED}✖${RESET} $1"; }
+line(){ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; }
+section(){ echo; echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"; echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD} $1${RESET}"; echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"; echo; }
+loading(){ local t="$1"; echo -ne " ${CYAN}${t}${RESET} "; for _ in 1 2 3; do echo -ne "${PURPLE}●${RESET}"; sleep .12; done; echo; }
+fatal(){ fail "$1"; exit 1; }
+
+header(){
+ clear 2>/dev/null || true
+ echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+ echo -e "${CYAN}║${RESET} ${PINK}${BOLD}                 KEVINTECH MULTI SCRIPT${RESET}              ${CYAN}║${RESET}"
+ echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                 PREMIUM INSTALLER v${VERSION}${RESET}              ${CYAN}║${RESET}"
+ echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+ echo -e "${SKY}              🚀  S E R V E R   E D I T I O N  🚀${RESET}"
+ echo
 }
 
-linea() {
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+require_root(){ [[ $EUID -eq 0 ]] || fatal "Debes ejecutar este instalador como root."; }
+require_ubuntu(){
+ [[ -f /etc/os-release ]] || fatal "No se pudo detectar el sistema operativo."
+ # shellcheck disable=SC1091
+ source /etc/os-release
+ [[ "${ID:-}" == "ubuntu" ]] || fatal "Este instalador requiere Ubuntu."
+ case "${VERSION_ID:-}" in 22.04|24.04) ;; *) warn "Ubuntu ${VERSION_ID:-desconocido}; se recomienda 22.04/24.04." ;; esac
 }
 
-linea_color() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+install_dependencies(){
+ section "📦 PASO 0 • DEPENDENCIAS"
+ export DEBIAN_FRONTEND=noninteractive
+ loading "Actualizando repositorios"
+ apt-get update -y >/dev/null 2>&1 || fatal "APT update falló."
+ ok "Repositorios actualizados."
+ loading "Instalando herramientas"
+ apt-get install -y curl wget git jq ca-certificates dnsutils sudo openssl unzip zip tar nano cron net-tools lsof screen bc socat openssh-server ufw fail2ban iproute2 iptables iptables-persistent >/dev/null 2>&1 || fatal "No se pudieron instalar las dependencias."
+ update-ca-certificates >/dev/null 2>&1 || true
+ ok "Dependencias instaladas."
 }
 
-titulo() {
-
-    clear_screen
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET} ${PINK}${BOLD}                 KEVINTECH MULTI SCRIPT${RESET}              ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                 PREMIUM INSTALLER v3.0${RESET}              ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-    echo -e "${SKY}              🚀  S E R V E R   E D I T I O N  🚀${RESET}"
-    echo
-
+license_health(){
+ local r h b
+ r=$(curl -fsS -4 --connect-timeout 5 --max-time 15 -w '\n%{http_code}' "$LICENSE_API/health" 2>/dev/null) || return 1
+ h=$(printf '%s\n' "$r" | tail -n1); b=$(printf '%s\n' "$r" | sed '$d')
+ [[ "$h" == 200 ]] && echo "$b" | jq -e '.ok==true' >/dev/null 2>&1
 }
 
-seccion() {
-
-    echo
-    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD} $1${RESET}"
-    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
+validate_license(){
+ section "🔐 PASO 1 • LICENCIA"
+ echo -e "${WHITE}Bot oficial:${RESET} ${PINK}${BOLD}${LICENSE_BOT}${RESET}"
+ license_health || fatal "El servidor de licencias no está disponible."
+ ok "Sistema de licencias operativo."
+ while :; do
+  [[ -n "$INSTALL_KEY" ]] || { read -r -s -p "$(echo -e "${GOLD}🔑 Key: ${RESET}")" INSTALL_KEY; echo; }
+  INSTALL_KEY=$(printf '%s' "$INSTALL_KEY" | tr -d '[:space:]')
+  [[ -n "$INSTALL_KEY" ]] || { fail "La Key está vacía."; continue; }
+  local req r h b valid err
+  req=$(jq -n --arg key "$INSTALL_KEY" '{key:$key}')
+  loading "Verificando licencia"
+  r=$(curl -fsS -4 --connect-timeout 5 --max-time 15 -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' --data "$req" "$LICENSE_API/api/public/validate" 2>/dev/null) || { fail "No se pudo conectar con la API."; INSTALL_KEY=""; continue; }
+  h=$(printf '%s\n' "$r" | tail -n1); b=$(printf '%s\n' "$r" | sed '$d')
+  [[ "$h" =~ ^2 ]] || { fail "API respondió HTTP $h."; INSTALL_KEY=""; continue; }
+  echo "$b" | jq empty >/dev/null 2>&1 || { fail "Respuesta JSON inválida."; INSTALL_KEY=""; continue; }
+  valid=$(echo "$b" | jq -r '.ok // false'); err=$(echo "$b" | jq -r '.error // empty')
+  if [[ "$valid" != true ]]; then
+   case "$err" in key_not_found) fail "KEY NO ENCONTRADA";; key_used) fail "KEY YA UTILIZADA";; key_expired) warn "KEY EXPIRADA";; *) fail "KEY NO VÁLIDA";; esac
+   INSTALL_KEY=""; continue
+  fi
+  LICENSE_OWNER=$(echo "$b" | jq -r '.owner // "Desconocido"')
+  LICENSE_RESELLER=$(echo "$b" | jq -r '.reseller // "Desconocido"')
+  LICENSE_TYPE=$(echo "$b" | jq -r '.type // "normal"')
+  LICENSE_DELETE_AT=$(echo "$b" | jq -r '.deleteAt // empty')
+  echo -e "${GREEN}✔ LICENCIA VÁLIDA${RESET} • ${WHITE}$LICENSE_OWNER${RESET} • ${CYAN}$LICENSE_TYPE${RESET}"
+  break
+ done
 }
 
-ok() {
-    echo -e " ${GREEN}✔${RESET} ${WHITE}$1${RESET}"
+get_public_ip(){ curl -fsS -4 --connect-timeout 5 --max-time 10 https://api.ipify.org 2>/dev/null || true; }
+
+configure_domain(){
+ section "🌐 PASO 2 • DOMINIO"
+ read -r -p "$(echo -e "${CYAN}🌐 Dominio del VPS: ${RESET}")" SERVER_DOMAIN
+ SERVER_DOMAIN=$(printf '%s' "$SERVER_DOMAIN" | tr -d '[:space:]')
+ [[ "$SERVER_DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || fatal "Dominio inválido."
+ SERVER_IP=$(get_public_ip); [[ -n "$SERVER_IP" ]] || SERVER_IP="Desconocida"
+ loading "Comprobando DNS"
+ DOMAIN_IP=$(dig +short A "$SERVER_DOMAIN" 2>/dev/null | grep -E '^[0-9]+(\.[0-9]+){3}$' | head -n1 || true)
+ if [[ -n "$DOMAIN_IP" && "$DOMAIN_IP" == "$SERVER_IP" ]]; then DOMAIN_IP_MATCH="YES"; ok "DNS apunta al VPS."; else warn "DNS aún no coincide con la IP del VPS."; fi
+ local ns; ns=$(dig +short NS "$SERVER_DOMAIN" 2>/dev/null | tr '\n' ' ' || true)
+ if echo "$ns" | grep -qi cloudflare; then DNS_PROVIDER="Cloudflare"; elif echo "$ns" | grep -Eqi 'awsdns|route53'; then DNS_PROVIDER="AWS Route 53"; elif echo "$ns" | grep -qi google; then DNS_PROVIDER="Google Cloud DNS"; elif echo "$ns" | grep -qi azure; then DNS_PROVIDER="Azure DNS"; elif echo "$ns" | grep -qi godaddy; then DNS_PROVIDER="GoDaddy"; elif echo "$ns" | grep -qi namecheap; then DNS_PROVIDER="Namecheap"; fi
+ echo -e " ${GRAY}DNS:${RESET} ${SKY}$DNS_PROVIDER${RESET}"
+ echo -e " ${GRAY}VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
 }
 
-info() {
-    echo -e " ${CYAN}◆${RESET} ${WHITE}$1${RESET}"
+configure_firewall(){
+ section "🛡️ PASO 3 • FIREWALL"
+ # No resetear UFW: evita borrar reglas ajenas.
+ ufw default deny incoming >/dev/null 2>&1 || true
+ ufw default allow outgoing >/dev/null 2>&1 || true
+ ufw allow 22/tcp >/dev/null 2>&1 || true
+ ufw allow 80/tcp >/dev/null 2>&1 || true
+ ufw allow 443/tcp >/dev/null 2>&1 || true
+ if [[ -f /etc/default/ufw ]]; then sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw; fi
+ if [[ -f /etc/ufw/sysctl.conf ]]; then sed -i 's/^#\?[[:space:]]*net\/ipv4\/ip_forward=.*/net\/ipv4\/ip_forward=1/' /etc/ufw/sysctl.conf; fi
+ ufw --force enable >/dev/null 2>&1 || true
+ ok "Firewall base configurado. Los módulos deben abrir sus propios puertos."
 }
 
-warn() {
-    echo -e " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
-}
-
-fail() {
-    echo -e " ${RED}✖${RESET} ${WHITE}$1${RESET}"
-}
-
-loading() {
-
-    local TEXT="$1"
-
-    echo -ne " ${CYAN}${TEXT}${RESET} "
-
-    for i in 1 2 3; do
-        echo -ne "${PURPLE}●${RESET}"
-        sleep 0.15
-    done
-
-    echo
-
-}
-
-pausa() {
-    sleep "${1:-1}"
-}
-
-error_exit() {
-
-    echo
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${RED}║${RESET} ${WHITE}${BOLD}❌ INSTALACIÓN DETENIDA${RESET}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-    echo -e " ${RED}✖${RESET} ${WHITE}$1${RESET}"
-    echo
-
-    rm -rf "$TMP"
-
-    exit 1
-}
-
-#=========================================================
-# ROOT
-#=========================================================
-
-if [[ "$EUID" -ne 0 ]]; then
-
-    echo
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${RED}║${RESET} ${WHITE}${BOLD}🔒 PERMISOS ROOT NECESARIOS${RESET}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-    echo -e "${YELLOW}Ejecuta:${RESET}"
-    echo
-    echo -e "${CYAN}sudo -i${RESET}"
-    echo
-
-    exit 1
-fi
-
-#=========================================================
-# SISTEMA OPERATIVO
-#=========================================================
-
-if [[ ! -f /etc/os-release ]]; then
-    error_exit "No se pudo detectar el sistema operativo."
-fi
-
-source /etc/os-release
-
-if [[ "$ID" != "ubuntu" ]]; then
-    error_exit "Este instalador solamente es compatible con Ubuntu."
-fi
-
-#=========================================================
-# CABECERA
-#=========================================================
-
-titulo
-
-echo -e "${GREEN}             ● SISTEMA COMPATIBLE DETECTADO ●${RESET}"
-echo
-echo -e "${WHITE}Sistema : ${SKY}${PRETTY_NAME}${RESET}"
-echo -e "${WHITE}Usuario : ${GOLD}root${RESET}"
-echo -e "${WHITE}Sistema : ${MAGENTA}KevinTech Multi Script${RESET}"
-
-echo
-linea_color
-
-#=========================================================
-# PASO 0
-# DEPENDENCIAS
-#=========================================================
-
-seccion "📦 PASO 0  •  PREPARANDO EL SISTEMA"
-
-echo -e "${GRAY}Instalando las herramientas necesarias para KevinTech.${RESET}"
-echo
-
-export DEBIAN_FRONTEND=noninteractive
-
-loading "Actualizando repositorios"
-
-apt-get update -y >/dev/null 2>&1 || \
-    error_exit "No se pudieron actualizar los repositorios."
-
-ok "Repositorios actualizados."
-
-loading "Instalando dependencias"
-
-apt-get install -y \
-    curl \
-    wget \
-    git \
-    jq \
-    ca-certificates \
-    dnsutils \
-    sudo \
-    openssl \
-    unzip \
-    zip \
-    tar \
-    nano \
-    cron \
-    net-tools \
-    lsof \
-    screen \
-    bc \
-    socat \
-    openssh-server \
-    ufw \
-    fail2ban \
-    >/dev/null 2>&1 || \
-    error_exit "No se pudieron instalar las dependencias."
-
-update-ca-certificates >/dev/null 2>&1 || true
-
-ok "Dependencias instaladas."
-
-#=========================================================
-# SISTEMA DE LICENCIAS
-#=========================================================
-
-seccion "🔐 SISTEMA DE LICENCIAS"
-
-echo -e "${WHITE}Obtén tu Key mediante nuestro bot oficial:${RESET}"
-echo
-echo -e " ${CYAN}🤖 Telegram:${RESET} ${PINK}${BOLD}${LICENSE_BOT}${RESET}"
-echo
-
-loading "Comprobando sistema de licencias"
-
-HEALTH_RESPONSE="$(
-    curl \
-        --silent \
-        --show-error \
-        --connect-timeout 5 \
-        --max-time 15 \
-        -4 \
-        -w '\n%{http_code}' \
-        "${LICENSE_API}/health" \
-        2>/dev/null
-)"
-
-HEALTH_HTTP="$(
-    printf '%s\n' "$HEALTH_RESPONSE" |
-    tail -n1
-)"
-
-HEALTH_BODY="$(
-    printf '%s\n' "$HEALTH_RESPONSE" |
-    sed '$d'
-)"
-
-if [[ "$HEALTH_HTTP" != "200" ]]; then
-
-    fail "Servidor de licencias no disponible."
-    echo
-    echo -e "${GRAY}Inténtalo nuevamente más tarde.${RESET}"
-    echo
-
-    exit 1
-fi
-
-if ! echo "$HEALTH_BODY" |
-    jq -e '.ok == true' >/dev/null 2>&1; then
-
-    error_exit "El sistema de licencias no está disponible."
-
-fi
-
-ok "Sistema de licencias operativo."
-
-#=========================================================
-# PASO 1
-# LICENCIA
-#=========================================================
-
-seccion "🔑 PASO 1  •  VALIDACIÓN DE LICENCIA"
-
-echo -e "${WHITE}Ingresa la Key proporcionada por KevinTech.${RESET}"
-echo
-echo -e "${GRAY}¿No tienes una Key?${RESET}"
-echo -e " ${CYAN}🤖 Telegram:${RESET} ${PINK}${BOLD}${LICENSE_BOT}${RESET}"
-echo
-
-while true; do
-
-    if [[ -z "${INSTALL_KEY:-}" ]]; then
-
-        read -r -p "$(echo -e "${GOLD}🔑 Key de Instalación:${RESET} ")" INSTALL_KEY
-
-    else
-
-        echo -e "${GOLD}🔑 Key de Instalación:${RESET} ${INSTALL_KEY}"
-
-    fi
-
-    INSTALL_KEY="$(
-        printf '%s' "$INSTALL_KEY" |
-        tr -d '[:space:]'
-    )"
-
-    if [[ -z "$INSTALL_KEY" ]]; then
-
-        fail "La Key no puede estar vacía."
-        continue
-
-    fi
-
-    loading "Verificando licencia"
-
-    REQUEST_JSON="$(
-        jq -n \
-            --arg key "$INSTALL_KEY" \
-            '{key:$key}'
-    )"
-
-    VALIDATE_RESPONSE="$(
-        curl \
-            --silent \
-            --show-error \
-            --connect-timeout 5 \
-            --max-time 15 \
-            -4 \
-            -w '\n%{http_code}' \
-            -X POST \
-            -H "Content-Type: application/json" \
-            --data "$REQUEST_JSON" \
-            "${LICENSE_API}/api/public/validate" \
-            2>/dev/null
-    )"
-
-    CURL_STATUS=$?
-
-    VALIDATE_HTTP="$(
-        printf '%s\n' "$VALIDATE_RESPONSE" |
-        tail -n1
-    )"
-
-    VALIDATE_BODY="$(
-        printf '%s\n' "$VALIDATE_RESPONSE" |
-        sed '$d'
-    )"
-
-    if [[ "$CURL_STATUS" -ne 0 ]]; then
-
-        fail "No fue posible conectar con el sistema de licencias."
-        pausa 2
-        continue
-
-    fi
-
-    if ! echo "$VALIDATE_BODY" |
-        jq empty >/dev/null 2>&1; then
-
-        fail "El servidor devolvió una respuesta inválida."
-        pausa 2
-        continue
-
-    fi
-
-    VALID="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.ok // false'
-    )"
-
-    ERROR_CODE="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.error // empty'
-    )"
-
-    if [[ "$VALID" != "true" ]]; then
-
-        echo
-
-        case "$ERROR_CODE" in
-
-            key_not_found)
-                fail "KEY NO ENCONTRADA"
-                ;;
-
-            key_used)
-                fail "KEY YA UTILIZADA"
-                ;;
-
-            key_expired)
-                warn "KEY EXPIRADA"
-                ;;
-
-            key_required)
-                fail "NO SE RECIBIÓ UNA KEY"
-                ;;
-
-            *)
-                fail "LA KEY NO ES VÁLIDA"
-                ;;
-
-        esac
-
-        echo
-        echo -e "${GRAY}No se instalará ningún archivo.${RESET}"
-        pausa 2
-
-        continue
-    fi
-
-    LICENSE_OWNER="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.owner // "Desconocido"'
-    )"
-
-    LICENSE_RESELLER="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.reseller // "Desconocido"'
-    )"
-
-    LICENSE_TYPE="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.type // "normal"'
-    )"
-
-    LICENSE_DELETE_AT="$(
-        echo "$VALIDATE_BODY" |
-        jq -r '.deleteAt // empty'
-    )"
-
-    echo
-
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}                 ✅ LICENCIA VÁLIDA${RESET}                  ${GREEN}║${RESET}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${GREEN}║${RESET} ${GRAY}Propietario:${RESET} ${WHITE}${LICENSE_OWNER}${RESET}"
-    echo -e "${GREEN}║${RESET} ${GRAY}Revendedor :${RESET} ${WHITE}${LICENSE_RESELLER}${RESET}"
-    echo -e "${GREEN}║${RESET} ${GRAY}Tipo       :${RESET} ${CYAN}${LICENSE_TYPE}${RESET}"
-
-    if [[ -n "$LICENSE_DELETE_AT" &&
-          "$LICENSE_DELETE_AT" != "null" ]]; then
-
-        echo -e "${GREEN}║${RESET} ${GRAY}Expira     :${RESET} ${YELLOW}${LICENSE_DELETE_AT}${RESET}"
-
-    fi
-
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    ok "Licencia aceptada."
-
-    break
-
-done
-
-#=========================================================
-# PASO 2
-# SISTEMA
-#=========================================================
-
-seccion "⚙️ PASO 2  •  PREPARANDO SERVIDOR"
-
-loading "Configurando OpenSSH"
-
-systemctl enable ssh >/dev/null 2>&1 || true
-
-systemctl restart ssh >/dev/null 2>&1 || \
-    error_exit "No se pudo iniciar OpenSSH."
-
-ok "OpenSSH activo."
-
-#=========================================================
-# FIREWALL
-#=========================================================
-
-info "Configurando firewall..."
-
-ufw --force reset >/dev/null 2>&1 || true
-
-ufw default deny incoming >/dev/null 2>&1
-ufw default allow outgoing >/dev/null 2>&1
-
-ufw allow 22/tcp >/dev/null 2>&1
-ufw allow 80/tcp >/dev/null 2>&1
-ufw allow 443/tcp >/dev/null 2>&1
-
-ufw --force enable >/dev/null 2>&1 || true
-
-ok "Firewall configurado."
-
-#=========================================================
-# SSH HARDENING
-#=========================================================
-
-info "Configurando SSH..."
-
-SSHD_CFG="/etc/ssh/sshd_config"
-
-if [[ -f "$SSHD_CFG" ]]; then
-
-    cp "$SSHD_CFG" \
-        "${SSHD_CFG}.kevintech.backup"
-
-    sed -i \
-        -e '/^[[:space:]]*#\?[[:space:]]*MaxAuthTries[[:space:]]/d' \
-        -e '/^[[:space:]]*#\?[[:space:]]*ClientAliveInterval[[:space:]]/d' \
-        -e '/^[[:space:]]*#\?[[:space:]]*ClientAliveCountMax[[:space:]]/d' \
-        "$SSHD_CFG"
-
-    cat >> "$SSHD_CFG" <<'EOF'
-
-#=========================================================
-# KevinTech SSH configuration
-#=========================================================
-
-MaxAuthTries 3
-ClientAliveInterval 300
-ClientAliveCountMax 2
-
-EOF
-
-fi
-
-if sshd -t >/dev/null 2>&1; then
-
-    systemctl restart ssh
-
-    ok "Configuración SSH válida."
-
-else
-
-    fail "Error en la configuración SSH."
-
-    if [[ -f "${SSHD_CFG}.kevintech.backup" ]]; then
-
-        cp \
-            "${SSHD_CFG}.kevintech.backup" \
-            "$SSHD_CFG"
-
-        systemctl restart ssh
-
-        ok "Configuración anterior restaurada."
-
-    fi
-
-fi
-
-#=========================================================
-# FAIL2BAN
-#=========================================================
-
-info "Configurando Fail2Ban..."
-
-mkdir -p /etc/fail2ban
-
-cat > /etc/fail2ban/jail.local <<'EOF'
+configure_ssh(){
+ section "🔐 PASO 4 • SSH + FAIL2BAN"
+ systemctl enable ssh >/dev/null 2>&1 || true
+ systemctl restart ssh >/dev/null 2>&1 || fatal "OpenSSH no pudo iniciar."
+ if [[ -f "$SSHD_CFG" ]]; then
+  cp -a "$SSHD_CFG" "${SSHD_CFG}.kevintech.backup"
+  sed -i '/^[[:space:]]*#\?[[:space:]]*MaxAuthTries[[:space:]]/d;/^[[:space:]]*#\?[[:space:]]*ClientAliveInterval[[:space:]]/d;/^[[:space:]]*#\?[[:space:]]*ClientAliveCountMax[[:space:]]/d' "$SSHD_CFG"
+  printf '\n# KevinTech\nMaxAuthTries 3\nClientAliveInterval 300\nClientAliveCountMax 2\n' >> "$SSHD_CFG"
+  if sshd -t >/dev/null 2>&1; then systemctl restart ssh; else cp -a "${SSHD_CFG}.kevintech.backup" "$SSHD_CFG"; systemctl restart ssh || true; warn "SSH restaurado por configuración inválida."; fi
+ fi
+ mkdir -p /etc/fail2ban
+ cat > /etc/fail2ban/jail.local <<'F2B'
 [DEFAULT]
 bantime = 1h
 findtime = 10m
@@ -600,206 +165,33 @@ maxretry = 3
 enabled = true
 port = ssh
 backend = systemd
-EOF
-
-systemctl enable fail2ban >/dev/null 2>&1 || true
-systemctl restart fail2ban >/dev/null 2>&1 || true
-
-ok "Fail2Ban configurado."
-
-#=========================================================
-# PASO 3
-# DOMINIO
-#=========================================================
-
-seccion "🌐 PASO 3  •  CONFIGURACIÓN DE DOMINIO"
-
-read -r -p \
-"$(echo -e "${CYAN}🌐 Dominio del VPS:${RESET} ")" \
-SERVER_DOMAIN
-
-SERVER_DOMAIN="$(
-    printf '%s' "$SERVER_DOMAIN" |
-    tr -d '[:space:]'
-)"
-
-SERVER_IP="$(
-    curl \
-        --silent \
-        --show-error \
-        --connect-timeout 5 \
-        --max-time 10 \
-        -4 \
-        https://api.ipify.org \
-        2>/dev/null
-)"
-
-[[ -z "$SERVER_IP" ]] &&
-    SERVER_IP="Desconocida"
-
-DOMAIN_IP_MATCH="NO"
-DNS_PROVIDER="Desconocido"
-
-if [[ -n "$SERVER_DOMAIN" ]]; then
-
-    loading "Comprobando DNS"
-
-    DOMAIN_IP="$(
-        dig +short A "$SERVER_DOMAIN" |
-        grep -E \
-        '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' |
-        head -n1
-    )"
-
-    if [[ -n "$DOMAIN_IP" &&
-          "$DOMAIN_IP" == "$SERVER_IP" ]]; then
-
-        DOMAIN_IP_MATCH="YES"
-
-        ok "El dominio apunta correctamente al VPS."
-
-    else
-
-        warn "El dominio todavía no apunta a este VPS."
-
-        [[ -n "$DOMAIN_IP" ]] && {
-            echo -e \
-                " ${GRAY}IP encontrada:${RESET} ${YELLOW}$DOMAIN_IP${RESET}"
-
-            echo -e \
-                " ${GRAY}IP VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
-        }
-
-    fi
-
-    NS="$(
-        dig +short NS "$SERVER_DOMAIN" |
-        tr '\n' ' '
-    )"
-
-    if echo "$NS" | grep -qi "cloudflare"; then
-        DNS_PROVIDER="Cloudflare"
-
-    elif echo "$NS" | grep -Eqi "awsdns|route53"; then
-        DNS_PROVIDER="AWS Route 53"
-
-    elif echo "$NS" | grep -Eqi "google"; then
-        DNS_PROVIDER="Google Cloud DNS"
-
-    elif echo "$NS" | grep -qi "azure"; then
-        DNS_PROVIDER="Azure DNS"
-
-    elif echo "$NS" | grep -qi "namecheap"; then
-        DNS_PROVIDER="Namecheap"
-
-    elif echo "$NS" | grep -qi "godaddy"; then
-        DNS_PROVIDER="GoDaddy"
-
-    elif echo "$NS" | grep -qi "porkbun"; then
-        DNS_PROVIDER="Porkbun"
-    fi
-
-    echo -e \
-        " ${GRAY}Proveedor DNS:${RESET} ${SKY}$DNS_PROVIDER${RESET}"
-
-else
-
-    warn "No se introdujo ningún dominio."
-
-fi
-
-#=========================================================
-# PASO 4
-# DESCARGAR KEVINTECH
-#=========================================================
-
-seccion "📥 PASO 4  •  INSTALANDO KEVINTECH"
-
-rm -rf "$TMP"
-mkdir -p "$TMP"
-
-loading "Descargando repositorio"
-
-if ! git clone \
-    --depth 1 \
-    "$REPO" \
-    "$TMP" >/dev/null 2>&1; then
-
-    rm -rf "$TMP"
-
-    error_exit "No se pudieron descargar los archivos."
-
-fi
-
-ok "Repositorio descargado."
-
-#=========================================================
-# INSTALAR ARCHIVOS
-#=========================================================
-
-mkdir -p "$BASE"
-
-cp -a "$TMP"/. "$BASE"/ || {
-
-    rm -rf "$TMP"
-
-    error_exit "No se pudieron copiar los archivos."
-
+F2B
+ systemctl enable fail2ban >/dev/null 2>&1 || true
+ systemctl restart fail2ban >/dev/null 2>&1 || warn "Fail2Ban no pudo iniciar."
+ ok "SSH y Fail2Ban listos."
 }
 
-rm -rf "$TMP"
+install_repository(){
+ section "📥 PASO 5 • KEVINTECH"
+ rm -rf "$TMP"; mkdir -p "$TMP"
+ loading "Clonando repositorio"
+ git clone --depth 1 "$REPO" "$TMP" >/dev/null 2>&1 || fatal "No se pudo descargar el repositorio."
+ mkdir -p "$BASE"
+ cp -a "$TMP"/. "$BASE"/ || fatal "No se pudieron copiar los archivos."
+ mkdir -p "$BASE/protocolos" "$BASE/usuarios" "$BASE/sistema" "$BASE/logs" "$BASE/herramientas"
+ find "$BASE" -type f -name '*.sh' -exec chmod 755 {} +
+ ok "Archivos instalados."
+}
 
-mkdir -p \
-    "$BASE/protocolos" \
-    "$BASE/usuarios" \
-    "$BASE/sistema" \
-    "$BASE/logs" \
-    "$BASE/herramientas"
-
-find "$BASE" \
-    -type f \
-    -name "*.sh" \
-    -exec chmod +x {} \;
-
-ok "Archivos instalados."
-
-#=========================================================
-# CONFIGURACIÓN PRINCIPAL
-#=========================================================
-
-cat > "$BASE/config.conf" <<EOF
-#=========================================================
-# KEVINTECH MULTI SCRIPT
-# CONFIGURATION
-#=========================================================
-
+write_config(){
+ cat > "$CONFIG" <<CFG
+# KevinTech Multi Script
 SERVER_DOMAIN="$SERVER_DOMAIN"
 SERVER_IP="$SERVER_IP"
-
 DNS_PROVIDER="$DNS_PROVIDER"
 DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"
-
-SSL_TUNNEL="OFF"
-PROXY_STATUS="OFF"
-
-AUTO_START=OFF
-
-#=========================================================
-# LICENCIA
-#=========================================================
-
 LICENSE_API="$LICENSE_API"
-LICENSE_OWNER="$LICENSE_OWNER"
-LICENSE_RESELLER="$LICENSE_RESELLER"
-LICENSE_TYPE="$LICENSE_TYPE"
-LICENSE_DELETE_AT="$LICENSE_DELETE_AT"
-
-#=========================================================
-# PROTOCOLOS
-#=========================================================
-
 OPENSSH=ON
-
 DROPBEAR=OFF
 SSL=OFF
 BADVPN=OFF
@@ -809,716 +201,138 @@ SLOWDNS=OFF
 XRAY=OFF
 V2RAY=OFF
 OPENVPN=OFF
-
 ZIPVPN=OFF
+ZIVPN=OFF
 WEBSOCKET=OFF
 TROJAN=OFF
 SHADOWSOCKS=OFF
 SOCKS5=OFF
-
-#=========================================================
-# SISTEMA
-#=========================================================
-
 SYSTEMDNS=OFF
 SQUID=OFF
 WEBMIN=OFF
 FAIL2BAN=ON
 BBR=OFF
-EOF
-
-#=========================================================
-# LICENSE CONF
-#=========================================================
-
-cat > "$BASE/license.conf" <<EOF
+AUTO_START=OFF
+CFG
+ cat > "$LICENSE_CONF" <<LC
 LICENSE_OWNER="$LICENSE_OWNER"
 LICENSE_RESELLER="$LICENSE_RESELLER"
 LICENSE_TYPE="$LICENSE_TYPE"
 LICENSE_DELETE_AT="$LICENSE_DELETE_AT"
 LICENSE_API="$LICENSE_API"
-LICENSE_STATUS="VALIDATED"
+LICENSE_STATUS="VALIDATING"
 LICENSE_BOT="$LICENSE_BOT"
-EOF
-
-chmod 600 "$BASE/license.conf"
-
-ok "Configuración creada."
-
-#=========================================================
-# COMANDO MENU
-#=========================================================
-
-cat > /usr/local/bin/menu <<'EOF'
-#!/bin/bash
-
-BASE="/etc/kevintech"
-
-if [[ -f "$BASE/menu.sh" ]]; then
-    exec bash "$BASE/menu.sh" "$@"
-fi
-
-echo "❌ No se encontró $BASE/menu.sh"
-exit 1
-EOF
-
-chmod +x /usr/local/bin/menu
-
-ok "Comando 'menu' instalado."
-
-#=========================================================
-# PASO 5
-# ROOT
-#=========================================================
-
-seccion "👑 PASO 5  •  ACCESO ROOT"
-
-echo -e "${WHITE}¿Deseas establecer una contraseña para root?${RESET}"
-echo
-echo -e "${GREEN}Y${RESET} = Establecer contraseña"
-echo -e "${RED}N${RESET} = Continuar"
-echo
-
-read -r -p \
-"$(echo -e "${GOLD}[Y/N]:${RESET} ")" \
-ROOT_ACCESS
-
-ROOT_ACCESS="$(
-    printf '%s' "$ROOT_ACCESS" |
-    tr '[:upper:]' '[:lower:]'
-)"
-
-if [[ "$ROOT_ACCESS" == "y" ]]; then
-
-    echo
-    passwd root
-
-    if [[ $? -eq 0 ]]; then
-
-        if [[ -f "$SSHD_CFG" ]]; then
-
-            sed -i \
-                -e '/^[[:space:]]*#\?[[:space:]]*PermitRootLogin[[:space:]]/d' \
-                -e '/^[[:space:]]*#\?[[:space:]]*PasswordAuthentication[[:space:]]/d' \
-                "$SSHD_CFG"
-
-            cat >> "$SSHD_CFG" <<'EOF'
-
-#=========================================================
-# KevinTech root access
-#=========================================================
-
-PermitRootLogin yes
-PasswordAuthentication yes
-
-EOF
-
-            if sshd -t >/dev/null 2>&1; then
-
-                systemctl restart ssh
-
-                ok "Acceso root habilitado."
-
-            else
-
-                fail "La configuración SSH no es válida."
-
-            fi
-        fi
-
-    else
-
-        fail "No se pudo cambiar la contraseña."
-
-    fi
-
-fi
-
-#=========================================================
-# PASO 6
-# PROTOCOLOS
-#=========================================================
-
-seccion "🚀 PASO 6  •  INSTALACIÓN DE PROTOCOLOS"
-
-echo -e "${WHITE}Instalando los protocolos disponibles en el sistema.${RESET}"
-echo
-
-#=========================================================
-# FUNCIÓN GENERAL
-#=========================================================
-
-instalar_modulo() {
-
-    local NOMBRE="$1"
-    local ARCHIVO="$2"
-    local VARIABLE="$3"
-
-    echo
-    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}📦 $NOMBRE${RESET}"
-    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    if [[ ! -f "$ARCHIVO" ]]; then
-
-        warn "$NOMBRE no encontrado."
-
-        echo -e \
-            " ${GRAY}Archivo:${RESET} $ARCHIVO"
-
-        return 2
-    fi
-
-    chmod +x "$ARCHIVO"
-
-    info "Ejecutando modo automático..."
-
-    if bash "$ARCHIVO" --auto; then
-
-        if [[ -n "$VARIABLE" ]] &&
-           grep -q "^${VARIABLE}=ON" "$BASE/config.conf"; then
-
-            ok "$NOMBRE instalado correctamente."
-
-        else
-
-            ok "$NOMBRE finalizó correctamente."
-
-        fi
-
-        return 0
-
-    fi
-
-    fail "$NOMBRE terminó con errores."
-
-    return 1
+LC
+ chmod 640 "$CONFIG"; chmod 600 "$LICENSE_CONF"
+ ok "config.conf y license.conf creados."
 }
 
-#=========================================================
-# OPENSSH
-#=========================================================
-
-echo
-info "Instalando OpenSSH..."
-
-if apt-get install -y openssh-server >/dev/null 2>&1 &&
-   systemctl enable ssh >/dev/null 2>&1 &&
-   systemctl restart ssh >/dev/null 2>&1 &&
-   systemctl is-active --quiet ssh; then
-
-    sed -i \
-        's/^OPENSSH=.*/OPENSSH=ON/' \
-        "$BASE/config.conf"
-
-    ok "OpenSSH instalado correctamente."
-
-else
-
-    sed -i \
-        's/^OPENSSH=.*/OPENSSH=OFF/' \
-        "$BASE/config.conf"
-
-    fail "OpenSSH no pudo iniciarse."
-
-fi
-
-#=========================================================
-# DROPBEAR
-#=========================================================
-
-instalar_modulo \
-    "Dropbear" \
-    "$BASE/protocolos/dropbear.sh" \
-    "DROPBEAR"
-
-#=========================================================
-# SSL TUNNEL
-#=========================================================
-
-if instalar_modulo \
-    "SSL Tunnel" \
-    "$BASE/protocolos/ssl.sh" \
-    "SSL"; then
-
-    :
-
-fi
-
-#=========================================================
-# SSL TUNNEL
-#=========================================================
-
-if instalar_modulo \
-    "SSL Tunnel" \
-    "$BASE/protocolos/ssl.sh" \
-    "SSL"; then
-
-    :
-
-fi
-
-#=========================================================
-# XRAY
-#=========================================================
-
-XRAY_SCRIPT=""
-
-if [[ -f "$BASE/protocolos/xray.sh" ]]; then
-
-    XRAY_SCRIPT="$BASE/protocolos/xray.sh"
-
-elif [[ -f "$BASE/protocolos/v2ray.sh" ]]; then
-
-    XRAY_SCRIPT="$BASE/protocolos/v2ray.sh"
-
-fi
-
-if [[ -n "$XRAY_SCRIPT" ]]; then
-
-    instalar_modulo \
-        "Xray / VMess" \
-        "$XRAY_SCRIPT" \
-        "XRAY"
-
-else
-
-    warn "No se encontró xray.sh ni v2ray.sh."
-
-fi
-
-#=========================================================
-# UDP CUSTOM
-#=========================================================
-
-instalar_modulo \
-    "UDP Custom" \
-    "$BASE/protocolos/udpcustom.sh" \
-    "UDP_CUSTOM"
-
-
-#=========================================================
-# BADVPN UDPGW
-#=========================================================
-
-instalar_modulo \
-    "BadVPN UDPGW" \
-    "$BASE/protocolos/badvpn.sh" \
-    "BADVPN"
-#=========================================================
-# ZIVPN
-#=========================================================
-
-instalar_modulo \
-    "ZiVPN" \
-    "$BASE/protocolos/zivpn.sh" \
-    "ZIPVPN"
-#=========================================================
-# SLOWDNS
-#=========================================================
-
-instalar_modulo \
-    "SlowDNS" \
-    "$BASE/protocolos/slowdns.sh" \
-    "SLOWDNS"
-#=========================================================
-# OPENVPN
-#=========================================================
-
-instalar_modulo \
-    "OpenVPN" \
-    "$BASE/protocolos/openvpn.sh" \
-    "OPENVPN"
-
-#=========================================================
-# PROTOCOLOS AÚN NO DISPONIBLES
-#=========================================================
-
-echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${WHITE}${BOLD}PROTOCOLOS DISPONIBLES PARA INSTALACIÓN POSTERIOR${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-echo
-echo -e " ${GRAY}○${RESET} ZIPVPN"
-echo -e " ${GRAY}○${RESET} Hysteria"
-echo -e " ${GRAY}○${RESET} OpenVPN"
-echo -e " ${GRAY}○${RESET} SlowDNS"
-echo -e " ${GRAY}○${RESET} Trojan"
-echo -e " ${GRAY}○${RESET} Shadowsocks"
-echo -e " ${GRAY}○${RESET} SOCKS5"
-
-echo
-echo -e "${GRAY}Se activarán cuando sus módulos estén instalados.${RESET}"
-
-#=========================================================
-# BANNER SSH
-#=========================================================
-
-seccion "🎨 CONFIGURANDO BANNER"
-
-cat > /etc/profile.d/kevintech-banner.sh <<'EOF'
+write_menu(){
+ cat > /usr/local/bin/menu <<'MENU'
 #!/bin/bash
-
-[[ $- != *i* ]] && return
-
 BASE="/etc/kevintech"
-CONFIG="$BASE/config.conf"
+[[ -f "$BASE/menu.sh" ]] && exec bash "$BASE/menu.sh" "$@"
+echo "❌ No se encontró $BASE/menu.sh"
+exit 1
+MENU
+ chmod 755 /usr/local/bin/menu
+ ok "Comando menu instalado."
+}
 
-CYAN="\e[1;96m"
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-MAGENTA="\e[1;95m"
-PINK="\e[38;5;213m"
-PURPLE="\e[38;5;141m"
-SKY="\e[38;5;117m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-RESET="\e[0m"
+module_on(){ grep -q "^$1=ON$" "$CONFIG" 2>/dev/null; }
+run_module(){
+ local name="$1" file="$2" var="$3"
+ echo; echo -e "${PURPLE}▶ $name${RESET}"
+ if [[ ! -f "$file" ]]; then warn "No disponible: $(basename "$file")"; return 2; fi
+ chmod 755 "$file"
+ if bash "$file" --auto; then
+  module_on "$var" && ok "$name → ON" || warn "$name terminó sin marcar $var=ON"
+ else fail "$name → ERROR"; fi
+}
 
-SERVER="$(hostname)"
-DOMAIN="-"
+install_modules(){
+ section "🚀 PASO 6 • PROTOCOLOS"
+ run_module "Dropbear" "$BASE/protocolos/dropbear.sh" DROPBEAR || true
+ run_module "SSL Tunnel" "$BASE/protocolos/ssl.sh" SSL || true
+ if [[ -f "$BASE/protocolos/xray.sh" ]]; then run_module "Xray" "$BASE/protocolos/xray.sh" XRAY || true; elif [[ -f "$BASE/protocolos/v2ray.sh" ]]; then run_module "V2Ray" "$BASE/protocolos/v2ray.sh" V2RAY || true; else warn "Xray/V2Ray no disponible."; fi
+ run_module "UDP Custom" "$BASE/protocolos/udpcustom.sh" UDP_CUSTOM || true
+ run_module "BadVPN" "$BASE/protocolos/badvpn.sh" BADVPN || true
+ run_module "ZiVPN" "$BASE/protocolos/zivpn.sh" ZIPVPN || true
+ run_module "SlowDNS" "$BASE/protocolos/slowdns.sh" SLOWDNS || true
+ run_module "OpenVPN" "$BASE/protocolos/openvpn.sh" OPENVPN || true
+}
 
-if [[ -f "$CONFIG" ]]; then
-    source "$CONFIG" 2>/dev/null
-    DOMAIN="${SERVER_DOMAIN:--}"
-fi
-
-UPTIME="$(
-    uptime -p 2>/dev/null |
-    sed 's/up //'
-)"
-
-FECHA="$(date '+%d-%m-%Y')"
-HORA="$(date '+%H:%M:%S')"
-
-RAM="$(
-    free -h 2>/dev/null |
-    awk '/Mem:/ {print $3 "/" $2}'
-)"
-
-LOAD="$(
-    uptime 2>/dev/null |
-    awk -F'load average:' '{print $2}' |
-    sed 's/^ //'
-)"
-
+write_banner(){
+ section "🎨 PASO 7 • BANNER"
+ cat > /etc/profile.d/kevintech-banner.sh <<'BANNER'
+#!/bin/bash
+[[ $- != *i* ]] && return
+BASE="/etc/kevintech"; CONFIG="$BASE/config.conf"
+CYAN="\e[1;96m"; GREEN="\e[1;92m"; YELLOW="\e[1;93m"; MAGENTA="\e[1;95m"; PINK="\e[38;5;213m"; PURPLE="\e[38;5;141m"; SKY="\e[38;5;117m"; WHITE="\e[1;97m"; RESET="\e[0m"
+SERVER=$(hostname); DOMAIN="-"; [[ -f "$CONFIG" ]] && { source "$CONFIG" 2>/dev/null || true; DOMAIN="${SERVER_DOMAIN:--}"; }
+UPTIME=$(uptime -p 2>/dev/null | sed 's/up //' || true); RAM=$(free -h 2>/dev/null | awk '/Mem:/ {print $3 "/" $2}' || true); LOAD=$(uptime 2>/dev/null | awk -F'load average:' '{print $2}' | sed 's/^ //' || true)
 echo
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${CYAN}║${RESET} ${PINK}${BOLD}             🚀 KEVINTECH MULTI SCRIPT 🚀${RESET}           ${CYAN}║${RESET}"
 echo -e "${CYAN}║${RESET} ${PURPLE}                    SERVER PANEL${RESET}                    ${CYAN}║${RESET}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
+echo -e " ${WHITE}🖥 Servidor:${RESET} ${SKY}$SERVER${RESET}"
+echo -e " ${WHITE}🌐 Dominio :${RESET} ${MAGENTA}$DOMAIN${RESET}"
+echo -e " ${WHITE}⏱ Uptime  :${RESET} ${GREEN}${UPTIME:-?}${RESET}"
+echo -e " ${WHITE}💾 RAM     :${RESET} ${GREEN}${RAM:-?}${RESET}"
+echo -e " ${WHITE}⚡ Carga   :${RESET} ${YELLOW}${LOAD:-?}${RESET}"
 echo
-
-echo -e "${CYAN}┌────────────────── SERVIDOR ──────────────────┐${RESET}"
-
-echo -e " ${WHITE}🖥 Servidor :${RESET} ${SKY}$SERVER${RESET}"
-echo -e " ${WHITE}🌐 Dominio  :${RESET} ${MAGENTA}$DOMAIN${RESET}"
-echo -e " ${WHITE}⏱ Uptime   :${RESET} ${GREEN}${UPTIME:-Desconocido}${RESET}"
-echo -e " ${WHITE}💾 RAM      :${RESET} ${GREEN}${RAM:-Desconocida}${RESET}"
-echo -e " ${WHITE}⚡ Carga    :${RESET} ${YELLOW}${LOAD:-Desconocida}${RESET}"
-echo -e " ${WHITE}📅 Fecha    :${RESET} ${YELLOW}$FECHA${RESET}"
-echo -e " ${WHITE}🕐 Hora     :${RESET} ${CYAN}$HORA${RESET}"
-
-echo -e "${CYAN}└─────────────────────────────────────────────┘${RESET}"
-
-echo
-
-#=========================================================
-# CRÉDITOS
-#=========================================================
-
 echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
 echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}                       ⭐ CRÉDITOS ⭐${RESET}                   ${PURPLE}║${RESET}"
 echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Proyecto :${RESET} ${PINK}KevinTech Multi Script${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin tech tutorials${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY} infraestructura :${RESET} ${SKY}@Dan3651 (tg)${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Soporte  :${RESET} ${MAGENTA}@multiscriptkeygen_bot${RESET}"
+echo -e "${PURPLE}║${RESET} Proyecto : ${PINK}KevinTech Multi Script${RESET}"
+echo -e "${PURPLE}║${RESET} Autor    : ${WHITE}Kevin tech tutorials${RESET}"
+echo -e "${PURPLE}║${RESET} Soporte  : ${MAGENTA}@multiscriptkeygen_bot${RESET}"
 echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
-if [[ "$EUID" -eq 0 ]]; then
-
-    echo -e " ${GREEN}👑 Usuario:${RESET} ${WHITE}root${RESET}"
-    echo -e " ${CYAN}👉 Panel:${RESET} ${WHITE}menu${RESET}"
-
-else
-
-    echo -e " ${YELLOW}👤 Usuario:${RESET} ${WHITE}$(whoami)${RESET}"
-    echo -e " ${YELLOW}⚠ Estado:${RESET} ${WHITE}No eres root${RESET}"
-
-fi
-
-echo
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo -e "${GRAY}          KevinTech Multi Script • Gracias por usarlo${RESET}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo
-
-EOF
-
-chmod +x /etc/profile.d/kevintech-banner.sh
-
-ok "Banner configurado con sección de créditos."
-
-#=========================================================
-# PASO FINAL
-# ACTIVACIÓN
-#=========================================================
-
-seccion "🔐 REGISTRANDO INSTALACIÓN"
-
-CLIENT_IP="$(
-    curl \
-        --silent \
-        --show-error \
-        --connect-timeout 5 \
-        --max-time 10 \
-        -4 \
-        https://api.ipify.org \
-        2>/dev/null
-)"
-
-[[ -z "$CLIENT_IP" ]] &&
-    CLIENT_IP="Desconocida"
-
-OS_NAME="$(
-    grep '^PRETTY_NAME=' /etc/os-release |
-    cut -d '"' -f2
-)"
-
-HOSTNAME_VALUE="$(hostname)"
-
-DATE_NOW="$(
-    date -u '+%Y-%m-%dT%H:%M:%SZ'
-)"
-
-echo -e " ${GRAY}IP:${RESET}       ${CYAN}$CLIENT_IP${RESET}"
-echo -e " ${GRAY}Hostname:${RESET} ${SKY}$HOSTNAME_VALUE${RESET}"
-echo -e " ${GRAY}Sistema:${RESET}  ${WHITE}$OS_NAME${RESET}"
-
-ACTIVATION_JSON="$(
-    jq -n \
-        --arg key "$INSTALL_KEY" \
-        --arg ip "$CLIENT_IP" \
-        --arg hostname "$HOSTNAME_VALUE" \
-        --arg os "$OS_NAME" \
-        --arg date "$DATE_NOW" \
-        '{
-            key:$key,
-            ip:$ip,
-            hostname:$hostname,
-            os:$os,
-            date:$date
-        }'
-)"
-
-loading "Registrando licencia"
-
-ACTIVATE_RESPONSE="$(
-    curl \
-        --silent \
-        --show-error \
-        --connect-timeout 5 \
-        --max-time 15 \
-        -4 \
-        -w '\n%{http_code}' \
-        -X POST \
-        -H "Content-Type: application/json" \
-        --data "$ACTIVATION_JSON" \
-        "${LICENSE_API}/api/public/activate" \
-        2>/dev/null
-)"
-
-ACTIVATE_STATUS=$?
-
-ACTIVATE_HTTP="$(
-    printf '%s\n' "$ACTIVATE_RESPONSE" |
-    tail -n1
-)"
-
-ACTIVATE_BODY="$(
-    printf '%s\n' "$ACTIVATE_RESPONSE" |
-    sed '$d'
-)"
-
-if [[ "$ACTIVATE_STATUS" -ne 0 ]]; then
-
-    fail "No se pudo conectar con el sistema de activación."
-    echo
-    echo -e "${YELLOW}La licencia no fue marcada como utilizada.${RESET}"
-
-    exit 1
-fi
-
-if ! echo "$ACTIVATE_BODY" |
-    jq empty >/dev/null 2>&1; then
-
-    fail "El sistema devolvió una respuesta inválida."
-
-    exit 1
-fi
-
-ACTIVATE_OK="$(
-    echo "$ACTIVATE_BODY" |
-    jq -r '.ok // false'
-)"
-
-ACTIVATE_ERROR="$(
-    echo "$ACTIVATE_BODY" |
-    jq -r '.error // empty'
-)"
-
-if [[ "$ACTIVATE_OK" != "true" ]]; then
-
-    fail "No se pudo registrar la activación."
-
-    echo
-    echo -e \
-        "${YELLOW}Código: ${ACTIVATE_ERROR:-desconocido}${RESET}"
-
-    exit 1
-fi
-
-ACTIVATION_ID="$(
-    echo "$ACTIVATE_BODY" |
-    jq -r '.activationId // empty'
-)"
-
-echo
-
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}              ✅ ACTIVACIÓN COMPLETADA${RESET}                ${GREEN}║${RESET}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
-[[ -n "$ACTIVATION_ID" ]] &&
-    echo -e \
-        "${GRAY}ID de activación:${RESET} ${CYAN}${ACTIVATION_ID}${RESET}"
-
-ok "La Key fue marcada como utilizada."
-
-#=========================================================
-# ESTADO LOCAL
-#=========================================================
-
-if [[ -f "$BASE/license.conf" ]]; then
-
-    sed -i \
-        's/^LICENSE_STATUS=.*/LICENSE_STATUS="ACTIVE"/' \
-        "$BASE/license.conf"
-
-    chmod 600 "$BASE/license.conf"
-
-fi
-
-#=========================================================
-# PERMISOS
-#=========================================================
-
-chmod -R 755 "$BASE"
-chmod 600 "$BASE/license.conf"
-
-#=========================================================
-# LIMPIEZA
-#=========================================================
-
-unset INSTALL_KEY
-unset ACTIVATION_JSON
-unset VALIDATE_RESPONSE
-unset ACTIVATE_RESPONSE
-
-rm -rf "$TMP"
-
-#=========================================================
-# FINAL
-#=========================================================
-
-titulo
-
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}             🎉 INSTALACIÓN COMPLETADA 🎉${RESET}             ${GREEN}║${RESET}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
-echo -e " ${GREEN}●${RESET} ${WHITE}Servidor:${RESET}    ${GREEN}LISTO${RESET}"
-echo -e " ${GREEN}●${RESET} ${WHITE}Licencia:${RESET}    ${GREEN}ACTIVA${RESET}"
-echo -e " ${GREEN}●${RESET} ${WHITE}Propietario:${RESET} ${WHITE}$LICENSE_OWNER${RESET}"
-echo -e " ${GREEN}●${RESET} ${WHITE}Revendedor:${RESET}  ${WHITE}$LICENSE_RESELLER${RESET}"
-echo -e " ${GREEN}●${RESET} ${WHITE}Tipo:${RESET}        ${CYAN}$LICENSE_TYPE${RESET}"
-
-echo
-
-echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}                 INFORMACIÓN DEL VPS${RESET}                   ${PURPLE}║${RESET}"
-echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}Dominio:${RESET} ${SKY}${SERVER_DOMAIN:-No configurado}${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}IP     :${RESET} ${CYAN}${SERVER_IP}${RESET}"
-echo -e "${PURPLE}║${RESET} ${GRAY}DNS    :${RESET} ${MAGENTA}${DNS_PROVIDER}${RESET}"
-echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
-echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}                     ⭐ CRÉDITOS ⭐${RESET}                    ${CYAN}║${RESET}"
-echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY}Proyecto :${RESET} ${PINK}KevinTech Multi Script${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY}Autor    :${RESET} ${WHITE}Kevin tech tutorials${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY} dueño de la infraestructura:${RESET} ${SKY}@Dan3651${RESET}"
-echo -e "${CYAN}║${RESET} ${GRAY} bot de key:${RESET} ${MAGENTA}${LICENSE_BOT}${RESET}"
-echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-echo
-
-echo -e "${GOLD}🚀 KevinTech Multi Script está listo.${RESET}"
-echo
-echo -e "${CYAN}👉 Escribe ${WHITE}menu${CYAN} para abrir el panel.${RESET}"
-
-echo
-
-read -r -p \
-"$(echo -e "${YELLOW}¿Reiniciar el servidor ahora? [Y/N]:${RESET} ")" \
-REBOOT_SERVER
-
-REBOOT_SERVER="$(
-    printf '%s' "$REBOOT_SERVER" |
-    tr '[:upper:]' '[:lower:]'
-)"
-
-if [[ "$REBOOT_SERVER" == "y" ]]; then
-
-    echo
-    echo -e "${YELLOW}🔄 Reiniciando en 5 segundos...${RESET}"
-
-    for i in 5 4 3 2 1; do
-
-        echo -ne \
-            "\r${CYAN}Reinicio en ${WHITE}${i}${CYAN}...${RESET}"
-
-        sleep 1
-
-    done
-
-    echo
-
-    reboot
-
-else
-
-    echo
-    echo -e "${GREEN}✅ Instalación finalizada sin reiniciar.${RESET}"
-    echo
-    echo -e \
-        "${CYAN}👉 Escribe ${WHITE}menu${CYAN} para abrir el panel.${RESET}"
-    echo
-
-fi
-
-exit 0
+echo -e " ${GREEN}👑 Usuario:${RESET} ${WHITE}$(whoami)${RESET}"
+echo -e " ${CYAN}👉 Panel:${RESET} ${WHITE}menu${RESET}"; echo
+BANNER
+ chmod 755 /etc/profile.d/kevintech-banner.sh
+ ok "Banner configurado."
+}
+
+activate_license(){
+ section "🔐 PASO 8 • ACTIVACIÓN"
+ local ip host os now req r h b good id
+ ip=$(get_public_ip); [[ -n "$ip" ]] || ip="Desconocida"; host=$(hostname); os=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d'"' -f2); now=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+ req=$(jq -n --arg key "$INSTALL_KEY" --arg ip "$ip" --arg hostname "$host" --arg os "$os" --arg date "$now" '{key:$key,ip:$ip,hostname:$hostname,os:$os,date:$date}')
+ loading "Registrando licencia"
+ r=$(curl -fsS -4 --connect-timeout 5 --max-time 15 -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' --data "$req" "$LICENSE_API/api/public/activate" 2>/dev/null) || fatal "No se pudo conectar con activación."
+ h=$(printf '%s\n' "$r" | tail -n1); b=$(printf '%s\n' "$r" | sed '$d'); [[ "$h" =~ ^2 ]] || fatal "Activación HTTP $h."; echo "$b" | jq empty >/dev/null 2>&1 || fatal "Respuesta de activación inválida."
+ good=$(echo "$b" | jq -r '.ok // false'); [[ "$good" == true ]] || fatal "Activación rechazada: $(echo "$b" | jq -r '.error // "desconocido"')"
+ id=$(echo "$b" | jq -r '.activationId // empty'); sed -i 's/^LICENSE_STATUS=.*/LICENSE_STATUS="ACTIVE"/' "$LICENSE_CONF"; chmod 600 "$LICENSE_CONF"; ok "Licencia activada."; [[ -n "$id" ]] && echo -e " ${GRAY}ID:${RESET} ${CYAN}$id${RESET}"
+}
+
+summary(){
+ section "📊 RESUMEN"
+ local v; for v in OPENSSH DROPBEAR SSL UDP_CUSTOM BADVPN ZIPVPN SLOWDNS OPENVPN XRAY V2RAY; do if module_on "$v"; then echo -e " ${GREEN}●${RESET} $(printf '%-12s' "$v") ${GREEN}ACTIVO${RESET}"; else echo -e " ${GRAY}○${RESET} $(printf '%-12s' "$v") ${GRAY}NO INSTALADO${RESET}"; fi; done
+ echo; echo -e " ${GRAY}Dominio:${RESET} ${SKY}${SERVER_DOMAIN:--}${RESET}"; echo -e " ${GRAY}IP:${RESET} ${CYAN}${SERVER_IP:--}${RESET}"; echo -e " ${GRAY}DNS:${RESET} ${MAGENTA}$DNS_PROVIDER${RESET}"
+}
+
+main(){
+ require_root; require_ubuntu; header
+ echo -e "${GREEN}● SISTEMA COMPATIBLE DETECTADO${RESET} ${WHITE}${PRETTY_NAME}${RESET}"; echo
+ install_dependencies
+ validate_license
+ configure_domain
+ configure_firewall
+ configure_ssh
+ install_repository
+ write_config
+ write_menu
+ install_modules
+ write_banner
+ activate_license
+ summary
+ chmod 755 "$BASE"; find "$BASE" -type d -exec chmod 755 {} +; find "$BASE" -type f -name '*.sh' -exec chmod 755 {} +; chmod 640 "$CONFIG"; chmod 600 "$LICENSE_CONF"
+ unset INSTALL_KEY
+ echo; line; echo -e "${GREEN}${BOLD}🎉 INSTALACIÓN COMPLETADA${RESET}"; echo -e "${CYAN}👉 Escribe ${WHITE}menu${CYAN} para abrir el panel.${RESET}"; echo
+ read -r -p "$(echo -e "${YELLOW}¿Reiniciar servidor? [y/N]: ${RESET}")" r; r=$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]')
+ if [[ "$r" == y || "$r" == yes ]]; then for i in 5 4 3 2 1; do echo -ne "\r${CYAN}Reinicio en ${WHITE}$i${CYAN}...${RESET}"; sleep 1; done; echo; reboot; else ok "Instalación finalizada sin reiniciar."; fi
+}
+main "$@"
