@@ -1,17 +1,22 @@
-# KevinTech Telegram Bot — Updated Fast UI
+# KevinTech Telegram Bot v3
 
-- Información detallada del VPS y protocolos.
-- Menú de servicios con estado y puertos.
-- Protocolos: estado, puertos, instalar, reiniciar y desinstalar.
-- Instalaciones/desinstalaciones se ejecutan en segundo plano.
-- Usuarios: crear, renovar, listar, online, eliminar, bloquear, desbloquear, cambiar contraseña y backup.
-- Herramientas rápidas.
-- systemd con reinicio automático.
-- Sin dependencias pip.
+Bot integrado con `/etc/kevintech`, sin pip ni librerías externas.
 
-Instalación:
+## Incluye
+- UI rápida con botones.
+- Crear/renovar cuentas y mostrar datos.
+- Lista, online, eliminar, bloquear, desbloquear, contraseña y backup.
+- Información completa del VPS.
+- Servicios con estado/puertos/reinicio.
+- Protocolos con estado/puertos/instalar/desinstalar.
+- Herramientas ejecutadas en segundo plano.
+- systemd + reinicio automático.
+- Logs y health check.
+
+## Instalación
 ```bash
+cd /ruta/del/proyecto
 sudo bash telegram/install.sh
 ```
 
-No subir `telegram/.env` a GitHub.
+No subas `.env`, `logs/` ni `offset` a GitHub.
