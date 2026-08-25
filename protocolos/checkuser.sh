@@ -1,8 +1,7 @@
 #!/bin/bash
-
 #=========================================================
 #                 🛡️ KEVINTECH
-#                CHECKUSER MANAGER
+#              CHECKUSER INSTALLER
 #=========================================================
 # CheckUser fijo : 10016
 # WebSocket SSH  : 10015
@@ -17,18 +16,6 @@ ONLINEAPP_PORT="8888"
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-SERVICE="checkuser"
-SERVICE_FILE="/etc/systemd/system/checkuser.service"
-
-CHECKUSER_DIR="/usr/lib/checkgestor"
-CHECKUSER_PY="$CHECKUSER_DIR/checkgestor.py"
-CHECKGESTOR_BIN="/bin/checkgestor"
-CHALL_BIN="/bin/chall"
-
-ONLINEAPP="$BASE/protocolos/onlineapp"
-
-VERSION="3.1"
-
 #=========================================================
 # COLORES
 #=========================================================
@@ -37,6 +24,7 @@ RESET='\e[0m'
 BOLD='\e[1m'
 DIM='\e[2m'
 
+BLACK='\e[1;30m'
 RED='\e[1;91m'
 GREEN='\e[1;92m'
 YELLOW='\e[1;93m'
@@ -61,43 +49,22 @@ AQUA='\e[38;5;159m'
 
 mkdir -p "$BASE"
 
-[[ -f "$CONFIG" ]] && source "$CONFIG" 2>/dev/null
-
-#=========================================================
-# ROOT
-#=========================================================
-
-if [[ "$EUID" -ne 0 ]]; then
-
-    echo
-    echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
-    echo
-    echo -e "${WHITE}Este administrador requiere permisos de root.${RESET}"
-    echo
-    exit 1
-
-fi
+[[ -f "$CONFIG" ]] && source "$CONFIG"
 
 #=========================================================
 # FUNCIONES VISUALES
 #=========================================================
 
 clear_screen() {
-
     clear 2>/dev/null || true
-
 }
 
 line() {
-
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
 }
 
 line_purple() {
-
     echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
 }
 
 header() {
@@ -106,13 +73,11 @@ header() {
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${RESET} ${PINK}${BOLD}                 🛡️ KEVINTECH                 ${RESET}${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                  CHECKUSER MANAGER            ${RESET}${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                 CHECKUSER INSTALLER          ${RESET}${CYAN}║${RESET}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
     echo -e "${CYAN}║${RESET} ${GRAY}CheckUser:${RESET} ${GREEN}${CHECKUSER_PORT}${RESET}  ${GRAY}WebSocket:${RESET} ${GREEN}${WEBSOCKET_PORT}${RESET}  ${GRAY}Online:${RESET} ${GREEN}${ONLINEAPP_PORT}${RESET} ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET} ${GRAY}Version:${RESET} ${WHITE}${VERSION}${RESET}          ${GRAY}Ubuntu 24.04${RESET}                 ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
-
 }
 
 section() {
@@ -122,31 +87,22 @@ section() {
     printf "${PURPLE}║${RESET} ${WHITE}${BOLD} %-58s ${RESET}${PURPLE}║${RESET}\n" "$1"
     echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
-
 }
 
 msg_ok() {
-
     echo -e " ${GREEN}✔${RESET} ${WHITE}$1${RESET}"
-
 }
 
 msg_error() {
-
     echo -e " ${RED}✘${RESET} ${WHITE}$1${RESET}"
-
 }
 
 msg_info() {
-
     echo -e " ${CYAN}◆${RESET} ${WHITE}$1${RESET}"
-
 }
 
 msg_warn() {
-
     echo -e " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
-
 }
 
 pause() {
@@ -155,51 +111,6 @@ pause() {
     line
     echo
     read -r -p "$(echo -e "${GOLD}➜ Presiona ENTER para continuar... ${RESET}")"
-
-}
-
-#=========================================================
-# CONFIG.CONF
-#=========================================================
-
-set_config() {
-
-    local KEY="$1"
-    local VALUE="$2"
-
-    if grep -q "^${KEY}=" "$CONFIG" 2>/dev/null; then
-
-        sed -i "s/^${KEY}=.*/${KEY}=${VALUE}/" "$CONFIG"
-
-    else
-
-        echo "${KEY}=${VALUE}" >> "$CONFIG"
-
-    fi
-
-}
-
-#=========================================================
-# VERIFICAR INSTALACIÓN
-#=========================================================
-
-check_installed() {
-
-    [[ -f "$CHECKUSER_PY" ]] &&
-    [[ -f "$CHECKGESTOR_BIN" ]] &&
-    [[ -f "$CHALL_BIN" ]] &&
-    [[ -f "$SERVICE_FILE" ]]
-
-}
-
-#=========================================================
-# ESTADO DEL SERVICIO
-#=========================================================
-
-check_service_active() {
-
-    systemctl is-active --quiet "$SERVICE"
-
 }
 
 #=========================================================
@@ -211,99 +122,72 @@ fun_bar() {
     local CMD1="$1"
     local CMD2="$2"
 
-    local DONE_FILE
-    local STATUS_FILE
-    local PID
-
-    DONE_FILE=$(mktemp)
-    STATUS_FILE=$(mktemp)
-
     (
-        set +e
+        rm -f "$HOME/.kevintech_install_done"
 
         bash -c "$CMD1" >/dev/null 2>&1
-        local RESULT=$?
 
         if [[ -n "$CMD2" ]]; then
             bash -c "$CMD2" >/dev/null 2>&1
         fi
 
-        echo "$RESULT" > "$STATUS_FILE"
-        touch "$DONE_FILE"
+        touch "$HOME/.kevintech_install_done"
 
-    ) &
+    ) >/dev/null 2>&1 &
 
-    PID=$!
-
+    local PID=$!
     local WIDTH=30
-    local START_TIME
-    local ELAPSED
-    local SPIN=(
-        "⠋"
-        "⠙"
-        "⠹"
-        "⠸"
-        "⠼"
-        "⠴"
-        "⠦"
-        "⠧"
-        "⠇"
-        "⠏"
-    )
-
-    local INDEX=0
+    local FILLED
+    local EMPTY
+    local PERCENT
 
     tput civis 2>/dev/null || true
 
-    START_TIME=$(date +%s)
+    while kill -0 "$PID" 2>/dev/null; do
 
-    while [[ ! -f "$DONE_FILE" ]]; do
+        for PERCENT in 10 20 30 40 50 60 70 80 90; do
 
-        ELAPSED=$(( $(date +%s) - START_TIME ))
+            if [[ -f "$HOME/.kevintech_install_done" ]]; then
+                break
+            fi
 
-        printf "\r ${CYAN}%s${RESET} ${GRAY}[${RESET}" \
-            "${SPIN[$INDEX]} Instalando"
+            FILLED=$((WIDTH * PERCENT / 100))
+            EMPTY=$((WIDTH - FILLED))
 
-        local FILLED=$(( (ELAPSED % (WIDTH + 1)) ))
-        local EMPTY=$((WIDTH - FILLED))
+            printf "\r ${CYAN}Instalando${RESET} ${GRAY}[${RESET}"
 
-        (( EMPTY < 0 )) && EMPTY=0
+            printf "${GREEN}%${FILLED}s${RESET}" "" | tr ' ' '█'
+            printf "${GRAY}%${EMPTY}s${RESET}" "" | tr ' ' '░'
 
-        printf "${GREEN}%${FILLED}s${RESET}" "" | tr ' ' '█'
-        printf "${GRAY}%${EMPTY}s${RESET}" "" | tr ' ' '░'
+            printf "${GRAY}]${RESET} ${WHITE}%3d%%${RESET}" "$PERCENT"
 
-        printf "${GRAY}]${RESET} ${WHITE}%3ds${RESET}" "$ELAPSED"
+            sleep 0.35
 
-        INDEX=$(( (INDEX + 1) % ${#SPIN[@]} ))
-
-        sleep 0.15
+        done
 
     done
 
     wait "$PID" 2>/dev/null
 
-    local RESULT=1
+    rm -f "$HOME/.kevintech_install_done"
 
-    [[ -f "$STATUS_FILE" ]] &&
-        RESULT=$(cat "$STATUS_FILE" 2>/dev/null)
-
-    rm -f "$DONE_FILE" "$STATUS_FILE"
-
-    if [[ "$RESULT" == "0" ]]; then
-
-        printf "\r ${GREEN}✔ Instalación completada correctamente.${RESET}"
-        echo
-
-    else
-
-        printf "\r ${RED}✘ La instalación terminó con errores.${RESET}"
-        echo
-
-    fi
+    printf "\r ${CYAN}Instalando${RESET} ${GRAY}[${RESET}"
+    printf "${GREEN}%${WIDTH}s${RESET}" "" | tr ' ' '█'
+    printf "${GRAY}]${RESET} ${GREEN}100%% ✔ COMPLETADO${RESET}"
+    echo
 
     tput cnorm 2>/dev/null || true
+}
 
-    return "$RESULT"
+#=========================================================
+# VERIFICAR CHECKUSER
+#=========================================================
+
+check_installed() {
+
+    [[ -f "/usr/lib/checkgestor/checkgestor.py" ]] &&
+    [[ -f "/bin/checkgestor" ]] &&
+    [[ -f "/bin/chall" ]]
 
 }
 
@@ -313,91 +197,64 @@ fun_bar() {
 
 fun_install() {
 
-    msg_info "Actualizando repositorios..."
+    apt update -y >/dev/null 2>&1
 
-    if ! apt-get update -y >/dev/null 2>&1; then
-
-        msg_error "No se pudo actualizar APT."
-        return 1
-
-    fi
-
-    msg_info "Instalando dependencias..."
-
-    if ! apt-get install -y \
+    apt install -y \
         figlet \
         wget \
         curl \
         python3-flask \
         apache2 \
         screen \
-        >/dev/null 2>&1; then
+        >/dev/null 2>&1
 
-        msg_error "No se pudieron instalar las dependencias."
-        return 1
-
-    fi
-
-    mkdir -p "$CHECKUSER_DIR"
+    mkdir -p /usr/lib/checkgestor
 
     #=====================================================
     # DESCARGAR ARCHIVOS
     #=====================================================
 
-    msg_info "Descargando CheckUser..."
+    wget -qO /bin/chall \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/chall.sh
 
-    if ! wget -qO "$CHALL_BIN" \
-        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/chall.sh; then
+    wget -qO /bin/checkgestor \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.sh
 
-        msg_error "No se pudo descargar chall."
-        return 1
-
-    fi
-
-    if ! wget -qO "$CHECKGESTOR_BIN" \
-        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.sh; then
-
-        msg_error "No se pudo descargar checkgestor."
-        return 1
-
-    fi
-
-    if ! wget -qO "$CHECKUSER_PY" \
-        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.py; then
-
-        msg_error "No se pudo descargar checkgestor.py."
-        return 1
-
-    fi
+    wget -qO /usr/lib/checkgestor/checkgestor.py \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.py
 
     #=====================================================
     # VERIFICAR DESCARGAS
     #=====================================================
 
-    [[ ! -s "$CHALL_BIN" ]] && {
-        msg_error "chall está vacío."
+    if [[ ! -s /bin/chall ]]; then
+        msg_error "No se pudo descargar chall."
         return 1
-    }
+    fi
 
-    [[ ! -s "$CHECKGESTOR_BIN" ]] && {
-        msg_error "checkgestor está vacío."
+    if [[ ! -s /bin/checkgestor ]]; then
+        msg_error "No se pudo descargar checkgestor."
         return 1
-    }
+    fi
 
-    [[ ! -s "$CHECKUSER_PY" ]] && {
-        msg_error "checkgestor.py está vacío."
+    if [[ ! -s /usr/lib/checkgestor/checkgestor.py ]]; then
+        msg_error "No se pudo descargar checkgestor.py."
         return 1
-    }
+    fi
 
-    chmod 755 "$CHALL_BIN"
-    chmod 755 "$CHECKGESTOR_BIN"
-    chmod 755 "$CHECKUSER_PY"
+    #=====================================================
+    # PERMISOS
+    #=====================================================
+
+    chmod 755 /bin/chall
+    chmod 755 /bin/checkgestor
+    chmod 755 /usr/lib/checkgestor/checkgestor.py
 
     #=====================================================
     # CHECKGESTOR KEVINTECH
     #=====================================================
 
-    cat > "$CHECKGESTOR_BIN" <<'EOF'
+    cat > /bin/checkgestor <<'EOF'
 #!/bin/bash
 
 USER_NAME="$1"
@@ -431,9 +288,7 @@ get_limit() {
         fi
 
     else
-
         echo "1"
-
     fi
 
 }
@@ -604,13 +459,13 @@ case "$TYPE" in
 esac
 EOF
 
-    chmod 755 "$CHECKGESTOR_BIN"
+    chmod 755 /bin/checkgestor
 
     #=====================================================
     # CHECKUSER SERVICE
     #=====================================================
 
-    cat > "$SERVICE_FILE" <<EOF
+    cat > /etc/systemd/system/checkuser.service <<EOF
 [Unit]
 Description=KevinTech CheckUser API
 After=network.target
@@ -618,8 +473,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$CHECKUSER_DIR
-ExecStart=/usr/bin/python3 $CHECKUSER_PY $CHECKUSER_PORT
+WorkingDirectory=/usr/lib/checkgestor
+ExecStart=/usr/bin/python3 /usr/lib/checkgestor/checkgestor.py ${CHECKUSER_PORT}
 Restart=always
 RestartSec=3
 
@@ -633,29 +488,17 @@ EOF
 
     systemctl daemon-reload
 
-    if ! systemctl enable "$SERVICE" >/dev/null 2>&1; then
+    systemctl enable checkuser.service >/dev/null 2>&1
 
-        msg_error "No se pudo habilitar CheckUser."
-        return 1
-
-    fi
-
-    msg_info "Iniciando CheckUser..."
-
-    if ! systemctl restart "$SERVICE"; then
-
-        msg_error "No se pudo reiniciar CheckUser."
-        return 1
-
-    fi
+    systemctl restart checkuser.service
 
     sleep 2
 
     #=====================================================
-    # VERIFICAR
+    # VERIFICAR SERVICIO
     #=====================================================
 
-    if check_service_active; then
+    if systemctl is-active --quiet checkuser.service; then
 
         msg_ok "CheckUser activo en puerto ${CHECKUSER_PORT}."
 
@@ -663,12 +506,7 @@ EOF
 
         msg_error "CheckUser no pudo iniciar."
 
-        echo
-        journalctl \
-            -u "$SERVICE" \
-            -n 30 \
-            --no-pager \
-            2>/dev/null
+        systemctl status checkuser.service --no-pager
 
         return 1
 
@@ -680,24 +518,17 @@ EOF
 
     mkdir -p /etc/licencec
 
-    echo "By: @nandoslayer" > /etc/licencec/telegram
-
-    #=====================================================
-    # CONFIG KEVINTECH
-    #=====================================================
-
-    set_config "CHECKUSER" "ON"
-    set_config "CHECKUSER_PORT" "$CHECKUSER_PORT"
+    echo "By: @nandoslayer" \
+        > /etc/licencec/telegram
 
     return 0
-
 }
 
 #=========================================================
-# ONLINE APP - INICIAR
+# OPCIÓN 04 - ONLINE APP
 #=========================================================
 
-onapp1() {
+function onapp1() {
 
     clear_screen
 
@@ -705,85 +536,60 @@ onapp1() {
 
     msg_info "Preparando Apache..."
 
-    if ! apt-get install -y apache2 >/dev/null 2>&1; then
-
-        msg_error "No se pudo instalar Apache."
-        pause
-        return 1
-
-    fi
+    apt install apache2 -y >/dev/null 2>&1
 
     #=====================================================
     # APACHE 8888
     #=====================================================
 
-    if [[ -f /etc/apache2/ports.conf ]]; then
+    if grep -qE '^Listen 80$' /etc/apache2/ports.conf; then
 
         sed -i \
             's/^Listen 80$/Listen 8888/' \
             /etc/apache2/ports.conf
 
-        if ! grep -qE '^Listen 8888$' /etc/apache2/ports.conf; then
-            echo "Listen 8888" >> /etc/apache2/ports.conf
-        fi
+    elif ! grep -qE '^Listen 8888$' /etc/apache2/ports.conf; then
+
+        echo "Listen 8888" >> /etc/apache2/ports.conf
 
     fi
+
+    sed -i \
+        's/^Listen 80$/Listen 8888/' \
+        /etc/apache2/ports.conf 2>/dev/null
 
     #=====================================================
     # DIRECTORIO
     #=====================================================
 
-    mkdir -p /var/www/html/server
+    rm -rf /var/www/html/server >/dev/null 2>&1
+
+    mkdir -p /var/www/html/server >/dev/null 2>&1
 
     #=====================================================
     # ONLINE APP
     #=====================================================
 
-    if [[ ! -f "$ONLINEAPP" ]]; then
+    if [[ ! -f "$BASE/protocolos/onlineapp" ]]; then
 
         echo
         msg_error "No existe:"
-        echo -e " ${YELLOW}$ONLINEAPP${RESET}"
+        echo -e " ${YELLOW}$BASE/protocolos/onlineapp${RESET}"
         echo
 
-        pause
         return 1
 
     fi
 
-    chmod +x "$ONLINEAPP"
+    chmod +x "$BASE/protocolos/onlineapp"
 
     #=====================================================
-    # CONFIGURAR APACHE
+    # APACHE
     #=====================================================
 
     msg_info "Reiniciando Apache..."
 
-    if ! apache2ctl configtest >/dev/null 2>&1; then
-
-        msg_error "La configuración de Apache contiene errores."
-        apache2ctl configtest
-
-        pause
-        return 1
-
-    fi
-
-    systemctl enable apache2 >/dev/null 2>&1
-    systemctl restart apache2
-
-    sleep 2
-
-    if ! systemctl is-active --quiet apache2; then
-
-        msg_error "Apache no pudo iniciar."
-
-        systemctl status apache2 --no-pager
-
-        pause
-        return 1
-
-    fi
+    systemctl restart apache2 >/dev/null 2>&1
 
     #=====================================================
     # ONLINE APP
@@ -791,9 +597,10 @@ onapp1() {
 
     screen -S onlineapp -X quit >/dev/null 2>&1
 
-    screen -dmS onlineapp "$ONLINEAPP"
+    screen -dmS onlineapp \
+        "$BASE/protocolos/onlineapp"
 
-    sleep 2
+    sleep 3
 
     #=====================================================
     # AUTOSTART
@@ -803,18 +610,16 @@ onapp1() {
 
     sed -i '/onlineapp/d' /etc/autostart
 
-    echo "pgrep -f '$ONLINEAPP' >/dev/null || screen -dmS onlineapp $ONLINEAPP" \
+    echo "ps x | grep '$BASE/protocolos/onlineapp' | grep -v grep >/dev/null || screen -dmS onlineapp $BASE/protocolos/onlineapp" \
         >> /etc/autostart
 
     #=====================================================
     # IP
     #=====================================================
 
-    local IP
+    IP=$(wget -qO- --timeout=5 ipv4.icanhazip.com)
 
-    IP=$(wget -qO- --timeout=5 ipv4.icanhazip.com 2>/dev/null)
-
-    [[ -z "$IP" ]] &&
+    [[ -z "$IP" ]] && \
         IP=$(hostname -I | awk '{print $1}')
 
     echo
@@ -826,29 +631,28 @@ onapp1() {
     echo -e "${GREEN}║${RESET} ${GRAY}URL:${RESET} ${SKY}http://${IP}:${ONLINEAPP_PORT}/server/online${RESET}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-    pause
+    echo
 
+    pause
 }
 
-#=========================================================
-# ONLINE APP - DETENER
-#=========================================================
-
-onapp2() {
+function onapp2() {
 
     clear_screen
 
     section "🛑 DETENIENDO ONLINE APP"
 
+    msg_info "Deteniendo Apache..."
+
     systemctl stop apache2 >/dev/null 2>&1
 
     screen -S onlineapp -X quit >/dev/null 2>&1
 
-    pkill -f "$ONLINEAPP" >/dev/null 2>&1
+    pkill -f "$BASE/protocolos/onlineapp" >/dev/null 2>&1
 
     screen -wipe >/dev/null 2>&1
 
-    [[ -f /etc/autostart ]] &&
+    [[ -f /etc/autostart ]] && \
         sed -i '/onlineapp/d' /etc/autostart
 
     rm -rf /var/www/html/server >/dev/null 2>&1
@@ -858,16 +662,11 @@ onapp2() {
     msg_ok "Online App detenido."
 
     pause
-
 }
 
-#=========================================================
-# ONLINE APP - TOGGLE
-#=========================================================
+function onapp_ssh() {
 
-onapp_ssh() {
-
-    if pgrep -f "$ONLINEAPP" >/dev/null 2>&1; then
+    if pgrep -f "$BASE/protocolos/onlineapp" >/dev/null; then
 
         onapp2
 
@@ -880,377 +679,35 @@ onapp_ssh() {
 }
 
 #=========================================================
-# REINICIAR CHECKUSER
+# INSTALACIÓN PRINCIPAL
 #=========================================================
 
-restart_checkuser() {
+install() {
+
+    #=====================================================
+    # ZONA HORARIA
+    #=====================================================
+
+    echo "America/Lima" > /etc/timezone
+
+    ln -fs \
+        /usr/share/zoneinfo/America/Lima \
+        /etc/localtime >/dev/null 2>&1
+
+    dpkg-reconfigure \
+        --frontend noninteractive \
+        tzdata >/dev/null 2>&1
+
+    #=====================================================
+    # CABECERA
+    #=====================================================
 
     header
 
-    section "♻️ REINICIAR CHECKUSER"
+    section "🚀 INSTALACIÓN PRINCIPAL"
 
-    if ! check_installed; then
-
-        msg_error "CheckUser no está instalado."
-        pause
-        return 1
-
-    fi
-
-    msg_info "Reiniciando servicio..."
-
-    systemctl restart "$SERVICE"
-
-    sleep 2
-
-    if check_service_active; then
-
-        set_config "CHECKUSER" "ON"
-
-        msg_ok "CheckUser reiniciado correctamente."
-
-    else
-
-        set_config "CHECKUSER" "OFF"
-
-        msg_error "CheckUser no pudo iniciar."
-
-        echo
-        journalctl \
-            -u "$SERVICE" \
-            -n 25 \
-            --no-pager \
-            2>/dev/null
-
-    fi
-
-    pause
-
-}
-
-#=========================================================
-# ESTADO
-#=========================================================
-
-status_checkuser() {
-
-    header
-
-    section "📊 ESTADO CHECKUSER"
-
-    local STATUS
-
-    if check_service_active; then
-
-        STATUS="${GREEN}🟢 ACTIVO${RESET}"
-
-    elif check_installed; then
-
-        STATUS="${RED}🔴 DETENIDO${RESET}"
-
-    else
-
-        STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
-
-    fi
-
-    echo -e " ${WHITE}Estado:${RESET}       $STATUS"
-    echo -e " ${WHITE}Servicio:${RESET}     ${CYAN}$SERVICE${RESET}"
-    echo -e " ${WHITE}CheckUser:${RESET}    ${GREEN}${CHECKUSER_PORT}${RESET}"
-    echo -e " ${WHITE}WebSocket:${RESET}    ${GREEN}${WEBSOCKET_PORT}${RESET}"
-    echo -e " ${WHITE}Online App:${RESET}   ${GREEN}${ONLINEAPP_PORT}${RESET}"
-
-    line
-
-    echo -e "${WHITE}Puertos:${RESET}"
-
+    echo -e "${WHITE}Preparando ${PINK}KevinTech CheckUser${WHITE}...${RESET}"
     echo
-
-    if ss -lntup 2>/dev/null | grep -q ":${CHECKUSER_PORT}"; then
-
-        msg_ok "Puerto ${CHECKUSER_PORT} está escuchando."
-
-    else
-
-        msg_warn "Puerto ${CHECKUSER_PORT} no está escuchando."
-
-    fi
-
-    if ss -lntup 2>/dev/null | grep -q ":${WEBSOCKET_PORT}"; then
-
-        msg_ok "Puerto ${WEBSOCKET_PORT} está escuchando."
-
-    else
-
-        msg_warn "Puerto ${WEBSOCKET_PORT} no está escuchando."
-
-    fi
-
-    if ss -lntup 2>/dev/null | grep -q ":${ONLINEAPP_PORT}"; then
-
-        msg_ok "Puerto ${ONLINEAPP_PORT} está escuchando."
-
-    else
-
-        msg_warn "Puerto ${ONLINEAPP_PORT} no está escuchando."
-
-    fi
-
-    line
-
-    echo
-
-    if check_installed; then
-
-        systemctl \
-            --no-pager \
-            --full \
-            status "$SERVICE" \
-            2>/dev/null
-
-    fi
-
-    pause
-
-}
-
-#=========================================================
-# DIAGNÓSTICO
-#=========================================================
-
-diagnostic_checkuser() {
-
-    header
-
-    section "🔎 DIAGNÓSTICO CHECKUSER"
-
-    echo -e "${WHITE}Componentes:${RESET}"
-    echo
-
-    if [[ -x "$CHALL_BIN" ]]; then
-        msg_ok "chall encontrado"
-    else
-        msg_error "chall no encontrado"
-    fi
-
-    if [[ -x "$CHECKGESTOR_BIN" ]]; then
-        msg_ok "checkgestor encontrado"
-    else
-        msg_error "checkgestor no encontrado"
-    fi
-
-    if [[ -f "$CHECKUSER_PY" ]]; then
-        msg_ok "checkgestor.py encontrado"
-    else
-        msg_error "checkgestor.py no encontrado"
-    fi
-
-    if [[ -f "$SERVICE_FILE" ]]; then
-        msg_ok "Servicio systemd encontrado"
-    else
-        msg_error "Servicio systemd no encontrado"
-    fi
-
-    echo
-
-    if check_service_active; then
-        msg_ok "Servicio CheckUser activo"
-    else
-        msg_error "Servicio CheckUser detenido"
-    fi
-
-    line
-
-    echo -e "${WHITE}Puerto CheckUser:${RESET} ${CYAN}${CHECKUSER_PORT}${RESET}"
-
-    if ss -lntup 2>/dev/null | grep -q ":${CHECKUSER_PORT}"; then
-        msg_ok "Puerto ${CHECKUSER_PORT} está escuchando"
-    else
-        msg_error "Puerto ${CHECKUSER_PORT} no está escuchando"
-    fi
-
-    line
-
-    echo -e "${WHITE}Últimos logs:${RESET}"
-    echo
-
-    journalctl \
-        -u "$SERVICE" \
-        -n 20 \
-        --no-pager \
-        2>/dev/null
-
-    pause
-
-}
-
-#=========================================================
-# INFORMACIÓN VPS
-#=========================================================
-
-system_info() {
-
-    header
-
-    section "🖥️ INFORMACIÓN DEL VPS"
-
-    local HOST
-    local IP
-    local OS
-    local KERNEL
-    local RAM
-    local DISK
-    local CPU
-    local CORES
-    local UPTIME
-
-    HOST=$(hostname)
-
-    IP=$(
-        curl \
-            -4 \
-            -s \
-            --connect-timeout 5 \
-            https://api.ipify.org \
-            2>/dev/null
-    )
-
-    OS=$(
-        grep '^PRETTY_NAME=' \
-            /etc/os-release |
-        cut -d= -f2 |
-        tr -d '"'
-    )
-
-    KERNEL=$(uname -r)
-
-    RAM=$(
-        free -h |
-        awk '/Mem:/ {print $3" / "$2}'
-    )
-
-    DISK=$(
-        df -h / |
-        awk 'NR==2 {print $3" / "$2" ("$5")"}'
-    )
-
-    CPU=$(
-        awk -F: '
-            /model name/ {
-                print $2
-                exit
-            }
-        ' /proc/cpuinfo |
-        sed 's/^ *//'
-    )
-
-    CORES=$(nproc)
-    UPTIME=$(uptime -p)
-
-    echo -e " ${WHITE}Hostname:${RESET} $HOST"
-    echo -e " ${WHITE}Sistema:${RESET}  $OS"
-    echo -e " ${WHITE}Kernel:${RESET}   $KERNEL"
-    echo -e " ${WHITE}CPU:${RESET}      ${CPU:-Desconocida}"
-    echo -e " ${WHITE}Núcleos:${RESET}  $CORES"
-    echo -e " ${WHITE}RAM:${RESET}      $RAM"
-    echo -e " ${WHITE}Disco:${RESET}    $DISK"
-    echo -e " ${WHITE}Uptime:${RESET}   $UPTIME"
-    echo -e " ${WHITE}IPv4:${RESET}     ${IP:-No disponible}"
-
-    line
-
-    echo -e "${WHITE}Carga:${RESET}"
-    uptime
-
-    pause
-
-}
-
-#=========================================================
-# DESINSTALAR
-#=========================================================
-
-remove_checkuser() {
-
-    header
-
-    section "🗑️ DESINSTALAR CHECKUSER"
-
-    echo -e "${YELLOW}Esta operación eliminará:${RESET}"
-    echo
-    echo "  • CheckUser"
-    echo "  • checkgestor"
-    echo "  • chall"
-    echo "  • Servicio systemd"
-    echo "  • Configuración de CheckUser"
-    echo
-
-    read -r -p \
-        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
-        CONFIRM
-
-    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
-
-        msg_warn "Operación cancelada."
-        sleep 1
-        return
-
-    fi
-
-    msg_info "Deteniendo CheckUser..."
-
-    systemctl stop "$SERVICE" >/dev/null 2>&1
-    systemctl disable "$SERVICE" >/dev/null 2>&1
-
-    msg_info "Eliminando servicio..."
-
-    rm -f "$SERVICE_FILE"
-
-    systemctl daemon-reload
-
-    systemctl reset-failed "$SERVICE" >/dev/null 2>&1 || true
-
-    msg_info "Eliminando archivos..."
-
-    rm -rf "$CHECKUSER_DIR"
-    rm -f "$CHECKGESTOR_BIN"
-    rm -f "$CHALL_BIN"
-
-    rm -rf /etc/licencec
-
-    set_config "CHECKUSER" "OFF"
-
-    echo
-
-    msg_ok "CheckUser eliminado correctamente."
-
-    pause
-
-}
-
-#=========================================================
-# INSTALACIÓN / REINSTALACIÓN
-#=========================================================
-
-install_checkuser() {
-
-    header
-
-    if check_installed; then
-
-        section "🔄 REINSTALAR / ACTUALIZAR CHECKUSER"
-
-        msg_warn "CheckUser ya está instalado."
-
-        echo
-        echo -e "${GRAY}Esta operación actualizará los archivos y reiniciará el servicio.${RESET}"
-        echo
-
-    else
-
-        section "🚀 INSTALAR CHECKUSER"
-
-    fi
 
     echo -e " ${GRAY}Sistema:${RESET}        ${SKY}Ubuntu 24.04${RESET}"
     echo -e " ${GRAY}CheckUser:${RESET}      ${GREEN}${CHECKUSER_PORT}${RESET}"
@@ -1261,36 +718,21 @@ install_checkuser() {
 
     section "📦 INSTALANDO COMPONENTES"
 
-    if ! fun_bar 'fun_install'; then
-
-        echo
-
-        msg_error "La instalación terminó con errores."
-
-        echo
-
-        journalctl \
-            -u "$SERVICE" \
-            -n 20 \
-            --no-pager \
-            2>/dev/null
-
-        pause
-
-        return 1
-
-    fi
+    fun_bar 'fun_install'
 
     sleep 1
 
+    #=====================================================
+    # RESULTADO
+    #=====================================================
+
     header
 
-    if check_service_active; then
+    if systemctl is-active --quiet checkuser.service; then
 
-        section "🎉 CHECKUSER INSTALADO"
+        section "🎉 INSTALACIÓN COMPLETADA"
 
         echo -e " ${GREEN}●${RESET} ${WHITE}CheckUser${RESET}      ${GREEN}ACTIVO${RESET}"
-        echo -e " ${GREEN}●${RESET} ${WHITE}Puerto${RESET}         ${GREEN}${CHECKUSER_PORT}${RESET}"
         echo -e " ${GREEN}●${RESET} ${WHITE}WebSocket SSH${RESET}  ${GREEN}${WEBSOCKET_PORT}${RESET}"
         echo -e " ${GREEN}●${RESET} ${WHITE}Online App${RESET}     ${GREEN}${ONLINEAPP_PORT}${RESET}"
 
@@ -1324,11 +766,7 @@ install_checkuser() {
         echo -e "${MAGENTA}║${RESET} ${GRAY}URL:${RESET} ${SKY}http://${SERVER_IP}:${ONLINEAPP_PORT}/server/online${RESET}"
         echo -e "${MAGENTA}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-        set_config "CHECKUSER" "ON"
-
     else
-
-        set_config "CHECKUSER" "OFF"
 
         section "❌ INSTALACIÓN CON ERRORES"
 
@@ -1336,15 +774,30 @@ install_checkuser() {
 
         echo
 
-        systemctl status \
-            "$SERVICE" \
-            --no-pager
+        echo -e "${GRAY}Estado del servicio:${RESET}"
+        echo
+
+        systemctl status checkuser.service --no-pager
 
     fi
 
     echo
 
-    pause
+    line
+
+    echo
+
+    echo -e "${GOLD}${BOLD}              🚀 KEVINTECH MULTI SCRIPT${RESET}"
+    echo -e "${GRAY}                    CHECKUSER INSTALLER${RESET}"
+
+    echo
+
+    line
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${YELLOW}➜ Presiona ENTER para continuar... ${RESET}")"
 
 }
 
@@ -1352,71 +805,398 @@ install_checkuser() {
 # LIMPIEZA
 #=========================================================
 
-cleanup() {
+cat /dev/null > ~/.bash_history 2>/dev/null
 
-    rm -f /root/instcheck* >/dev/null 2>&1
-    rm -f /root/wget-log* >/dev/null 2>&1
+history -c 2>/dev/null
 
+rm -f /root/instcheck* >/dev/null 2>&1
+
+rm -f /root/wget-log* >/dev/null 2>&1
+
+#=========================================================
+# ESTADO CHECKUSER
+#=========================================================
+
+get_checkuser_status() {
+
+    if systemctl is-active --quiet checkuser.service; then
+
+        echo -e "${GREEN}🟢 ACTIVO${RESET}"
+
+    elif check_installed; then
+
+        echo -e "${RED}🔴 DETENIDO${RESET}"
+
+    else
+
+        echo -e "${GRAY}⚪ NO INSTALADO${RESET}"
+
+    fi
 }
 
 #=========================================================
-# MENÚ
+# REINICIAR CHECKUSER
 #=========================================================
 
-main_menu() {
+restart_checkuser() {
+
+    header
+
+    section "♻️ REINICIAR CHECKUSER"
+
+    if [[ ! -f /etc/systemd/system/checkuser.service ]]; then
+
+        msg_error "CheckUser no está instalado."
+        pause
+        return
+    fi
+
+    msg_info "Reiniciando CheckUser..."
+
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl restart checkuser.service
+
+    sleep 2
+
+    if systemctl is-active --quiet checkuser.service; then
+
+        msg_ok "CheckUser reiniciado correctamente."
+
+    else
+
+        msg_error "CheckUser no pudo iniciar."
+
+        echo
+        journalctl \
+            -u checkuser.service \
+            -n 20 \
+            --no-pager \
+            2>/dev/null
+    fi
+
+    pause
+}
+
+#=========================================================
+# ESTADO
+#=========================================================
+
+status_checkuser() {
+
+    header
+
+    section "📊 ESTADO CHECKUSER"
+
+    echo -e " ${GRAY}Servicio:${RESET}       ${CYAN}checkuser.service${RESET}"
+    echo -e " ${GRAY}Estado:${RESET}         $(get_checkuser_status)"
+    echo -e " ${GRAY}CheckUser:${RESET}      ${GREEN}${CHECKUSER_PORT}${RESET}"
+    echo -e " ${GRAY}WebSocket:${RESET}      ${GREEN}${WEBSOCKET_PORT}${RESET}"
+    echo -e " ${GRAY}Online App:${RESET}     ${GREEN}${ONLINEAPP_PORT}${RESET}"
+    echo -e " ${GRAY}Directorio:${RESET}     ${WHITE}/usr/lib/checkgestor${RESET}"
+
+    line
+
+    echo
+    echo -e "${WHITE}${BOLD}Puertos escuchando:${RESET}"
+    echo
+
+    ss -lntup 2>/dev/null |
+        grep -E ":(${CHECKUSER_PORT}|${WEBSOCKET_PORT}|${ONLINEAPP_PORT})" ||
+        echo -e "${GRAY}No se encontraron los puertos.${RESET}"
+
+    line
+
+    echo
+    echo -e "${WHITE}${BOLD}Servicio:${RESET}"
+    echo
+
+    systemctl \
+        --no-pager \
+        --full \
+        status checkuser.service \
+        2>/dev/null
+
+    pause
+}
+
+#=========================================================
+# DIAGNÓSTICO
+#=========================================================
+
+diagnostic_checkuser() {
+
+    header
+
+    section "🔎 DIAGNÓSTICO CHECKUSER"
+
+    echo
+
+    if [[ -f "/usr/lib/checkgestor/checkgestor.py" ]]; then
+        msg_ok "checkgestor.py encontrado"
+    else
+        msg_error "checkgestor.py no encontrado"
+    fi
+
+    if [[ -x "/bin/checkgestor" ]]; then
+        msg_ok "/bin/checkgestor encontrado"
+    else
+        msg_error "/bin/checkgestor no encontrado"
+    fi
+
+    if [[ -x "/bin/chall" ]]; then
+        msg_ok "/bin/chall encontrado"
+    else
+        msg_error "/bin/chall no encontrado"
+    fi
+
+    if [[ -f "/etc/systemd/system/checkuser.service" ]]; then
+        msg_ok "Servicio systemd encontrado"
+    else
+        msg_error "Servicio systemd no encontrado"
+    fi
+
+    if systemctl is-active --quiet checkuser.service; then
+        msg_ok "CheckUser está activo"
+    else
+        msg_error "CheckUser está detenido"
+    fi
+
+    echo
+
+    line
+
+    echo
+    echo -e "${WHITE}${BOLD}Puertos:${RESET}"
+    echo
+
+    if ss -lntup 2>/dev/null | grep -q ":${CHECKUSER_PORT}"; then
+        msg_ok "Puerto ${CHECKUSER_PORT} activo"
+    else
+        msg_error "Puerto ${CHECKUSER_PORT} no está escuchando"
+    fi
+
+    if ss -lntup 2>/dev/null | grep -q ":${ONLINEAPP_PORT}"; then
+        msg_ok "Puerto ${ONLINEAPP_PORT} activo"
+    else
+        msg_warn "Puerto ${ONLINEAPP_PORT} no está escuchando"
+    fi
+
+    echo
+
+    line
+
+    echo
+    echo -e "${WHITE}${BOLD}Últimos logs:${RESET}"
+    echo
+
+    journalctl \
+        -u checkuser.service \
+        -n 20 \
+        --no-pager \
+        2>/dev/null
+
+    pause
+}
+
+#=========================================================
+# INFORMACIÓN VPS
+#=========================================================
+
+system_info_checkuser() {
+
+    header
+
+    section "🖥️ INFORMACIÓN VPS"
+
+    local HOST
+    local IP
+    local OS
+    local KERNEL
+    local RAM
+    local DISK
+    local CPU
+    local CORES
+    local UPTIME
+
+    HOST=$(hostname)
+
+    IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+
+    OS=$(
+        grep '^PRETTY_NAME=' /etc/os-release |
+        cut -d= -f2 |
+        tr -d '"'
+    )
+
+    KERNEL=$(uname -r)
+
+    RAM=$(
+        free -h |
+        awk '/Mem:/ {print $3" / "$2}'
+    )
+
+    DISK=$(
+        df -h / |
+        awk 'NR==2 {print $3" / "$2" ("$5")"}'
+    )
+
+    CPU=$(
+        awk -F: '
+            /model name/ {
+                print $2
+                exit
+            }
+        ' /proc/cpuinfo |
+        sed 's/^ *//'
+    )
+
+    CORES=$(nproc)
+
+    UPTIME=$(uptime -p)
+
+    echo -e " ${GRAY}Hostname:${RESET}    ${WHITE}$HOST${RESET}"
+    echo -e " ${GRAY}Sistema:${RESET}     ${WHITE}$OS${RESET}"
+    echo -e " ${GRAY}Kernel:${RESET}      ${WHITE}$KERNEL${RESET}"
+    echo -e " ${GRAY}CPU:${RESET}         ${WHITE}${CPU:-Desconocida}${RESET}"
+    echo -e " ${GRAY}Núcleos:${RESET}     ${GREEN}$CORES${RESET}"
+    echo -e " ${GRAY}Memoria:${RESET}     ${WHITE}$RAM${RESET}"
+    echo -e " ${GRAY}Disco:${RESET}       ${WHITE}$DISK${RESET}"
+    echo -e " ${GRAY}Uptime:${RESET}      ${WHITE}$UPTIME${RESET}"
+    echo -e " ${GRAY}IPv4:${RESET}        ${CYAN}${IP:-No disponible}${RESET}"
+
+    line
+
+    echo
+    echo -e "${WHITE}${BOLD}Carga:${RESET}"
+    uptime
+
+    pause
+}
+
+#=========================================================
+# DESINSTALAR CHECKUSER
+#=========================================================
+
+remove_checkuser() {
+
+    header
+
+    section "🗑️ DESINSTALAR CHECKUSER"
+
+    msg_warn "Esta operación eliminará CheckUser."
+
+    echo
+    echo -e "${GRAY}Se eliminarán:${RESET}"
+    echo " • Servicio CheckUser"
+    echo " • checkgestor"
+    echo " • chall"
+    echo " • Archivos de CheckUser"
+    echo
+
+    read -r -p \
+        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+        CONFIRM
+
+    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
+
+        msg_warn "Operación cancelada."
+        sleep 1
+        return
+
+    fi
+
+    msg_info "Deteniendo CheckUser..."
+
+    systemctl stop checkuser.service \
+        >/dev/null 2>&1
+
+    systemctl disable checkuser.service \
+        >/dev/null 2>&1
+
+    msg_info "Eliminando servicio..."
+
+    rm -f \
+        /etc/systemd/system/checkuser.service
+
+    systemctl daemon-reload
+
+    systemctl reset-failed checkuser.service \
+        >/dev/null 2>&1 || true
+
+    msg_info "Eliminando archivos..."
+
+    rm -f /bin/checkgestor
+    rm -f /bin/chall
+
+    rm -rf /usr/lib/checkgestor
+
+    rm -rf /etc/licencec
+
+    echo
+
+    msg_ok "CheckUser eliminado correctamente."
+
+    pause
+}
+
+#=========================================================
+# MENÚ CHECKUSER
+#=========================================================
+
+checkuser_menu() {
 
     while true; do
 
         header
 
-        #-------------------------------------------------
-        # RECARGAR CONFIG
-        #-------------------------------------------------
-
-        [[ -f "$CONFIG" ]] &&
-            source "$CONFIG" 2>/dev/null
-
-        #-------------------------------------------------
-        # ESTADO
-        #-------------------------------------------------
-
         local STATUS
 
-        if check_service_active; then
+        STATUS=$(get_checkuser_status)
 
-            STATUS="${GREEN}🟢 ACTIVO${RESET}"
+        echo -e \
+            " ${GRAY}Estado:${RESET}        $STATUS"
 
-        elif check_installed; then
+        echo -e \
+            " ${GRAY}CheckUser:${RESET}     ${GREEN}${CHECKUSER_PORT}${RESET}"
 
-            STATUS="${RED}🔴 DETENIDO${RESET}"
+        echo -e \
+            " ${GRAY}WebSocket:${RESET}     ${GREEN}${WEBSOCKET_PORT}${RESET}"
 
-        else
-
-            STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
-
-        fi
-
-        echo -e "${WHITE}Estado:${RESET}       $STATUS"
-        echo -e "${WHITE}CheckUser:${RESET}    ${CYAN}${CHECKUSER_PORT}${RESET}"
-        echo -e "${WHITE}WebSocket:${RESET}    ${CYAN}${WEBSOCKET_PORT}${RESET}"
-        echo -e "${WHITE}Online App:${RESET}   ${CYAN}${ONLINEAPP_PORT}${RESET}"
+        echo -e \
+            " ${GRAY}Online App:${RESET}    ${GREEN}${ONLINEAPP_PORT}${RESET}"
 
         line
+
+        #=================================================
+        # NO INSTALADO
+        #=================================================
+
+        if ! check_installed; then
+
+            section "🚀 INSTALACIÓN"
+
+            echo -e \
+                " ${GREEN}[01]${RESET} 🚀 Instalar CheckUser"
+
+            echo -e \
+                " ${GREEN}[02]${RESET} 🔎 Diagnóstico"
+
+            echo -e \
+                " ${GREEN}[03]${RESET} 🖥️ Información VPS"
 
         #=================================================
         # INSTALADO
         #=================================================
 
-        if check_installed; then
+        else
 
-            echo -e "${BLUE}${BOLD}⚙️  ADMINISTRACIÓN${RESET}"
-            echo
+            section "⚙️ ADMINISTRACIÓN"
 
             echo -e \
                 " ${GREEN}[01]${RESET} 🔄 Reinstalar / Actualizar"
 
             echo -e \
-                " ${GREEN}[02]${RESET} ♻️  Reiniciar CheckUser"
+                " ${GREEN}[02]${RESET} ♻️ Reiniciar CheckUser"
 
             echo -e \
                 " ${GREEN}[03]${RESET} 📊 Estado"
@@ -1428,42 +1208,24 @@ main_menu() {
                 " ${GREEN}[05]${RESET} 🌐 Online App"
 
             echo -e \
-                " ${GREEN}[06]${RESET} 🖥️  Información VPS"
+                " ${GREEN}[06]${RESET} 🖥️ Información VPS"
 
             echo -e \
-                " ${RED}[07]${RESET} 🗑️  Desinstalar CheckUser"
-
-        else
-
-            #=================================================
-            # NO INSTALADO
-            #=================================================
-
-            echo -e "${BLUE}${BOLD}🚀 INSTALACIÓN${RESET}"
-            echo
-
-            echo -e \
-                " ${GREEN}[01]${RESET} 🚀 Instalar CheckUser"
-
-            echo -e \
-                " ${GREEN}[02]${RESET} 🔎 Diagnóstico"
-
-            echo -e \
-                " ${GREEN}[03]${RESET} 🖥️  Información VPS"
+                " ${RED}[07]${RESET} 🗑️ Desinstalar CheckUser"
 
         fi
 
         echo
 
-        line_purple
+        line
 
         echo -e \
-            " ${RED}[00]${RESET} ↩️  Regresar al Menú de Protocolos"
+            " ${RED}[00]${RESET} ↩️ Regresar al Menú de Protocolos"
 
         echo
 
         echo -e \
-            "${GRAY}KevinTech Multi Script • CheckUser Manager v${VERSION}${RESET}"
+            "${GRAY}KevinTech Multi Script • CheckUser${RESET}"
 
         echo
 
@@ -1471,141 +1233,149 @@ main_menu() {
             "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" \
             OP
 
-        case "$OP" in
+        #=================================================
+        # MENÚ NO INSTALADO
+        #=================================================
 
-            1)
+        if ! check_installed; then
 
-                install_checkuser
+            case "$OP" in
 
-                ;;
+                1)
 
-            2)
+                    install
 
-                if check_installed; then
+                    ;;
 
-                    restart_checkuser
-
-                else
-
-                    diagnostic_checkuser
-
-                fi
-
-                ;;
-
-            3)
-
-                if check_installed; then
-
-                    status_checkuser
-
-                else
-
-                    system_info
-
-                fi
-
-                ;;
-
-            4)
-
-                if check_installed; then
+                2)
 
                     diagnostic_checkuser
 
-                else
+                    ;;
 
-                    system_info
+                3)
 
-                fi
+                    system_info_checkuser
 
-                ;;
+                    ;;
 
-            5)
+                0)
 
-                if check_installed; then
+                    clear_screen
 
-                    onapp_ssh
+                    if [[ -f "$BASE/protocolos/menu.sh" ]]; then
 
-                else
+                        exec bash \
+                            "$BASE/protocolos/menu.sh"
 
-                    msg_error "CheckUser no está instalado."
-                    sleep 1
+                    else
 
-                fi
+                        exit 0
 
-                ;;
+                    fi
 
-            6)
+                    ;;
 
-                if check_installed; then
+                "")
 
-                    system_info
+                    ;;
 
-                else
-
-                    system_info
-
-                fi
-
-                ;;
-
-            7)
-
-                if check_installed; then
-
-                    remove_checkuser
-
-                else
+                *)
 
                     msg_error "Opción inválida."
                     sleep 1
 
-                fi
+                    ;;
 
-                ;;
+            esac
 
-            0)
+        #=================================================
+        # MENÚ INSTALADO
+        #=================================================
 
-                clear_screen
+        else
 
-                if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+            case "$OP" in
 
-                    exec bash "$BASE/protocolos/menu.sh"
+                1)
 
-                else
+                    install
 
-                    exit 0
+                    ;;
 
-                fi
+                2)
 
-                ;;
+                    restart_checkuser
 
-            "")
+                    ;;
 
-                ;;
+                3)
 
-            *)
+                    status_checkuser
 
-                msg_error "Opción inválida."
-                sleep 1
+                    ;;
 
-                ;;
+                4)
 
-        esac
+                    diagnostic_checkuser
+
+                    ;;
+
+                5)
+
+                    onapp_ssh
+
+                    ;;
+
+                6)
+
+                    system_info_checkuser
+
+                    ;;
+
+                7)
+
+                    remove_checkuser
+
+                    ;;
+
+                0)
+
+                    clear_screen
+
+                    if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+
+                        exec bash \
+                            "$BASE/protocolos/menu.sh"
+
+                    else
+
+                        exit 0
+
+                    fi
+
+                    ;;
+
+                "")
+
+                    ;;
+
+                *)
+
+                    msg_error "Opción inválida."
+                    sleep 1
+
+                    ;;
+
+            esac
+
+        fi
 
     done
-
 }
 
 #=========================================================
-# LIMPIEZA
+# EJECUTAR
 #=========================================================
 
-cleanup
-
-#=========================================================
-# EJECUTAR MANAGER
-#=========================================================
-
-main_menu
+checkuser_menu
