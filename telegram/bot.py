@@ -60,12 +60,12 @@ def tg(method, data=None):
 
 def send(chat, text, keyboard=None):
     d={"chat_id":chat,"text":text,"parse_mode":"HTML"}
-    if keyboard is not None: d["reply_markup"]=json.dumps({"inline_keyboard":keyboard}, ensure_ascii=False)
+    if keyboard: d["reply_markup"]=json.dumps({"inline_keyboard":keyboard}, ensure_ascii=False)
     return tg("sendMessage", d)
 
 def edit(chat,msg,text,keyboard=None):
     d={"chat_id":chat,"message_id":msg,"text":text,"parse_mode":"HTML"}
-    if keyboard is not None: d["reply_markup"]=json.dumps({"inline_keyboard":keyboard}, ensure_ascii=False)
+    if keyboard: d["reply_markup"]=json.dumps({"inline_keyboard":keyboard}, ensure_ascii=False)
     try: return tg("editMessageText", d)
     except Exception: return send(chat,text,keyboard)
 
@@ -196,8 +196,7 @@ def handle_text(chat,text):
     st=STATE.get(chat)
     if not st:
         if text in ("/start","/menu"):
-            send(chat,"🤖 <b>KEVINTECH MULTI SCRIPT</b>\n\nPanel de administración:","")
-            # edit/send without malformed empty keyboard
+            send(chat,"🤖 <b>KEVINTECH MULTI SCRIPT</b>\n\nPanel de administración:")
             send(chat,"Selecciona una sección:",menu_main())
         elif text=="/id": send(chat,f"🆔 ID: <code>{chat}</code>")
         return
