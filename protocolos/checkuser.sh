@@ -806,10 +806,16 @@ show_result() {
     echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}                    🌐 CHECKUSER API${RESET}                    ${PURPLE}║${RESET}"
     echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${PURPLE}║${RESET} ${GRAY}IP:${RESET}       ${CYAN}${IP}${RESET}"
-    echo -e "${PURPLE}║${RESET} ${GRAY}Puerto:${RESET}   ${GREEN}${CHECKUSER_PORT}${RESET}"
-    echo -e "${PURPLE}║${RESET} ${GRAY}Endpoint:${RESET} ${SKY}/checkUser${RESET}"
-    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    IP=$(curl -4 -s --connect-timeout 5 https://api.ipify.org)
+
+if [[ -z "$IP" ]]; then
+    IP=$(hostname -I | awk '{print $1}')
+fi
+
+echo
+echo -e "${GREEN}http://${IP}:${CHECKUSER_PORT}/checkUser${RESET}"
+echo
+╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
