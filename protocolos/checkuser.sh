@@ -1,10 +1,12 @@
 #!/bin/bash
 #=========================================================
-# KEVINTECH CHECKUSER INSTALLER
-# CheckUser fijo: 10016
-# WebSocket SSH: 10015
-# Online App: 8888
-# Ubuntu 24.04
+#                 🛡️ KEVINTECH
+#              CHECKUSER INSTALLER
+#=========================================================
+# CheckUser fijo : 10016
+# WebSocket SSH  : 10015
+# Online App     : 8888
+# Sistema        : Ubuntu 24.04
 #=========================================================
 
 CHECKUSER_PORT="10016"
@@ -14,95 +16,167 @@ ONLINEAPP_PORT="8888"
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-GREEN='\e[1;92m'
+#=========================================================
+# COLORES
+#=========================================================
+
+RESET='\e[0m'
+BOLD='\e[1m'
+DIM='\e[2m'
+
+BLACK='\e[1;30m'
 RED='\e[1;91m'
+GREEN='\e[1;92m'
 YELLOW='\e[1;93m'
 BLUE='\e[1;94m'
-CYAN='\e[1;96m'
 MAGENTA='\e[1;95m'
+CYAN='\e[1;96m'
 WHITE='\e[1;97m'
-RESET='\e[0m'
+GRAY='\e[1;90m'
+
+PINK='\e[38;5;213m'
+PURPLE='\e[38;5;141m'
+VIOLET='\e[38;5;177m'
+SKY='\e[38;5;117m'
+LIME='\e[38;5;154m'
+GOLD='\e[38;5;220m'
+ORANGE='\e[38;5;214m'
+AQUA='\e[38;5;159m'
+
+#=========================================================
+# PREPARACIÓN
+#=========================================================
 
 mkdir -p "$BASE"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
 #=========================================================
-# FUNCIONES
+# FUNCIONES VISUALES
 #=========================================================
 
+clear_screen() {
+    clear 2>/dev/null || true
+}
+
+line() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+line_purple() {
+    echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+header() {
+
+    clear_screen
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET} ${PINK}${BOLD}                 🛡️ KEVINTECH                 ${RESET}${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                 CHECKUSER INSTALLER          ${RESET}${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${RESET} ${GRAY}CheckUser:${RESET} ${GREEN}${CHECKUSER_PORT}${RESET}  ${GRAY}WebSocket:${RESET} ${GREEN}${WEBSOCKET_PORT}${RESET}  ${GRAY}Online:${RESET} ${GREEN}${ONLINEAPP_PORT}${RESET} ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+}
+
+section() {
+
+    echo
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    printf "${PURPLE}║${RESET} ${WHITE}${BOLD} %-58s ${RESET}${PURPLE}║${RESET}\n" "$1"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+}
+
 msg_ok() {
-    echo -e "${GREEN}✔ $1${RESET}"
+    echo -e " ${GREEN}✔${RESET} ${WHITE}$1${RESET}"
 }
 
 msg_error() {
-    echo -e "${RED}✘ $1${RESET}"
+    echo -e " ${RED}✘${RESET} ${WHITE}$1${RESET}"
 }
 
 msg_info() {
-    echo -e "${CYAN}➜ $1${RESET}"
+    echo -e " ${CYAN}◆${RESET} ${WHITE}$1${RESET}"
 }
 
 msg_warn() {
-    echo -e "${YELLOW}⚠ $1${RESET}"
+    echo -e " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
 }
 
 pause() {
+
     echo
-    read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
+    line
+    echo
+    read -r -p "$(echo -e "${GOLD}➜ Presiona ENTER para continuar... ${RESET}")"
 }
 
 #=========================================================
-# BARRA
+# BARRA DE PROGRESO
 #=========================================================
 
 fun_bar() {
 
-    comando[0]="$1"
-    comando[1]="$2"
+    local CMD1="$1"
+    local CMD2="$2"
 
     (
-        rm -f "$HOME/fim"
+        rm -f "$HOME/.kevintech_install_done"
 
-        ${comando[0]} >/dev/null 2>&1
+        bash -c "$CMD1" >/dev/null 2>&1
 
-        if [[ -n "${comando[1]}" ]]; then
-            ${comando[1]} >/dev/null 2>&1
+        if [[ -n "$CMD2" ]]; then
+            bash -c "$CMD2" >/dev/null 2>&1
         fi
 
-        touch "$HOME/fim"
+        touch "$HOME/.kevintech_install_done"
 
     ) >/dev/null 2>&1 &
 
-    tput civis
+    local PID=$!
+    local WIDTH=30
+    local FILLED
+    local EMPTY
+    local PERCENT
 
-    echo -ne "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
+    tput civis 2>/dev/null || true
 
-    while true; do
+    while kill -0 "$PID" 2>/dev/null; do
 
-        for ((i=0; i<18; i++)); do
-            echo -ne "\033[1;31m#"
-            sleep 0.1
+        for PERCENT in 10 20 30 40 50 60 70 80 90; do
+
+            if [[ -f "$HOME/.kevintech_install_done" ]]; then
+                break
+            fi
+
+            FILLED=$((WIDTH * PERCENT / 100))
+            EMPTY=$((WIDTH - FILLED))
+
+            printf "\r ${CYAN}Instalando${RESET} ${GRAY}[${RESET}"
+
+            printf "${GREEN}%${FILLED}s${RESET}" "" | tr ' ' '█'
+            printf "${GRAY}%${EMPTY}s${RESET}" "" | tr ' ' '░'
+
+            printf "${GRAY}]${RESET} ${WHITE}%3d%%${RESET}" "$PERCENT"
+
+            sleep 0.35
+
         done
-
-        if [[ -e "$HOME/fim" ]]; then
-            rm -f "$HOME/fim"
-            break
-        fi
-
-        echo -e "\033[1;33m]"
-        sleep 1
-
-        tput cuu1
-        tput dl1
-
-        echo -ne "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
 
     done
 
-    echo -e "\033[1;33m]\033[1;37m - \033[1;32mOK !\033[1;37m"
+    wait "$PID" 2>/dev/null
 
-    tput cnorm
+    rm -f "$HOME/.kevintech_install_done"
+
+    printf "\r ${CYAN}Instalando${RESET} ${GRAY}[${RESET}"
+    printf "${GREEN}%${WIDTH}s${RESET}" "" | tr ' ' '█'
+    printf "${GRAY}]${RESET} ${GREEN}100%% ✔ COMPLETADO${RESET}"
+    echo
+
+    tput cnorm 2>/dev/null || true
 }
 
 #=========================================================
@@ -136,9 +210,9 @@ fun_install() {
 
     mkdir -p /usr/lib/checkgestor
 
-    #-----------------------------------------------
-    # Descargar archivos originales
-    #-----------------------------------------------
+    #=====================================================
+    # DESCARGAR ARCHIVOS
+    #=====================================================
 
     wget -qO /bin/chall \
         https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/chall.sh
@@ -149,9 +223,9 @@ fun_install() {
     wget -qO /usr/lib/checkgestor/checkgestor.py \
         https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.py
 
-    #-----------------------------------------------
-    # Verificar descargas
-    #-----------------------------------------------
+    #=====================================================
+    # VERIFICAR DESCARGAS
+    #=====================================================
 
     if [[ ! -s /bin/chall ]]; then
         msg_error "No se pudo descargar chall."
@@ -168,17 +242,17 @@ fun_install() {
         return 1
     fi
 
-    #-----------------------------------------------
-    # Permisos
-    #-----------------------------------------------
+    #=====================================================
+    # PERMISOS
+    #=====================================================
 
     chmod 755 /bin/chall
     chmod 755 /bin/checkgestor
     chmod 755 /usr/lib/checkgestor/checkgestor.py
 
-    #=================================================
+    #=====================================================
     # CHECKGESTOR KEVINTECH
-    #=================================================
+    #=====================================================
 
     cat > /bin/checkgestor <<'EOF'
 #!/bin/bash
@@ -231,7 +305,6 @@ cont_online() {
         grep -c '^sshd$'
     )
 
-    # 0 = ilimitado
     if (( LIMIT > 0 && CONSSH > LIMIT )); then
         pkill -KILL -u "$USER_NAME" 2>/dev/null
     fi
@@ -388,9 +461,9 @@ EOF
 
     chmod 755 /bin/checkgestor
 
-    #=================================================
+    #=====================================================
     # CHECKUSER SERVICE
-    #=================================================
+    #=====================================================
 
     cat > /etc/systemd/system/checkuser.service <<EOF
 [Unit]
@@ -409,9 +482,9 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-    #-----------------------------------------------
-    # Activar servicio
-    #-----------------------------------------------
+    #=====================================================
+    # SYSTEMD
+    #=====================================================
 
     systemctl daemon-reload
 
@@ -421,27 +494,34 @@ EOF
 
     sleep 2
 
-    #-----------------------------------------------
-    # Verificar CheckUser
-    #-----------------------------------------------
+    #=====================================================
+    # VERIFICAR SERVICIO
+    #=====================================================
 
     if systemctl is-active --quiet checkuser.service; then
+
         msg_ok "CheckUser activo en puerto ${CHECKUSER_PORT}."
+
     else
+
         msg_error "CheckUser no pudo iniciar."
+
         systemctl status checkuser.service --no-pager
+
         return 1
+
     fi
 
-    #-----------------------------------------------
-    # Licencia
-    #-----------------------------------------------
+    #=====================================================
+    # LICENCIA
+    #=====================================================
 
     mkdir -p /etc/licencec
 
     echo "By: @nandoslayer" \
         > /etc/licencec/telegram
 
+    return 0
 }
 
 #=========================================================
@@ -450,64 +530,70 @@ EOF
 
 function onapp1() {
 
-    clear
+    clear_screen
 
-    echo -e "\n\033[1;32mINICIANDO O ONLINE APP...\033[0m"
-    echo ""
+    section "🌐 INICIANDO ONLINE APP"
 
-    apt install apache2 -y > /dev/null 2>&1
+    msg_info "Preparando Apache..."
 
-    #-----------------------------------------------
-    # Apache 8888
-    #-----------------------------------------------
+    apt install apache2 -y >/dev/null 2>&1
+
+    #=====================================================
+    # APACHE 8888
+    #=====================================================
 
     if grep -qE '^Listen 80$' /etc/apache2/ports.conf; then
-        sed -i 's/^Listen 80$/Listen 8888/' \
+
+        sed -i \
+            's/^Listen 80$/Listen 8888/' \
             /etc/apache2/ports.conf
+
     elif ! grep -qE '^Listen 8888$' /etc/apache2/ports.conf; then
+
         echo "Listen 8888" >> /etc/apache2/ports.conf
+
     fi
 
-    #-----------------------------------------------
-    # Evitar conflicto Listen 80 en otros archivos
-    #-----------------------------------------------
-
-    sed -i 's/^Listen 80$/Listen 8888/' \
+    sed -i \
+        's/^Listen 80$/Listen 8888/' \
         /etc/apache2/ports.conf 2>/dev/null
 
-    #-----------------------------------------------
-    # Directorio
-    #-----------------------------------------------
+    #=====================================================
+    # DIRECTORIO
+    #=====================================================
 
     rm -rf /var/www/html/server >/dev/null 2>&1
 
     mkdir -p /var/www/html/server >/dev/null 2>&1
 
-    #-----------------------------------------------
-    # Online App
-    #-----------------------------------------------
+    #=====================================================
+    # ONLINE APP
+    #=====================================================
 
     if [[ ! -f "$BASE/protocolos/onlineapp" ]]; then
 
-        echo ""
-        echo -e "${RED}✘ No existe:${RESET}"
-        echo -e "${YELLOW}$BASE/protocolos/onlineapp${RESET}"
-        echo ""
+        echo
+        msg_error "No existe:"
+        echo -e " ${YELLOW}$BASE/protocolos/onlineapp${RESET}"
+        echo
 
         return 1
+
     fi
 
     chmod +x "$BASE/protocolos/onlineapp"
 
-    #-----------------------------------------------
-    # Reiniciar Apache
-    #-----------------------------------------------
+    #=====================================================
+    # APACHE
+    #=====================================================
+
+    msg_info "Reiniciando Apache..."
 
     systemctl restart apache2 >/dev/null 2>&1
 
-    #-----------------------------------------------
-    # Iniciar Online App
-    #-----------------------------------------------
+    #=====================================================
+    # ONLINE APP
+    #=====================================================
 
     screen -S onlineapp -X quit >/dev/null 2>&1
 
@@ -516,9 +602,9 @@ function onapp1() {
 
     sleep 3
 
-    #-----------------------------------------------
+    #=====================================================
     # AUTOSTART
-    #-----------------------------------------------
+    #=====================================================
 
     touch /etc/autostart
 
@@ -527,34 +613,36 @@ function onapp1() {
     echo "ps x | grep '$BASE/protocolos/onlineapp' | grep -v grep >/dev/null || screen -dmS onlineapp $BASE/protocolos/onlineapp" \
         >> /etc/autostart
 
-    #-----------------------------------------------
+    #=====================================================
     # IP
-    #-----------------------------------------------
+    #=====================================================
 
     IP=$(wget -qO- --timeout=5 ipv4.icanhazip.com)
 
     [[ -z "$IP" ]] && \
         IP=$(hostname -I | awk '{print $1}')
 
-    echo ""
+    echo
 
-    echo -e "\033[1;32mONLINE APP ACTIVO!\033[0m"
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}               ✅ ONLINE APP ACTIVO                  ${RESET}${GREEN}║${RESET}"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${GREEN}║${RESET} ${GRAY}Puerto:${RESET} ${CYAN}${ONLINEAPP_PORT}${RESET}"
+    echo -e "${GREEN}║${RESET} ${GRAY}URL:${RESET} ${SKY}http://${IP}:${ONLINEAPP_PORT}/server/online${RESET}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-    echo -e "\033[1;33mURL de Usuários Online:\033[0m"
+    echo
 
-    echo "http://$IP:${ONLINEAPP_PORT}/server/online"
-
-    echo ""
-
-    sleep 3
+    pause
 }
 
 function onapp2() {
 
-    clear
+    clear_screen
 
-    echo -e "\n\033[1;31mPARANDO O ONLINE APP...\033[0m"
-    echo ""
+    section "🛑 DETENIENDO ONLINE APP"
+
+    msg_info "Deteniendo Apache..."
 
     systemctl stop apache2 >/dev/null 2>&1
 
@@ -569,21 +657,23 @@ function onapp2() {
 
     rm -rf /var/www/html/server >/dev/null 2>&1
 
-    sleep 3
+    sleep 2
 
-    echo ""
+    msg_ok "Online App detenido."
 
-    echo -e "\033[1;31mONLINE APP PARADO!\033[0m"
-
-    sleep 3
+    pause
 }
 
 function onapp_ssh() {
 
     if pgrep -f "$BASE/protocolos/onlineapp" >/dev/null; then
+
         onapp2
+
     else
+
         onapp1
+
     fi
 
 }
@@ -594,9 +684,9 @@ function onapp_ssh() {
 
 install() {
 
-    #-----------------------------------------------
-    # Zona horaria
-    #-----------------------------------------------
+    #=====================================================
+    # ZONA HORARIA
+    #=====================================================
 
     echo "America/Lima" > /etc/timezone
 
@@ -608,73 +698,106 @@ install() {
         --frontend noninteractive \
         tzdata >/dev/null 2>&1
 
-    clear
+    #=====================================================
+    # CABECERA
+    #=====================================================
 
-    echo -e "\E[44;1;37m  INSTALAR CHECKUSER PARA CONECTA4G,  \E[0m"
-    echo -e "\E[44;1;37m      GLTUNNEL, DTUNNEL, ANYMOD.      \E[0m"
-    echo -e "\E[44;1;37mVERSIÓN KEVINTECH                \E[0m"
+    header
 
-    echo ""
+    section "🚀 INSTALACIÓN PRINCIPAL"
 
-    echo -e \
-        "      \033[1;33m • \033[1;32mINICIANDO INSTALACIÓN\033[1;33m • \033[0m"
+    echo -e "${WHITE}Preparando ${PINK}KevinTech CheckUser${WHITE}...${RESET}"
+    echo
 
-    echo ""
+    echo -e " ${GRAY}Sistema:${RESET}        ${SKY}Ubuntu 24.04${RESET}"
+    echo -e " ${GRAY}CheckUser:${RESET}      ${GREEN}${CHECKUSER_PORT}${RESET}"
+    echo -e " ${GRAY}WebSocket SSH:${RESET}  ${GREEN}${WEBSOCKET_PORT}${RESET}"
+    echo -e " ${GRAY}Online App:${RESET}     ${GREEN}${ONLINEAPP_PORT}${RESET}"
+
+    echo
+
+    section "📦 INSTALANDO COMPONENTES"
 
     fun_bar 'fun_install'
 
-    clear
+    sleep 1
 
-    echo -e "\E[44;1;37m       CHECKUSER KEVINTECH          \E[0m"
+    #=====================================================
+    # RESULTADO
+    #=====================================================
 
-    echo -e "\E[44;1;37m       PUERTO: ${CHECKUSER_PORT}              \E[0m"
-
-    echo -e "\E[44;1;37m       WEBSOCKET: ${WEBSOCKET_PORT}           \E[0m"
-
-    echo -e "\E[44;1;37m       ONLINE APP: ${ONLINEAPP_PORT}          \E[0m"
-
-    echo ""
+    header
 
     if systemctl is-active --quiet checkuser.service; then
 
-        echo -e \
-            "      \033[1;33m • \033[1;32mINSTALACIÓN CONCLUIDA\033[1;33m • \033[0m"
+        section "🎉 INSTALACIÓN COMPLETADA"
 
-        echo ""
+        echo -e " ${GREEN}●${RESET} ${WHITE}CheckUser${RESET}      ${GREEN}ACTIVO${RESET}"
+        echo -e " ${GREEN}●${RESET} ${WHITE}WebSocket SSH${RESET}  ${GREEN}${WEBSOCKET_PORT}${RESET}"
+        echo -e " ${GREEN}●${RESET} ${WHITE}Online App${RESET}     ${GREEN}${ONLINEAPP_PORT}${RESET}"
 
-        echo -e "${GREEN}CheckUser:${RESET}"
+        local SERVER_IP
 
-        echo "http://$(hostname -I | awk '{print $1}'):${CHECKUSER_PORT}/checkUser"
+        SERVER_IP="$(hostname -I | awk '{print $1}')"
 
-        echo ""
+        echo
 
-        echo -e "${GREEN}WebSocket SSH:${RESET}"
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}                    🌐 CHECKUSER API                    ${RESET}${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${CYAN}║${RESET} ${GRAY}URL:${RESET} ${SKY}http://${SERVER_IP}:${CHECKUSER_PORT}/checkUser${RESET}"
+        echo -e "${CYAN}║${RESET} ${GRAY}Puerto:${RESET} ${GREEN}${CHECKUSER_PORT}${RESET}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-        echo "Puerto ${WEBSOCKET_PORT}"
+        echo
 
-        echo ""
+        echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${PURPLE}║${RESET} ${WHITE}${BOLD}                   🔌 WEBSOCKET SSH                   ${RESET}${PURPLE}║${RESET}"
+        echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${PURPLE}║${RESET} ${GRAY}Puerto:${RESET} ${GREEN}${WEBSOCKET_PORT}${RESET}"
+        echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-        echo -e "${GREEN}Online App:${RESET}"
+        echo
 
-        echo "Puerto ${ONLINEAPP_PORT}"
+        echo -e "${MAGENTA}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${MAGENTA}║${RESET} ${WHITE}${BOLD}                    📊 ONLINE APP                     ${RESET}${MAGENTA}║${RESET}"
+        echo -e "${MAGENTA}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e "${MAGENTA}║${RESET} ${GRAY}Puerto:${RESET} ${GREEN}${ONLINEAPP_PORT}${RESET}"
+        echo -e "${MAGENTA}║${RESET} ${GRAY}URL:${RESET} ${SKY}http://${SERVER_IP}:${ONLINEAPP_PORT}/server/online${RESET}"
+        echo -e "${MAGENTA}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     else
 
-        echo -e \
-            "${RED}✘ CheckUser no está activo.${RESET}"
+        section "❌ INSTALACIÓN CON ERRORES"
 
-        echo ""
+        msg_error "CheckUser no está activo."
+
+        echo
+
+        echo -e "${GRAY}Estado del servicio:${RESET}"
+        echo
 
         systemctl status checkuser.service --no-pager
 
     fi
 
-    echo ""
+    echo
 
-    echo -ne \
-        "\033[1;32mDE UM ENTER PARA \033[1;33mCONTINUAR...\033[1;37m: "
+    line
 
-    read -r
+    echo
+
+    echo -e "${GOLD}${BOLD}              🚀 KEVINTECH MULTI SCRIPT${RESET}"
+    echo -e "${GRAY}                    CHECKUSER INSTALLER${RESET}"
+
+    echo
+
+    line
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${YELLOW}➜ Presiona ENTER para continuar... ${RESET}")"
 
 }
 
