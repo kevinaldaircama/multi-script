@@ -330,7 +330,8 @@ while true; do
     echo -e "  ${GREEN}${BOLD}[11]${RESET} 🧰 Herramientas"
     echo -e "  ${GREEN}${BOLD}[12]${RESET} 🔄 Reiniciar Servicios"
     echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔥 Firewall"
-
+    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔘 bot telegram"
+    
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  Regresar al Menú Principal"
@@ -394,7 +395,10 @@ while true; do
         13)
             run_module "$BASE/herramientas/firewall.sh"
             ;;
-
+       14)
+            run_module "$BASE/telegram/install.sh"
+            ;;
+            
         0)
             clear
             exec bash "$BASE/menu.sh"
