@@ -63,7 +63,29 @@ def module(name):
   if p.exists():return p
  return None
 def installed(k):
- s=SVCS[k]; rc,_=sh(f'systemctl cat {q(s)} >/dev/null 2>&1',3); return rc==0
+ s=SVCS[k]
+ # Prefer concrete project files/binaries when a service unit uses a different name.
+ paths={
+  'openssh':['/usr/sbin/sshd','/etc/ssh/sshd_config'],
+  'dropbear':['/usr/sbin/dropbear','/etc/default/dropbear'],
+  'openvpn':['/usr/sbin/openvpn','/etc/openvpn'],
+  'v2ray':['/usr/local/bin/xray','/usr/bin/xray','/etc/xray','/usr/local/etc/xray'],
+  'checkuser':['/etc/systemd/system/checkuser.service','/usr/local/bin/checkuser'],
+  'slowdns':['/etc/slowdns','/usr/local/bin/dnstt-server','/usr/local/bin/slowdns'],
+  'badvpn':['/usr/local/bin/badvpn-udpgw','/usr/bin/badvpn-udpgw','/etc/systemd/system/badvpn-7300.service'],
+  'ssl':['/usr/sbin/haproxy','/etc/haproxy'],
+  'udpcustom':['/usr/local/bin/udp-custom','/usr/bin/udp-custom','/etc/udp-custom'],
+  'zivpn':['/etc/zivpn','/usr/local/bin/zivpn','/usr/bin/zivpn'],
+ }
+ if any(Path(x).exists() for x in paths.get(k,[])): return True
+ rc,_=sh(f'systemctl cat {q(s)} >/dev/null 2>&1',3)
+ if rc==0:return True
+ # Some project services have versioned/templated names.
+ pats={'badvpn':'badvpn-*','slowdns':'dnstt*','openvpn':'openvpn*','v2ray':'xray*','zivpn':'zivpn*'}
+ if k in pats:
+  rc,_=sh(f'systemctl list-unit-files {q(pats[k])} --no-legend 2>/dev/null | grep -q .',3)
+  return rc==0
+ return False
 
 def info():
  ip=(subprocess.getoutput('hostname -I').split() or ['N/D'])[0]; mem=subprocess.getoutput("free -m|awk '/^Mem:/{printf \"%d/%dMB (%d%%)\",$3,$2,$3*100/$2}'");disk=subprocess.getoutput("df -h /|awk 'NR==2{print $3\"/\"$2\" (\"$5\")\"}'");load=subprocess.getoutput("awk '{print $1\", \"$2\", \"$3}' /proc/loadavg");domain='N/D'
@@ -92,8 +114,8 @@ def account(c,d,renew=False):
    if m and m.group(1) not in vals: vals.append(m.group(1))
   return ','.join(vals) if vals else 'No instalado'
  ssh=ports('sshd'); drop=ports('dropbear'); hap=ports('haproxy'); bad=ports('badvpn')
- hyst_port=subprocess.getoutput("grep -oP '\"listen\"\s*:\s*\":\K[0-9]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No instalado'
- hyst_obfs=subprocess.getoutput("grep -oP '\"obfs\"\s*:\s*\"\K[^\"]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No configurado'
+ hyst_port=subprocess.getoutput(r"grep -oP '\"listen\"\s*:\s*\":\K[0-9]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No instalado'
+ hyst_obfs=subprocess.getoutput(r"grep -oP '\"obfs\"\s*:\s*\"\K[^\"]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No configurado'
  zivpn='No instalado'
  if Path('/etc/zivpn/config.json').exists(): zivpn=subprocess.getoutput("jq -r '.listen // empty' /etc/zivpn/config.json 2>/dev/null | tr -d ':'") or 'No instalado'
  slow=''
@@ -161,6 +183,17 @@ def process_text(c,t):
   if t in ('/start','/menu'):return send(c,'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚡ Panel rápido de administración:',HOME)
   return
  f=st['f'];d=st['d'];step=st['s']
+ if f in ('delete','block','unblock','passwd'):
+  if step=='u':
+   u=t.strip()
+   if not userexists(u):return send(c,'❌ Usuario no encontrado. Escribe otro:')
+   d['user']=u
+   if f=='passwd':st['s']='p';return send(c,f'🔑 Nueva contraseña para <code>{e(u)}</code>:')
+   st['s']='confirm';label={'delete':'eliminar','block':'bloquear','unblock':'desbloquear'}[f]
+   return send(c,f'⚠️ ¿Confirmar {label} <code>{e(u)}</code>?',[[{'text':'✅ CONFIRMAR','callback_data':'userop:'+f},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if f=='passwd' and step=='p':
+   if len(t)<4:return send(c,'❌ Contraseña demasiado corta.')
+   d['pass']=t;st['s']='confirm';return send(c,f'🔑 Confirmar cambio de contraseña para <code>{e(d["user"])}</code>?',[[{'text':'✅ CAMBIAR','callback_data':'userop:passwd'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
  if f in ('create','renew'):
   if step=='u':
    if not userexists(t) and f=='renew':return send(c,'❌ Usuario no encontrado.')
@@ -198,9 +231,23 @@ def cb(c,m,u,i,x):
    if rc==0:(BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u).write_text('0' if d.get('limit')=='Ilimitado' else d.get('limit','0'));return account(c,d)
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>',USERS)
   rc,o=sh(f'chage -E {q(exp)} {q(u)}',10);return account(c,d,True) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>',USERS)
+ if x in ('delete','block','unblock','passwd'):
+  STATE[c]={'f':x,'s':'u','d':{}}
+  labels={'delete':'eliminar','block':'bloquear','unblock':'desbloquear','passwd':'cambiar la contraseña de'}
+  return send(c,f"👤 <b>{labels[x].upper()}</b>\n\nEscribe el usuario:")
+ if x.startswith('userop:'):
+  op=x.split(':',1)[1];st=STATE.pop(c,None)
+  if not st:return send(c,'❌ Operación expirada.',USERS)
+  u=st['d']['user']
+  if op=='delete': rc,o=sh(f'pkill -u {q(u)} 2>/dev/null || true; userdel -r -f {q(u)}',15)
+  elif op=='block': rc,o=sh(f'passwd -l {q(u)}; pkill -u {q(u)} 2>/dev/null || true',15)
+  elif op=='unblock': rc,o=sh(f'passwd -u {q(u)}',15)
+  else: rc,o=sh(f"printf '%s\\n' {q(u+':'+st['d']['pass'])} | chpasswd",15)
+  label={'delete':'Cuenta eliminada','block':'Cuenta bloqueada','unblock':'Cuenta desbloqueada','passwd':'Contraseña actualizada'}[op]
+  return send(c,('🟢 ' if rc==0 else '🔴 ')+f'<b>{label}</b>\n\n👤 <code>{e(u)}</code>\n<pre>{e(o or "Operación completada")}</pre>',USERS)
  if x.startswith('proto:'):
-  k=x.split(':')[1];v=PROTO[k];st='🟢 INSTALADO' if installed(k) else '⚪ NO INSTALADO';ports=v[3];buttons=[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k}]] if installed(k) else []
-  buttons += [[{'text':'🗑️ Desinstalar','callback_data':'un:'+k}]] if installed(k) else [[{'text':'🚀 Instalar','callback_data':'in:'+k}]]
+  k=x.split(':')[1];v=PROTO[k];ins=installed(k);st='🟢 INSTALADO' if ins else '⚪ NO INSTALADO';ports=v[3];buttons=[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k}]] if ins else []
+  buttons += [[{'text':'🗑️ Desinstalar','callback_data':'un:'+k}]] if ins else [[{'text':'🚀 Instalar','callback_data':'in:'+k}]]
   buttons += [[{'text':'🔙 Protocolos','callback_data':'protocols'}]]
   return edit(c,m,f'🌐 <b>{e(v[0])}</b>\n\nEstado: {st}\nPuertos: <code>{e(ports)}</code>\nServicio: <code>{e(v[2])}</code>',buttons)
  if x.startswith('in:') or x.startswith('un:'):
