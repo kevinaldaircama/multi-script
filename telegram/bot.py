@@ -76,7 +76,83 @@ def userexists(u):return bool(re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I)) and
 def userlist():
  _,o=sh("awk -F: '$3>=1000&&$1!=\"nobody\"{print $1}' /etc/passwd",4); a=o.splitlines();return '📋 <b>USUARIOS</b>\n\n'+('\n'.join(f'• <code>{e(x)}</code>' for x in a) if a else 'No hay usuarios.')+f'\n\nTotal: <b>{len(a)}</b>'
 def account(c,d,renew=False):
- u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");ip=(subprocess.getoutput('hostname -I').split() or ['N/D'])[0];title='♻️ CUENTA RENOVADA' if renew else '🎉 CUENTA CREADA';p=f'🔑 Contraseña: <code>{e(pw)}</code>' if pw else '🔐 Contraseña: se mantiene la actual';send(c,f'''<b>{title} EXITOSAMENTE</b>\n\n👤 Usuario: <code>{e(u)}</code>\n{p}\n📅 Expira: <code>{e(exp)}</code>\n👥 Límite: <code>{e(d.get('limit','Ilimitado'))}</code>\n\n🌐 <b>DATOS</b>\n• IP: <code>{e(ip)}</code>\n• SSH: <code>22</code>\n• Dropbear: <code>90,143,109</code>\n• HTTP: <code>{e(ip)}:80</code>\n• HTTPS: <code>{e(ip)}:443</code>\n• UDP Custom: <code>{e(ip)}:1-65535</code>''',USERS)
+ u=d['user'];pw=d.get('pass');days=int(d['days'])
+ exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
+ ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
+ cfg=BASE/'config.conf'; domain=''
+ if cfg.exists():
+  for line in cfg.read_text(errors='ignore').splitlines():
+   if line.startswith('SERVER_DOMAIN='): domain=line.split('=',1)[1].strip().strip('\"').strip("'")
+ host=domain or ip
+ def ports(proc):
+  out=subprocess.getoutput(f"ss -ltnp 2>/dev/null | grep -i {q(proc)} || true")
+  vals=[]
+  for ln in out.splitlines():
+   m=re.search(r':(\d+)\s',ln)
+   if m and m.group(1) not in vals: vals.append(m.group(1))
+  return ','.join(vals) if vals else 'No instalado'
+ ssh=ports('sshd'); drop=ports('dropbear'); hap=ports('haproxy'); bad=ports('badvpn')
+ hyst_port=subprocess.getoutput("grep -oP '\"listen\"\s*:\s*\":\K[0-9]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No instalado'
+ hyst_obfs=subprocess.getoutput("grep -oP '\"obfs\"\s*:\s*\"\K[^\"]+' /etc/hysteria/config.json 2>/dev/null | head -1") or 'No configurado'
+ zivpn='No instalado'
+ if Path('/etc/zivpn/config.json').exists(): zivpn=subprocess.getoutput("jq -r '.listen // empty' /etc/zivpn/config.json 2>/dev/null | tr -d ':'") or 'No instalado'
+ slow=''
+ if Path('/etc/slowdns/domain.conf').exists() and Path('/etc/slowdns/server.pub').exists():
+  ns=Path('/etc/slowdns/domain.conf').read_text(errors='ignore').strip(); key=Path('/etc/slowdns/server.pub').read_text(errors='ignore').strip(); slow=f"\n\n🐌 <b>SLOWDNS (5300)</b>\n• NS: <code>{e(ns)}</code>\n• KEY: <code>{e(key)}</code>\n• Puerto: <code>5300</code>"
+ title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
+ pwdline=f"🔑 <b>Contraseña:</b> <code>{e(pw)}</code>" if pw else '🔐 <b>Contraseña:</b> se mantiene la actual'
+ lim=e(d.get('limit','Ilimitado'))
+ send(c,f"""<b>{title}</b>
+
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>DATOS DEL USUARIO</b>
+━━━━━━━━━━━━━━━━━━━━
+• Usuario: <code>{e(u)}</code>
+• {pwdline}
+• Expira: <code>{e(exp)}</code>
+• Duración: <code>{days} días</code>
+• Límite IP: <code>{lim}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🌐 <b>INFORMACIÓN DEL SERVIDOR</b>
+━━━━━━━━━━━━━━━━━━━━
+• Host/IP: <code>{e(host)}</code>
+• IP: <code>{e(ip)}</code>
+• SSH: <code>{e(ssh)}</code>
+• Dropbear: <code>{e(drop)}</code>
+• SSL Tunnel: <code>{e(hap)}</code>
+• OpenVPN: <code>1194,2200,443</code>
+• BadVPN: <code>{e(bad)}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+📡 <b>HTTP CUSTOM</b>
+━━━━━━━━━━━━━━━━━━━━
+<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>
+<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>
+<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>UDP CUSTOM</b>
+━━━━━━━━━━━━━━━━━━━━
+<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🟣 <b>HYSTERIA V1</b>
+━━━━━━━━━━━━━━━━━━━━
+• Servidor: <code>{e(host)}:{e(hyst_port)}</code>
+• OBFS: <code>{e(hyst_obfs)}</code>
+• Credenciales: <code>{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>ZIVPN UDP</b>
+━━━━━━━━━━━━━━━━━━━━
+• Servidor: <code>{e(host)}:{e(zivpn)}</code>
+• Contraseña: <code>{e(pw or '********')}</code>
+• Puerto UDP: <code>20000-29999</code>{slow}
+
+━━━━━━━━━━━━━━━━━━━━
+💎 <b>KEVINTECH MULTI SCRIPT</b>
+━━━━━━━━━━━━━━━━━━━━""",USERS)
 
 def process_text(c,t):
  if c not in ADM:return send(c,'⛔ Acceso denegado.')

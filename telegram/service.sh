@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-case "${1:-status}" in
- start) systemctl start kevintech-telegram;; stop) systemctl stop kevintech-telegram;; restart) systemctl restart kevintech-telegram;; status) systemctl --no-pager --full status kevintech-telegram;; logs) journalctl -u kevintech-telegram -f;; *) echo 'Uso: service.sh {start|stop|restart|status|logs}'; exit 1;; esac
+C='\033[1;36m'; G='\033[1;92m'; Y='\033[1;93m'; R='\033[1;91m'; M='\033[1;95m'; W='\033[1;97m'; Z='\033[0m'; U='kevintech-telegram'; D='/etc/kevintech/telegram'
+banner(){ echo -e "${C}╔════════════════════════════════════════════════════════════╗${Z}"; echo -e "${C}║${M}       ⚙️ KEVINTECH TELEGRAM SERVICE • V4 PREMIUM       ${C}║${Z}"; echo -e "${C}╚════════════════════════════════════════════════════════════╝${Z}"; }
+case "${1:-menu}" in
+start) systemctl start "$U"; echo -e "${G}✔ Iniciado.${Z}";; stop) systemctl stop "$U"; echo -e "${Y}⚠ Detenido.${Z}";; restart) systemctl restart "$U"; echo -e "${G}✔ Reiniciado.${Z}";; reload) systemctl daemon-reload; systemctl restart "$U"; echo -e "${G}✔ Recargado.${Z}";; status) banner; systemctl --no-pager --full status "$U" || true;; logs) journalctl -u "$U" -f;; log10) journalctl -u "$U" -n 10 --no-pager;; errors) journalctl -u "$U" -p warning..alert -n 80 --no-pager;; enable) systemctl enable "$U"; echo -e "${G}✔ Autoarranque activado.${Z}";; disable) systemctl disable "$U"; echo -e "${Y}⚠ Autoarranque desactivado.${Z}";; health) bash "$D/health.sh";; *) banner; echo -e "${G}Uso:${W} service.sh {start|stop|restart|reload|status|logs|log10|errors|enable|disable|health}${Z}";; esac

@@ -1,22 +1,24 @@
-# KevinTech Telegram Bot v3
+# 🤖 KevinTech Telegram Bot V4 Premium
 
-Bot integrado con `/etc/kevintech`, sin pip ni librerías externas.
+Integrado con `/etc/kevintech`.
 
-## Incluye
-- UI rápida con botones.
-- Crear/renovar cuentas y mostrar datos.
-- Lista, online, eliminar, bloquear, desbloquear, contraseña y backup.
-- Información completa del VPS.
-- Servicios con estado/puertos/reinicio.
-- Protocolos con estado/puertos/instalar/desinstalar.
-- Herramientas ejecutadas en segundo plano.
-- systemd + reinicio automático.
-- Logs y health check.
+## V4
+- Instalador seguro: si se ejecuta desde `/etc/kevintech/telegram`, no copia un archivo sobre sí mismo.
+- `.env` se conserva en las actualizaciones.
+- setup valida el token con Telegram.
+- service con restart/status/logs/errors/health.
+- health verifica systemd, permisos y Python.
+- operaciones pesadas se ejecutan en segundo plano.
+- crear/renovar muestran ficha detallada inspirada en `usuarios/add.sh`.
 
-## Instalación
-```bash
-cd /ruta/del/proyecto
-sudo bash telegram/install.sh
-```
+## Instalar
+`bash telegram/install.sh`
+
+También: `cd /etc/kevintech/telegram && bash install.sh`
+
+## Servicio
+`bash /etc/kevintech/telegram/service.sh status`
+`bash /etc/kevintech/telegram/service.sh logs`
+`bash /etc/kevintech/telegram/service.sh health`
 
 No subas `.env`, `logs/` ni `offset` a GitHub.

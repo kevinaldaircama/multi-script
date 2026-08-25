@@ -1,6 +1,7 @@
-.env
-logs/*
-!logs/.gitkeep
-offset
+telegram/.env
+telegram/logs/*
+!telegram/logs/.gitkeep
+telegram/offset
+telegram/__pycache__/
+*.pyc
 *.log
-*.bak.*
