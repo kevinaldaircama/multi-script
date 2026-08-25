@@ -1,44 +1,41 @@
-# KEVINTECH Telegram Bot
+# KEVINTECH Telegram Bot — integrado
 
-Módulo inicial del bot de Telegram para integrarse dentro de `multi-script-main`.
+Este módulo está diseñado para colocarse dentro de `multi-script-main/telegram/`.
+
+## Instalación
+
+Desde la raíz del proyecto:
+
+```bash
+sudo bash telegram/install.sh
+```
+
+El instalador:
+- instala `curl` y `jq`;
+- copia el bot a `/etc/kevintech/telegram`;
+- pide el token y los Telegram ID;
+- crea un servicio systemd;
+- inicia el bot automáticamente.
+
+## Comprobar
+
+```bash
+systemctl status kevintech-telegram --no-pager
+journalctl -u kevintech-telegram -f
+```
 
 ## Configuración
 
-Desde el VPS:
-
-```bash
-bash telegram/setup.sh
-```
-
-El token y los IDs se guardan en:
+Las credenciales están únicamente en:
 
 ```text
 /etc/kevintech/telegram/.env
 ```
 
-El archivo queda con permisos `600` y no debe subirse a GitHub.
+No se deben subir a GitHub.
 
-## Dependencias
+## Integración
 
-Ubuntu/Debian:
+El bot busca módulos existentes dentro de `/etc/kevintech` y los ejecuta cuando corresponda. No reemplaza ni modifica los módulos existentes.
 
-```bash
-apt update
-apt install -y curl jq
-```
-
-## Ejecutar
-
-```bash
-bash telegram/bot.sh
-```
-
-El bot usa Telegram Bot API mediante `curl`, por lo que no necesita instalar un framework de Python.
-
-## Comandos
-
-- `/start`
-- `/menu`
-- `/id`
-
-La arquitectura está preparada para conectar progresivamente los botones con los módulos existentes de Multi Script.
+Nota: los módulos interactivos que requieren muchas preguntas en terminal necesitarán handlers específicos para convertir ese flujo en botones/pasos de Telegram. El bot base ya está preparado para esa ampliación.

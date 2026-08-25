@@ -1,218 +1,222 @@
 #!/usr/bin/env bash
-# =========================================================
-# KEVINTECH TELEGRAM BOT
-# Integrated Telegram interface for Multi Script
-# Credentials are loaded from /etc/kevintech/telegram/.env
-# =========================================================
-
 set -Eeuo pipefail
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="/etc/kevintech/telegram/.env"
-LOG_DIR="$BASE_DIR/logs"
-LOG_FILE="$LOG_DIR/bot.log"
+BASE="/etc/kevintech"
+BOT_DIR="$BASE/telegram"
+ENV_FILE="$BOT_DIR/.env"
+LOG_FILE="$BOT_DIR/logs/bot.log"
 
-mkdir -p "$LOG_DIR"
-touch "$LOG_FILE"
-chmod 600 "$LOG_FILE" 2>/dev/null || true
+[[ $EUID -eq 0 ]] || { echo "Ejecuta como root."; exit 1; }
+[[ -f "$ENV_FILE" ]] || { echo "Falta $ENV_FILE. Ejecuta setup.sh."; exit 1; }
+command -v curl >/dev/null || { echo "Falta curl."; exit 1; }
+command -v jq >/dev/null || { echo "Falta jq."; exit 1; }
 
-log() {
-    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"
-}
-
-die() {
-    log "ERROR: $*"
-    printf 'ERROR: %s\n' "$*" >&2
-    exit 1
-}
-
-[[ -f "$ENV_FILE" ]] || die "Configuración no encontrada: $ENV_FILE"
 # shellcheck disable=SC1090
 source "$ENV_FILE"
-
-: "${BOT_TOKEN:?Falta BOT_TOKEN en $ENV_FILE}"
-: "${ADMIN_ID:?Falta ADMIN_ID en $ENV_FILE}"
+: "${BOT_TOKEN:?BOT_TOKEN no configurado}"
+: "${ADMIN_ID:?ADMIN_ID no configurado}"
 
 API="https://api.telegram.org/bot${BOT_TOKEN}"
 OFFSET=0
+mkdir -p "$BOT_DIR/logs"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 
-api() {
-    local method="$1"
-    shift
-    curl -fsS --max-time 35 -X POST "$API/$method" "$@"
+log(){ printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOG_FILE"; }
+
+api(){
+  local method="$1"; shift
+  curl -fsS --connect-timeout 10 --max-time 40 -X POST "$API/$method" "$@"
 }
 
-send_message() {
-    local chat_id="$1"
-    local text="$2"
-    local keyboard="${3:-}"
-    if [[ -n "$keyboard" ]]; then
-        api sendMessage \
-            -d "chat_id=$chat_id" \
-            --data-urlencode "text=$text" \
-            --data-urlencode "reply_markup=$keyboard" >/dev/null
-    else
-        api sendMessage \
-            -d "chat_id=$chat_id" \
-            --data-urlencode "text=$text" >/dev/null
+auth(){
+  local id="$1"
+  [[ "$id" == "$ADMIN_ID" ]] && return 0
+  [[ -n "${ADMIN_IDS:-}" ]] || return 1
+  IFS=',' read -ra A <<< "$ADMIN_IDS"
+  for x in "${A[@]}"; do [[ "$id" == "$x" ]] && return 0; done
+  return 1
+}
+
+kb(){
+  case "$1" in
+    main) printf '%s' '{"inline_keyboard":[[{"text":"👤 Usuarios","callback_data":"users"},{"text":"🌐 Protocolos","callback_data":"protocols"}],[{"text":"📊 Estado VPS","callback_data":"status"},{"text":"🛠 Herramientas","callback_data":"tools"}],[{"text":"🔄 Servicios","callback_data":"services"},{"text":"ℹ️ Info","callback_data":"info"}]]}' ;;
+    users) printf '%s' '{"inline_keyboard":[[{"text":"➕ Crear","callback_data":"u_add"},{"text":"🗑 Eliminar","callback_data":"u_del"}],[{"text":"📋 Lista","callback_data":"u_list"},{"text":"🟢 Online","callback_data":"u_online"}],[{"text":"🔄 Renovar","callback_data":"u_renew"},{"text":"🔒 Bloquear","callback_data":"u_block"}],[{"text":"💾 Backup","callback_data":"u_backup"},{"text":"🔙 Volver","callback_data":"home"}]]}' ;;
+    protocols) printf '%s' '{"inline_keyboard":[[{"text":"🔐 OpenSSH","callback_data":"p_ssh"},{"text":"🟡 Dropbear","callback_data":"p_dropbear"}],[{"text":"🔵 OpenVPN","callback_data":"p_openvpn"},{"text":"🟣 Xray/V2Ray","callback_data":"p_xray"}],[{"text":"🔎 CheckUser","callback_data":"p_checkuser"},{"text":"🐌 SlowDNS","callback_data":"p_slowdns"}],[{"text":"🌐 SSL/WebSocket","callback_data":"p_ssl"},{"text":"🔙 Volver","callback_data":"home"}]]}' ;;
+    tools) printf '%s' '{"inline_keyboard":[[{"text":"🔥 Firewall","callback_data":"t_firewall"},{"text":"⚡ Reiniciar","callback_data":"t_restart"}],[{"text":"📈 Recursos","callback_data":"status"},{"text":"🔄 Actualizar","callback_data":"t_update"}],[{"text":"🔙 Volver","callback_data":"home"}]]}' ;;
+    services) printf '%s' '{"inline_keyboard":[[{"text":"🔐 SSH","callback_data":"s_ssh"},{"text":"🟡 Dropbear","callback_data":"s_dropbear"}],[{"text":"🔵 OpenVPN","callback_data":"s_openvpn"},{"text":"🟣 Xray","callback_data":"s_xray"}],[{"text":"🔎 CheckUser","callback_data":"s_checkuser"},{"text":"🔙 Volver","callback_data":"home"}]]}' ;;
+  esac
+}
+
+send(){
+  local chat="$1" text="$2" markup="${3:-}"
+  if [[ -n "$markup" ]]; then
+    api sendMessage -d "chat_id=$chat" --data-urlencode "text=$text" \
+      --data-urlencode "parse_mode=HTML" --data-urlencode "reply_markup=$markup" >/dev/null
+  else
+    api sendMessage -d "chat_id=$chat" --data-urlencode "text=$text" \
+      --data-urlencode "parse_mode=HTML" >/dev/null
+  fi
+}
+
+edit(){
+  local chat="$1" msg="$2" text="$3" markup="${4:-}"
+  if [[ -n "$markup" ]]; then
+    api editMessageText -d "chat_id=$chat" -d "message_id=$msg" \
+      --data-urlencode "text=$text" --data-urlencode "parse_mode=HTML" \
+      --data-urlencode "reply_markup=$markup" >/dev/null
+  else
+    api editMessageText -d "chat_id=$chat" -d "message_id=$msg" \
+      --data-urlencode "text=$text" --data-urlencode "parse_mode=HTML" >/dev/null
+  fi
+}
+
+svc_state(){
+  local svc="$1"
+  systemctl is-active --quiet "$svc" && echo "🟢 ACTIVO" || echo "🔴 INACTIVO"
+}
+
+status_text(){
+  local mem disk load
+  load="$(awk '{print $1}' /proc/loadavg)"
+  mem="$(free -m | awk '/^Mem:/ {printf "%s/%s MB (%d%%)",$3,$2,($3*100)/$2}')"
+  disk="$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
+  cat <<EOF
+📊 <b>ESTADO DEL VPS</b>
+
+🖥 Host: <code>$(hostname)</code>
+⏱ Uptime: <code>$(uptime -p)</code>
+⚙️ Load: <code>$load</code>
+🧠 RAM: <code>$mem</code>
+💾 Disco: <code>$disk</code>
+
+🔐 SSH: $(svc_state ssh)
+🟡 Dropbear: $(svc_state dropbear)
+🔵 OpenVPN: $(svc_state openvpn)
+EOF
+}
+
+# Intenta localizar módulos existentes sin modificar el proyecto.
+find_module(){
+  local name="$1"
+  find "$BASE" -type f -name "$name" -print -quit 2>/dev/null || true
+}
+
+run_safe_module(){
+  local file="$1"
+  shift || true
+  [[ -n "$file" && -f "$file" ]] || return 1
+  timeout 30s bash "$file" "$@" 2>&1 | tail -c 3500
+}
+
+module_response(){
+  local key="$1" file out
+  case "$key" in
+    p_ssh) file="$(find_module openssh.sh)" ;;
+    p_dropbear) file="$(find_module dropbear.sh)" ;;
+    p_openvpn) file="$(find_module openvpn.sh)" ;;
+    p_xray) file="$(find_module v2ray.sh)"; [[ -n "$file" ]] || file="$(find_module xray.sh)" ;;
+    p_checkuser) file="$(find_module checkuser.sh)" ;;
+    p_slowdns) file="$(find_module slowdns.sh)" ;;
+    p_ssl) file="$(find_module ssl.sh)" ;;
+    u_list) file="$(find_module list.sh)" ;;
+    u_online) file="$(find_module online.sh)" ;;
+    u_add) file="$(find_module add.sh)" ;;
+    u_del) file="$(find_module delete.sh)" ;;
+    u_renew) file="$(find_module edit.sh)" ;;
+    u_block) file="$(find_module block.sh)" ;;
+    u_backup) file="$(find_module backup.sh)" ;;
+    t_firewall) file="$(find_module firewall.sh)" ;;
+    t_restart) file="$(find_module reiniciar.sh)" ;;
+    t_update) file="$(find_module update.sh)" ;;
+    *) return 2 ;;
+  esac
+
+  if [[ -z "$file" ]]; then
+    printf '⚠️ <b>Módulo no encontrado</b>\n\nLa función <code>%s</code> aún no tiene un archivo compatible en este proyecto.' "$key"
+    return 0
+  fi
+
+  out="$(run_safe_module "$file" || true)"
+  if [[ -n "$out" ]]; then
+    printf '🧩 <b>Resultado</b>\n\n<pre>%s</pre>' "$(printf '%s' "$out" | sed 's/&/\&amp;/g;s/</\&lt;/g;s/>/\&gt;/g')"
+  else
+    printf '✅ Módulo ejecutado:\n<code>%s</code>' "$file"
+  fi
+}
+
+callback(){
+  local chat="$1" msg="$2" from="$3" data="$4"
+  api answerCallbackQuery -d "callback_query_id=$msg" >/dev/null 2>&1 || true
+  [[ "$from" =~ ^[0-9]+$ ]] || return
+  auth "$from" || return
+
+  case "$data" in
+    home) send "$chat" "🏠 <b>KEVINTECH MULTI SCRIPT</b>\n\nSelecciona una sección:" "$(kb main)" ;;
+    users) send "$chat" "👤 <b>USUARIOS</b>\n\nGestión del sistema de usuarios:" "$(kb users)" ;;
+    protocols) send "$chat" "🌐 <b>PROTOCOLOS</b>\n\nSelecciona un módulo:" "$(kb protocols)" ;;
+    tools) send "$chat" "🛠 <b>HERRAMIENTAS</b>" "$(kb tools)" ;;
+    services) send "$chat" "🔄 <b>SERVICIOS</b>\n\nEstado rápido:" "$(kb services)" ;;
+    status) send "$chat" "$(status_text)" "$(kb main)" ;;
+    info) send "$chat" "🤖 <b>KEVINTECH TELEGRAM</b>\n\nInterfaz integrada para Multi Script.\n\n🔐 Acceso por Telegram ID." "$(kb main)" ;;
+    s_ssh) send "$chat" "🔐 <b>OpenSSH:</b> $(svc_state ssh)" "$(kb services)" ;;
+    s_dropbear) send "$chat" "🟡 <b>Dropbear:</b> $(svc_state dropbear)" "$(kb services)" ;;
+    s_openvpn) send "$chat" "🔵 <b>OpenVPN:</b> $(svc_state openvpn)" "$(kb services)" ;;
+    s_xray) send "$chat" "🟣 <b>Xray:</b> $(svc_state xray)" "$(kb services)" ;;
+    s_checkuser) send "$chat" "🔎 <b>CheckUser:</b> $(svc_state checkuser)" "$(kb services)" ;;
+    u_*|p_*|t_*)
+      local result
+      result="$(module_response "$data")"
+      send "$chat" "$result" "$(kb main)"
+      ;;
+    *) send "$chat" "⚠️ Acción no reconocida." "$(kb main)" ;;
+  esac
+}
+
+handle(){
+  local u="$1" chat from text cbid data msgid
+  cbid="$(jq -r '.callback_query.id // empty' <<<"$u")"
+  if [[ -n "$cbid" ]]; then
+    chat="$(jq -r '.callback_query.message.chat.id' <<<"$u")"
+    msgid="$(jq -r '.callback_query.message.message_id' <<<"$u")"
+    from="$(jq -r '.callback_query.from.id' <<<"$u")"
+    data="$(jq -r '.callback_query.data' <<<"$u")"
+    if auth "$from"; then callback "$chat" "$cbid" "$from" "$data"
+    else api answerCallbackQuery -d "callback_query_id=$cbid" --data-urlencode "text=⛔ Acceso denegado" -d "show_alert=true" >/dev/null 2>&1 || true
     fi
-}
+    return
+  fi
 
-main_menu() {
-    printf '%s' '{"inline_keyboard":[[{"text":"👤 Usuarios","callback_data":"users"},{"text":"🌐 Protocolos","callback_data":"protocols"}],[{"text":"📊 Estado VPS","callback_data":"status"},{"text":"🛠 Herramientas","callback_data":"tools"}],[{"text":"ℹ️ Información","callback_data":"info"}]]}'
-}
+  chat="$(jq -r '.message.chat.id // empty' <<<"$u")"
+  from="$(jq -r '.message.from.id // empty' <<<"$u")"
+  text="$(jq -r '.message.text // empty' <<<"$u")"
+  [[ -n "$chat" ]] || return
 
-users_menu() {
-    printf '%s' '{"inline_keyboard":[[{"text":"➕ Crear usuario","callback_data":"users_add"},{"text":"🗑 Eliminar","callback_data":"users_delete"}],[{"text":"📋 Lista","callback_data":"users_list"},{"text":"🟢 Online","callback_data":"users_online"}],[{"text":"🔄 Renovar","callback_data":"users_renew"},{"text":"🔙 Volver","callback_data":"home"}]]}'
-}
+  if ! auth "$from"; then
+    send "$chat" "⛔ <b>Acceso denegado.</b>\n\nTu Telegram ID no está autorizado."
+    return
+  fi
 
-protocols_menu() {
-    printf '%s' '{"inline_keyboard":[[{"text":"🔐 OpenSSH","callback_data":"proto_ssh"},{"text":"🟡 Dropbear","callback_data":"proto_dropbear"}],[{"text":"🔵 OpenVPN","callback_data":"proto_openvpn"},{"text":"🟣 Xray/V2Ray","callback_data":"proto_xray"}],[{"text":"🔎 CheckUser","callback_data":"proto_checkuser"},{"text":"🔙 Volver","callback_data":"home"}]]}'
-}
-
-tools_menu() {
-    printf '%s' '{"inline_keyboard":[[{"text":"🔥 Firewall","callback_data":"tool_firewall"},{"text":"⚡ Reiniciar","callback_data":"tool_restart"}],[{"text":"📈 Recursos","callback_data":"status"},{"text":"🔙 Volver","callback_data":"home"}]]}'
-}
-
-authorized() {
-    local id="$1"
-    [[ "$id" == "$ADMIN_ID" ]] && return 0
-
-    if [[ -n "${ADMIN_IDS:-}" ]]; then
-        IFS=',' read -ra ids <<< "$ADMIN_IDS"
-        for allowed in "${ids[@]}"; do
-            [[ "$id" == "$allowed" ]] && return 0
-        done
-    fi
-    return 1
-}
-
-vps_status() {
-    local host uptime cpu mem disk
-    host="$(hostname)"
-    uptime="$(uptime -p 2>/dev/null || true)"
-    cpu="$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo '?')"
-    mem="$(free -m | awk '/^Mem:/ {printf "%s/%s MB (%s%%)", $3,$2,($3/$2)*100}' 2>/dev/null || echo '?')"
-    disk="$(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}' 2>/dev/null || echo '?')"
-
-    printf '🖥️ <b>KEVINTECH VPS</b>\n\nHost: <code>%s</code>\n⏱ Uptime: <code>%s</code>\n⚙️ Load: <code>%s</code>\n🧠 RAM: <code>%s</code>\n💾 Disco: <code>%s</code>' \
-        "$host" "$uptime" "$cpu" "$mem" "$disk"
-}
-
-handle_callback() {
-    local chat_id="$1"
-    local callback_id="$2"
-    local data="$3"
-
-    api answerCallbackQuery -d "callback_query_id=$callback_id" >/dev/null 2>&1 || true
-
-    case "$data" in
-        home)
-            send_message "$chat_id" "🏠 <b>MENÚ PRINCIPAL</b>\n\nSelecciona una opción:" "$(main_menu)"
-            ;;
-        users)
-            send_message "$chat_id" "👤 <b>GESTIÓN DE USUARIOS</b>\n\nSelecciona una opción:" "$(users_menu)"
-            ;;
-        protocols)
-            send_message "$chat_id" "🌐 <b>PROTOCOLOS</b>\n\nSelecciona una opción:" "$(protocols_menu)"
-            ;;
-        tools)
-            send_message "$chat_id" "🛠 <b>HERRAMIENTAS</b>\n\nSelecciona una opción:" "$(tools_menu)"
-            ;;
-        status)
-            send_message "$chat_id" "$(vps_status)" "$(main_menu)"
-            ;;
-        info)
-            send_message "$chat_id" "🤖 <b>KEVINTECH TELEGRAM BOT</b>\n\nBot integrado en Multi Script.\n\n🔐 Acceso protegido por Telegram ID." "$(main_menu)"
-            ;;
-        *)
-            send_message "$chat_id" "ℹ️ Esta función está preparada para conectarse al módulo correspondiente." "$(main_menu)"
-            ;;
-    esac
-}
-
-handle_update() {
-    local update="$1"
-    local chat_id callback_id data text from_id
-
-    callback_id="$(jq -r '.callback_query.id // empty' <<< "$update")"
-    if [[ -n "$callback_id" ]]; then
-        chat_id="$(jq -r '.callback_query.message.chat.id // empty' <<< "$update")"
-        data="$(jq -r '.callback_query.data // empty' <<< "$update")"
-        from_id="$(jq -r '.callback_query.from.id // empty' <<< "$update")"
-
-        if ! authorized "$from_id"; then
-            api answerCallbackQuery \
-                -d "callback_query_id=$callback_id" \
-                --data-urlencode "text=⛔ Acceso denegado" \
-                -d "show_alert=true" >/dev/null 2>&1 || true
-            log "Unauthorized callback from Telegram ID $from_id"
-            return
-        fi
-
-        handle_callback "$chat_id" "$callback_id" "$data"
-        return
-    fi
-
-    chat_id="$(jq -r '.message.chat.id // empty' <<< "$update")"
-    text="$(jq -r '.message.text // empty' <<< "$update")"
-    from_id="$(jq -r '.message.from.id // empty' <<< "$update")"
-
-    [[ -n "$chat_id" ]] || return
-
-    if ! authorized "$from_id"; then
-        send_message "$chat_id" "⛔ <b>Acceso denegado.</b>\n\nTu Telegram ID no está autorizado."
-        log "Unauthorized message from Telegram ID $from_id"
-        return
-    fi
-
-    case "$text" in
-        /start|/menu)
-            send_message "$chat_id" "🤖 <b>KEVINTECH MULTI SCRIPT</b>\n\nBienvenido. Selecciona una opción:" "$(main_menu)"
-            ;;
-        /id)
-            send_message "$chat_id" "🆔 Tu Telegram ID es: <code>$from_id</code>"
-            ;;
-        *)
-            send_message "$chat_id" "Usa /menu para abrir el panel." "$(main_menu)"
-            ;;
-    esac
+  case "$text" in
+    /start|/menu) send "$chat" "🤖 <b>KEVINTECH MULTI SCRIPT</b>\n\nBienvenido al panel de administración:" "$(kb main)" ;;
+    /id) send "$chat" "🆔 Tu Telegram ID:\n<code>$from</code>" ;;
+    *) send "$chat" "Usa /menu para abrir el panel." "$(kb main)" ;;
+  esac
 }
 
 log "Bot iniciado"
-
-# Dependencias mínimas.
-command -v curl >/dev/null || die "curl no está instalado."
-command -v jq >/dev/null || die "jq no está instalado."
-
-# Evita recibir mensajes antiguos al iniciar.
-if initial="$(api getUpdates -d 'timeout=0' -d 'limit=1' 2>/dev/null)"; then
-    last_id="$(jq -r '.result[-1].update_id // empty' <<< "$initial")"
-    [[ -n "$last_id" ]] && OFFSET=$((last_id + 1))
-fi
+old="$(api getUpdates -d timeout=0 -d limit=1 2>/dev/null || true)"
+last="$(jq -r '.result[-1].update_id // empty' <<<"$old" 2>/dev/null || true)"
+[[ -n "$last" ]] && OFFSET=$((last+1))
 
 while true; do
-    response="$(api getUpdates \
-        -d "offset=$OFFSET" \
-        -d 'timeout=30' \
-        -d 'allowed_updates=["message","callback_query"]' 2>/dev/null || true)"
-
-    if [[ -z "$response" ]]; then
-        sleep 2
-        continue
-    fi
-
-    ok="$(jq -r '.ok // false' <<< "$response" 2>/dev/null || echo false)"
-    [[ "$ok" == "true" ]] || {
-        log "Telegram API error: $response"
-        sleep 5
-        continue
-    }
-
-    while IFS= read -r update; do
-        [[ -z "$update" ]] && continue
-        id="$(jq -r '.update_id' <<< "$update")"
-        OFFSET=$((id + 1))
-        handle_update "$update" &
-    done < <(jq -c '.result[]' <<< "$response")
+  response="$(api getUpdates -d "offset=$OFFSET" -d timeout=30 -d 'allowed_updates=["message","callback_query"]' 2>/dev/null || true)"
+  [[ -n "$response" ]] || { sleep 2; continue; }
+  [[ "$(jq -r '.ok // false' <<<"$response")" == "true" ]] || { log "API: $response"; sleep 5; continue; }
+  while IFS= read -r u; do
+    [[ -z "$u" ]] && continue
+    id="$(jq -r '.update_id' <<<"$u")"
+    OFFSET=$((id+1))
+    handle "$u" &
+  done < <(jq -c '.result[]' <<<"$response")
 done
