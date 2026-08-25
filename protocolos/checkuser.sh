@@ -1,52 +1,35 @@
 #!/bin/bash
-
-#==================================================
-# KevinTech Multi Script
-# CHECKUSER + ONLINE APP
-#==================================================
-
-BASE="/etc/kevintech"
-
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-BLUE="\e[1;94m"
-CYAN="\e[1;96m"
-MAGENTA="\e[1;95m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-RESET="\e[0m"
-
-#==================================================
-# CONFIGURACIÓN
-#==================================================
+#=========================================================
+# KEVINTECH CHECKUSER INSTALLER
+# CheckUser fijo: 10016
+# WebSocket SSH: 10015
+# Online App: 8888
+# Ubuntu 24.04
+#=========================================================
 
 CHECKUSER_PORT="10016"
-ONLINE_PORT="8888"
+WEBSOCKET_PORT="10015"
+ONLINEAPP_PORT="8888"
 
-CHECKUSER_DIR="/usr/lib/checkgestor"
-CHECKUSER_PY="$CHECKUSER_DIR/checkgestor.py"
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
 
-CHECKUSER_CMD="/bin/checkgestor"
-CHECKUSER_MANAGER="/bin/chall"
-
-CHECKUSER_SERVICE="/etc/systemd/system/checkuser.service"
-
-ONLINE_DIR="$BASE/protocolos"
-ONLINE_APP="$ONLINE_DIR/onlineapp"
-
-ONLINE_SERVICE="/etc/systemd/system/kevintech-onlineapp.service"
+GREEN='\e[1;92m'
+RED='\e[1;91m'
+YELLOW='\e[1;93m'
+BLUE='\e[1;94m'
+CYAN='\e[1;96m'
+MAGENTA='\e[1;95m'
+WHITE='\e[1;97m'
+RESET='\e[0m'
 
 mkdir -p "$BASE"
-mkdir -p "$ONLINE_DIR"
 
-#==================================================
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+
+#=========================================================
 # FUNCIONES
-#==================================================
-
-line() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-}
+#=========================================================
 
 msg_ok() {
     echo -e "${GREEN}✔ $1${RESET}"
@@ -69,253 +52,301 @@ pause() {
     read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
 }
 
-#==================================================
-# DETECTAR CHECKUSER
-#==================================================
+#=========================================================
+# BARRA
+#=========================================================
 
-checkuser_installed() {
+fun_bar() {
 
-    [[ -f "$CHECKUSER_PY" ]] &&
-    [[ -f "$CHECKUSER_CMD" ]]
+    comando[0]="$1"
+    comando[1]="$2"
+
+    (
+        rm -f "$HOME/fim"
+
+        ${comando[0]} >/dev/null 2>&1
+
+        if [[ -n "${comando[1]}" ]]; then
+            ${comando[1]} >/dev/null 2>&1
+        fi
+
+        touch "$HOME/fim"
+
+    ) >/dev/null 2>&1 &
+
+    tput civis
+
+    echo -ne "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
+
+    while true; do
+
+        for ((i=0; i<18; i++)); do
+            echo -ne "\033[1;31m#"
+            sleep 0.1
+        done
+
+        if [[ -e "$HOME/fim" ]]; then
+            rm -f "$HOME/fim"
+            break
+        fi
+
+        echo -e "\033[1;33m]"
+        sleep 1
+
+        tput cuu1
+        tput dl1
+
+        echo -ne "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
+
+    done
+
+    echo -e "\033[1;33m]\033[1;37m - \033[1;32mOK !\033[1;37m"
+
+    tput cnorm
 }
 
-#==================================================
-# DETECTAR ONLINE APP
-#==================================================
+#=========================================================
+# VERIFICAR CHECKUSER
+#=========================================================
 
-online_installed() {
+check_installed() {
 
-    [[ -f "$ONLINE_APP" ]]
+    [[ -f "/usr/lib/checkgestor/checkgestor.py" ]] &&
+    [[ -f "/bin/checkgestor" ]] &&
+    [[ -f "/bin/chall" ]]
+
 }
 
-#==================================================
-# ESTADO CHECKUSER
-#==================================================
+#=========================================================
+# INSTALAR CHECKUSER
+#=========================================================
 
-status_checkuser() {
-
-    if systemctl is-active --quiet checkuser 2>/dev/null; then
-        echo -e "${GREEN}🟢 ACTIVO : ${CHECKUSER_PORT}${RESET}"
-
-    elif checkuser_installed; then
-        echo -e "${YELLOW}🟡 INSTALADO / OFF${RESET}"
-
-    else
-        echo -e "${RED}🔴 NO INSTALADO${RESET}"
-    fi
-}
-
-#==================================================
-# ESTADO ONLINE APP
-#==================================================
-
-status_online() {
-
-    if systemctl is-active --quiet kevintech-onlineapp 2>/dev/null; then
-        echo -e "${GREEN}🟢 ACTIVO : ${ONLINE_PORT}${RESET}"
-
-    elif online_installed; then
-        echo -e "${YELLOW}🟡 INSTALADO / OFF${RESET}"
-
-    else
-        echo -e "${RED}🔴 NO INSTALADO${RESET}"
-    fi
-}
-
-#==================================================
-# COMPROBAR PUERTO
-#==================================================
-
-port_in_use() {
-
-    local PORT="$1"
-
-    ss -lntp 2>/dev/null |
-        awk -v p=":$PORT" '$4 ~ p"$" {print}'
-}
-
-#==================================================
-# INSTALAR DEPENDENCIAS
-#==================================================
-
-install_dependencies() {
-
-    msg_info "Instalando dependencias..."
+fun_install() {
 
     apt update -y >/dev/null 2>&1
 
     apt install -y \
-        python3 \
+        figlet \
+        wget \
+        curl \
         python3-flask \
-        python3-werkzeug \
-        python3-itsdangerous \
-        python3-asgiref \
-        python3-simplejson \
         apache2 \
         screen \
-        curl \
-        wget \
-        jq >/dev/null 2>&1
+        >/dev/null 2>&1
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        msg_error "Python3 no está disponible."
+    mkdir -p /usr/lib/checkgestor
+
+    #-----------------------------------------------
+    # Descargar archivos originales
+    #-----------------------------------------------
+
+    wget -qO /bin/chall \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/chall.sh
+
+    wget -qO /bin/checkgestor \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.sh
+
+    wget -qO /usr/lib/checkgestor/checkgestor.py \
+        https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.py
+
+    #-----------------------------------------------
+    # Verificar descargas
+    #-----------------------------------------------
+
+    if [[ ! -s /bin/chall ]]; then
+        msg_error "No se pudo descargar chall."
         return 1
     fi
 
-    if ! python3 -c "import flask" >/dev/null 2>&1; then
-        msg_error "Flask no está disponible."
+    if [[ ! -s /bin/checkgestor ]]; then
+        msg_error "No se pudo descargar checkgestor."
         return 1
     fi
 
-    msg_ok "Dependencias instaladas."
-}
-
-#==================================================
-# INSTALAR CHECKUSER
-#==================================================
-
-install_checkuser() {
-
-    clear
-
-    line
-    echo -e "${MAGENTA}          INSTALANDO CHECKUSER${RESET}"
-    line
-
-    # IMPORTANTE:
-    # 10015 NO SE TOCA.
-    # Está reservado para SSH WebSocket.
-
-    if [[ -n "$(port_in_use "$CHECKUSER_PORT")" ]]; then
-
-        msg_error "El puerto $CHECKUSER_PORT ya está ocupado."
-
-        port_in_use "$CHECKUSER_PORT"
-
-        pause
+    if [[ ! -s /usr/lib/checkgestor/checkgestor.py ]]; then
+        msg_error "No se pudo descargar checkgestor.py."
         return 1
     fi
 
-    install_dependencies || {
-        pause
-        return 1
-    }
+    #-----------------------------------------------
+    # Permisos
+    #-----------------------------------------------
 
-    mkdir -p "$CHECKUSER_DIR"
+    chmod 755 /bin/chall
+    chmod 755 /bin/checkgestor
+    chmod 755 /usr/lib/checkgestor/checkgestor.py
 
-    #----------------------------------------------
-    # CHECKGESTOR
-    #----------------------------------------------
+    #=================================================
+    # CHECKGESTOR KEVINTECH
+    #=================================================
 
-    msg_info "Instalando checkgestor..."
-
-    cat > "$CHECKUSER_CMD" <<'EOF'
+    cat > /bin/checkgestor <<'EOF'
 #!/bin/bash
 
 USER_NAME="$1"
 TYPE="$2"
 
-DATABASE="/tmp/checkdb"
-
-if [[ -f /root/usuarios.db ]]; then
-    uniq /root/usuarios.db > "$DATABASE"
-else
-    : > "$DATABASE"
-fi
+LIMIT_DIR="/etc/kevintech/limits"
 
 user_exist() {
 
-    if getent passwd "$USER_NAME" >/dev/null 2>&1; then
+    if id "$USER_NAME" >/dev/null 2>&1; then
         echo "$USER_NAME"
     else
         echo "Not exist"
     fi
+
+}
+
+get_limit() {
+
+    local FILE="$LIMIT_DIR/$USER_NAME"
+
+    if [[ -f "$FILE" ]]; then
+
+        local LIMIT
+        LIMIT=$(cat "$FILE" 2>/dev/null)
+
+        if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
+            echo "$LIMIT"
+        else
+            echo "1"
+        fi
+
+    else
+        echo "1"
+    fi
+
 }
 
 cont_online() {
 
-    local limit
+    local LIMIT
+    local CONSSH
 
-    limit="$(grep -w "$USER_NAME" "$DATABASE" 2>/dev/null | awk '{print $2}')"
+    LIMIT=$(get_limit)
 
-    [[ -z "$limit" ]] && limit="1"
+    CONSSH=$(
+        ps -u "$USER_NAME" -o comm= 2>/dev/null |
+        grep -c '^sshd$'
+    )
 
-    local conssh
-
-    conssh="$(ps -u "$USER_NAME" 2>/dev/null | grep sshd | wc -l)"
-
-    if [[ "$conssh" -gt "$limit" ]]; then
-        pkill -u "$USER_NAME" 2>/dev/null
+    # 0 = ilimitado
+    if (( LIMIT > 0 && CONSSH > LIMIT )); then
+        pkill -KILL -u "$USER_NAME" 2>/dev/null
     fi
 
-    echo "$conssh"
+    echo "$CONSSH"
+
 }
 
 limiter_user() {
 
-    local limit
+    get_limit
 
-    limit="$(grep -w "$USER_NAME" "$DATABASE" 2>/dev/null | awk '{print $2}')"
-
-    [[ -z "$limit" ]] && limit="1"
-
-    echo "$limit"
 }
 
 check_data() {
 
-    if ! getent passwd "$USER_NAME" >/dev/null 2>&1; then
+    if ! id "$USER_NAME" >/dev/null 2>&1; then
         echo "Not exist"
         return
     fi
 
-    local datauser
+    local DATAUSER
 
-    datauser="$(chage -l "$USER_NAME" 2>/dev/null |
+    DATAUSER=$(
+        chage -l "$USER_NAME" 2>/dev/null |
         grep -i 'Account expires' |
-        awk -F: '{print $2}' |
-        xargs)"
+        awk -F: '{gsub(/^ /,"",$2); print $2}'
+    )
 
-    if [[ -z "$datauser" || "$datauser" == "never" ]]; then
+    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
         echo "31/12/2099"
         return
     fi
 
-    date -d "$datauser" '+%d/%m/%Y' 2>/dev/null
+    date -d "$DATAUSER" '+%d/%m/%Y' 2>/dev/null
+
 }
 
 check_dias() {
 
-    if ! getent passwd "$USER_NAME" >/dev/null 2>&1; then
-        echo "0"
+    if ! id "$USER_NAME" >/dev/null 2>&1; then
+        echo "Not exist"
         return
     fi
 
-    local datauser
+    local DATAUSER
+    local EXPIRATION
+    local TODAY
+    local DAYS
 
-    datauser="$(chage -l "$USER_NAME" 2>/dev/null |
+    DATAUSER=$(
+        chage -l "$USER_NAME" 2>/dev/null |
         grep -i 'Account expires' |
-        awk -F: '{print $2}' |
-        xargs)"
+        awk -F: '{gsub(/^ /,"",$2); print $2}'
+    )
 
-    if [[ -z "$datauser" || "$datauser" == "never" ]]; then
-        echo "99999"
+    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
+        echo "9999"
         return
     fi
 
-    local expiry
+    EXPIRATION=$(date -d "$DATAUSER" '+%Y-%m-%d' 2>/dev/null)
 
-    expiry="$(date -d "$datauser" '+%Y-%m-%d' 2>/dev/null)"
-
-    if [[ -z "$expiry" ]]; then
+    [[ -z "$EXPIRATION" ]] && {
         echo "0"
         return
+    }
+
+    TODAY=$(date '+%Y-%m-%d')
+
+    DAYS=$(((
+        $(date -ud "$EXPIRATION" +%s) -
+        $(date -ud "$TODAY" +%s)
+    ) / 86400))
+
+    echo "$DAYS"
+
+}
+
+check_new_data() {
+
+    if ! id "$USER_NAME" >/dev/null 2>&1; then
+        echo "Not exist"
+        return
     fi
 
-    echo "$(((
-        $(date -ud "$expiry" +%s) -
-        $(date -ud "$(date +%Y-%m-%d)" +%s)
-    ) / 86400))"
+    local DATAUSER
+
+    DATAUSER=$(
+        chage -l "$USER_NAME" 2>/dev/null |
+        grep -i 'Account expires' |
+        awk -F: '{gsub(/^ /,"",$2); print $2}'
+    )
+
+    date -d "$DATAUSER" '+%Y%m%d' 2>/dev/null
+
+}
+
+datacheck_new() {
+
+    if ! id "$USER_NAME" >/dev/null 2>&1; then
+        echo "Not exist"
+        return
+    fi
+
+    local DATAUSER
+
+    DATAUSER=$(
+        chage -l "$USER_NAME" 2>/dev/null |
+        grep -i 'Account expires' |
+        awk -F: '{gsub(/^ /,"",$2); print $2}'
+    )
+
+    date -d "$DATAUSER" '+%d%m%Y' 2>/dev/null
+
 }
 
 case "$TYPE" in
@@ -340,6 +371,14 @@ case "$TYPE" in
         check_dias
         ;;
 
+    6)
+        check_new_data
+        ;;
+
+    7)
+        datacheck_new
+        ;;
+
     *)
         echo "Not exist"
         ;;
@@ -347,313 +386,13 @@ case "$TYPE" in
 esac
 EOF
 
-    chmod 755 "$CHECKUSER_CMD"
+    chmod 755 /bin/checkgestor
 
-    #----------------------------------------------
-    # CHECKUSER PYTHON
-    #----------------------------------------------
+    #=================================================
+    # CHECKUSER SERVICE
+    #=================================================
 
-    msg_info "Instalando API CheckUser..."
-
-    cat > "$CHECKUSER_PY" <<'PYEOF'
-#!/usr/bin/python3
-
-import os
-import sys
-from datetime import datetime
-
-from flask import Flask, jsonify, request
-
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10016
-
-app = Flask(__name__)
-
-
-def run_command(username, action):
-
-    try:
-
-        command = f"/bin/checkgestor '{username}' {action}"
-
-        result = os.popen(command).readlines()
-
-        if not result:
-            return None
-
-        return result[0].strip()
-
-    except Exception:
-
-        return None
-
-
-def user_usuario(username):
-    return run_command(username, 1)
-
-
-def user_conectados(username):
-    return run_command(username, 2)
-
-
-def user_limite(username):
-    return run_command(username, 3)
-
-
-def user_data(username):
-    return run_command(username, 4)
-
-
-def user_dias_restantes(username):
-    return run_command(username, 5)
-
-
-def format_date_for_anymod(date_string):
-
-    try:
-
-        date = datetime.strptime(
-            date_string,
-            "%d/%m/%Y"
-        )
-
-        return date.strftime("%Y-%m-%d-")
-
-    except Exception:
-
-        return ""
-
-
-#==================================================
-# CONECTA4G
-#==================================================
-
-@app.route(
-    "/checkUser",
-    methods=["POST", "GET"]
-)
-def c4g():
-
-    if request.method == "GET":
-
-        return (
-            "Por favor, use o metodo de "
-            "requisição correto !\n\n"
-            "Checkuser CONECTA4G"
-        )
-
-    try:
-
-        req_data = request.get_json(
-            silent=True
-        ) or {}
-
-        requested_user = req_data.get("user")
-
-        if not requested_user:
-
-            return jsonify({
-                "error": "user is required"
-            }), 400
-
-        username = user_usuario(
-            requested_user
-        )
-
-        if username == "Not exist":
-
-            return jsonify({
-
-                "username": "Not exist",
-                "count_connection": None,
-                "expiration_date": None,
-                "expiration_days": None,
-                "limiter_user": None
-
-            })
-
-        return jsonify({
-
-            "username": username,
-
-            "count_connection":
-                user_conectados(username),
-
-            "expiration_date":
-                user_data(username),
-
-            "expiration_days":
-                user_dias_restantes(username),
-
-            "limiter_user":
-                user_limite(username)
-
-        })
-
-    except Exception as e:
-
-        return jsonify({
-            "error": str(e)
-        }), 500
-
-
-#==================================================
-# GLTUNNEL
-#==================================================
-
-@app.route(
-    "/gl/check/<username>",
-    methods=["GET", "POST"]
-)
-def gl(username):
-
-    if request.method == "POST":
-
-        return (
-            "Por favor, use o método de "
-            "requisição correto!\n\n"
-            "Checkuser GL"
-        )
-
-    try:
-
-        user = user_usuario(username)
-
-        if user == "Not exist":
-
-            return jsonify({
-
-                "username": "Not exist",
-                "count_connection": None,
-                "expiration_date": None,
-                "expiration_days": None,
-                "limit_connection": None
-
-            })
-
-        return jsonify({
-
-            "username": user,
-
-            "count_connection":
-                user_conectados(user),
-
-            "expiration_date":
-                user_data(user),
-
-            "expiration_days":
-                user_dias_restantes(user),
-
-            "limit_connection":
-                user_limite(user)
-
-        })
-
-    except Exception as e:
-
-        return jsonify({
-            "error": str(e)
-        }), 500
-
-
-#==================================================
-# ANYMOD
-#==================================================
-
-@app.route(
-    "/anymod",
-    methods=["POST", "GET"]
-)
-def anymod():
-
-    if request.method == "GET":
-
-        return (
-            "Por favor, use o método de "
-            "requisição correto!\n\n"
-            "Checkuser ANY VPN MOD"
-        )
-
-    try:
-
-        data = request.form
-
-        username = data.get(
-            "username"
-        )
-
-        deviceid = data.get(
-            "deviceid"
-        )
-
-        user = user_usuario(username)
-
-        if user == "Not exist":
-
-            return jsonify({
-
-                "USER_ID": username,
-                "DEVICE": deviceid,
-                "is_active": "false",
-                "Status": "naoencontrado",
-                "uuid": "null"
-
-            })
-
-        online = int(
-            user_conectados(user) or 0
-        )
-
-        limite = int(
-            user_limite(user) or 1
-        )
-
-        active = online <= limite
-
-        return jsonify({
-
-            "USER_ID": username,
-
-            "DEVICE":
-                deviceid if active else "false",
-
-            "is_active":
-                "true" if active else "false",
-
-            "expiration_date":
-                format_date_for_anymod(
-                    user_data(user)
-                ),
-
-            "expiry":
-                f"{user_dias_restantes(user)} dias.",
-
-            "uuid": "null"
-
-        })
-
-    except Exception as e:
-
-        return jsonify({
-            "error": str(e)
-        }), 500
-
-
-if __name__ == "__main__":
-
-    app.run(
-        host="127.0.0.1",
-        port=PORT,
-        debug=False
-    )
-PYEOF
-
-    chmod 755 "$CHECKUSER_PY"
-
-    #----------------------------------------------
-    # SERVICIO CHECKUSER
-    #----------------------------------------------
-
-    cat > "$CHECKUSER_SERVICE" <<EOF
+    cat > /etc/systemd/system/checkuser.service <<EOF
 [Unit]
 Description=KevinTech CheckUser API
 After=network.target
@@ -661,8 +400,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/
-ExecStart=/usr/bin/python3 $CHECKUSER_PY $CHECKUSER_PORT
+WorkingDirectory=/usr/lib/checkgestor
+ExecStart=/usr/bin/python3 /usr/lib/checkgestor/checkgestor.py ${CHECKUSER_PORT}
 Restart=always
 RestartSec=3
 
@@ -670,450 +409,289 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
+    #-----------------------------------------------
+    # Activar servicio
+    #-----------------------------------------------
+
     systemctl daemon-reload
 
-    systemctl enable checkuser >/dev/null 2>&1
+    systemctl enable checkuser.service >/dev/null 2>&1
 
-    systemctl restart checkuser
+    systemctl restart checkuser.service
 
     sleep 2
 
-    if systemctl is-active --quiet checkuser; then
+    #-----------------------------------------------
+    # Verificar CheckUser
+    #-----------------------------------------------
 
-        msg_ok "CheckUser instalado correctamente."
-        msg_ok "API local: 127.0.0.1:$CHECKUSER_PORT"
-
+    if systemctl is-active --quiet checkuser.service; then
+        msg_ok "CheckUser activo en puerto ${CHECKUSER_PORT}."
     else
-
         msg_error "CheckUser no pudo iniciar."
-
-        systemctl status checkuser --no-pager
-
-        pause
+        systemctl status checkuser.service --no-pager
         return 1
     fi
+
+    #-----------------------------------------------
+    # Licencia
+    #-----------------------------------------------
+
+    mkdir -p /etc/licencec
+
+    echo "By: @nandoslayer" \
+        > /etc/licencec/telegram
+
 }
 
-#==================================================
-# INSTALAR ONLINE APP
-#==================================================
+#=========================================================
+# OPCIÓN 04 - ONLINE APP
+#=========================================================
 
-install_onlineapp() {
+function onapp1() {
 
     clear
 
-    line
-    echo -e "${MAGENTA}          INSTALANDO ONLINE APP${RESET}"
-    line
+    echo -e "\n\033[1;32mINICIANDO O ONLINE APP...\033[0m"
+    echo ""
 
-    if [[ -n "$(port_in_use "$ONLINE_PORT")" ]]; then
+    apt install apache2 -y > /dev/null 2>&1
 
-        msg_error "El puerto $ONLINE_PORT ya está ocupado."
+    #-----------------------------------------------
+    # Apache 8888
+    #-----------------------------------------------
 
-        port_in_use "$ONLINE_PORT"
-
-        pause
-        return 1
-    fi
-
-    apt install -y apache2 screen >/dev/null 2>&1
-
-    mkdir -p "$ONLINE_DIR"
-
-    #----------------------------------------------
-    # CONFIGURAR APACHE EN 8888
-    #----------------------------------------------
-
-    if [[ -f /etc/apache2/ports.conf ]]; then
-
-        sed -i \
-            's/^Listen 80$/#Listen 80/' \
+    if grep -qE '^Listen 80$' /etc/apache2/ports.conf; then
+        sed -i 's/^Listen 80$/Listen 8888/' \
             /etc/apache2/ports.conf
-
-        grep -q "^Listen $ONLINE_PORT$" \
-            /etc/apache2/ports.conf ||
-            echo "Listen $ONLINE_PORT" >> \
-            /etc/apache2/ports.conf
+    elif ! grep -qE '^Listen 8888$' /etc/apache2/ports.conf; then
+        echo "Listen 8888" >> /etc/apache2/ports.conf
     fi
 
-    # VirtualHost
-    cat > /etc/apache2/sites-available/kevintech-onlineapp.conf <<EOF
-<VirtualHost *:$ONLINE_PORT>
+    #-----------------------------------------------
+    # Evitar conflicto Listen 80 en otros archivos
+    #-----------------------------------------------
 
-    DocumentRoot /var/www/html
+    sed -i 's/^Listen 80$/Listen 8888/' \
+        /etc/apache2/ports.conf 2>/dev/null
 
-    <Directory /var/www/html>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
+    #-----------------------------------------------
+    # Directorio
+    #-----------------------------------------------
 
-</VirtualHost>
-EOF
+    rm -rf /var/www/html/server >/dev/null 2>&1
 
-    a2dissite 000-default.conf >/dev/null 2>&1
-    a2ensite kevintech-onlineapp.conf >/dev/null 2>&1
+    mkdir -p /var/www/html/server >/dev/null 2>&1
 
-    #----------------------------------------------
-    # ONLINE APP
-    #----------------------------------------------
+    #-----------------------------------------------
+    # Online App
+    #-----------------------------------------------
 
-    if [[ ! -f "$ONLINE_APP" ]]; then
+    if [[ ! -f "$BASE/protocolos/onlineapp" ]]; then
 
-        cat > "$ONLINE_APP" <<'EOF'
-#!/bin/bash
+        echo ""
+        echo -e "${RED}✘ No existe:${RESET}"
+        echo -e "${YELLOW}$BASE/protocolos/onlineapp${RESET}"
+        echo ""
 
-while true; do
-
-    clear
-
-    echo "========================================"
-    echo "       KEVINTECH ONLINE APP"
-    echo "========================================"
-    echo
-    echo "Usuarios SSH conectados:"
-    echo
-
-    USERS="$(who | awk '{print $1}' | sort -u)"
-
-    if [[ -z "$USERS" ]]; then
-        echo "Ningún usuario conectado."
-    else
-        echo "$USERS"
-    fi
-
-    echo
-    sleep 10
-
-done
-EOF
-
-    fi
-
-    chmod +x "$ONLINE_APP"
-
-    #----------------------------------------------
-    # SERVICIO ONLINE APP
-    #----------------------------------------------
-
-    cat > "$ONLINE_SERVICE" <<EOF
-[Unit]
-Description=KevinTech Online App
-After=network.target apache2.service
-
-[Service]
-Type=simple
-User=root
-ExecStart=$ONLINE_APP
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-
-    systemctl enable apache2 >/dev/null 2>&1
-    systemctl restart apache2
-
-    systemctl enable kevintech-onlineapp >/dev/null 2>&1
-    systemctl restart kevintech-onlineapp
-
-    sleep 2
-
-    if systemctl is-active --quiet apache2 &&
-       systemctl is-active --quiet kevintech-onlineapp; then
-
-        msg_ok "Online App instalado correctamente."
-        msg_ok "Puerto Apache: $ONLINE_PORT"
-
-    else
-
-        msg_error "Online App no pudo iniciar."
-
-        systemctl status apache2 --no-pager
-        systemctl status kevintech-onlineapp --no-pager
-
-        pause
         return 1
     fi
-}
 
-#==================================================
-# INSTALAR TODO
-#==================================================
+    chmod +x "$BASE/protocolos/onlineapp"
 
-install_all() {
-
-    clear
-
-    line
-    echo -e "${MAGENTA}        INSTALACIÓN KEVINTECH${RESET}"
-    line
-
-    echo
-    msg_info "10015 está reservado para SSH/WebSocket."
-    msg_info "CheckUser utilizará $CHECKUSER_PORT."
-    msg_info "Online App utilizará $ONLINE_PORT."
-    echo
-
-    install_checkuser || return 1
-
-    echo
-
-    install_onlineapp || return 1
-
-    echo
-    line
-    msg_ok "INSTALACIÓN COMPLETA."
-    line
-
-    echo
-    echo -e "${WHITE}CheckUser : ${GREEN}127.0.0.1:$CHECKUSER_PORT${RESET}"
-    echo -e "${WHITE}Online App: ${GREEN}:$ONLINE_PORT${RESET}"
-
-    echo
-    pause
-}
-
-#==================================================
-# DESINSTALAR CHECKUSER
-#==================================================
-
-remove_checkuser() {
-
-    msg_info "Deteniendo CheckUser..."
-
-    systemctl disable --now checkuser >/dev/null 2>&1
-
-    rm -f "$CHECKUSER_SERVICE"
-
-    systemctl daemon-reload
-
-    rm -f "$CHECKUSER_CMD"
-    rm -f "$CHECKUSER_MANAGER"
-
-    rm -rf "$CHECKUSER_DIR"
-
-    rm -rf /etc/licencec
-
-    msg_ok "CheckUser eliminado."
-}
-
-#==================================================
-# DESINSTALAR ONLINE APP
-#==================================================
-
-remove_onlineapp() {
-
-    msg_info "Deteniendo Online App..."
-
-    systemctl disable --now kevintech-onlineapp \
-        >/dev/null 2>&1
-
-    rm -f "$ONLINE_SERVICE"
-
-    systemctl daemon-reload
-
-    #----------------------------------------------
-    # APACHE
-    #----------------------------------------------
-
-    a2dissite kevintech-onlineapp.conf \
-        >/dev/null 2>&1
-
-    rm -f \
-        /etc/apache2/sites-available/kevintech-onlineapp.conf
-
-    # Volver a 80 si no existe otro Listen 80
-    sed -i \
-        's/^#Listen 80$/Listen 80/' \
-        /etc/apache2/ports.conf
-
-    sed -i \
-        "/^Listen $ONLINE_PORT$/d" \
-        /etc/apache2/ports.conf
+    #-----------------------------------------------
+    # Reiniciar Apache
+    #-----------------------------------------------
 
     systemctl restart apache2 >/dev/null 2>&1
 
-    #----------------------------------------------
-    # ARCHIVOS ONLINE APP
-    #----------------------------------------------
+    #-----------------------------------------------
+    # Iniciar Online App
+    #-----------------------------------------------
 
-    rm -f "$ONLINE_APP"
+    screen -S onlineapp -X quit >/dev/null 2>&1
 
-    rm -rf /var/www/html/server
+    screen -dmS onlineapp \
+        "$BASE/protocolos/onlineapp"
 
-    #----------------------------------------------
-    # LIMPIAR SCREEN
-    #----------------------------------------------
+    sleep 3
 
-    screen -S onlineapp -X quit \
-        >/dev/null 2>&1
+    #-----------------------------------------------
+    # AUTOSTART
+    #-----------------------------------------------
+
+    touch /etc/autostart
+
+    sed -i '/onlineapp/d' /etc/autostart
+
+    echo "ps x | grep '$BASE/protocolos/onlineapp' | grep -v grep >/dev/null || screen -dmS onlineapp $BASE/protocolos/onlineapp" \
+        >> /etc/autostart
+
+    #-----------------------------------------------
+    # IP
+    #-----------------------------------------------
+
+    IP=$(wget -qO- --timeout=5 ipv4.icanhazip.com)
+
+    [[ -z "$IP" ]] && \
+        IP=$(hostname -I | awk '{print $1}')
+
+    echo ""
+
+    echo -e "\033[1;32mONLINE APP ACTIVO!\033[0m"
+
+    echo -e "\033[1;33mURL de Usuários Online:\033[0m"
+
+    echo "http://$IP:${ONLINEAPP_PORT}/server/online"
+
+    echo ""
+
+    sleep 3
+}
+
+function onapp2() {
+
+    clear
+
+    echo -e "\n\033[1;31mPARANDO O ONLINE APP...\033[0m"
+    echo ""
+
+    systemctl stop apache2 >/dev/null 2>&1
+
+    screen -S onlineapp -X quit >/dev/null 2>&1
+
+    pkill -f "$BASE/protocolos/onlineapp" >/dev/null 2>&1
 
     screen -wipe >/dev/null 2>&1
 
-    msg_ok "Online App eliminado."
+    [[ -f /etc/autostart ]] && \
+        sed -i '/onlineapp/d' /etc/autostart
+
+    rm -rf /var/www/html/server >/dev/null 2>&1
+
+    sleep 3
+
+    echo ""
+
+    echo -e "\033[1;31mONLINE APP PARADO!\033[0m"
+
+    sleep 3
 }
 
-#==================================================
-# DESINSTALAR TODO
-#==================================================
+function onapp_ssh() {
 
-remove_all() {
+    if pgrep -f "$BASE/protocolos/onlineapp" >/dev/null; then
+        onapp2
+    else
+        onapp1
+    fi
+
+}
+
+#=========================================================
+# INSTALACIÓN PRINCIPAL
+#=========================================================
+
+install() {
+
+    #-----------------------------------------------
+    # Zona horaria
+    #-----------------------------------------------
+
+    echo "America/Lima" > /etc/timezone
+
+    ln -fs \
+        /usr/share/zoneinfo/America/Lima \
+        /etc/localtime >/dev/null 2>&1
+
+    dpkg-reconfigure \
+        --frontend noninteractive \
+        tzdata >/dev/null 2>&1
 
     clear
 
-    line
-    echo -e "${RED}       DESINSTALANDO KEVINTECH CHECKUSER${RESET}"
-    line
+    echo -e "\E[44;1;37m  INSTALAR CHECKUSER PARA CONECTA4G,  \E[0m"
+    echo -e "\E[44;1;37m      GLTUNNEL, DTUNNEL, ANYMOD.      \E[0m"
+    echo -e "\E[44;1;37mVERSIÓN KEVINTECH                \E[0m"
 
-    remove_checkuser
+    echo ""
 
-    echo
+    echo -e \
+        "      \033[1;33m • \033[1;32mINICIANDO INSTALACIÓN\033[1;33m • \033[0m"
 
-    remove_onlineapp
+    echo ""
 
-    echo
+    fun_bar 'fun_install'
 
-    # NO TOCAR 10015
-    msg_info "Puerto 10015 no fue modificado."
+    clear
 
-    echo
+    echo -e "\E[44;1;37m       CHECKUSER KEVINTECH          \E[0m"
 
-    line
-    msg_ok "DESINSTALACIÓN COMPLETA."
-    line
+    echo -e "\E[44;1;37m       PUERTO: ${CHECKUSER_PORT}              \E[0m"
 
-    echo
-    pause
-}
+    echo -e "\E[44;1;37m       WEBSOCKET: ${WEBSOCKET_PORT}           \E[0m"
 
-#==================================================
-# ONLINE APP MANUAL
-#==================================================
+    echo -e "\E[44;1;37m       ONLINE APP: ${ONLINEAPP_PORT}          \E[0m"
 
-toggle_onlineapp() {
+    echo ""
 
-    if systemctl is-active --quiet kevintech-onlineapp; then
+    if systemctl is-active --quiet checkuser.service; then
 
-        systemctl stop kevintech-onlineapp
+        echo -e \
+            "      \033[1;33m • \033[1;32mINSTALACIÓN CONCLUIDA\033[1;33m • \033[0m"
 
-        msg_ok "Online App detenido."
+        echo ""
+
+        echo -e "${GREEN}CheckUser:${RESET}"
+
+        echo "http://$(hostname -I | awk '{print $1}'):${CHECKUSER_PORT}/checkUser"
+
+        echo ""
+
+        echo -e "${GREEN}WebSocket SSH:${RESET}"
+
+        echo "Puerto ${WEBSOCKET_PORT}"
+
+        echo ""
+
+        echo -e "${GREEN}Online App:${RESET}"
+
+        echo "Puerto ${ONLINEAPP_PORT}"
 
     else
 
-        if [[ ! -f "$ONLINE_APP" ]]; then
+        echo -e \
+            "${RED}✘ CheckUser no está activo.${RESET}"
 
-            msg_warn "Online App no está instalado."
-            install_onlineapp
+        echo ""
 
-            return
-        fi
+        systemctl status checkuser.service --no-pager
 
-        systemctl start kevintech-onlineapp
-
-        if systemctl is-active --quiet \
-            kevintech-onlineapp; then
-
-            msg_ok "Online App iniciado."
-
-        else
-
-            msg_error "No pudo iniciar."
-        fi
     fi
 
-    sleep 2
+    echo ""
+
+    echo -ne \
+        "\033[1;32mDE UM ENTER PARA \033[1;33mCONTINUAR...\033[1;37m: "
+
+    read -r
+
 }
 
-#==================================================
-# MENÚ
-#==================================================
+#=========================================================
+# LIMPIEZA
+#=========================================================
 
-while true; do
+cat /dev/null > ~/.bash_history 2>/dev/null
 
-    clear
+history -c 2>/dev/null
 
-    CHECK_STATUS="$(status_checkuser)"
-    ONLINE_STATUS="$(status_online)"
+rm -f /root/instcheck* >/dev/null 2>&1
 
-    line
+rm -f /root/wget-log* >/dev/null 2>&1
 
-    echo -e "${MAGENTA}           🛡 KEVINTECH MULTI SCRIPT${RESET}"
-    echo -e "${WHITE}              CHECKUSER PREMIUM${RESET}"
+#=========================================================
+# EJECUTAR
+#=========================================================
 
-    line
-
-    echo -e " ${GREEN}[01]${RESET} 📦 Instalar CheckUser + Online App"
-    echo -e " ${RED}[02]${RESET} 🗑️  Desinstalar todo"
-    echo -e " ${CYAN}[03]${RESET} 🌐 Online App ON/OFF"
-
-    echo
-
-    echo -e " ${WHITE}CheckUser : ${RESET}$CHECK_STATUS"
-    echo -e " ${WHITE}Online App: ${RESET}$ONLINE_STATUS"
-
-    echo
-
-    echo -e "${GRAY}CheckUser : puerto interno $CHECKUSER_PORT${RESET}"
-    echo -e "${GRAY}Online App: puerto $ONLINE_PORT${RESET}"
-    echo -e "${GRAY}SSH/WS    : puerto 10015 NO SE TOCA${RESET}"
-
-    line
-
-    echo -e " ${GREEN}[00]${RESET} ↩ Regresar"
-
-    line
-
-    echo
-
-    read -rp " ► Opción: " OP
-
-    case "$OP" in
-
-        1|01)
-
-            if checkuser_installed &&
-               online_installed; then
-
-                msg_warn "Ya está instalado."
-                pause
-
-            else
-
-                install_all
-
-            fi
-
-        ;;
-
-        2|02)
-
-            remove_all
-
-        ;;
-
-        3|03)
-
-            toggle_onlineapp
-
-        ;;
-
-        0|00)
-
-            exec bash "$BASE/protocolos/menu.sh"
-
-        ;;
-
-        *)
-
-            msg_error "Opción inválida."
-            sleep 2
-
-        ;;
-
-    esac
-
-done
+install
