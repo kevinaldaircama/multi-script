@@ -1,8 +1,8 @@
-# KEVINTECH Telegram Bot
+# KevinTech Telegram Bot - Full
 
-Bot integrado para Multi Script.
+Bot integrado con `/etc/kevintech`.
 
-## Instalar
+## Instalación
 
 Desde la raíz del proyecto:
 
@@ -10,13 +10,20 @@ Desde la raíz del proyecto:
 sudo bash telegram/install.sh
 ```
 
-El instalador pide Token + Telegram ID del dueño, crea el servicio systemd y lo mantiene activo.
+Pide Token + Telegram ID del dueño y crea un servicio systemd permanente.
 
-## Estado
+## Usuarios
 
-```bash
-systemctl status kevintech-telegram --no-pager
-journalctl -u kevintech-telegram -f
-```
+La creación por Telegram usa la misma lógica esencial de `usuarios/add.sh`:
+- useradd con expiración
+- contraseña
+- límite en `/etc/kevintech/limits`
+- sincronización ZiVPN si existe
+- limitador cron
+- entrega de credenciales y datos del servidor
 
-No subas `telegram/.env` a GitHub.
+Renovar, cambiar contraseña, eliminar, bloquear y desbloquear se ejecutan directamente desde el bot.
+
+## Seguridad
+
+`telegram/.env` nunca debe subirse a GitHub.
