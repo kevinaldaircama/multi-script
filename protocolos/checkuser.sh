@@ -923,9 +923,265 @@ install() {
 }
 
 #=========================================================
-# EJECUCIÓN
+# MODO AUTOMÁTICO
 #=========================================================
 
-install
+if [[ "$1" == "--auto" ]]; then
 
-exit 0
+    install
+
+    exit $?
+
+fi
+
+#=========================================================
+# MENÚ PRINCIPAL
+#=========================================================
+
+while true; do
+
+    header
+
+    echo -e "${WHITE}Estado de CheckUser:${RESET}"
+
+    if systemctl is-active --quiet checkuser.service; then
+        echo -e " ${GREEN}●${RESET} ${GREEN}ACTIVO${RESET}"
+    elif [[ -f "/etc/systemd/system/checkuser.service" ]]; then
+        echo -e " ${RED}●${RESET} ${RED}DETENIDO${RESET}"
+    else
+        echo -e " ${GRAY}●${RESET} ${GRAY}NO INSTALADO${RESET}"
+    fi
+
+    echo
+
+    echo -e "${WHITE}Puertos:${RESET}"
+    echo -e " ${CYAN}◆${RESET} CheckUser  : ${GREEN}${CHECKUSER_PORT}${RESET}"
+    echo -e " ${CYAN}◆${RESET} WebSocket  : ${GREEN}${WEBSOCKET_PORT}${RESET}"
+    echo -e " ${CYAN}◆${RESET} Online App : ${GREEN}${ONLINEAPP_PORT}${RESET}"
+
+    line
+
+    echo -e "${BLUE}${BOLD}🛡️ CHECKUSER${RESET}"
+    echo
+
+    echo -e " ${GREEN}[01]${RESET} 🚀 Instalar / Actualizar"
+    echo -e " ${GREEN}[02]${RESET} ♻️  Reiniciar CheckUser"
+    echo -e " ${GREEN}[03]${RESET} 📊 Estado"
+    echo -e " ${GREEN}[04]${RESET} 🌐 Online App"
+    echo -e " ${GREEN}[05]${RESET} ⛔ Detener Online App"
+    echo -e " ${GREEN}[06]${RESET} 🔎 Diagnóstico"
+    echo -e " ${GREEN}[07]${RESET} 🖥️  Información VPS"
+    echo -e " ${RED}[08]${RESET} 🗑️  Desinstalar"
+
+    echo
+
+    echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
+    echo -e " ${RED}[00]${RESET} ↩️  Regresar al Menú de Protocolos"
+
+    echo
+
+    echo -e "${GRAY}KevinTech Multi Script • CheckUser Manager v4.0${RESET}"
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" \
+        OP
+
+    case "$OP" in
+
+        1)
+            install
+            ;;
+
+        2)
+            header
+
+            systemctl restart checkuser.service
+
+            sleep 2
+
+            if systemctl is-active --quiet checkuser.service; then
+                ok "CheckUser reiniciado correctamente."
+            else
+                error_msg "CheckUser no pudo reiniciarse."
+            fi
+
+            pause
+            ;;
+
+        3)
+            header
+
+            echo
+            echo -e "${WHITE}${BOLD}📊 ESTADO DE CHECKUSER${RESET}"
+            echo
+
+            if systemctl is-active --quiet checkuser.service; then
+                ok "CheckUser: ACTIVO"
+            else
+                error_msg "CheckUser: DETENIDO"
+            fi
+
+            echo
+
+            ss -lntp 2>/dev/null |
+                grep -E ":${CHECKUSER_PORT}|:${WEBSOCKET_PORT}|:${ONLINEAPP_PORT}" ||
+                echo -e "${GRAY}No se encontraron los puertos escuchando.${RESET}"
+
+            pause
+            ;;
+
+        4)
+            create_onlineapp_service
+            pause
+            ;;
+
+        5)
+            header
+
+            systemctl stop "$ONLINEAPP_SERVICE" 2>/dev/null || true
+
+            ok "Online App detenido."
+
+            pause
+            ;;
+
+        6)
+            header
+
+            echo -e "${WHITE}${BOLD}🔎 DIAGNÓSTICO${RESET}"
+            echo
+
+            [[ -f /bin/chall ]] &&
+                ok "chall encontrado" ||
+                error_msg "chall no encontrado"
+
+            [[ -f /bin/checkgestor ]] &&
+                ok "checkgestor encontrado" ||
+                error_msg "checkgestor no encontrado"
+
+            [[ -f "$CHECKUSER_PY" ]] &&
+                ok "CheckUser API encontrada" ||
+                error_msg "CheckUser API no encontrada"
+
+            [[ -f "/etc/systemd/system/$CHECKUSER_SERVICE" ]] &&
+                ok "Servicio CheckUser encontrado" ||
+                error_msg "Servicio CheckUser no encontrado"
+
+            if systemctl is-active --quiet "$CHECKUSER_SERVICE"; then
+                ok "CheckUser está activo"
+            else
+                error_msg "CheckUser está detenido"
+            fi
+
+            echo
+
+            echo -e "${WHITE}Puertos:${RESET}"
+
+            for PORT in \
+                "$CHECKUSER_PORT" \
+                "$WEBSOCKET_PORT" \
+                "$ONLINEAPP_PORT"
+            do
+
+                if ss -lnt 2>/dev/null |
+                    grep -q ":${PORT} "; then
+
+                    ok "TCP $PORT está escuchando"
+
+                else
+
+                    warning "TCP $PORT no está escuchando"
+
+                fi
+
+            done
+
+            echo
+
+            echo -e "${WHITE}Últimos logs:${RESET}"
+
+            journalctl \
+                -u "$CHECKUSER_SERVICE" \
+                -n 20 \
+                --no-pager \
+                2>/dev/null
+
+            pause
+            ;;
+
+        7)
+            header
+
+            echo -e "${WHITE}${BOLD}🖥️ INFORMACIÓN VPS${RESET}"
+            echo
+
+            echo -e "${WHITE}Hostname:${RESET} $(hostname)"
+            echo -e "${WHITE}Sistema:${RESET} $(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')"
+            echo -e "${WHITE}Kernel:${RESET} $(uname -r)"
+            echo -e "${WHITE}RAM:${RESET} $(free -h | awk '/Mem:/ {print $3" / "$2}')"
+            echo -e "${WHITE}Disco:${RESET} $(df -h / | awk 'NR==2 {print $5}')"
+            echo -e "${WHITE}Uptime:${RESET} $(uptime -p)"
+
+            pause
+            ;;
+
+        8)
+
+            header
+
+            warning "Se eliminará CheckUser."
+
+            read -r -p \
+                "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+                CONFIRM
+
+            if [[ "$CONFIRM" == "ELIMINAR" ]]; then
+
+                systemctl stop "$CHECKUSER_SERVICE" 2>/dev/null || true
+                systemctl disable "$CHECKUSER_SERVICE" 2>/dev/null || true
+
+                rm -f \
+                    "/etc/systemd/system/$CHECKUSER_SERVICE" \
+                    /bin/chall \
+                    /bin/checkgestor
+
+                rm -rf "$CHECKUSER_DIR"
+
+                systemctl daemon-reload
+
+                ok "CheckUser eliminado."
+
+            else
+
+                warning "Operación cancelada."
+
+            fi
+
+            pause
+            ;;
+
+        0)
+
+            clear
+
+            exec bash \
+                "$BASE/protocolos/menu.sh"
+
+            ;;
+
+        "")
+
+            ;;
+
+        *)
+
+            error_msg "Opción inválida."
+            sleep 1
+
+            ;;
+
+    esac
+
+done
