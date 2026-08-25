@@ -194,9 +194,6 @@ while true; do
     printf "  ${GREEN}${BOLD}[07]${RESET} 🔎 %-35s\n" \
         "Scanner Host / Dominio"
 
-    printf "  ${GREEN}${BOLD}[08]${RESET} 🤖 %-35s\n" \
-        "Bot Telegram"
-
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar al Menú de Protocolos${RESET}"
@@ -235,10 +232,6 @@ while true; do
 
         7)
             run_tool "$BASE/herramientas/scanner.sh"
-            ;;
-
-        8)
-            run_tool "$BASE/herramientas/dewisep.sh"
             ;;
 
         0)
