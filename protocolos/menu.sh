@@ -322,17 +322,17 @@ while true; do
 
     printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
         "histeria" "$HYSTERIA_STATUS"
-printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
+printf "  ${GREEN}${BOLD}[11]${RESET} 💱 %-19s %b\n" \
         "histeria" "$HYSTERIA_STATUS"
 
     echo
     echo -e "${BLUE}${BOLD}  🛠️ ADMINISTRACIÓN DEL SISTEMA${RESET}"
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
 
-    echo -e "  ${GREEN}${BOLD}[11]${RESET} 🧰 Herramientas"
-    echo -e "  ${GREEN}${BOLD}[12]${RESET} 🔄 Reiniciar Servicios"
-    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔥 Firewall"
-    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔘 bot telegram"
+    echo -e "  ${GREEN}${BOLD}[12]${RESET} 🧰 Herramientas"
+    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔄 Reiniciar Servicios"
+    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔥 Firewall"
+    echo -e "  ${GREEN}${BOLD}[15]${RESET} 🔘 bot telegram"
     
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
@@ -385,19 +385,22 @@ printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
         10)
             run_module "$BASE/protocolos/openvpn.sh"
             ;;
-
         11)
-            run_module "$BASE/herramientas/menu.sh"
+            run_module "$BASE/protocolos/histeria.sh"
             ;;
 
         12)
-            run_module "$BASE/herramientas/reiniciar.sh"
+            run_module "$BASE/herramientas/menu.sh"
             ;;
 
         13)
+            run_module "$BASE/herramientas/reiniciar.sh"
+            ;;
+
+        14)
             run_module "$BASE/herramientas/firewall.sh"
             ;;
-       14)
+       15)
             run_module "$BASE/telegram/install.sh"
             ;;
             
