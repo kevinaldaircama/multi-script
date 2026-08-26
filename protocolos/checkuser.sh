@@ -2,7 +2,9 @@
 
 #=========================================================
 #        KEVINTECH CHECKUSER MANAGER
-#        PREMIUM EDITION v4.1
+#        PREMIUM EDITION v5.0
+#
+#        INTEGRACIÓN CHECKUSER ORIGINAL
 #
 # CheckUser  : TCP 10016
 # WebSocket  : TCP 10015
@@ -25,6 +27,7 @@ CONFIG="$BASE/config.conf"
 
 CHECKUSER_DIR="/usr/lib/checkgestor"
 CHECKUSER_PY="$CHECKUSER_DIR/checkgestor.py"
+
 CHECKUSER_SERVICE="checkuser.service"
 
 ONLINEAPP_DIR="/var/www/html/server"
@@ -33,6 +36,25 @@ ONLINEAPP_SERVICE="kevintech-onlineapp.service"
 
 CHECKUSER_URL_PATH="/checkUser"
 ONLINEAPP_URL_PATH="/server/online"
+
+#=========================================================
+# URLS ORIGINALES CHECKUSER
+#=========================================================
+
+CHECKUSER_REPO="https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main"
+
+CHALL_URL="$CHECKUSER_REPO/chall.sh"
+CHECKGESTOR_URL="$CHECKUSER_REPO/checkgestor.sh"
+CHECKGESTOR_PY_URL="$CHECKUSER_REPO/checkgestor.py"
+
+#=========================================================
+# LICENCIA / INFORMACIÓN ORIGINAL
+#=========================================================
+
+LICENSE_DIR="/etc/licencec"
+LICENSE_FILE="$LICENSE_DIR/telegram"
+
+LICENSE_TEXT="By: @nandoslayer"
 
 #=========================================================
 # COLORES
@@ -88,15 +110,20 @@ fi
 #=========================================================
 
 clear_screen() {
+
     clear 2>/dev/null || true
 }
 
 line() {
-    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo -e \
+        "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
 line_color() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+    echo -e \
+        "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
 header() {
@@ -105,7 +132,7 @@ header() {
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${RESET} ${PINK}${BOLD}              🛡️ KEVINTECH CHECKUSER${RESET}                ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                    PREMIUM v4.1${RESET}                    ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET} ${PURPLE}${BOLD}                    PREMIUM v5.0${RESET}                    ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
@@ -117,25 +144,35 @@ section() {
 
     echo
     echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    printf "${PURPLE}║${RESET} ${WHITE}${BOLD} %-58s${RESET} ${PURPLE}║${RESET}\n" "$1"
+    printf \
+        "${PURPLE}║${RESET} ${WHITE}${BOLD} %-58s${RESET} ${PURPLE}║${RESET}\n" \
+        "$1"
     echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
 }
 
 ok() {
-    echo -e " ${GREEN}✔${RESET} ${WHITE}$1${RESET}"
+
+    echo -e \
+        " ${GREEN}✔${RESET} ${WHITE}$1${RESET}"
 }
 
 error_msg() {
-    echo -e " ${RED}✖${RESET} ${WHITE}$1${RESET}"
+
+    echo -e \
+        " ${RED}✖${RESET} ${WHITE}$1${RESET}"
 }
 
 warning() {
-    echo -e " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
+
+    echo -e \
+        " ${YELLOW}⚠${RESET} ${WHITE}$1${RESET}"
 }
 
 info() {
-    echo -e " ${CYAN}◆${RESET} ${WHITE}$1${RESET}"
+
+    echo -e \
+        " ${CYAN}◆${RESET} ${WHITE}$1${RESET}"
 }
 
 loading() {
@@ -145,8 +182,11 @@ loading() {
     echo -ne " ${CYAN}${TEXT}${RESET} "
 
     for _ in 1 2 3; do
+
         echo -ne "${PURPLE}●${RESET}"
+
         sleep 0.15
+
     done
 
     echo
@@ -155,10 +195,96 @@ loading() {
 pause() {
 
     echo
+
     line_color
+
     echo
+
     read -r -p \
         "$(echo -e "${GOLD}${BOLD}➜ Presiona ENTER para continuar...${RESET}")"
+}
+
+#=========================================================
+# BARRA ORIGINAL
+#=========================================================
+
+fun_bar() {
+
+    local COMMAND1="$1"
+    local COMMAND2="$2"
+
+    rm -f "$HOME/fim" 2>/dev/null
+
+    (
+
+        if [[ -n "$COMMAND1" ]]; then
+            bash -c "$COMMAND1" >/dev/null 2>&1
+        fi
+
+        if [[ -n "$COMMAND2" ]]; then
+            bash -c "$COMMAND2" >/dev/null 2>&1
+        fi
+
+        touch "$HOME/fim"
+
+    ) >/dev/null 2>&1 &
+
+    tput civis 2>/dev/null || true
+
+    echo -ne \
+        "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
+
+    while true; do
+
+        for ((i=0; i<18; i++)); do
+
+            echo -ne "\033[1;31m#"
+
+            sleep 0.1
+
+        done
+
+        if [[ -e "$HOME/fim" ]]; then
+
+            rm -f "$HOME/fim"
+
+            break
+
+        fi
+
+        echo -e "\033[1;33m]"
+
+        sleep 1
+
+        tput cuu1 2>/dev/null || true
+        tput dl1 2>/dev/null || true
+
+        echo -ne \
+            "\033[1;33mAGUARDE \033[1;37m- \033[1;33m["
+
+    done
+
+    echo -e \
+        "\033[1;33m]\033[1;37m - \033[1;32mOK !\033[1;37m"
+
+    tput cnorm 2>/dev/null || true
+}
+
+#=========================================================
+# CHECK INSTALADO
+#=========================================================
+
+check_installed() {
+
+    if [[ -f "/bin/chall" ]] &&
+       [[ -f "/bin/checkgestor" ]] &&
+       [[ -f "$CHECKUSER_PY" ]]; then
+
+        return 0
+
+    fi
+
+    return 1
 }
 
 #=========================================================
@@ -166,6 +292,7 @@ pause() {
 #=========================================================
 
 check_service() {
+
     systemctl is-active --quiet "$1"
 }
 
@@ -182,6 +309,7 @@ port_tcp_in_use() {
             $4 == P || $4 ~ P"$" {
                 found=1
             }
+
             END {
                 exit !found
             }
@@ -207,10 +335,12 @@ get_public_ip() {
     )
 
     if [[ -z "$IP" ]]; then
+
         IP=$(
             hostname -I 2>/dev/null |
             awk '{print $1}'
         )
+
     fi
 
     echo "${IP:-127.0.0.1}"
@@ -229,7 +359,10 @@ install_dependencies() {
     info "Actualizando repositorios..."
 
     if ! apt-get update -y >/dev/null 2>&1; then
-        error_msg "No se pudieron actualizar los repositorios."
+
+        error_msg \
+            "No se pudieron actualizar los repositorios."
+
         return 1
     fi
 
@@ -242,20 +375,208 @@ install_dependencies() {
         curl \
         ca-certificates \
         python3 \
+        python3-pip \
         python3-flask \
         apache2 \
         screen \
         figlet \
         iproute2 \
+        net-tools \
+        lsof \
         >/dev/null 2>&1; then
 
-        error_msg "No se pudieron instalar las dependencias."
+        error_msg \
+            "No se pudieron instalar las dependencias."
+
         return 1
     fi
 
     ok "Dependencias instaladas."
 
+    #-----------------------------------------------------
+    # FLASK
+    #-----------------------------------------------------
+
+    if python3 -c "import flask" >/dev/null 2>&1; then
+
+        ok "Flask ya está disponible."
+
+    else
+
+        info "Instalando Flask mediante pip..."
+
+        python3 -m pip install flask \
+            --break-system-packages \
+            >/dev/null 2>&1 || true
+
+        if python3 -c "import flask" >/dev/null 2>&1; then
+
+            ok "Flask instalado."
+
+        else
+
+            warning \
+                "No fue posible instalar Flask mediante pip."
+
+        fi
+
+    fi
+
     return 0
+}
+
+#=========================================================
+# DESCARGAR ARCHIVO
+#=========================================================
+
+download_file() {
+
+    local URL="$1"
+    local DEST="$2"
+    local NAME="$3"
+
+    info "Descargando $NAME..."
+
+    rm -f "$DEST"
+
+    if ! wget \
+        -q \
+        --timeout=20 \
+        --tries=3 \
+        -O "$DEST" \
+        "$URL"; then
+
+        error_msg \
+            "No se pudo descargar $NAME."
+
+        rm -f "$DEST"
+
+        return 1
+    fi
+
+    if [[ ! -s "$DEST" ]]; then
+
+        error_msg \
+            "$NAME está vacío."
+
+        rm -f "$DEST"
+
+        return 1
+    fi
+
+    chmod 755 "$DEST"
+
+    ok "$NAME instalado."
+
+    return 0
+}
+
+#=========================================================
+# INSTALACIÓN ORIGINAL
+#=========================================================
+
+fun_install() {
+
+    #-----------------------------------------------------
+    # DEPENDENCIAS
+    #-----------------------------------------------------
+
+    apt-get install \
+        figlet \
+        python3-pip \
+        python3-flask \
+        wget \
+        curl \
+        ca-certificates \
+        screen \
+        iproute2 \
+        net-tools \
+        lsof \
+        -y >/dev/null 2>&1
+
+    #-----------------------------------------------------
+    # FLASK
+    #-----------------------------------------------------
+
+    python3 -c "import flask" \
+        >/dev/null 2>&1 || {
+
+        python3 -m pip install flask \
+            --break-system-packages \
+            >/dev/null 2>&1 || true
+    }
+
+    #-----------------------------------------------------
+    # DIRECTORIO
+    #-----------------------------------------------------
+
+    mkdir -p "$CHECKUSER_DIR"
+
+    #-----------------------------------------------------
+    # CHALL
+    #-----------------------------------------------------
+
+    wget \
+        -q \
+        --timeout=20 \
+        --tries=3 \
+        -O /bin/chall \
+        "$CHALL_URL" \
+        >/dev/null 2>&1
+
+    #-----------------------------------------------------
+    # CHECKGESTOR
+    #-----------------------------------------------------
+
+    wget \
+        -q \
+        --timeout=20 \
+        --tries=3 \
+        -O /bin/checkgestor \
+        "$CHECKGESTOR_URL" \
+        >/dev/null 2>&1
+
+    #-----------------------------------------------------
+    # PYTHON
+    #-----------------------------------------------------
+
+    wget \
+        -q \
+        --timeout=20 \
+        --tries=3 \
+        -O "$CHECKUSER_PY" \
+        "$CHECKGESTOR_PY_URL" \
+        >/dev/null 2>&1
+
+    #-----------------------------------------------------
+    # PERMISOS
+    #-----------------------------------------------------
+
+    chmod 755 /bin/chall \
+        >/dev/null 2>&1
+
+    chmod 755 /bin/checkgestor \
+        >/dev/null 2>&1
+
+    chmod 755 "$CHECKUSER_PY" \
+        >/dev/null 2>&1
+
+    #-----------------------------------------------------
+    # LICENCIA ORIGINAL
+    #-----------------------------------------------------
+
+    mkdir -p "$LICENSE_DIR"
+
+    echo "$LICENSE_TEXT" \
+        > "$LICENSE_FILE"
+
+    chmod 644 "$LICENSE_FILE"
+
+    #-----------------------------------------------------
+    # ESPERA ORIGINAL
+    #-----------------------------------------------------
+
+    sleep 2
 }
 
 #=========================================================
@@ -268,312 +589,104 @@ download_checkuser() {
 
     mkdir -p "$CHECKUSER_DIR"
 
-    #-----------------------------------------------------
+    #=====================================================
     # CHALL
-    #-----------------------------------------------------
+    #=====================================================
 
-    info "Descargando chall..."
+    download_file \
+        "$CHALL_URL" \
+        "/bin/chall" \
+        "chall" || return 1
 
-    if ! wget \
-        -q \
-        -O /bin/chall \
-        "https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/chall.sh"; then
+    #=====================================================
+    # CHECKGESTOR
+    #=====================================================
 
-        error_msg "No se pudo descargar chall."
-        return 1
-    fi
+    download_file \
+        "$CHECKGESTOR_URL" \
+        "/bin/checkgestor" \
+        "checkgestor" || return 1
 
-    if [[ ! -s /bin/chall ]]; then
+    #=====================================================
+    # PYTHON
+    #=====================================================
 
-        error_msg "El archivo chall está vacío."
-        return 1
-    fi
+    download_file \
+        "$CHECKGESTOR_PY_URL" \
+        "$CHECKUSER_PY" \
+        "checkgestor.py" || return 1
+
+    #=====================================================
+    # PERMISOS
+    #=====================================================
 
     chmod 755 /bin/chall
-
-    ok "chall instalado."
-
-    #-----------------------------------------------------
-    # CHECKGESTOR
-    #-----------------------------------------------------
-
-    info "Descargando CheckGestor..."
-
-    if ! wget \
-        -q \
-        -O /bin/checkgestor \
-        "https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.sh"; then
-
-        error_msg "No se pudo descargar checkgestor."
-        return 1
-    fi
-
-    if [[ ! -s /bin/checkgestor ]]; then
-
-        error_msg "El archivo checkgestor está vacío."
-        return 1
-    fi
-
     chmod 755 /bin/checkgestor
-
-    ok "CheckGestor descargado."
-
-    #-----------------------------------------------------
-    # API PYTHON
-    #-----------------------------------------------------
-
-    info "Descargando API CheckUser..."
-
-    if ! wget \
-        -q \
-        -O "$CHECKUSER_PY" \
-        "https://raw.githubusercontent.com/PhoenixxZ2023/checkUser2024/main/checkgestor.py"; then
-
-        error_msg "No se pudo descargar checkgestor.py."
-        return 1
-    fi
-
-    if [[ ! -s "$CHECKUSER_PY" ]]; then
-
-        error_msg "checkgestor.py está vacío."
-        return 1
-    fi
-
     chmod 755 "$CHECKUSER_PY"
 
-    #-----------------------------------------------------
-    # COMPROBAR PYTHON
-    #-----------------------------------------------------
+    ok "Permisos configurados."
 
-    if ! python3 -m py_compile "$CHECKUSER_PY" \
+    #=====================================================
+    # PYTHON
+    #=====================================================
+
+    if ! python3 -m py_compile \
+        "$CHECKUSER_PY" \
         >/dev/null 2>&1; then
 
-        error_msg "checkgestor.py contiene un error de Python."
+        error_msg \
+            "checkgestor.py contiene un error de Python."
 
-        python3 -m py_compile "$CHECKUSER_PY" 2>&1
+        python3 -m py_compile \
+            "$CHECKUSER_PY" 2>&1
 
         return 1
     fi
 
-    ok "API CheckUser instalada."
+    ok "Sintaxis Python correcta."
+
+    #=====================================================
+    # LICENCIA
+    #=====================================================
+
+    create_license_info
 
     return 0
 }
 
 #=========================================================
-# CHECKGESTOR KEVINTECH
+# CONFIGURAR CHECKGESTOR
 #=========================================================
 
 create_checkgestor() {
 
     section "⚙️ CONFIGURANDO CHECKGESTOR"
 
-    cat > /bin/checkgestor <<'EOF'
-#!/bin/bash
+    if [[ ! -f /bin/checkgestor ]]; then
 
-USER_NAME="$1"
-TYPE="$2"
+        error_msg \
+            "No existe /bin/checkgestor."
 
-LIMIT_DIR="/etc/kevintech/limits"
-
-user_exist() {
-
-    if id "$USER_NAME" >/dev/null 2>&1; then
-        echo "$USER_NAME"
-    else
-        echo "Not exist"
+        return 1
     fi
-}
-
-get_limit() {
-
-    local FILE="$LIMIT_DIR/$USER_NAME"
-
-    if [[ -f "$FILE" ]]; then
-
-        local LIMIT
-
-        LIMIT=$(cat "$FILE" 2>/dev/null)
-
-        if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
-            echo "$LIMIT"
-        else
-            echo "1"
-        fi
-
-    else
-
-        echo "1"
-
-    fi
-}
-
-cont_online() {
-
-    local LIMIT
-    local CONSSH
-
-    LIMIT=$(get_limit)
-
-    CONSSH=$(
-        ps -u "$USER_NAME" -o comm= 2>/dev/null |
-        grep -c '^sshd$'
-    )
-
-    if (( LIMIT > 0 && CONSSH > LIMIT )); then
-        pkill -KILL -u "$USER_NAME" 2>/dev/null
-    fi
-
-    echo "$CONSSH"
-}
-
-limiter_user() {
-
-    get_limit
-}
-
-get_expiration() {
-
-    chage -l "$USER_NAME" 2>/dev/null |
-        grep -i 'Account expires' |
-        awk -F: '{gsub(/^ /,"",$2); print $2}'
-}
-
-check_data() {
-
-    if ! id "$USER_NAME" >/dev/null 2>&1; then
-        echo "Not exist"
-        return
-    fi
-
-    local DATAUSER
-
-    DATAUSER=$(get_expiration)
-
-    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
-        echo "31/12/2099"
-        return
-    fi
-
-    date -d "$DATAUSER" '+%d/%m/%Y' 2>/dev/null
-}
-
-check_dias() {
-
-    if ! id "$USER_NAME" >/dev/null 2>&1; then
-        echo "Not exist"
-        return
-    fi
-
-    local DATAUSER
-    local EXPIRATION
-    local TODAY
-    local DAYS
-
-    DATAUSER=$(get_expiration)
-
-    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
-        echo "9999"
-        return
-    fi
-
-    EXPIRATION=$(date -d "$DATAUSER" '+%Y-%m-%d' 2>/dev/null)
-
-    if [[ -z "$EXPIRATION" ]]; then
-        echo "0"
-        return
-    fi
-
-    TODAY=$(date '+%Y-%m-%d')
-
-    DAYS=$(((
-        $(date -ud "$EXPIRATION" +%s) -
-        $(date -ud "$TODAY" +%s)
-    ) / 86400))
-
-    echo "$DAYS"
-}
-
-check_new_data() {
-
-    if ! id "$USER_NAME" >/dev/null 2>&1; then
-        echo "Not exist"
-        return
-    fi
-
-    local DATAUSER
-
-    DATAUSER=$(get_expiration)
-
-    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
-        echo "20991231"
-        return
-    fi
-
-    date -d "$DATAUSER" '+%Y%m%d' 2>/dev/null
-}
-
-datacheck_new() {
-
-    if ! id "$USER_NAME" >/dev/null 2>&1; then
-        echo "Not exist"
-        return
-    fi
-
-    local DATAUSER
-
-    DATAUSER=$(get_expiration)
-
-    if [[ -z "$DATAUSER" || "$DATAUSER" == "never" ]]; then
-        echo "31122099"
-        return
-    fi
-
-    date -d "$DATAUSER" '+%d%m%Y' 2>/dev/null
-}
-
-case "$TYPE" in
-
-    1)
-        user_exist
-        ;;
-
-    2)
-        cont_online
-        ;;
-
-    3)
-        limiter_user
-        ;;
-
-    4)
-        check_data
-        ;;
-
-    5)
-        check_dias
-        ;;
-
-    6)
-        check_new_data
-        ;;
-
-    7)
-        datacheck_new
-        ;;
-
-    *)
-        echo "Not exist"
-        ;;
-
-esac
-EOF
 
     chmod 755 /bin/checkgestor
 
-    mkdir -p /etc/kevintech/limits
+    ok "CheckGestor configurado."
 
-    ok "CheckGestor KevinTech configurado."
+    if [[ -f /root/usuarios.db ]]; then
+
+        ok "/root/usuarios.db detectado."
+
+    else
+
+        warning \
+            "/root/usuarios.db no existe."
+
+        info \
+            "Los usuarios pueden ser administrados por otro sistema."
+
+    fi
 
     return 0
 }
@@ -586,11 +699,20 @@ create_checkuser_service() {
 
     section "🌐 CONFIGURANDO CHECKUSER API"
 
+    if [[ ! -f "$CHECKUSER_PY" ]]; then
+
+        error_msg \
+            "No existe $CHECKUSER_PY."
+
+        return 1
+    fi
+
     if port_tcp_in_use "$CHECKUSER_PORT"; then
 
         if ! check_service "$CHECKUSER_SERVICE"; then
 
-            warning "TCP $CHECKUSER_PORT ya está ocupado."
+            warning \
+                "TCP $CHECKUSER_PORT ya está ocupado."
 
             ss -lntp 2>/dev/null |
                 grep ":$CHECKUSER_PORT" || true
@@ -634,12 +756,14 @@ EOF
 
     if check_service "$CHECKUSER_SERVICE"; then
 
-        ok "CheckUser activo en TCP $CHECKUSER_PORT."
+        ok \
+            "CheckUser activo en TCP $CHECKUSER_PORT."
 
         return 0
     fi
 
-    error_msg "CheckUser no pudo iniciar."
+    error_msg \
+        "CheckUser no pudo iniciar."
 
     echo
 
@@ -658,18 +782,32 @@ EOF
 
 configure_apache() {
 
-    info "Configurando Apache en puerto $ONLINEAPP_PORT..."
+    info \
+        "Configurando Apache en puerto $ONLINEAPP_PORT..."
 
-    # Eliminar Listen 80/8888 existentes
+    mkdir -p "$ONLINEAPP_DIR"
+
+    if [[ ! -f /etc/apache2/ports.conf ]]; then
+
+        touch /etc/apache2/ports.conf
+
+    fi
+
+    #-----------------------------------------------------
+    # LISTEN 8888
+    #-----------------------------------------------------
+
     sed -i \
-        -E '/^[[:space:]]*Listen[[:space:]]+(80|8888)[[:space:]]*$/d' \
+        -E "/^[[:space:]]*Listen[[:space:]]+$ONLINEAPP_PORT[[:space:]]*$/d" \
         /etc/apache2/ports.conf
 
-    # Agregar únicamente nuestro puerto
     echo "Listen $ONLINEAPP_PORT" \
         >> /etc/apache2/ports.conf
 
-    # Eliminar VirtualHost antiguo de este proyecto
+    #-----------------------------------------------------
+    # VIRTUAL HOST
+    #-----------------------------------------------------
+
     rm -f \
         /etc/apache2/sites-enabled/kevintech-onlineapp.conf
 
@@ -701,7 +839,8 @@ EOF
     if ! apache2ctl configtest \
         >/dev/null 2>&1; then
 
-        error_msg "La configuración de Apache es inválida."
+        error_msg \
+            "La configuración de Apache es inválida."
 
         apache2ctl configtest
 
@@ -717,7 +856,8 @@ EOF
 
     if ! systemctl is-active --quiet apache2; then
 
-        error_msg "Apache no pudo iniciar."
+        error_msg \
+            "Apache no pudo iniciar."
 
         journalctl \
             -u apache2 \
@@ -728,7 +868,8 @@ EOF
         return 1
     fi
 
-    ok "Apache activo en TCP $ONLINEAPP_PORT."
+    ok \
+        "Apache activo en TCP $ONLINEAPP_PORT."
 
     return 0
 }
@@ -744,9 +885,12 @@ create_onlineapp_service() {
     if [[ ! -f "$ONLINEAPP_SCRIPT" ]]; then
 
         warning "No existe:"
-        echo -e " ${GRAY}$ONLINEAPP_SCRIPT${RESET}"
 
-        warning "Online App será omitido."
+        echo -e \
+            " ${GRAY}$ONLINEAPP_SCRIPT${RESET}"
+
+        warning \
+            "Online App será omitido."
 
         return 0
     fi
@@ -794,14 +938,14 @@ EOF
 
     else
 
-        warning "Online App no quedó activo."
+        warning \
+            "Online App no quedó activo."
 
         journalctl \
             -u "$ONLINEAPP_SERVICE" \
             -n 15 \
             --no-pager \
             2>/dev/null
-
     fi
 
     return 0
@@ -813,14 +957,242 @@ EOF
 
 create_license_info() {
 
-    mkdir -p /etc/licencec
+    mkdir -p "$LICENSE_DIR"
 
-    cat > /etc/licencec/telegram <<'EOF'
-By: @nandoslayer
-KevinTech CheckUser
+    cat > "$LICENSE_FILE" <<EOF
+$LICENSE_TEXT
+KevinTech CheckUser Manager
 EOF
 
-    chmod 644 /etc/licencec/telegram
+    chmod 644 "$LICENSE_FILE"
+
+    ok \
+        "Información de instalación registrada."
+}
+
+#=========================================================
+# MOSTRAR INSTALACIÓN ORIGINAL
+#=========================================================
+
+show_original_install_info() {
+
+    clear_screen
+
+    echo -e \
+        "\E[44;1;37m  INSTALAR CHECKUSER PARA CONECTA4G,  \E[0m"
+
+    echo -e \
+        "\E[44;1;37m      GLTUNNEL, DTUNNEL, ANYMOD.      \E[0m"
+
+    echo -e \
+        "\E[44;1;37mVERSIÓN 1.6       Integrado KevinTech \E[0m"
+
+    echo
+
+    echo -e \
+        "      \033[1;33m • \033[1;32mINSTALACIÓN COMPLETADA\033[1;33m • \033[0m"
+
+    sleep 1
+
+    echo
+
+    echo -e \
+        "\033[1;31m \033[1;33mCOMANDO PRINCIPAL: \033[1;32mchall\033[0m"
+
+    echo
+
+    echo -e \
+        "\033[1;33m RUTAS COMPATIBLES:\033[0m"
+
+    echo
+
+    echo -e \
+        "${GREEN}/checkUser${RESET}"
+
+    echo -e \
+        "${GREEN}/gl/check/<usuario>${RESET}"
+
+    echo -e \
+        "${GREEN}/anymod${RESET}"
+
+    echo
+
+    echo -e \
+        "${CYAN}CHECKUSER TCP: ${CHECKUSER_PORT}${RESET}"
+
+    echo
+
+    read -r -p \
+        "$(echo -e "${GREEN}➜ Presiona ENTER para continuar...${RESET}")"
+}
+
+#=========================================================
+# INSTALACIÓN COMPLETA
+#=========================================================
+
+install() {
+
+    header
+
+    section "🚀 INSTALACIÓN / ACTUALIZACIÓN CHECKUSER"
+
+    echo -e "${WHITE}Componentes:${RESET}"
+
+    echo
+
+    echo -e \
+        " ${GREEN}01${RESET} 🛡️ CheckUser API  → TCP $CHECKUSER_PORT"
+
+    echo -e \
+        " ${GREEN}02${RESET} 🔌 WebSocket      → TCP $WEBSOCKET_PORT"
+
+    echo -e \
+        " ${GREEN}03${RESET} 🌐 Online App     → TCP $ONLINEAPP_PORT"
+
+    echo -e \
+        " ${GREEN}04${RESET} 📥 Chall"
+
+    echo -e \
+        " ${GREEN}05${RESET} ⚙️ CheckGestor"
+
+    echo -e \
+        " ${GREEN}06${RESET} 🐍 Flask"
+
+    echo
+
+    line
+
+    #=====================================================
+    # ZONA HORARIA
+    #=====================================================
+
+    info "Configurando zona horaria..."
+
+    timedatectl set-timezone America/Lima \
+        >/dev/null 2>&1 || true
+
+    ok "Zona horaria: America/Lima"
+
+    #=====================================================
+    # DEPENDENCIAS
+    #=====================================================
+
+    if ! install_dependencies; then
+
+        error_msg \
+            "La instalación fue detenida."
+
+        pause
+
+        return 1
+    fi
+
+    #=====================================================
+    # BARRA ORIGINAL
+    #=====================================================
+
+    section "⏳ INSTALACIÓN CHECKUSER ORIGINAL"
+
+    echo -e \
+        "${YELLOW}AGUARDE - preparando componentes...${RESET}"
+
+    echo
+
+    fun_bar 'fun_install'
+
+    #=====================================================
+    # VALIDACIÓN
+    #=====================================================
+
+    section "🔎 VALIDANDO INSTALACIÓN"
+
+    if [[ ! -s /bin/chall ]]; then
+
+        error_msg \
+            "chall no fue instalado correctamente."
+
+        pause
+
+        return 1
+    fi
+
+    ok "chall encontrado."
+
+    if [[ ! -s /bin/checkgestor ]]; then
+
+        error_msg \
+            "checkgestor no fue instalado correctamente."
+
+        pause
+
+        return 1
+    fi
+
+    ok "checkgestor encontrado."
+
+    if [[ ! -s "$CHECKUSER_PY" ]]; then
+
+        error_msg \
+            "checkgestor.py no fue instalado correctamente."
+
+        pause
+
+        return 1
+    fi
+
+    ok "checkgestor.py encontrado."
+
+    #=====================================================
+    # CHECKGESTOR
+    #=====================================================
+
+    create_checkgestor || {
+
+        error_msg \
+            "No se pudo configurar CheckGestor."
+
+        pause
+
+        return 1
+    }
+
+    #=====================================================
+    # CHECKUSER SERVICE
+    #=====================================================
+
+    create_checkuser_service || {
+
+        error_msg \
+            "CheckUser no pudo quedar activo."
+
+        pause
+
+        return 1
+    }
+
+    #=====================================================
+    # ONLINE APP
+    #=====================================================
+
+    if ! create_onlineapp_service; then
+
+        warning \
+            "Online App no pudo configurarse."
+    fi
+
+    #=====================================================
+    # RESULTADO ORIGINAL
+    #=====================================================
+
+    show_original_install_info
+
+    #=====================================================
+    # RESULTADO KEVINTECH
+    #=====================================================
+
+    show_result
+
+    return 0
 }
 
 #=========================================================
@@ -839,59 +1211,99 @@ show_result() {
 
     if check_service "$CHECKUSER_SERVICE"; then
 
-        ok "CheckUser activo en TCP $CHECKUSER_PORT."
+        ok \
+            "CheckUser activo en TCP $CHECKUSER_PORT."
 
     else
 
-        error_msg "CheckUser está detenido."
+        error_msg \
+            "CheckUser está detenido."
 
     fi
 
     if check_service "$ONLINEAPP_SERVICE"; then
 
-        ok "Online App activo en TCP $ONLINEAPP_PORT."
+        ok \
+            "Online App activo en TCP $ONLINEAPP_PORT."
 
     else
 
-        warning "Online App no está activo."
-
+        warning \
+            "Online App no está activo."
     fi
 
     echo
 
-    #=====================================================
-    # CHECKUSER
-    #=====================================================
+    section "🌐 DIRECCIONES"
 
-    echo -e "${GREEN}${BOLD}http://${IP}:${CHECKUSER_PORT}${CHECKUSER_URL_PATH}${RESET}"
+    echo -e \
+        "${GREEN}CheckUser:${RESET}"
+
+    echo -e \
+        "http://${IP}:${CHECKUSER_PORT}${CHECKUSER_URL_PATH}"
 
     echo
 
-    #=====================================================
-    # ONLINE APP
-    #=====================================================
+    echo -e \
+        "${CYAN}Online App:${RESET}"
 
-    if check_service "$ONLINEAPP_SERVICE"; then
+    echo -e \
+        "http://${IP}:${ONLINEAPP_PORT}${ONLINEAPP_URL_PATH}"
 
-        echo -e "${CYAN}http://${IP}:${ONLINEAPP_PORT}${ONLINEAPP_URL_PATH}${RESET}"
+    echo
 
-        echo
+    section "📡 RUTAS COMPATIBLES"
 
-    fi
+    echo -e \
+        "${GREEN}CONECTA4G${RESET}"
+
+    echo -e \
+        "http://${IP}:${CHECKUSER_PORT}/checkUser"
+
+    echo
+
+    echo -e \
+        "${GREEN}GLTUNNEL${RESET}"
+
+    echo -e \
+        "http://${IP}:${CHECKUSER_PORT}/gl/check/USUARIO"
+
+    echo
+
+    echo -e \
+        "${GREEN}ANYMOD${RESET}"
+
+    echo -e \
+        "http://${IP}:${CHECKUSER_PORT}/anymod"
+
+    echo
 
     line
 
-    echo -e "${WHITE}${BOLD}📁 ARCHIVOS PRINCIPALES${RESET}"
-
-    echo
-    echo -e " ${GRAY}CheckUser:${RESET}     $CHECKUSER_PY"
-    echo -e " ${GRAY}CheckGestor:${RESET}   /bin/checkgestor"
-    echo -e " ${GRAY}Chall:${RESET}         /bin/chall"
-    echo -e " ${GRAY}Configuración:${RESET} $CONFIG"
+    echo -e \
+        "${WHITE}${BOLD}📁 ARCHIVOS PRINCIPALES${RESET}"
 
     echo
 
-    echo -e "${GREEN}✔ KevinTech CheckUser quedó instalado.${RESET}"
+    echo -e \
+        " ${GRAY}CheckUser:${RESET}     $CHECKUSER_PY"
+
+    echo -e \
+        " ${GRAY}CheckGestor:${RESET}   /bin/checkgestor"
+
+    echo -e \
+        " ${GRAY}Chall:${RESET}         /bin/chall"
+
+    echo -e \
+        " ${GRAY}Licencia:${RESET}      $LICENSE_FILE"
+
+    echo -e \
+        " ${GRAY}Configuración:${RESET} $CONFIG"
+
+    echo
+
+    echo -e \
+        "${GREEN}✔ KevinTech CheckUser quedó instalado.${RESET}"
 
     pause
 }
@@ -907,41 +1319,75 @@ diagnostic() {
     section "🔎 DIAGNÓSTICO CHECKUSER"
 
     if [[ -f /bin/chall ]]; then
+
         ok "chall encontrado."
+
     else
+
         error_msg "chall no encontrado."
+
     fi
 
     if [[ -x /bin/checkgestor ]]; then
+
         ok "checkgestor encontrado."
+
     else
+
         error_msg "checkgestor no encontrado."
+
     fi
 
     if [[ -f "$CHECKUSER_PY" ]]; then
+
         ok "API CheckUser encontrada."
+
     else
+
         error_msg "API CheckUser no encontrada."
+
     fi
 
-    if [[ -f "/etc/systemd/system/$CHECKUSER_SERVICE" ]]; then
-        ok "Servicio CheckUser encontrado."
+    if [[ -f "$LICENSE_FILE" ]]; then
+
+        ok "Información de instalación encontrada."
+
     else
-        error_msg "Servicio CheckUser no encontrado."
+
+        warning "Información de instalación no encontrada."
+
+    fi
+
+    if [[ -f "/root/usuarios.db" ]]; then
+
+        ok "/root/usuarios.db encontrado."
+
+    else
+
+        warning "/root/usuarios.db no encontrado."
+
     fi
 
     echo
 
     if check_service "$CHECKUSER_SERVICE"; then
+
         ok "CheckUser está ACTIVO."
+
     else
+
         error_msg "CheckUser está DETENIDO."
+
     fi
 
     if check_service "$ONLINEAPP_SERVICE"; then
+
         ok "Online App está ACTIVO."
+
     else
+
         warning "Online App está DETENIDO."
+
     fi
 
     echo
@@ -970,6 +1416,23 @@ diagnostic() {
 
     echo
 
+    section "🐍 PYTHON"
+
+    if python3 -m py_compile \
+        "$CHECKUSER_PY" \
+        >/dev/null 2>&1; then
+
+        ok "checkgestor.py tiene sintaxis correcta."
+
+    else
+
+        error_msg \
+            "checkgestor.py tiene errores."
+
+    fi
+
+    echo
+
     section "📜 LOGS CHECKUSER"
 
     journalctl \
@@ -992,15 +1455,23 @@ status_checkuser() {
     section "📊 ESTADO DEL SERVIDOR"
 
     if check_service "$CHECKUSER_SERVICE"; then
+
         ok "CheckUser : ACTIVO"
+
     else
+
         error_msg "CheckUser : DETENIDO"
+
     fi
 
     if check_service "$ONLINEAPP_SERVICE"; then
+
         ok "Online App : ACTIVO"
+
     else
+
         warning "Online App : DETENIDO"
+
     fi
 
     echo
@@ -1032,10 +1503,13 @@ status_checkuser() {
     echo
 
     local IP
+
     IP=$(get_public_ip)
 
     echo -e "${WHITE}CheckUser:${RESET}"
-    echo -e "${GREEN}http://${IP}:${CHECKUSER_PORT}${CHECKUSER_URL_PATH}${RESET}"
+
+    echo -e \
+        "${GREEN}http://${IP}:${CHECKUSER_PORT}${CHECKUSER_URL_PATH}${RESET}"
 
     pause
 }
@@ -1056,18 +1530,19 @@ restart_checkuser() {
 
     if check_service "$CHECKUSER_SERVICE"; then
 
-        ok "CheckUser reiniciado correctamente."
+        ok \
+            "CheckUser reiniciado correctamente."
 
     else
 
-        error_msg "CheckUser no pudo reiniciarse."
+        error_msg \
+            "CheckUser no pudo reiniciarse."
 
         journalctl \
             -u "$CHECKUSER_SERVICE" \
             -n 20 \
             --no-pager \
             2>/dev/null
-
     fi
 
     pause
@@ -1084,34 +1559,105 @@ system_info() {
     section "🖥️ INFORMACIÓN VPS"
 
     local IP
+
     IP=$(get_public_ip)
 
-    echo -e "${WHITE}Hostname:${RESET} $(hostname)"
+    echo -e \
+        "${WHITE}Hostname:${RESET} $(hostname)"
 
-    echo -e "${WHITE}Sistema:${RESET} $(
-        grep '^PRETTY_NAME=' \
-            /etc/os-release |
-        cut -d= -f2 |
-        tr -d '"'
-    )"
+    echo -e \
+        "${WHITE}Sistema:${RESET} $("
+            grep '^PRETTY_NAME=' \
+                /etc/os-release |
+            cut -d= -f2 |
+            tr -d '"'
+        )"
 
-    echo -e "${WHITE}Kernel:${RESET} $(uname -r)"
+    echo -e \
+        "${WHITE}Kernel:${RESET} $(uname -r)"
 
-    echo -e "${WHITE}CPU:${RESET} $(nproc) cores"
+    echo -e \
+        "${WHITE}CPU:${RESET} $(nproc) cores"
 
-    echo -e "${WHITE}RAM:${RESET} $(
-        free -h |
-        awk '/Mem:/ {print $3" / "$2}'
-    )"
+    echo -e \
+        "${WHITE}RAM:${RESET} $("
+            free -h |
+            awk '/Mem:/ {print $3" / "$2}'
+        )"
 
-    echo -e "${WHITE}Disco:${RESET} $(
-        df -h / |
-        awk 'NR==2 {print $5}'
-    )"
+    echo -e \
+        "${WHITE}Disco:${RESET} $("
+            df -h / |
+            awk 'NR==2 {print $5}'
+        )"
 
-    echo -e "${WHITE}Uptime:${RESET} $(uptime -p)"
+    echo -e \
+        "${WHITE}Uptime:${RESET} $(uptime -p)"
 
-    echo -e "${WHITE}IPv4:${RESET} $IP"
+    echo -e \
+        "${WHITE}IPv4:${RESET} $IP"
+
+    pause
+}
+
+#=========================================================
+# INICIAR ONLINE APP
+#=========================================================
+
+start_onlineapp() {
+
+    header
+
+    section "🌐 INICIAR ONLINE APP"
+
+    if [[ ! -f "$ONLINEAPP_SCRIPT" ]]; then
+
+        warning \
+            "No existe $ONLINEAPP_SCRIPT."
+
+        pause
+
+        return
+    fi
+
+    systemctl start "$ONLINEAPP_SERVICE"
+
+    sleep 2
+
+    if check_service "$ONLINEAPP_SERVICE"; then
+
+        ok \
+            "Online App iniciado correctamente."
+
+    else
+
+        error_msg \
+            "Online App no pudo iniciar."
+
+        journalctl \
+            -u "$ONLINEAPP_SERVICE" \
+            -n 20 \
+            --no-pager \
+            2>/dev/null
+    fi
+
+    pause
+}
+
+#=========================================================
+# DETENER ONLINE APP
+#=========================================================
+
+stop_onlineapp() {
+
+    header
+
+    section "⛔ DETENER ONLINE APP"
+
+    systemctl stop "$ONLINEAPP_SERVICE" \
+        >/dev/null 2>&1 || true
+
+    ok "Online App detenido."
 
     pause
 }
@@ -1126,7 +1672,8 @@ uninstall_checkuser() {
 
     section "🗑️ DESINSTALAR CHECKUSER"
 
-    warning "Se eliminará la instalación de CheckUser."
+    warning \
+        "Se eliminará la instalación de CheckUser."
 
     echo
 
@@ -1136,7 +1683,8 @@ uninstall_checkuser() {
 
     if [[ "$CONFIRM" != "ELIMINAR" ]]; then
 
-        warning "Operación cancelada."
+        warning \
+            "Operación cancelada."
 
         pause
 
@@ -1177,125 +1725,136 @@ uninstall_checkuser() {
         /etc/apache2/sites-enabled/kevintech-onlineapp.conf \
         /etc/apache2/sites-available/kevintech-onlineapp.conf
 
-    # Restaurar Apache Listen 80 si no existe
-    if ! grep -qE '^[[:space:]]*Listen[[:space:]]+80[[:space:]]*$' \
-        /etc/apache2/ports.conf 2>/dev/null; then
+    rm -f "$LICENSE_FILE"
 
-        echo "Listen 80" >> /etc/apache2/ports.conf
+    #-----------------------------------------------------
+    # RESTAURAR APACHE
+    #-----------------------------------------------------
+
+    if [[ -f /etc/apache2/ports.conf ]]; then
+
+        sed -i \
+            -E "/^[[:space:]]*Listen[[:space:]]+$ONLINEAPP_PORT[[:space:]]*$/d" \
+            /etc/apache2/ports.conf
+
+    fi
+
+    if ! grep -qE \
+        '^[[:space:]]*Listen[[:space:]]+80[[:space:]]*$' \
+        /etc/apache2/ports.conf \
+        2>/dev/null; then
+
+        echo "Listen 80" \
+            >> /etc/apache2/ports.conf
     fi
 
     systemctl restart apache2 \
         >/dev/null 2>&1 || true
 
-    systemctl reset-failed "$CHECKUSER_SERVICE" \
+    systemctl reset-failed \
+        "$CHECKUSER_SERVICE" \
         >/dev/null 2>&1 || true
 
-    systemctl reset-failed "$ONLINEAPP_SERVICE" \
+    systemctl reset-failed \
+        "$ONLINEAPP_SERVICE" \
         >/dev/null 2>&1 || true
 
-    ok "CheckUser eliminado correctamente."
+    ok \
+        "CheckUser eliminado correctamente."
 
     pause
 }
 
 #=========================================================
-# INSTALACIÓN
+# ACTUALIZACIÓN RÁPIDA
 #=========================================================
 
-install() {
+update_checkuser() {
 
     header
 
-    section "🚀 INSTALACIÓN CHECKUSER"
+    section "🔄 ACTUALIZAR CHECKUSER"
 
-    echo -e "${WHITE}Componentes:${RESET}"
-    echo
-    echo -e " ${GREEN}01${RESET} 🛡️ CheckUser API  → TCP $CHECKUSER_PORT"
-    echo -e " ${GREEN}02${RESET} 🔌 WebSocket SSH  → TCP $WEBSOCKET_PORT"
-    echo -e " ${GREEN}03${RESET} 🌐 Online App      → TCP $ONLINEAPP_PORT"
+    info "Descargando archivos actualizados..."
 
-    echo
+    if ! download_checkuser; then
 
-    line
-
-    #-----------------------------------------------------
-    # ZONA HORARIA
-    #-----------------------------------------------------
-
-    info "Configurando zona horaria..."
-
-    timedatectl set-timezone America/Lima \
-        >/dev/null 2>&1 || true
-
-    ok "Zona horaria: America/Lima"
-
-    #-----------------------------------------------------
-    # DEPENDENCIAS
-    #-----------------------------------------------------
-
-    install_dependencies || {
-
-        error_msg "La instalación fue detenida."
+        error_msg \
+            "La actualización falló."
 
         pause
 
         return 1
-    }
+    fi
 
-    #-----------------------------------------------------
-    # CHECKUSER
-    #-----------------------------------------------------
+    create_checkgestor
 
-    download_checkuser || {
+    if ! create_checkuser_service; then
 
-        error_msg "No se pudo instalar CheckUser."
-
-        pause
-
-        return 1
-    }
-
-    create_checkgestor || {
-
-        error_msg "No se pudo configurar CheckGestor."
+        error_msg \
+            "No se pudo reiniciar CheckUser."
 
         pause
 
         return 1
-    }
+    fi
 
-    create_checkuser_service || {
+    ok \
+        "CheckUser actualizado correctamente."
 
-        error_msg "CheckUser no pudo quedar activo."
+    pause
+}
+
+#=========================================================
+# PRUEBA LOCAL API
+#=========================================================
+
+test_api() {
+
+    header
+
+    section "🧪 PRUEBA API CHECKUSER"
+
+    if ! check_service "$CHECKUSER_SERVICE"; then
+
+        error_msg \
+            "El servicio CheckUser está detenido."
 
         pause
 
-        return 1
-    }
+        return
+    fi
 
-    #-----------------------------------------------------
-    # ONLINE APP
-    #-----------------------------------------------------
+    info "Probando TCP $CHECKUSER_PORT..."
 
-    if ! create_onlineapp_service; then
+    if curl \
+        -fsS \
+        --max-time 5 \
+        "http://127.0.0.1:${CHECKUSER_PORT}/checkUser" \
+        >/tmp/kevintech_checkuser_test 2>/dev/null; then
 
-        warning "Online App no pudo configurarse."
+        ok \
+            "El servidor CheckUser responde."
+
+        echo
+
+        cat /tmp/kevintech_checkuser_test
+
+        echo
+
+        rm -f /tmp/kevintech_checkuser_test
+
+    else
+
+        warning \
+            "La ruta requiere una petición POST válida."
+
+        info \
+            "El puerto está activo, pero la prueba GET no es válida para /checkUser."
 
     fi
 
-    #-----------------------------------------------------
-    # LICENCIA
-    #-----------------------------------------------------
-
-    create_license_info
-
-    #-----------------------------------------------------
-    # RESULTADO
-    #-----------------------------------------------------
-
-    show_result
-
-    return 0
+    pause
 }
 
 #=========================================================
@@ -1363,7 +1922,8 @@ while true; do
 
     line
 
-    echo -e "${BLUE}${BOLD}🛡️ CHECKUSER MANAGER${RESET}"
+    echo -e \
+        "${BLUE}${BOLD}🛡️ CHECKUSER MANAGER${RESET}"
 
     echo
 
@@ -1389,7 +1949,13 @@ while true; do
         " ${GREEN}[07]${RESET} 🖥️  Información VPS"
 
     echo -e \
-        " ${RED}[08]${RESET} 🗑️  Desinstalar"
+        " ${GREEN}[08]${RESET} 🔄 Actualizar archivos CheckUser"
+
+    echo -e \
+        " ${GREEN}[09]${RESET} 🧪 Probar API"
+
+    echo -e \
+        " ${RED}[10]${RESET} 🗑️  Desinstalar"
 
     echo
 
@@ -1401,7 +1967,7 @@ while true; do
     echo
 
     echo -e \
-        "${GRAY}KevinTech Multi Script • CheckUser Manager v4.1${RESET}"
+        "${GRAY}KevinTech Multi Script • CheckUser Manager v5.0${RESET}"
 
     echo
 
@@ -1424,26 +1990,11 @@ while true; do
             ;;
 
         4)
-
-            header
-
-            create_onlineapp_service
-
-            pause
-
+            start_onlineapp
             ;;
 
         5)
-
-            header
-
-            systemctl stop "$ONLINEAPP_SERVICE" \
-                >/dev/null 2>&1 || true
-
-            ok "Online App detenido."
-
-            pause
-
+            stop_onlineapp
             ;;
 
         6)
@@ -1455,6 +2006,14 @@ while true; do
             ;;
 
         8)
+            update_checkuser
+            ;;
+
+        9)
+            test_api
+            ;;
+
+        10)
             uninstall_checkuser
             ;;
 
@@ -1462,8 +2021,21 @@ while true; do
 
             clear_screen
 
-            exec bash \
-                "$BASE/protocolos/menu.sh"
+            if [[ -f "$BASE/protocolos/menu.sh" ]]; then
+
+                exec bash \
+                    "$BASE/protocolos/menu.sh"
+
+            else
+
+                echo
+                echo -e \
+                    "${YELLOW}Menú de protocolos no encontrado.${RESET}"
+                echo
+
+                exit 0
+
+            fi
 
             ;;
 
@@ -1473,7 +2045,8 @@ while true; do
 
         *)
 
-            error_msg "Opción inválida."
+            error_msg \
+                "Opción inválida."
 
             sleep 1
 
