@@ -1559,19 +1559,36 @@ system_info() {
     section "🖥️ INFORMACIÓN VPS"
 
     local IP
+    local SISTEMA
+    local RAM
+    local DISCO
 
     IP=$(get_public_ip)
 
-    echo -e \
-        "${WHITE}Hostname:${RESET} $(hostname)"
+    SISTEMA=$(
+        grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null |
+        cut -d= -f2- |
+        tr -d '"'
+    )
+
+    RAM=$(
+        free -h 2>/dev/null |
+        awk '/^Mem:/ {
+            print $3 " / " $2
+        }'
+    )
+
+    DISCO=$(
+        df -h / 2>/dev/null |
+        awk 'NR==2 {
+            print $5
+        }'
+    )
+
+    echo -e "${WHITE}Hostname:${RESET} $(hostname)"
 
     echo -e \
-        "${WHITE}Sistema:${RESET} $("
-            grep '^PRETTY_NAME=' \
-                /etc/os-release |
-            cut -d= -f2 |
-            tr -d '"'
-        )"
+        "${WHITE}Sistema:${RESET} ${SISTEMA:-Desconocido}"
 
     echo -e \
         "${WHITE}Kernel:${RESET} $(uname -r)"
@@ -1580,22 +1597,16 @@ system_info() {
         "${WHITE}CPU:${RESET} $(nproc) cores"
 
     echo -e \
-        "${WHITE}RAM:${RESET} $("
-            free -h |
-            awk '/Mem:/ {print $3" / "$2}'
-        )"
+        "${WHITE}RAM:${RESET} ${RAM:-Desconocida}"
 
     echo -e \
-        "${WHITE}Disco:${RESET} $("
-            df -h / |
-            awk 'NR==2 {print $5}'
-        )"
+        "${WHITE}Disco:${RESET} ${DISCO:-Desconocido}"
 
     echo -e \
-        "${WHITE}Uptime:${RESET} $(uptime -p)"
+        "${WHITE}Uptime:${RESET} $(uptime -p 2>/dev/null)"
 
     echo -e \
-        "${WHITE}IPv4:${RESET} $IP"
+        "${WHITE}IPv4:${RESET} ${IP}"
 
     pause
 }
