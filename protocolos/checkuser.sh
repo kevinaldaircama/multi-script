@@ -205,7 +205,7 @@ pause() {
 }
 
 #=========================================================
-# BARRA DE INSTALACIÓN
+# BARRA DE INSTALACIÓN - CORREGIDA
 #=========================================================
 
 fun_bar() {
@@ -217,7 +217,10 @@ fun_bar() {
     rm -f "$RESULT_FILE" "$LOG_FILE"
 
     (
-        if bash -c "$COMMAND" >"$LOG_FILE" 2>&1; then
+        # IMPORTANTE:
+        # No usar bash -c aquí porque fun_install()
+        # es una función del script actual.
+        if eval "$COMMAND" >"$LOG_FILE" 2>&1; then
 
             echo "0" > "$RESULT_FILE"
 
@@ -280,9 +283,12 @@ fun_bar() {
             "\033[1;33m]\033[1;37m - \033[1;32mOK !\033[1;37m"
 
         echo
+
         cat "$LOG_FILE" 2>/dev/null
 
-        rm -f "$RESULT_FILE" "$LOG_FILE"
+        rm -f \
+            "$RESULT_FILE" \
+            "$LOG_FILE"
 
         return 0
 
@@ -299,11 +305,12 @@ fun_bar() {
 
     echo
 
-    rm -f "$RESULT_FILE" "$LOG_FILE"
+    rm -f \
+        "$RESULT_FILE" \
+        "$LOG_FILE"
 
     return 1
 }
-
 #=========================================================
 # CHECK INSTALADO
 #=========================================================
