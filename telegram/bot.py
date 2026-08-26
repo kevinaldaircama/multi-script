@@ -227,7 +227,7 @@ def cb(c,m,u,i,x):
   if not st:return send(c,'❌ Operación expirada.',USERS)
   d=st['d'];u=d['user'];days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' +%F")
   if x=='do:create':
-   rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u)} && printf %s\\n {q(u+":"+d["pass"])} | chpasswd',12)
+   rc,o=sh(f"useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u)} && printf '%s\\n' {q(u+":"+d["pass"])} | chpasswd",12)
    if rc==0:(BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u).write_text('0' if d.get('limit')=='Ilimitado' else d.get('limit','0'));return account(c,d)
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>',USERS)
   rc,o=sh(f'chage -E {q(exp)} {q(u)}',10);return account(c,d,True) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>',USERS)
