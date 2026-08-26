@@ -321,7 +321,9 @@ while true; do
         "CheckUser" "$CHECKUSER_STATUS"
 
     printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
-        "OpenVPN Pro" "$OPENVPN_STATUS"
+        "histeria" "$HYSTERIA_STATUS"
+printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
+        "histeria" "$HYSTERIA_STATUS"
 
     echo
     echo -e "${BLUE}${BOLD}  🛠️ ADMINISTRACIÓN DEL SISTEMA${RESET}"
