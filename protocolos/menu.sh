@@ -321,10 +321,9 @@ while true; do
         "CheckUser" "$CHECKUSER_STATUS"
 
     printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-19s %b\n" \
-        "histeria" "$HYSTERIA_STATUS"
+        
 printf "  ${GREEN}${BOLD}[11]${RESET} 💱 %-19s %b\n" \
-        "histeria" "$HYSTERIA_STATUS"
-
+        "hysteria" "$HYSTERIA_STATUS"
     echo
     echo -e "${BLUE}${BOLD}  🛠️ ADMINISTRACIÓN DEL SISTEMA${RESET}"
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
