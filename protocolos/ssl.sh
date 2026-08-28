@@ -3,6 +3,7 @@
 # ==============================================================
 #              🛡️ KEVINTECH MULTI SCRIPT
 #                    SSL TUNNEL MANAGER
+#                         v2.1
 # ==============================================================
 # Componentes:
 #   HAProxy
@@ -13,14 +14,22 @@
 #   80
 #   443
 #   8080
+#   10015 (interno)
 #
-# Config:
-#   /etc/kevintech/config.conf
+# Mejoras v2.1:
+#   • WebSocket interno más estable
+#   • Limpieza correcta de conexiones
+#   • Prevención de CLOSE-WAIT acumulados
+#   • Timeout tunnel 7 días
+#   • Timeout client/server 7 días
+#   • TCP keepalive
+#   • Mejor recuperación automática
+#   • Validación antes de reiniciar HAProxy
 # ==============================================================
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
-VERSION="2.0"
+VERSION="2.1"
 
 HAPROXY_CFG="/etc/haproxy/haproxy.cfg"
 CERT_FILE="/etc/haproxy/yha.pem"
@@ -58,15 +67,12 @@ GRAY="\e[1;90m"
 # ==============================================================
 
 if [[ $EUID -ne 0 ]]; then
-
     clear
-
     echo
     echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
     echo
     echo -e "${WHITE}SSL Tunnel Manager requiere permisos de root.${RESET}"
     echo
-
     exit 1
 fi
 
@@ -75,16 +81,13 @@ fi
 # ==============================================================
 
 if [[ ! -f "$CONFIG" ]]; then
-
     clear
-
     echo
     echo -e "${RED}${BOLD}✘ CONFIGURACIÓN NO ENCONTRADA${RESET}"
     echo
     echo -e "${WHITE}Archivo:${RESET}"
     echo -e "${YELLOW}$CONFIG${RESET}"
     echo
-
     exit 1
 fi
 
@@ -130,13 +133,9 @@ set_config() {
     local VALUE="$2"
 
     if grep -q "^${KEY}=" "$CONFIG"; then
-
         sed -i "s/^${KEY}=.*/${KEY}=${VALUE}/" "$CONFIG"
-
     else
-
         echo "${KEY}=${VALUE}" >> "$CONFIG"
-
     fi
 }
 
@@ -145,12 +144,10 @@ set_config() {
 # ==============================================================
 
 service_exists() {
-
     systemctl cat "$1" &>/dev/null
 }
 
 service_active() {
-
     systemctl is-active --quiet "$1" 2>/dev/null
 }
 
@@ -182,6 +179,28 @@ port_status() {
     else
         echo -e "${RED}● CERRADO${RESET}"
     fi
+}
+
+# ==============================================================
+# CONEXIONES
+# ==============================================================
+
+show_connections() {
+
+    local PORT="$1"
+
+    echo
+    echo -e "${WHITE}Conexiones puerto ${PORT}:${RESET}"
+
+    ss -tan 2>/dev/null |
+        awk -v P=":${PORT}" '
+            $4 ~ P"$" || $5 ~ P"$" {
+                print $1
+            }
+        ' |
+        sort |
+        uniq -c |
+        sort -nr
 }
 
 # ==============================================================
@@ -225,9 +244,7 @@ install_dependencies() {
     info "Actualizando repositorios..."
 
     if ! apt-get update -y >/dev/null 2>&1; then
-
         error_msg "No se pudo actualizar APT."
-
         return 1
     fi
 
@@ -244,7 +261,6 @@ install_dependencies() {
         >/dev/null 2>&1; then
 
         error_msg "No se pudieron instalar las dependencias."
-
         return 1
     fi
 
@@ -262,11 +278,8 @@ generate_certificate() {
     mkdir -p "$(dirname "$CERT_FILE")"
 
     if [[ -s "$CERT_FILE" ]]; then
-
         ok "Certificado SSL encontrado."
-
         chmod 600 "$CERT_FILE"
-
         return 0
     fi
 
@@ -301,9 +314,7 @@ generate_certificate() {
     chmod 600 "$CERT_FILE"
 
     if [[ ! -s "$CERT_FILE" ]]; then
-
         error_msg "El certificado no fue creado correctamente."
-
         return 1
     fi
 
@@ -313,7 +324,7 @@ generate_certificate() {
 }
 
 # ==============================================================
-# COMPROBAR PUERTOS ANTES DE INSTALAR
+# COMPROBAR PUERTOS
 # ==============================================================
 
 check_ports() {
@@ -348,7 +359,7 @@ check_ports() {
 }
 
 # ==============================================================
-# ELIMINAR CONFIGURACIONES WS ANTIGUAS
+# LIMPIAR WS ANTIGUOS
 # ==============================================================
 
 remove_old_ws() {
@@ -372,10 +383,17 @@ remove_old_ws() {
 # ==============================================================
 # SSH WEBSOCKET INTERNAL
 # ==============================================================
+#
+# IMPORTANTE:
+# El proceso escucha únicamente en 127.0.0.1:10015.
+#
+# El cierre de una dirección provoca el cierre controlado
+# de toda la sesión para evitar conexiones CLOSE-WAIT.
+# ==============================================================
 
 install_ssh_ws_internal() {
 
-    info "Instalando SSH WebSocket Internal..."
+    info "Instalando SSH WebSocket Internal v2.1..."
 
     cat > "$PROXY_SCRIPT" <<'PYEOF'
 #!/usr/bin/env python3
@@ -389,6 +407,7 @@ BUFFER_SIZE = 65536
 SSH_HOST = "127.0.0.1"
 SSH_PORT = 22
 
+CONNECT_TIMEOUT = 10
 
 HTTP_101 = (
     b"HTTP/1.1 101 Switching Protocols\r\n"
@@ -402,7 +421,22 @@ HTTP_200 = (
 )
 
 
-async def forward(reader, writer):
+async def close_writer(writer):
+    if writer is None:
+        return
+
+    try:
+        writer.close()
+    except Exception:
+        return
+
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
+
+
+async def pipe(reader, writer):
 
     try:
 
@@ -420,31 +454,36 @@ async def forward(reader, writer):
     except (
         ConnectionResetError,
         BrokenPipeError,
+        ConnectionAbortedError,
+        asyncio.IncompleteReadError,
         asyncio.CancelledError
     ):
 
         pass
 
-    finally:
+    except Exception:
 
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except Exception:
-            pass
+        pass
 
 
 async def handle(client_reader, client_writer):
 
+    ssh_reader = None
     ssh_writer = None
 
+    client_closed = False
+
     try:
+
+        # ------------------------------------------------------
+        # Recibir primer paquete
+        # ------------------------------------------------------
 
         try:
 
             payload = await asyncio.wait_for(
                 client_reader.read(BUFFER_SIZE),
-                timeout=10
+                timeout=CONNECT_TIMEOUT
             )
 
         except asyncio.TimeoutError:
@@ -454,6 +493,10 @@ async def handle(client_reader, client_writer):
         if not payload:
             return
 
+        # ------------------------------------------------------
+        # Detectar WebSocket / HTTP
+        # ------------------------------------------------------
+
         text = payload.decode(
             "utf-8",
             errors="ignore"
@@ -461,10 +504,15 @@ async def handle(client_reader, client_writer):
 
         upper = text.upper()
 
-        if (
+        is_websocket = (
             "UPGRADE: WEBSOCKET" in upper
-            or "UPGRADE" in upper and "WEBSOCKET" in upper
-        ):
+            or (
+                "UPGRADE" in upper
+                and "WEBSOCKET" in upper
+            )
+        )
+
+        if is_websocket:
 
             client_writer.write(HTTP_101)
 
@@ -474,21 +522,95 @@ async def handle(client_reader, client_writer):
 
         await client_writer.drain()
 
+        # ------------------------------------------------------
+        # Conectar a SSH
+        # ------------------------------------------------------
+
         try:
 
-            ssh_reader, ssh_writer = await asyncio.open_connection(
-                SSH_HOST,
-                SSH_PORT
+            ssh_reader, ssh_writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    SSH_HOST,
+                    SSH_PORT,
+                    limit=BUFFER_SIZE
+                ),
+                timeout=CONNECT_TIMEOUT
             )
 
-        except Exception:
+        except (
+            asyncio.TimeoutError,
+            ConnectionRefusedError,
+            OSError
+        ):
 
             return
 
-        await asyncio.gather(
-            forward(client_reader, ssh_writer),
-            forward(ssh_reader, client_writer)
+        # ------------------------------------------------------
+        # IMPORTANTE:
+        #
+        # El primer payload ya fue consumido.
+        # Debemos enviarlo inmediatamente al SSH.
+        # ------------------------------------------------------
+
+        ssh_writer.write(payload)
+        await ssh_writer.drain()
+
+        # ------------------------------------------------------
+        # Crear los dos sentidos
+        # ------------------------------------------------------
+
+        task_client_to_ssh = asyncio.create_task(
+            pipe(client_reader, ssh_writer)
         )
+
+        task_ssh_to_client = asyncio.create_task(
+            pipe(ssh_reader, client_writer)
+        )
+
+        # ------------------------------------------------------
+        # Esperar a que uno termine
+        # ------------------------------------------------------
+
+        done, pending = await asyncio.wait(
+            {
+                task_client_to_ssh,
+                task_ssh_to_client
+            },
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        # ------------------------------------------------------
+        # Cancelar inmediatamente el otro sentido.
+        #
+        # Esto evita dejar una mitad de la conexión abierta.
+        # ------------------------------------------------------
+
+        for task in pending:
+
+            task.cancel()
+
+        if pending:
+
+            await asyncio.gather(
+                *pending,
+                return_exceptions=True
+            )
+
+        for task in done:
+
+            try:
+                task.result()
+            except Exception:
+                pass
+
+    except (
+        ConnectionResetError,
+        BrokenPipeError,
+        ConnectionAbortedError,
+        asyncio.CancelledError
+    ):
+
+        pass
 
     except Exception:
 
@@ -496,28 +618,28 @@ async def handle(client_reader, client_writer):
 
     finally:
 
-        try:
-            client_writer.close()
-            await client_writer.wait_closed()
-        except Exception:
-            pass
+        # ------------------------------------------------------
+        # Cierre completo y ordenado
+        # ------------------------------------------------------
 
-        if ssh_writer:
-
-            try:
-                ssh_writer.close()
-                await ssh_writer.wait_closed()
-            except Exception:
-                pass
+        await close_writer(ssh_writer)
+        await close_writer(client_writer)
 
 
 async def main(port):
 
     server = await asyncio.start_server(
         handle,
-        "127.0.0.1",
-        port,
-        limit=BUFFER_SIZE
+        host="127.0.0.1",
+        port=port,
+        limit=BUFFER_SIZE,
+        reuse_address=True
+    )
+
+    print(
+        f"SSH WebSocket Internal escuchando "
+        f"en 127.0.0.1:{port}",
+        flush=True
     )
 
     async with server:
@@ -527,13 +649,19 @@ async def main(port):
 
 def run():
 
-    port = int(
-        sys.argv[1]
-    ) if len(sys.argv) > 1 else 10015
-
-    asyncio.run(
-        main(port)
+    port = (
+        int(sys.argv[1])
+        if len(sys.argv) > 1
+        else 10015
     )
+
+    try:
+
+        asyncio.run(main(port))
+
+    except KeyboardInterrupt:
+
+        pass
 
 
 if __name__ == "__main__":
@@ -544,18 +672,31 @@ PYEOF
 
     chmod 755 "$PROXY_SCRIPT"
 
+    # ----------------------------------------------------------
+    # SYSTEMD
+    # ----------------------------------------------------------
+
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=KevinTech SSH WebSocket Internal
+Description=KevinTech SSH WebSocket Internal v2.1
 After=network-online.target ssh.service
 Wants=network-online.target
 
 [Service]
 Type=simple
+
 ExecStart=/usr/bin/python3 $PROXY_SCRIPT $WS_PORT
+
 Restart=always
 RestartSec=3
+
+KillMode=mixed
+TimeoutStopSec=10
+
 LimitNOFILE=65535
+LimitNPROC=4096
+
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
@@ -579,14 +720,13 @@ EOF
         ok "SSH WebSocket Internal activo."
 
         return 0
-
     fi
 
     error_msg "SSH WebSocket Internal no pudo iniciar."
 
     journalctl \
         -u "$SERVICE_WS" \
-        -n 15 \
+        -n 20 \
         --no-pager 2>/dev/null
 
     return 1
@@ -600,10 +740,11 @@ create_haproxy_config() {
 
     mkdir -p /etc/haproxy
 
-    info "Generando configuración HAProxy..."
+    info "Generando configuración HAProxy v2.1..."
 
     cat > "$HAPROXY_CFG" <<'EOF'
 global
+
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     stats timeout 1d
 
@@ -612,6 +753,7 @@ global
     tune.ssl.default-dh-param 2048
 
     pidfile /run/haproxy.pid
+
     chroot /var/lib/haproxy
 
     user haproxy
@@ -628,14 +770,24 @@ global
 
 
 defaults
+
     log global
+
     mode tcp
+
     option dontlognull
     option tcp-smart-connect
+    option tcpka
 
-    timeout connect 5s
-    timeout client 24h
-    timeout server 24h
+    timeout connect 10s
+
+    # Sesiones largas
+    timeout client 7d
+    timeout server 7d
+    timeout tunnel 7d
+
+    # Tiempo máximo esperando una petición inicial
+    timeout http-request 30s
 
 
 frontend multiport_frontend
@@ -707,10 +859,15 @@ frontend ssl_frontend
     acl acl_http2 ssl_fc_alpn -i h2
 
     acl acl_path_regex path_reg -i ^\/(.*)
+
     acl acl_path_vless path_reg -i ^\/vless.*
+
     acl acl_path_vmess path_reg -i ^\/vmess.*
+
     acl acl_path_trojan path_reg -i ^\/trojan-ws.*
+
     acl acl_path_grpc path_reg -i ^\/(vmess-grpc|trojan-grpc|ss-grpc).*
+
     acl acl_path_ssh path_reg -i ^\/fightertunnelssh.*
 
     use_backend grpc_backend if acl_http2
@@ -735,12 +892,16 @@ backend websocket_backend
 
     mode tcp
 
+    option tcpka
+
     server ssh_ws_server 127.0.0.1:10015 check
 
 
 backend grpc_backend
 
     mode tcp
+
+    option tcpka
 
     server grpc_server 127.0.0.1:1013 check
 
@@ -749,6 +910,8 @@ backend ssh_ws_default_backend
 
     mode tcp
 
+    option tcpka
+
     server ssh_ws_server 127.0.0.1:10015 check
 
 
@@ -756,12 +919,16 @@ backend bot_ftvpn_backend
 
     mode tcp
 
+    option tcpka
+
     server ssh_direct 127.0.0.1:22 check
 
 
 backend payload_backend
 
     mode tcp
+
+    option tcpka
 
     balance roundrobin
 
@@ -782,14 +949,18 @@ backend ssh_backend
 
     mode tcp
 
+    option tcpka
+
     server ssh_server 127.0.0.1:10015 check
 EOF
 
-    if ! haproxy -c -f "$HAPROXY_CFG" >/dev/null 2>&1; then
+    # ----------------------------------------------------------
+    # VALIDAR ANTES DE REINICIAR
+    # ----------------------------------------------------------
+
+    if ! haproxy -c -f "$HAPROXY_CFG"; then
 
         error_msg "La configuración de HAProxy contiene errores."
-
-        haproxy -c -f "$HAPROXY_CFG"
 
         return 1
     fi
@@ -819,6 +990,7 @@ Wants=network-online.target $SERVICE_WS.service
 Restart=always
 RestartSec=3
 StartLimitIntervalSec=0
+LimitNOFILE=65535
 EOF
 
     systemctl daemon-reload
@@ -877,7 +1049,23 @@ install_ssl_tunnel() {
     info "Iniciando HAProxy..."
 
     systemctl enable "$SERVICE_HAPROXY" >/dev/null 2>&1
-    systemctl restart "$SERVICE_HAPROXY"
+
+    if ! systemctl restart "$SERVICE_HAPROXY"; then
+
+        error_msg "No se pudo reiniciar HAProxy."
+
+        journalctl \
+            -u "$SERVICE_HAPROXY" \
+            -n 20 \
+            --no-pager 2>/dev/null
+
+        set_config "SSL" "OFF"
+        set_config "SSL_TUNNEL" "OFF"
+
+        pause
+
+        return 1
+    fi
 
     sleep 2
 
@@ -885,8 +1073,6 @@ install_ssl_tunnel() {
 
         error_msg "HAProxy no pudo iniciar."
 
-        echo
-        info "Últimos registros:"
         journalctl \
             -u "$SERVICE_HAPROXY" \
             -n 20 \
@@ -904,6 +1090,7 @@ install_ssl_tunnel() {
     set_config "SSL_TUNNEL" "ON"
 
     echo
+
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${GREEN}║${RESET}              ${BOLD}✔ SSL TUNNEL ACTIVADO${RESET}                   ${GREEN}║${RESET}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
@@ -913,6 +1100,8 @@ install_ssl_tunnel() {
     echo -e "${GREEN}║${RESET}  HTTPS         : $PORT_HTTPS"
     echo -e "${GREEN}║${RESET}  Alternativo   : $PORT_ALT"
     echo -e "${GREEN}║${RESET}  Backend       : 127.0.0.1:$WS_PORT"
+    echo -e "${GREEN}║${RESET}  Tunnel timeout: 7 días"
+    echo -e "${GREEN}║${RESET}  TCP Keepalive : ACTIVADO"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     pause
@@ -954,7 +1143,7 @@ restart_ssl_tunnel() {
 
         journalctl \
             -u "$SERVICE_WS" \
-            -n 15 \
+            -n 20 \
             --no-pager 2>/dev/null
 
         pause
@@ -964,7 +1153,7 @@ restart_ssl_tunnel() {
 
     info "Validando configuración HAProxy..."
 
-    if ! haproxy -c -f "$HAPROXY_CFG" >/dev/null 2>&1; then
+    if ! haproxy -c -f "$HAPROXY_CFG"; then
 
         error_msg "La configuración de HAProxy no es válida."
 
@@ -975,7 +1164,19 @@ restart_ssl_tunnel() {
 
     info "Reiniciando HAProxy..."
 
-    systemctl restart "$SERVICE_HAPROXY"
+    if ! systemctl restart "$SERVICE_HAPROXY"; then
+
+        error_msg "HAProxy no pudo reiniciarse."
+
+        journalctl \
+            -u "$SERVICE_HAPROXY" \
+            -n 20 \
+            --no-pager 2>/dev/null
+
+        pause
+
+        return
+    fi
 
     sleep 2
 
@@ -1042,8 +1243,22 @@ show_status() {
 
     line
 
-    echo -e "${WHITE}Dominio:${RESET}       ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
-    echo -e "${WHITE}Certificado:${RESET}   ${GREEN}$CERT_FILE${RESET}"
+    echo -e "${WHITE}Conexiones WS:${RESET}"
+
+    ss -tan 2>/dev/null |
+        awk -v P=":${WS_PORT}" '
+            $4 ~ P"$" || $5 ~ P"$" {
+                print $1
+            }
+        ' |
+        sort |
+        uniq -c |
+        sort -nr
+
+    line
+
+    echo -e "${WHITE}Dominio:${RESET}        ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
+    echo -e "${WHITE}Certificado:${RESET}    ${GREEN}$CERT_FILE${RESET}"
     echo -e "${WHITE}HAProxy config:${RESET} ${GREEN}$HAPROXY_CFG${RESET}"
 
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
@@ -1067,28 +1282,24 @@ diagnostic_ssl() {
     echo -e "${WHITE}Componentes:${RESET}"
     echo
 
-    # HAProxy
     if command -v haproxy >/dev/null 2>&1; then
         ok "HAProxy instalado"
     else
         error_msg "HAProxy no instalado"
     fi
 
-    # OpenSSL
     if command -v openssl >/dev/null 2>&1; then
         ok "OpenSSL disponible"
     else
         error_msg "OpenSSL no disponible"
     fi
 
-    # Python
     if command -v python3 >/dev/null 2>&1; then
         ok "Python3 disponible"
     else
         error_msg "Python3 no disponible"
     fi
 
-    # Config
     if [[ -f "$HAPROXY_CFG" ]]; then
 
         if haproxy -c -f "$HAPROXY_CFG" >/dev/null 2>&1; then
@@ -1103,21 +1314,18 @@ diagnostic_ssl() {
 
     fi
 
-    # Certificado
     if [[ -s "$CERT_FILE" ]]; then
         ok "Certificado SSL encontrado"
     else
         error_msg "Certificado SSL no encontrado"
     fi
 
-    # Servicio WS
     if service_active "$SERVICE_WS"; then
         ok "SSH WebSocket activo"
     else
         error_msg "SSH WebSocket detenido"
     fi
 
-    # HAProxy
     if service_active "$SERVICE_HAPROXY"; then
         ok "HAProxy activo"
     else
@@ -1127,17 +1335,62 @@ diagnostic_ssl() {
     echo
     echo -e "${WHITE}Puertos:${RESET}"
 
-    echo -e "  80    $(port_status 80)"
-    echo -e "  443   $(port_status 443)"
-    echo -e "  8080  $(port_status 8080)"
-    echo -e "  10015 $(port_status 10015)"
+    echo -e "  80     $(port_status 80)"
+    echo -e "  443    $(port_status 443)"
+    echo -e "  8080   $(port_status 8080)"
+    echo -e "  10015  $(port_status 10015)"
+
+    echo
+    echo -e "${WHITE}Conexiones 10015:${RESET}"
+
+    ss -tan 2>/dev/null |
+        awk -v P=":${WS_PORT}" '
+            $4 ~ P"$" || $5 ~ P"$" {
+                print $1
+            }
+        ' |
+        sort |
+        uniq -c |
+        sort -nr
+
+    echo
+    echo -e "${WHITE}CLOSE-WAIT en 10015:${RESET}"
+
+    CLOSE_WAIT_COUNT=$(
+        ss -tan 2>/dev/null |
+            awk -v P=":${WS_PORT}" '
+                $1 == "CLOSE-WAIT" &&
+                ($4 ~ P"$" || $5 ~ P"$") {
+                    count++
+                }
+                END {
+                    print count+0
+                }
+            '
+    )
+
+    if [[ "$CLOSE_WAIT_COUNT" -eq 0 ]]; then
+        echo -e "  ${GREEN}✔ 0 CLOSE-WAIT${RESET}"
+    elif [[ "$CLOSE_WAIT_COUNT" -lt 20 ]]; then
+        echo -e "  ${YELLOW}⚠ $CLOSE_WAIT_COUNT CLOSE-WAIT${RESET}"
+    else
+        echo -e "  ${RED}✘ $CLOSE_WAIT_COUNT CLOSE-WAIT${RESET}"
+    fi
 
     echo
     echo -e "${WHITE}Últimos registros HAProxy:${RESET}"
 
     journalctl \
         -u "$SERVICE_HAPROXY" \
-        -n 8 \
+        -n 10 \
+        --no-pager 2>/dev/null
+
+    echo
+    echo -e "${WHITE}Últimos registros SSH WebSocket:${RESET}"
+
+    journalctl \
+        -u "$SERVICE_WS" \
+        -n 10 \
         --no-pager 2>/dev/null
 
     pause
@@ -1242,7 +1495,11 @@ remove_ssl_tunnel() {
     rm -f "$HAPROXY_CFG"
 
     systemctl daemon-reload
-    systemctl reset-failed "$SERVICE_HAPROXY" "$SERVICE_WS" 2>/dev/null
+
+    systemctl reset-failed \
+        "$SERVICE_HAPROXY" \
+        "$SERVICE_WS" \
+        2>/dev/null
 
     set_config "SSL" "OFF"
     set_config "SSL_TUNNEL" "OFF"
@@ -1265,7 +1522,7 @@ if [[ "$1" == "--auto" ]]; then
     echo
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "${MAGENTA}${BOLD}             🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
-    echo -e "${WHITE}                    SSL TUNNEL${RESET}"
+    echo -e "${WHITE}                    SSL TUNNEL v${VERSION}${RESET}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo
 
@@ -1293,7 +1550,6 @@ while true; do
 
     clear
 
-    # Recargar configuración
     # shellcheck disable=SC1090
     source "$CONFIG" 2>/dev/null
 
@@ -1303,7 +1559,9 @@ while true; do
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
     echo -e "${WHITE}Estado:${RESET}       $(get_status)"
+
     echo -e "${WHITE}Dominio:${RESET}      ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
+
     echo -e "${WHITE}HAProxy:${RESET}      $(
         if service_active "$SERVICE_HAPROXY"; then
             echo -e "${GREEN}● ACTIVO${RESET}"
@@ -1323,6 +1581,7 @@ while true; do
     line
 
     echo -e "${WHITE}Puertos:${RESET}"
+
     echo -e "  HTTP  $PORT_HTTP    $(port_status "$PORT_HTTP")"
     echo -e "  HTTPS $PORT_HTTPS   $(port_status "$PORT_HTTPS")"
     echo -e "  ALT   $PORT_ALT     $(port_status "$PORT_ALT")"
@@ -1346,6 +1605,7 @@ while true; do
 
         echo -e "${BLUE}${BOLD}  🚀 INSTALACIÓN${RESET}"
         echo
+
         echo -e "  ${GREEN}${BOLD}[01]${RESET} 🚀 Instalar SSL Tunnel"
 
     fi
