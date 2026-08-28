@@ -1,681 +1,226 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# ============================================================
+# KevinTech SSL Tunnel Manager - Bash Edition
+# HAProxy + SSH WebSocket + Xray routing
+# Ubuntu/Debian
+# ============================================================
 
-# ==============================================================
-#              🛡️ KEVINTECH MULTI SCRIPT
-#                 SSL TUNNEL MANAGER v2.2
-# ==============================================================
-#
-# Arquitectura:
-#
-#   CLIENTE
-#      │
-#      ▼
-#   TLS :443
-#      │
-#      ▼
-#   HAProxy
-#      │
-#      ▼
-#   127.0.0.1:10015
-#      │
-#      ▼
-#   SSH WebSocket Internal
-#      │
-#      ▼
-#   127.0.0.1:22
-#
-# Puertos públicos:
-#   80
-#   443
-#   8080
-#
-# Puerto interno:
-#   10015
-#
-# ==============================================================
+set -Eeuo pipefail
 
-BASE="/etc/kevintech"
-CONFIG="$BASE/config.conf"
-
-VERSION="2.2"
-
-HAPROXY_CFG="/etc/haproxy/haproxy.cfg"
-CERT_FILE="/etc/haproxy/yha.pem"
-
-SERVICE_HAPROXY="haproxy"
-SERVICE_WS="ssh-ws-internal"
-
-SERVICE_FILE="/etc/systemd/system/ssh-ws-internal.service"
-PROXY_SCRIPT="/usr/local/bin/ssh-ws-internal.py"
-
-RESILIENCE_DIR="/etc/systemd/system/haproxy.service.d"
-RESILIENCE_FILE="$RESILIENCE_DIR/10-resilience.conf"
-
-WS_PORT="10015"
-
-PORT_HTTP="80"
-PORT_HTTPS="443"
-PORT_ALT="8080"
-
-# ==============================================================
-# COLORES
-# ==============================================================
-
-RESET="\e[0m"
-BOLD="\e[1m"
-
-CYAN="\e[1;96m"
-BLUE="\e[1;94m"
-GREEN="\e[1;92m"
-YELLOW="\e[1;93m"
-MAGENTA="\e[1;95m"
-RED="\e[1;91m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-
-# ==============================================================
-# ROOT
-# ==============================================================
-
-if [[ $EUID -ne 0 ]]; then
-    echo
-    echo -e "${RED}${BOLD}✘ Debes ejecutar este script como root.${RESET}"
-    echo
-    exit 1
-fi
-
-# ==============================================================
+# -----------------------------
 # CONFIGURACIÓN
-# ==============================================================
+# -----------------------------
 
-mkdir -p "$BASE"
+readonly APP_NAME="KevinTech SSL Tunnel"
+readonly CONFIG_DIR="/etc/kevintech-ssl"
+readonly HAPROXY_DIR="/etc/haproxy"
+readonly HAPROXY_CFG="${HAPROXY_DIR}/haproxy.cfg"
+readonly CERT_FILE="${HAPROXY_DIR}/yha.pem"
+readonly RESILIENCE_DIR="/etc/systemd/system/haproxy.service.d"
+readonly RESILIENCE_FILE="${RESILIENCE_DIR}/10-kevintech-resilience.conf"
 
-if [[ ! -f "$CONFIG" ]]; then
-    touch "$CONFIG"
-fi
+readonly WS_PORT="10015"
 
-# shellcheck disable=SC1090
-source "$CONFIG" 2>/dev/null || true
+readonly GREEN='\033[1;32m'
+readonly RED='\033[1;31m'
+readonly YELLOW='\033[1;33m'
+readonly CYAN='\033[1;36m'
+readonly BLUE='\033[1;34m'
+readonly WHITE='\033[1;37m'
+readonly RESET='\033[0m'
 
-# ==============================================================
-# FUNCIONES VISUALES
-# ==============================================================
+# -----------------------------
+# UTILIDADES
+# -----------------------------
 
-line() {
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+log() {
+    echo -e "${GREEN}[✓]${RESET} $*"
 }
 
-ok() {
-    echo -e "${GREEN}✔ $1${RESET}"
+warn() {
+    echo -e "${YELLOW}[!]${RESET} $*"
 }
 
-error_msg() {
-    echo -e "${RED}✘ $1${RESET}"
-}
-
-warning() {
-    echo -e "${YELLOW}⚠ $1${RESET}"
+error() {
+    echo -e "${RED}[✗]${RESET} $*" >&2
 }
 
 info() {
-    echo -e "${CYAN}➜ $1${RESET}"
+    echo -e "${CYAN}[i]${RESET} $*"
 }
 
-pause() {
-    echo
-    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+die() {
+    error "$*"
+    exit 1
 }
 
-# ==============================================================
-# CONFIG.CONF
-# ==============================================================
-
-set_config() {
-
-    local KEY="$1"
-    local VALUE="$2"
-
-    if grep -q "^${KEY}=" "$CONFIG" 2>/dev/null; then
-        sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG"
-    else
-        echo "${KEY}=${VALUE}" >> "$CONFIG"
-    fi
+require_root() {
+    [[ $EUID -eq 0 ]] || die "Ejecuta este script como root."
 }
 
-# ==============================================================
-# SERVICIOS
-# ==============================================================
-
-service_exists() {
-    systemctl cat "$1" >/dev/null 2>&1
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-service_active() {
-    systemctl is-active --quiet "$1" 2>/dev/null
+# -----------------------------
+# BANNER
+# -----------------------------
+
+banner() {
+    clear
+
+    echo -e "${CYAN}"
+    cat <<'EOF'
+
+██╗  ██╗███████╗██╗   ██╗██╗███╗   ██╗
+██║ ██╔╝██╔════╝╚██╗ ██╔╝██║████╗  ██║
+█████╔╝ █████╗   ╚████╔╝ ██║██╔██╗ ██║
+██╔═██╗ ██╔══╝    ╚██╔╝  ██║██║╚██╗██║
+██║  ██╗███████╗   ██║   ██║██║ ╚████║
+╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═══╝
+
+          SSL TUNNEL MANAGER
+              BASH EDITION
+
+EOF
+    echo -e "${RESET}"
 }
 
-# ==============================================================
-# PUERTOS
-# ==============================================================
-
-port_in_use() {
-
-    local PORT="$1"
-
-    ss -H -lnt 2>/dev/null |
-        awk -v P=":$PORT" '
-            $4 ~ P"$" {
-                found=1
-            }
-            END {
-                exit !found
-            }
-        '
-}
-
-port_status() {
-
-    local PORT="$1"
-
-    if port_in_use "$PORT"; then
-        echo -e "${GREEN}● ESCUCHANDO${RESET}"
-    else
-        echo -e "${RED}● CERRADO${RESET}"
-    fi
-}
-
-# ==============================================================
-# INSTALAR DEPENDENCIAS
-# ==============================================================
+# -----------------------------
+# DEPENDENCIAS
+# -----------------------------
 
 install_dependencies() {
 
     info "Actualizando repositorios..."
 
-    if ! apt-get update -y; then
-        error_msg "No se pudo actualizar APT."
-        return 1
-    fi
+    apt-get update -y
 
-    echo
-    info "Instalando dependencias..."
-
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    apt-get install -y \
         haproxy \
         openssl \
-        python3 \
         curl \
+        wget \
+        jq \
         socat \
-        net-tools \
-        lsof \
-        psmisc; then
+        ca-certificates \
+        iproute2 \
+        psmisc
 
-        error_msg "No se pudieron instalar las dependencias."
-        return 1
-    fi
-
-    ok "Dependencias instaladas."
-    return 0
+    log "Dependencias instaladas."
 }
 
-# ==============================================================
+# -----------------------------
 # CERTIFICADO
-# ==============================================================
+# -----------------------------
 
 generate_certificate() {
 
-    mkdir -p /etc/haproxy
+    mkdir -p "$HAPROXY_DIR"
 
     if [[ -s "$CERT_FILE" ]]; then
-        chmod 600 "$CERT_FILE"
-        ok "Certificado PEM existente."
-        return 0
+        log "Certificado existente: $CERT_FILE"
+        return
     fi
 
     info "Generando certificado SSL..."
 
-    local KEY="/tmp/haproxy_key.pem"
-    local CERT="/tmp/haproxy_cert.pem"
+    local key cert
 
-    rm -f "$KEY" "$CERT"
+    key="$(mktemp)"
+    cert="$(mktemp)"
 
-    if ! openssl req \
+    openssl req \
         -x509 \
-        -newkey rsa:2048 \
         -nodes \
+        -newkey rsa:2048 \
         -days 3650 \
-        -keyout "$KEY" \
-        -out "$CERT" \
-        -subj "/CN=${SERVER_DOMAIN:-ssl-tunnel}"; then
+        -keyout "$key" \
+        -out "$cert" \
+        -subj "/CN=ssl-tunnel"
 
-        error_msg "No se pudo generar el certificado."
-        rm -f "$KEY" "$CERT"
-        return 1
-    fi
-
-    if ! cat "$KEY" "$CERT" > "$CERT_FILE"; then
-        error_msg "No se pudo crear el PEM."
-        rm -f "$KEY" "$CERT"
-        return 1
-    fi
-
-    rm -f "$KEY" "$CERT"
+    cat "$key" "$cert" > "$CERT_FILE"
 
     chmod 600 "$CERT_FILE"
 
-    if [[ ! -s "$CERT_FILE" ]]; then
-        error_msg "El certificado quedó vacío."
-        return 1
-    fi
+    rm -f "$key" "$cert"
 
-    ok "Certificado SSL creado."
-    return 0
+    log "Certificado creado."
 }
 
-# ==============================================================
-# LIMPIAR SERVICIOS WS ANTIGUOS
-# ==============================================================
+# -----------------------------
+# PUERTOS
+# -----------------------------
 
-remove_old_ws() {
+kill_port() {
 
-    info "Deteniendo WebSocket antiguos..."
+    local port="$1"
 
-    systemctl stop ssh-ws.service 2>/dev/null || true
-    systemctl stop ssh-wss.service 2>/dev/null || true
+    if ss -ltnp 2>/dev/null | grep -q ":${port} "; then
+
+        warn "Liberando puerto ${port}..."
+
+        fuser -k "${port}/tcp" 2>/dev/null || true
+
+        sleep 1
+    fi
+}
+
+free_haproxy_ports() {
+
+    kill_port 80
+    kill_port 443
+    kill_port 8080
+}
+
+# -----------------------------
+# SERVICIOS WS ANTIGUOS
+# -----------------------------
+
+disable_old_ws() {
+
+    for service in \
+        ssh-ws.service \
+        ssh-wss.service \
+        ssh-ws-internal.service
+    do
+
+        systemctl stop "$service" 2>/dev/null || true
+    done
 
     systemctl disable ssh-ws.service 2>/dev/null || true
     systemctl disable ssh-wss.service 2>/dev/null || true
 
-    rm -f /etc/systemd/system/ssh-ws.service
-    rm -f /etc/systemd/system/ssh-wss.service
-
-    systemctl daemon-reload
-
-    ok "Servicios WS antiguos limpiados."
+    log "Servicios WS antiguos detenidos."
 }
 
-# ==============================================================
-# LIBERAR PUERTOS HAProxy
-# ==============================================================
-#
-# Igual que la implementación Go:
-#
-#   fuser -k 80/tcp
-#   fuser -k 443/tcp
-#   fuser -k 8080/tcp
-#
-# Esto permite que HAProxy pueda tomar los puertos.
-#
-# ==============================================================
-
-free_haproxy_ports() {
-
-    info "Comprobando puertos HAProxy..."
-
-    for PORT in "$PORT_HTTP" "$PORT_HTTPS" "$PORT_ALT"; do
-
-        if port_in_use "$PORT"; then
-
-            warning "Puerto $PORT ocupado."
-
-            ss -lntp 2>/dev/null |
-                grep -E ":${PORT}([[:space:]]|$)" ||
-                true
-
-            info "Liberando puerto $PORT..."
-
-            fuser -k "${PORT}/tcp" 2>/dev/null || true
-
-            sleep 1
-
-        fi
-
-    done
-
-    ok "Puertos preparados."
-}
-
-# ==============================================================
-# SSH WEBSOCKET INTERNAL
-# ==============================================================
-
-install_ssh_ws_internal() {
-
-    info "Instalando SSH WebSocket Internal..."
-
-    mkdir -p /usr/local/bin
-
-    cat > "$PROXY_SCRIPT" <<'PYEOF'
-#!/usr/bin/env python3
-
-"""
-KevinTech SSH WebSocket Internal
-Puerto interno: 10015
-
-HAProxy
-   ↓
-127.0.0.1:10015
-   ↓
-127.0.0.1:22
-"""
-
-import asyncio
-import signal
-import sys
-
-BUFFER_SIZE = 65536
-
-SSH_HOST = "127.0.0.1"
-SSH_PORT = 22
-
-RESPONSE_101 = (
-    b"HTTP/1.1 101 Switching Protocols\r\n"
-    b"Upgrade: websocket\r\n"
-    b"Connection: Upgrade\r\n"
-    b"\r\n"
-)
-
-RESPONSE_200 = (
-    b"HTTP/1.1 200 Connection established\r\n"
-    b"Connection: keep-alive\r\n"
-    b"\r\n"
-)
-
-active_connections = 0
-
-
-async def pipe(reader, writer):
-
-    try:
-
-        while True:
-
-            data = await reader.read(BUFFER_SIZE)
-
-            if not data:
-                break
-
-            writer.write(data)
-
-            await writer.drain()
-
-    except (
-        ConnectionResetError,
-        BrokenPipeError,
-        ConnectionAbortedError,
-        asyncio.CancelledError,
-    ):
-
-        pass
-
-    except Exception:
-
-        pass
-
-
-async def close_writer(writer):
-
-    if writer is None:
-        return
-
-    try:
-
-        writer.close()
-
-        await writer.wait_closed()
-
-    except Exception:
-
-        pass
-
-
-async def handle(client_reader, client_writer):
-
-    global active_connections
-
-    active_connections += 1
-
-    ssh_reader = None
-    ssh_writer = None
-
-    try:
-
-        try:
-
-            payload = await asyncio.wait_for(
-                client_reader.read(BUFFER_SIZE),
-                timeout=10
-            )
-
-        except asyncio.TimeoutError:
-
-            return
-
-        if not payload:
-            return
-
-        text = payload.decode(
-            "utf-8",
-            errors="ignore"
-        )
-
-        upper = text.upper()
-
-        if (
-            "UPGRADE: WEBSOCKET" in upper
-            or (
-                "UPGRADE" in upper
-                and "WEBSOCKET" in upper
-            )
-        ):
-
-            client_writer.write(RESPONSE_101)
-
-        else:
-
-            client_writer.write(RESPONSE_200)
-
-        await client_writer.drain()
-
-        try:
-
-            ssh_reader, ssh_writer = await asyncio.open_connection(
-                SSH_HOST,
-                SSH_PORT
-            )
-
-        except Exception:
-
-            return
-
-        task_client_to_ssh = asyncio.create_task(
-            pipe(client_reader, ssh_writer)
-        )
-
-        task_ssh_to_client = asyncio.create_task(
-            pipe(ssh_reader, client_writer)
-        )
-
-        done, pending = await asyncio.wait(
-            [
-                task_client_to_ssh,
-                task_ssh_to_client
-            ],
-            return_when=asyncio.FIRST_COMPLETED
-        )
-
-        for task in pending:
-            task.cancel()
-
-        await asyncio.gather(
-            *pending,
-            return_exceptions=True
-        )
-
-    except asyncio.CancelledError:
-
-        pass
-
-    except Exception:
-
-        pass
-
-    finally:
-
-        await close_writer(ssh_writer)
-        await close_writer(client_writer)
-
-        active_connections -= 1
-
-
-async def start(port):
-
-    server = await asyncio.start_server(
-        handle,
-        "127.0.0.1",
-        port,
-        limit=BUFFER_SIZE,
-        reuse_address=True
-    )
-
-    print(
-        f"SSH WebSocket Internal escuchando "
-        f"en 127.0.0.1:{port}",
-        flush=True
-    )
-
-    async with server:
-
-        await server.serve_forever()
-
-
-def main():
-
-    port = (
-        int(sys.argv[1])
-        if len(sys.argv) > 1
-        else 10015
-    )
-
-    loop = asyncio.new_event_loop()
-
-    asyncio.set_event_loop(loop)
-
-    for sig in (
-        signal.SIGTERM,
-        signal.SIGINT
-    ):
-
-        try:
-
-            loop.add_signal_handler(
-                sig,
-                loop.stop
-            )
-
-        except Exception:
-
-            pass
-
-    try:
-
-        loop.run_until_complete(
-            start(port)
-        )
-
-    except KeyboardInterrupt:
-
-        pass
-
-    finally:
-
-        loop.close()
-
-
-if __name__ == "__main__":
-
-    main()
-
-PYEOF
-
-    chmod 755 "$PROXY_SCRIPT"
-
-    cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=KevinTech SSH WebSocket Internal v2.2
-After=network-online.target ssh.service
-Wants=network-online.target ssh.service
-
-[Service]
-Type=simple
-
-ExecStart=/usr/bin/python3 $PROXY_SCRIPT $WS_PORT
-
-Restart=always
-RestartSec=3
-
-LimitNOFILE=65535
-
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-
-    if ! systemctl enable "$SERVICE_WS" >/dev/null 2>&1; then
-        error_msg "No se pudo habilitar $SERVICE_WS."
-        return 1
-    fi
-
-    systemctl restart "$SERVICE_WS"
-
-    sleep 1
-
-    if service_active "$SERVICE_WS"; then
-        ok "SSH WebSocket Internal activo."
-        return 0
-    fi
-
-    error_msg "SSH WebSocket Internal no pudo iniciar."
-
-    journalctl \
-        -u "$SERVICE_WS" \
-        -n 20 \
-        --no-pager \
-        -o cat
-
-    return 1
-}
-
-# ==============================================================
+# ============================================================
 # CONFIGURACIÓN HAPROXY
-# ==============================================================
+# ============================================================
 
-create_haproxy_config() {
+write_haproxy_config() {
 
-    mkdir -p /etc/haproxy
-    mkdir -p /run/haproxy
-
-    info "Generando configuración HAProxy..."
+    mkdir -p "$HAPROXY_DIR"
 
     cat > "$HAPROXY_CFG" <<'EOF'
 global
-    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
-    stats timeout 1d
+    log /dev/log local0
+    log /dev/log local1 notice
 
-    tune.bufsize 10485760
-    tune.maxrewrite 3072
-    tune.ssl.default-dh-param 2048
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
 
     pidfile /run/haproxy.pid
-    chroot /var/lib/haproxy
 
     user haproxy
     group haproxy
+
     daemon
+
+    tune.bufsize 10485760
+    tune.maxrewrite 3072
+
+    tune.ssl.default-dh-param 2048
 
     ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
 
@@ -699,60 +244,16 @@ defaults
     timeout server 24h
 
 
-frontend multiport_frontend
+# ============================================================
+# ENTRADA PRINCIPAL HTTPS
+# ============================================================
 
+frontend https_entry
     mode tcp
 
     bind *:443 tfo
-
-    tcp-request inspect-delay 10ms
-
-    tcp-request content accept if HTTP
-    tcp-request content accept if { req.ssl_hello_type 1 }
-
-    use_backend recir_http_backend if HTTP
-
-    default_backend recir_https_backend
-
-
-backend recir_https_backend
-
-    mode tcp
-
-    server recir_https_server abns@haproxy-https send-proxy-v2 check
-
-
-backend recir_http_backend
-
-    mode tcp
-
-    server recir_http_server abns@haproxy-http send-proxy-v2 check
-
-
-frontend multiports_frontend
-
-    mode tcp
-
-    bind abns@haproxy-http accept-proxy tfo
-
-    default_backend recir_https_www_backend
-
-
-backend recir_https_www_backend
-
-    mode tcp
-
-    server recir_https_www_server 127.0.0.1:2223 check
-
-
-frontend ssl_frontend
-
-    mode tcp
-
     bind *:80 tfo
     bind *:8080 tfo
-
-    bind abns@haproxy-https accept-proxy ssl crt /etc/haproxy/yha.pem alpn h2,http/1.1 tfo
 
     tcp-request inspect-delay 200ms
 
@@ -760,125 +261,111 @@ frontend ssl_frontend
 
     tcp-request content accept if { req.ssl_hello_type 1 }
 
-    acl acl_upgrade hdr(Connection) -i upgrade
-    acl acl_websocket hdr(Upgrade) -i websocket
+    acl ssh_payload payload(0,7) -m bin 5353482d322e30
 
-    acl acl_payload payload(0,7) -m bin 5353482d322e30
+    acl websocket_upgrade req.payload(0,4096) -m reg -i "upgrade:\s*websocket"
 
-    acl acl_http2 ssl_fc_alpn -i h2
+    acl vless_path req.payload(0,4096) -m reg -i "GET\s+/vless"
+    acl vmess_path req.payload(0,4096) -m reg -i "GET\s+/vmess"
+    acl trojan_path req.payload(0,4096) -m reg -i "GET\s+/trojan-ws"
 
-    acl acl_path_regex path_reg -i ^\/(.*)
+    use_backend ssh_direct_backend if ssh_payload
 
-    acl acl_path_vless path_reg -i ^\/vless.*
-    acl acl_path_vmess path_reg -i ^\/vmess.*
-    acl acl_path_trojan path_reg -i ^\/trojan-ws.*
+    use_backend vless_backend if vless_path
+    use_backend vmess_backend if vmess_path
+    use_backend trojan_backend if trojan_path
 
-    acl acl_path_grpc path_reg -i ^\/(vmess-grpc|trojan-grpc|ss-grpc).*
+    use_backend websocket_backend if websocket_upgrade
 
-    acl acl_path_ssh path_reg -i ^\/fightertunnelssh.*
+    default_backend ssh_ws_backend
 
-    use_backend grpc_backend if acl_http2
 
-    use_backend payload_backend if acl_path_vless
-    use_backend payload_backend if acl_path_vmess
-    use_backend payload_backend if acl_path_trojan
-    use_backend payload_backend if acl_path_grpc
+# ============================================================
+# SSH DIRECT
+# ============================================================
 
-    use_backend ssh_backend if acl_path_ssh
+backend ssh_direct_backend
+    mode tcp
 
-    use_backend websocket_backend if acl_upgrade acl_websocket
+    server ssh 127.0.0.1:22 check
 
-    use_backend websocket_backend if acl_path_regex
 
-    use_backend bot_ftvpn_backend if acl_payload
-
-    default_backend ssh_ws_default_backend
-
+# ============================================================
+# WEBSOCKET SSH
+# ============================================================
 
 backend websocket_backend
-
     mode tcp
 
-    server ssh_ws_server 127.0.0.1:10015 check
+    server sshws 127.0.0.1:10015 check
 
+
+backend ssh_ws_backend
+    mode tcp
+
+    server sshws 127.0.0.1:10015 check
+
+
+# ============================================================
+# XRAY VLESS
+# ============================================================
+
+backend vless_backend
+    mode tcp
+
+    server vless1 127.0.0.1:10001 check
+
+
+# ============================================================
+# XRAY VMESS
+# ============================================================
+
+backend vmess_backend
+    mode tcp
+
+    server vmess1 127.0.0.1:10002 check
+
+
+# ============================================================
+# XRAY TROJAN
+# ============================================================
+
+backend trojan_backend
+    mode tcp
+
+    server trojan1 127.0.0.1:10003 check
+
+
+# ============================================================
+# GRPC
+# ============================================================
 
 backend grpc_backend
-
     mode tcp
 
-    server grpc_server 127.0.0.1:1013 check
-
-
-backend ssh_ws_default_backend
-
-    mode tcp
-
-    balance roundrobin
-
-    server ssh_ws_server 127.0.0.1:10015 check
-
-
-backend bot_ftvpn_backend
-
-    mode tcp
-
-    server ssh_direct 127.0.0.1:22 check
-
-
-backend payload_backend
-
-    mode tcp
-
-    balance roundrobin
-
-    server payload_server_vless 127.0.0.1:10001 check
-    server payload_server_vmess 127.0.0.1:10002 check
-    server payload_server_trojan 127.0.0.1:10003 check
-    server payload_server_grpc 127.0.0.1:10004 check
-
-    server payload_server_vless2 127.0.0.1:10005 check
-    server payload_server_vmess2 127.0.0.1:10006 check
-    server payload_server_trojan2 127.0.0.1:10007 check
-    server payload_server_grpc2 127.0.0.1:10008 check
-
-    server ssh_server 127.0.0.1:10015 check
-
-
-backend ssh_backend
-
-    mode tcp
-
-    server ssh_server 127.0.0.1:10015 check
+    server grpc1 127.0.0.1:1013 check
 EOF
 
-    if ! haproxy -c -f "$HAPROXY_CFG"; then
-        error_msg "Configuración HAProxy inválida."
-        return 1
-    fi
-
-    ok "Configuración HAProxy válida."
-
-    return 0
+    log "HAProxy configurado."
 }
 
-# ==============================================================
-# RESILIENCIA HAPROXY
-# ==============================================================
+# -----------------------------
+# RESILIENCIA SYSTEMD
+# -----------------------------
 
-ensure_haproxy_resilience() {
-
-    info "Configurando recuperación automática HAProxy..."
+configure_resilience() {
 
     mkdir -p "$RESILIENCE_DIR"
 
-    cat > "$RESILIENCE_FILE" <<EOF
+    cat > "$RESILIENCE_FILE" <<'EOF'
 [Unit]
-After=network-online.target ssh-ws-internal.service
-Wants=network-online.target ssh-ws-internal.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Restart=always
 RestartSec=3
+
 StartLimitIntervalSec=0
 
 ExecStartPre=/bin/mkdir -p /run/haproxy
@@ -886,832 +373,363 @@ EOF
 
     systemctl daemon-reload
 
-    ok "Resiliencia HAProxy configurada."
+    log "Resiliencia systemd configurada."
 }
 
-# ==============================================================
-# REPARAR / EJECUTAR SERVICIOS
-# ==============================================================
+# -----------------------------
+# VALIDAR HAPROXY
+# -----------------------------
 
-ensure_services_running() {
+validate_haproxy() {
 
-    info "Comprobando SSH WebSocket..."
+    info "Validando configuración HAProxy..."
 
-    if ! service_active "$SERVICE_WS"; then
-
-        warning "SSH WebSocket detenido."
-
-        if [[ -f "$SERVICE_FILE" ]]; then
-            systemctl restart "$SERVICE_WS"
-        else
-            install_ssh_ws_internal || return 1
-        fi
-
+    if haproxy -c -f "$HAPROXY_CFG"; then
+        log "Configuración válida."
+    else
+        die "La configuración de HAProxy contiene errores."
     fi
+}
 
-    if ! service_active "$SERVICE_WS"; then
-        error_msg "SSH WebSocket no está activo."
-        return 1
-    fi
+# -----------------------------
+# ARRANCAR
+# -----------------------------
 
-    ok "SSH WebSocket activo."
-
-    info "Comprobando HAProxy..."
-
-    if service_active "$SERVICE_HAPROXY"; then
-        ok "HAProxy ya está activo."
-        return 0
-    fi
-
-    warning "HAProxy está detenido."
+start_haproxy() {
 
     mkdir -p /run/haproxy
 
-    free_haproxy_ports
-
     systemctl daemon-reload
 
-    systemctl enable "$SERVICE_HAPROXY" >/dev/null 2>&1
+    systemctl enable haproxy
 
-    if ! systemctl restart "$SERVICE_HAPROXY"; then
-
-        error_msg "No se pudo iniciar HAProxy."
-
-        journalctl \
-            -u "$SERVICE_HAPROXY" \
-            -n 30 \
-            --no-pager \
-            -o cat
-
-        return 1
-    fi
+    systemctl restart haproxy
 
     sleep 2
 
-    if service_active "$SERVICE_HAPROXY"; then
-        ok "HAProxy activo."
-        return 0
-    fi
-
-    error_msg "HAProxy continúa detenido."
-
-    return 1
-}
-
-# ==============================================================
-# INSTALACIÓN COMPLETA
-# ==============================================================
-
-install_ssl_tunnel() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🚀 INSTALAR SSL TUNNEL${RESET}                   ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    echo -e "${WHITE}Dominio:${RESET} ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
-
-    echo -e "${WHITE}Puertos:${RESET} ${CYAN}80, 443, 8080${RESET}"
-
-    echo -e "${WHITE}Backend:${RESET} ${CYAN}127.0.0.1:10015 → SSH:22${RESET}"
-
-    echo
-
-    if ! install_dependencies; then
-        pause
-        return 1
-    fi
-
-    if ! generate_certificate; then
-        pause
-        return 1
-    fi
-
-    remove_old_ws
-
-    free_haproxy_ports
-
-    if ! install_ssh_ws_internal; then
-        pause
-        return 1
-    fi
-
-    if ! create_haproxy_config; then
-        pause
-        return 1
-    fi
-
-    ensure_haproxy_resilience
-
-    info "Reiniciando systemd..."
-
-    systemctl daemon-reload
-
-    info "Habilitando servicios..."
-
-    systemctl enable "$SERVICE_WS" >/dev/null 2>&1
-    systemctl enable "$SERVICE_HAPROXY" >/dev/null 2>&1
-
-    info "Iniciando SSH WebSocket..."
-
-    systemctl restart "$SERVICE_WS"
-
-    sleep 1
-
-    if ! service_active "$SERVICE_WS"; then
-
-        error_msg "SSH WebSocket no inició."
-
-        journalctl \
-            -u "$SERVICE_WS" \
-            -n 20 \
-            --no-pager \
-            -o cat
-
-        pause
-        return 1
-    fi
-
-    ok "SSH WebSocket activo."
-
-    info "Iniciando HAProxy..."
-
-    systemctl restart "$SERVICE_HAPROXY"
-
-    sleep 2
-
-    if ! service_active "$SERVICE_HAPROXY"; then
-
-        error_msg "HAProxy no pudo iniciar."
-
-        journalctl \
-            -u "$SERVICE_HAPROXY" \
-            -n 30 \
-            --no-pager \
-            -o cat
-
-        set_config "SSL" "OFF"
-        set_config "SSL_TUNNEL" "OFF"
-
-        pause
-        return 1
-    fi
-
-    set_config "SSL" "ON"
-    set_config "SSL_TUNNEL" "ON"
-
-    echo
-
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}║${RESET}              ${BOLD}✔ SSL TUNNEL ACTIVADO${RESET}                   ${GREEN}║${RESET}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${GREEN}║${RESET}  HAProxy       : ACTIVO"
-    echo -e "${GREEN}║${RESET}  SSH WebSocket : ACTIVO"
-    echo -e "${GREEN}║${RESET}  HTTP          : 80"
-    echo -e "${GREEN}║${RESET}  HTTPS         : 443"
-    echo -e "${GREEN}║${RESET}  Alternativo   : 8080"
-    echo -e "${GREEN}║${RESET}  Backend       : 127.0.0.1:10015"
-    echo -e "${GREEN}║${RESET}  SSH           : 127.0.0.1:22"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-
-    ss -lntp 2>/dev/null |
-        grep -E ':(80|443|8080|10015)\b' ||
-        true
-
-    pause
-
-    return 0
-}
-
-# ==============================================================
-# REINICIAR SSL TUNNEL
-# ==============================================================
-
-restart_ssl_tunnel() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}♻️ REINICIAR SSL TUNNEL${RESET}                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    if [[ ! -f "$HAPROXY_CFG" ]]; then
-        error_msg "Configuración HAProxy no encontrada."
-        pause
-        return 1
-    fi
-
-    info "Validando configuración..."
-
-    if ! haproxy -c -f "$HAPROXY_CFG"; then
-        error_msg "Configuración inválida."
-        pause
-        return 1
-    fi
-
-    info "Reiniciando SSH WebSocket..."
-
-    systemctl restart "$SERVICE_WS"
-
-    sleep 1
-
-    if ! service_active "$SERVICE_WS"; then
-        error_msg "SSH WebSocket no inició."
-        pause
-        return 1
-    fi
-
-    ok "SSH WebSocket activo."
-
-    info "Reiniciando HAProxy..."
-
-    systemctl restart "$SERVICE_HAPROXY"
-
-    sleep 2
-
-    if service_active "$SERVICE_HAPROXY"; then
-
-        set_config "SSL" "ON"
-        set_config "SSL_TUNNEL" "ON"
-
-        ok "SSL Tunnel reiniciado correctamente."
-
+    if systemctl is-active --quiet haproxy; then
+        log "HAProxy está funcionando."
     else
-
-        set_config "SSL" "OFF"
-        set_config "SSL_TUNNEL" "OFF"
-
-        error_msg "HAProxy no pudo iniciar."
-
-        journalctl \
-            -u "$SERVICE_HAPROXY" \
-            -n 25 \
-            --no-pager \
-            -o cat
+        error "HAProxy no pudo iniciar."
+        systemctl status haproxy --no-pager || true
+        exit 1
     fi
-
-    pause
 }
 
-# ==============================================================
+# -----------------------------
+# INSTALACIÓN PRINCIPAL
+# -----------------------------
+
+install_tunnel() {
+
+    require_root
+
+    banner
+
+    echo -e "${WHITE}Instalación del sistema SSL Tunnel${RESET}"
+    echo
+
+    install_dependencies
+
+    generate_certificate
+
+    free_haproxy_ports
+
+    disable_old_ws
+
+    write_haproxy_config
+
+    configure_resilience
+
+    validate_haproxy
+
+    start_haproxy
+
+    echo
+    echo -e "${GREEN}"
+    echo "=============================================="
+    echo "        INSTALACIÓN COMPLETADA"
+    echo "=============================================="
+    echo -e "${RESET}"
+
+    show_status
+}
+
+# -----------------------------
 # ESTADO
-# ==============================================================
+# -----------------------------
 
 show_status() {
 
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}                ${MAGENTA}${BOLD}📊 SSL TUNNEL STATUS${RESET}                   ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-
-    echo -e "${WHITE}Dominio:${RESET} ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
-
     echo
-    echo -e "${WHITE}HAProxy:${RESET}"
+    echo -e "${CYAN}========== ESTADO DEL SISTEMA ==========${RESET}"
 
-    if service_active "$SERVICE_HAPROXY"; then
-        echo -e "  ${GREEN}● ACTIVO${RESET}"
+    printf "%-20s : " "HAProxy"
+
+    if systemctl is-active --quiet haproxy; then
+        echo -e "${GREEN}ONLINE${RESET}"
     else
-        echo -e "  ${RED}● DETENIDO${RESET}"
+        echo -e "${RED}OFFLINE${RESET}"
+    fi
+
+    printf "%-20s : " "SSH"
+
+    if systemctl is-active --quiet ssh 2>/dev/null ||
+       systemctl is-active --quiet sshd 2>/dev/null; then
+        echo -e "${GREEN}ONLINE${RESET}"
+    else
+        echo -e "${RED}OFFLINE${RESET}"
     fi
 
     echo
-    echo -e "${WHITE}SSH WebSocket:${RESET}"
+    echo -e "${CYAN}Puertos:${RESET}"
 
-    if service_active "$SERVICE_WS"; then
-        echo -e "  ${GREEN}● ACTIVO${RESET}"
-    else
-        echo -e "  ${RED}● DETENIDO${RESET}"
-    fi
-
-    line
-
-    echo -e "${WHITE}Puertos:${RESET}"
-
-    echo -e "  HTTP   80      $(port_status 80)"
-    echo -e "  HTTPS  443     $(port_status 443)"
-    echo -e "  ALT    8080    $(port_status 8080)"
-    echo -e "  WS     10015   $(port_status 10015)"
-    echo -e "  SSH    22      $(port_status 22)"
-
-    line
-
-    echo -e "${WHITE}Archivos:${RESET}"
-
-    echo -e "  HAProxy : $HAPROXY_CFG"
-    echo -e "  PEM     : $CERT_FILE"
-    echo -e "  WS      : $PROXY_SCRIPT"
-    echo -e "  Service : $SERVICE_FILE"
+    ss -ltnp 2>/dev/null |
+        grep -E ':(22|80|443|8080|10001|10002|10003|1013|10015)\b' ||
+        true
 
     echo
-
-    echo -e "${WHITE}Conexiones 10015:${RESET}"
-
-    ss -tan 2>/dev/null |
-        awk '$4 ~ /:10015$/ || $5 ~ /:10015$/ {print}' |
-        head -20
-
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    pause
 }
 
-# ==============================================================
-# DIAGNÓSTICO
-# ==============================================================
+# -----------------------------
+# REINICIO
+# -----------------------------
 
-diagnostic_ssl() {
+restart_tunnel() {
 
-    clear
+    require_root
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🔎 DIAGNÓSTICO SSL TUNNEL${RESET}                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    echo -e "${WHITE}Dependencias:${RESET}"
-
-    command -v haproxy >/dev/null 2>&1 \
-        && ok "HAProxy instalado" \
-        || error_msg "HAProxy no instalado"
-
-    command -v openssl >/dev/null 2>&1 \
-        && ok "OpenSSL disponible" \
-        || error_msg "OpenSSL no disponible"
-
-    command -v python3 >/dev/null 2>&1 \
-        && ok "Python3 disponible" \
-        || error_msg "Python3 no disponible"
-
-    command -v fuser >/dev/null 2>&1 \
-        && ok "fuser disponible" \
-        || error_msg "fuser no disponible"
-
-    echo
-
-    echo -e "${WHITE}Configuración:${RESET}"
-
-    if [[ -f "$HAPROXY_CFG" ]]; then
-
-        if haproxy -c -f "$HAPROXY_CFG" >/dev/null 2>&1; then
-            ok "haproxy.cfg válido"
-        else
-            error_msg "haproxy.cfg inválido"
-        fi
-
-    else
-        error_msg "haproxy.cfg no encontrado"
-    fi
-
-    if [[ -s "$CERT_FILE" ]]; then
-        ok "Certificado PEM encontrado"
-    else
-        error_msg "Certificado PEM no encontrado"
-    fi
-
-    echo
-
-    echo -e "${WHITE}Servicios:${RESET}"
-
-    service_active "$SERVICE_WS" \
-        && ok "SSH WebSocket activo" \
-        || error_msg "SSH WebSocket detenido"
-
-    service_active "$SERVICE_HAPROXY" \
-        && ok "HAProxy activo" \
-        || error_msg "HAProxy detenido"
-
-    echo
-
-    echo -e "${WHITE}Puertos:${RESET}"
-
-    echo -e "  22     $(port_status 22)"
-    echo -e "  80     $(port_status 80)"
-    echo -e "  443    $(port_status 443)"
-    echo -e "  8080   $(port_status 8080)"
-    echo -e "  10015  $(port_status 10015)"
-
-    echo
-
-    echo -e "${WHITE}HAProxy últimos registros:${RESET}"
-
-    journalctl \
-        -u "$SERVICE_HAPROXY" \
-        -n 15 \
-        --no-pager \
-        -o cat
-
-    echo
-
-    echo -e "${WHITE}SSH WebSocket últimos registros:${RESET}"
-
-    journalctl \
-        -u "$SERVICE_WS" \
-        -n 15 \
-        --no-pager \
-        -o cat
-
-    pause
-}
-
-# ==============================================================
-# LOGS
-# ==============================================================
-
-show_logs() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}                 ${MAGENTA}${BOLD}📜 SSL TUNNEL LOGS${RESET}                    ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-    echo -e "${WHITE}===== HAProxy =====${RESET}"
-
-    journalctl \
-        -u "$SERVICE_HAPROXY" \
-        -n 50 \
-        --no-pager \
-        -o cat
-
-    echo
-    echo -e "${WHITE}===== SSH WebSocket =====${RESET}"
-
-    journalctl \
-        -u "$SERVICE_WS" \
-        -n 50 \
-        --no-pager \
-        -o cat
-
-    pause
-}
-
-# ==============================================================
-# REPARACIÓN AUTOMÁTICA
-# ==============================================================
-
-repair_ssl_tunnel() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🛠️ REPARAR SSL TUNNEL${RESET}                    ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    if [[ ! -f "$HAPROXY_CFG" ]] ||
-       [[ ! -f "$CERT_FILE" ]]; then
-
-        warning "Faltan archivos principales."
-        info "Ejecutando instalación completa..."
-
-        install_ssl_tunnel
-
-        return
-    fi
-
-    info "Recreando /run/haproxy..."
+    info "Reiniciando túnel..."
 
     mkdir -p /run/haproxy
 
-    info "Actualizando resiliencia..."
-
-    ensure_haproxy_resilience
-
-    info "Comprobando WebSocket..."
-
-    if ! service_active "$SERVICE_WS"; then
-        systemctl restart "$SERVICE_WS"
-    fi
-
-    info "Comprobando HAProxy..."
-
-    if ! service_active "$SERVICE_HAPROXY"; then
-
-        free_haproxy_ports
-
-        if ! haproxy -c -f "$HAPROXY_CFG"; then
-            error_msg "Configuración HAProxy inválida."
-            pause
-            return 1
-        fi
-
-        systemctl restart "$SERVICE_HAPROXY"
-    fi
+    systemctl restart haproxy
 
     sleep 2
 
-    if service_active "$SERVICE_HAPROXY" &&
-       service_active "$SERVICE_WS"; then
-
-        set_config "SSL" "ON"
-        set_config "SSL_TUNNEL" "ON"
-
-        ok "SSL Tunnel reparado correctamente."
-
+    if systemctl is-active --quiet haproxy; then
+        log "Túnel reiniciado correctamente."
     else
-
-        error_msg "No se pudo reparar completamente."
-
+        error "HAProxy no está funcionando."
     fi
-
-    pause
 }
 
-# ==============================================================
-# DESINSTALAR
-# ==============================================================
+# -----------------------------
+# REPARACIÓN
+# -----------------------------
 
-remove_ssl_tunnel() {
+repair_tunnel() {
 
-    clear
+    require_root
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}               ${RED}${BOLD}🗑️ DESINSTALAR SSL TUNNEL${RESET}              ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
+    banner
 
-    warning "Se eliminarán HAProxy, certificado y WebSocket interno."
-    echo
+    info "Iniciando reparación..."
 
-    read -rp "$(echo -e "${RED}Escribe ELIMINAR para continuar: ${RESET}")" CONFIRM
+    mkdir -p /run/haproxy
 
-    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
-        warning "Operación cancelada."
-        sleep 1
-        return
+    if [[ ! -f "$CERT_FILE" ]]; then
+        warn "Certificado inexistente."
+        generate_certificate
     fi
 
+    if [[ ! -f "$HAPROXY_CFG" ]]; then
+        warn "Configuración inexistente."
+        write_haproxy_config
+    fi
+
+    configure_resilience
+
+    free_haproxy_ports
+
+    validate_haproxy
+
+    systemctl daemon-reload
+
+    systemctl enable haproxy
+
+    systemctl restart haproxy
+
+    sleep 2
+
+    if systemctl is-active --quiet haproxy; then
+        log "Reparación completada."
+    else
+        error "No fue posible recuperar HAProxy."
+        journalctl -u haproxy -n 50 --no-pager
+    fi
+}
+
+# -----------------------------
+# LOGS
+# -----------------------------
+
+show_logs() {
+
+    require_root
+
+    echo -e "${CYAN}========== HAProxy LOG ==========${RESET}"
+
+    journalctl \
+        -u haproxy \
+        -n 100 \
+        --no-pager
+}
+
+# -----------------------------
+# DESINSTALAR
+# -----------------------------
+
+remove_tunnel() {
+
+    require_root
+
     echo
+    echo -e "${RED}Esto eliminará HAProxy y su configuración.${RESET}"
+    read -rp "¿Continuar? [s/N]: " answer
 
-    info "Deteniendo HAProxy..."
-    systemctl stop "$SERVICE_HAPROXY" 2>/dev/null || true
+    [[ "$answer" =~ ^[sS]$ ]] || return
 
-    info "Deteniendo SSH WebSocket..."
-    systemctl stop "$SERVICE_WS" 2>/dev/null || true
-
-    info "Deshabilitando servicios..."
-
-    systemctl disable "$SERVICE_HAPROXY" 2>/dev/null || true
-    systemctl disable "$SERVICE_WS" 2>/dev/null || true
-
-    info "Eliminando servicio WebSocket..."
-
-    rm -f "$SERVICE_FILE"
-
-    info "Eliminando resiliencia HAProxy..."
-
-    rm -f "$RESILIENCE_FILE"
-
-    rmdir "$RESILIENCE_DIR" 2>/dev/null || true
-
-    info "Eliminando proxy..."
-
-    rm -f "$PROXY_SCRIPT"
-
-    info "Eliminando configuración..."
+    systemctl stop haproxy 2>/dev/null || true
+    systemctl disable haproxy 2>/dev/null || true
 
     rm -f "$HAPROXY_CFG"
     rm -f "$CERT_FILE"
 
+    rm -rf "$RESILIENCE_DIR"
+
     systemctl daemon-reload
 
-    systemctl reset-failed \
-        "$SERVICE_HAPROXY" \
-        "$SERVICE_WS" \
-        2>/dev/null || true
+    apt-get remove -y haproxy || true
+    apt-get autoremove -y || true
 
-    set_config "SSL" "OFF"
-    set_config "SSL_TUNNEL" "OFF"
-
-    echo
-
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}║${RESET}              ${BOLD}✔ SSL TUNNEL ELIMINADO${RESET}                   ${GREEN}║${RESET}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    pause
+    log "HAProxy eliminado."
 }
 
-# ==============================================================
-# ENSURE HAPROXY RUNNING
-# ==============================================================
-#
-# Equivalente Bash de:
-#
-# EnsureHAProxyRunning()
-#
-# Sirve para que el menú/bot pueda ejecutar:
-#
-#   ensure_haproxy_running
-#
-# después de un reboot.
-#
-# ==============================================================
+# -----------------------------
+# MENU
+# -----------------------------
 
-ensure_haproxy_running() {
+menu() {
 
-    if [[ ! -f "$HAPROXY_CFG" ]]; then
-        return 0
-    fi
+    while true; do
 
-    if [[ ! -f "$CERT_FILE" ]]; then
-        return 0
-    fi
+        banner
 
-    mkdir -p /run/haproxy
+        echo -e "${WHITE}1)${RESET} Instalar SSL Tunnel"
+        echo -e "${WHITE}2)${RESET} Estado del sistema"
+        echo -e "${WHITE}3)${RESET} Reiniciar HAProxy"
+        echo -e "${WHITE}4)${RESET} Reparar instalación"
+        echo -e "${WHITE}5)${RESET} Ver logs"
+        echo -e "${WHITE}6)${RESET} Validar configuración"
+        echo -e "${WHITE}7)${RESET} Desinstalar"
+        echo -e "${WHITE}0)${RESET} Salir"
 
-    ensure_haproxy_resilience
+        echo
+        read -rp "Selecciona una opción: " option
 
-    if ! service_active "$SERVICE_WS"; then
+        case "$option" in
 
-        if [[ -f "$SERVICE_FILE" ]]; then
-            systemctl restart "$SERVICE_WS"
-        else
-            install_ssh_ws_internal
-        fi
+            1)
+                install_tunnel
+                read -rp "ENTER para continuar..."
+                ;;
 
-    fi
+            2)
+                show_status
+                read -rp "ENTER para continuar..."
+                ;;
 
-    if service_active "$SERVICE_HAPROXY"; then
-        return 0
-    fi
+            3)
+                restart_tunnel
+                read -rp "ENTER para continuar..."
+                ;;
 
-    free_haproxy_ports
+            4)
+                repair_tunnel
+                read -rp "ENTER para continuar..."
+                ;;
 
-    if ! haproxy -c -f "$HAPROXY_CFG" >/dev/null 2>&1; then
-        return 1
-    fi
+            5)
+                show_logs
+                read -rp "ENTER para continuar..."
+                ;;
 
-    systemctl restart "$SERVICE_HAPROXY"
+            6)
+                validate_haproxy
+                read -rp "ENTER para continuar..."
+                ;;
 
-    sleep 2
+            7)
+                remove_tunnel
+                read -rp "ENTER para continuar..."
+                ;;
 
-    service_active "$SERVICE_HAPROXY"
-}
-
-# ==============================================================
-# MODO AUTO
-# ==============================================================
-
-if [[ "$1" == "--auto" ]]; then
-
-    echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${MAGENTA}${BOLD}             🚀 INSTALACIÓN AUTOMÁTICA${RESET}"
-    echo -e "${WHITE}                    SSL TUNNEL v${VERSION}${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo
-
-    if install_ssl_tunnel; then
-        ok "SSL Tunnel instalado correctamente."
-        exit 0
-    else
-        error_msg "La instalación automática falló."
-        exit 1
-    fi
-
-fi
-
-# ==============================================================
-# MODO ENSURE
-# ==============================================================
-
-if [[ "$1" == "--ensure" ]]; then
-
-    if ensure_haproxy_running; then
-        exit 0
-    fi
-
-    exit 1
-fi
-
-# ==============================================================
-# MENÚ PRINCIPAL
-# ==============================================================
-
-while true; do
-
-    clear
-
-    # Recargar configuración
-    # shellcheck disable=SC1090
-    source "$CONFIG" 2>/dev/null || true
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}               ${MAGENTA}${BOLD}🔐 SSL TUNNEL MANAGER${RESET}                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                  ${GRAY}HAProxy / TLS v${VERSION}${RESET}                  ${CYAN}║${RESET}"
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-
-    echo -e "${WHITE}Dominio:${RESET} ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
-
-    echo -e "${WHITE}HAProxy:${RESET} $(
-        if service_active "$SERVICE_HAPROXY"; then
-            echo -e "${GREEN}● ACTIVO${RESET}"
-        else
-            echo -e "${RED}● DETENIDO${RESET}"
-        fi
-    )"
-
-    echo -e "${WHITE}SSH WebSocket:${RESET} $(
-        if service_active "$SERVICE_WS"; then
-            echo -e "${GREEN}● ACTIVO${RESET}"
-        else
-            echo -e "${RED}● DETENIDO${RESET}"
-        fi
-    )"
-
-    line
-
-    echo -e "${WHITE}Puertos:${RESET}"
-
-    echo -e "  HTTP   80      $(port_status 80)"
-    echo -e "  HTTPS  443     $(port_status 443)"
-    echo -e "  ALT    8080    $(port_status 8080)"
-    echo -e "  WS     10015   $(port_status 10015)"
-
-    line
-
-    echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN SSL TUNNEL${RESET}"
-    echo
-
-    echo -e "  ${GREEN}${BOLD}[01]${RESET} 🚀 Instalar / Actualizar"
-    echo -e "  ${GREEN}${BOLD}[02]${RESET} ♻️  Reiniciar Servicios"
-    echo -e "  ${GREEN}${BOLD}[03]${RESET} 📊 Estado Detallado"
-    echo -e "  ${GREEN}${BOLD}[04]${RESET} 🔎 Diagnóstico"
-    echo -e "  ${GREEN}${BOLD}[05]${RESET} 📜 Ver Logs"
-    echo -e "  ${GREEN}${BOLD}[06]${RESET} 🛠️  Reparar"
-    echo -e "  ${RED}${BOLD}[07]${RESET} 🗑️  Desinstalar"
-
-    echo
-    echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
-    echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar al Menú de Protocolos${RESET}"
-
-    echo
-    echo -e "${GRAY}  KevinTech Multi Script • SSL Tunnel • v${VERSION}${RESET}"
-    echo
-
-    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
-
-    case "$OP" in
-
-        1)
-            install_ssl_tunnel
-            ;;
-
-        2)
-            restart_ssl_tunnel
-            ;;
-
-        3)
-            show_status
-            ;;
-
-        4)
-            diagnostic_ssl
-            ;;
-
-        5)
-            show_logs
-            ;;
-
-        6)
-            repair_ssl_tunnel
-            ;;
-
-        7)
-            remove_ssl_tunnel
-            ;;
-
-        0)
-            clear
-
-            if [[ -f "$BASE/protocolos/menu.sh" ]]; then
-                exec bash "$BASE/protocolos/menu.sh"
-            else
+            0)
                 exit 0
-            fi
-            ;;
+                ;;
 
-        "")
-            ;;
+            *)
+                error "Opción inválida."
+                sleep 1
+                ;;
 
-        *)
-            error_msg "Opción inválida."
-            sleep 1
-            ;;
+        esac
 
-    esac
+    done
+}
 
-done
+# ============================================================
+# EJECUCIÓN
+# ============================================================
+
+case "${1:-menu}" in
+
+    install)
+        install_tunnel
+        ;;
+
+    status)
+        require_root
+        show_status
+        ;;
+
+    restart)
+        restart_tunnel
+        ;;
+
+    repair)
+        repair_tunnel
+        ;;
+
+    logs)
+        show_logs
+        ;;
+
+    remove)
+        remove_tunnel
+        ;;
+
+    validate)
+        require_root
+        validate_haproxy
+        ;;
+
+    menu)
+        menu
+        ;;
+
+    *)
+        echo
+        echo "Uso:"
+        echo "  $0 install"
+        echo "  $0 status"
+        echo "  $0 restart"
+        echo "  $0 repair"
+        echo "  $0 logs"
+        echo "  $0 validate"
+        echo "  $0 remove"
+        echo
+        ;;
+
+esac
