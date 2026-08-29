@@ -2,8 +2,14 @@
 #=========================================================
 # KevinTech Multi Script Premium
 # Módulo: Crear Usuario SSH
-# Límite real de IPs simultáneas
+# Versión: Premium
+# Autor: KevinTech
+# Límite IP real por usuario
 #=========================================================
+
+#========================#
+#         COLORES
+#========================#
 
 GREEN='\e[1;92m'
 RED='\e[1;91m'
@@ -15,16 +21,25 @@ WHITE='\e[1;97m'
 GRAY='\e[1;90m'
 RESET='\e[0m'
 
+#========================#
+#      CONFIGURACIÓN
+#========================#
+
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 LIMITS_FILE="$BASE/limits.conf"
 LIMIT_SCRIPT="/usr/local/bin/kevintech-limit"
 
 mkdir -p "$BASE"
+
 touch "$LIMITS_FILE"
 chmod 600 "$LIMITS_FILE"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
+
+#========================#
+#       FUNCIONES
+#========================#
 
 line() {
     printf "%b━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n" \
@@ -52,36 +67,171 @@ msg_warn() {
     echo -e "${YELLOW}⚠ $1${RESET}"
 }
 
-titulo() {
+#=========================================================
+# INSTALAR LIMITADOR REAL
+#=========================================================
 
-    clear
+instalar_limitador() {
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}               ⚜ KevinTech Multi Script ⚜                ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE}                 CREAR USUARIO SSH PREMIUM               ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    cat > "$LIMIT_SCRIPT" <<'EOF'
+#!/bin/bash
 
-    echo
+#=========================================================
+# KevinTech Multi Script
+# Controlador de límite IP SSH
+#=========================================================
+
+LIMITS_FILE="/etc/kevintech/limits.conf"
+
+[[ ! -f "$LIMITS_FILE" ]] && exit 0
+
+#=========================================================
+# OBTENER SESIONES DE UN USUARIO
+#=========================================================
+
+obtener_sesiones() {
+
+    local USERNAME="$1"
+
+    who 2>/dev/null |
+    awk -v USERNAME="$USERNAME" '
+        $1 == USERNAME {
+
+            tty=$2
+            ip=$5
+
+            gsub(/[()]/, "", ip)
+
+            if (tty != "" && ip != "")
+                print tty "|" ip
+        }
+    '
 }
 
 #=========================================================
-# OBTENER IP PÚBLICA
+# PROCESAR TODOS LOS USUARIOS
 #=========================================================
 
-obtener_ip() {
+while IFS=: read -r USERNAME LIMIT; do
 
-    IP=$(curl -4 -s --max-time 5 ifconfig.me)
+    # Ignorar líneas vacías
+    [[ -z "$USERNAME" ]] && continue
 
-    [[ -z "$IP" ]] &&
-        IP=$(hostname -I | awk '{print $1}')
+    # Ignorar comentarios
+    [[ "$USERNAME" =~ ^# ]] && continue
 
-    [[ -z "$IP" ]] &&
-        IP="0.0.0.0"
+    # Validar límite
+    [[ ! "$LIMIT" =~ ^[0-9]+$ ]] && continue
+
+    # 0 = ilimitado
+    (( LIMIT == 0 )) && continue
+
+    # Verificar usuario
+    id "$USERNAME" >/dev/null 2>&1 || continue
+
+    #=====================================================
+    # OBTENER SESIONES
+    #=====================================================
+
+    SESSIONS=$(obtener_sesiones "$USERNAME")
+
+    [[ -z "$SESSIONS" ]] && continue
+
+    #=====================================================
+    # OBTENER IPs ÚNICAS
+    #=====================================================
+
+    IPS=$(
+        echo "$SESSIONS" |
+        cut -d'|' -f2 |
+        awk '!seen[$0]++'
+    )
+
+    COUNT=0
+    ALLOWED_IPS=""
+
+    #=====================================================
+    # DETERMINAR IPs PERMITIDAS
+    #=====================================================
+
+    while IFS= read -r IP; do
+
+        [[ -z "$IP" ]] && continue
+
+        ((COUNT++))
+
+        if (( COUNT <= LIMIT )); then
+
+            ALLOWED_IPS="${ALLOWED_IPS}${IP}"$'\n'
+
+        fi
+
+    done <<< "$IPS"
+
+    #=====================================================
+    # EXPULSAR IPs QUE SUPEREN EL LÍMITE
+    #=====================================================
+
+    while IFS='|' read -r TTY IP; do
+
+        [[ -z "$TTY" ]] && continue
+        [[ -z "$IP" ]] && continue
+
+        # Si la IP no está entre las permitidas,
+        # expulsar solamente esa sesión.
+
+        if ! echo "$ALLOWED_IPS" |
+            grep -Fxq "$IP"; then
+
+            pkill -KILL -t "$TTY" 2>/dev/null
+
+        fi
+
+    done <<< "$SESSIONS"
+
+done < "$LIMITS_FILE"
+
+exit 0
+EOF
+
+    chmod 755 "$LIMIT_SCRIPT"
+
+    #=====================================================
+    # SYSTEMD
+    #=====================================================
+
+    cat > /etc/systemd/system/kevintech-limit.service <<'EOF'
+[Unit]
+Description=KevinTech SSH IP Limit
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/kevintech-limit; sleep 2; done'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+
+    systemctl enable kevintech-limit.service >/dev/null 2>&1
+
+    systemctl restart kevintech-limit.service >/dev/null 2>&1
+
+    if systemctl is-active --quiet kevintech-limit.service; then
+        msg_ok "Sistema de límite IP activo."
+    else
+        msg_warn "El sistema de límite no pudo iniciarse."
+    fi
 }
 
-#=========================================================
-# SINCRONIZAR CONTRASEÑA CON ZIVPN
-#=========================================================
+#========================#
+# SINCRONIZAR CONTRASEÑA
+# CON ZIVPN
+#========================#
 
 sync_zivpn_password() {
 
@@ -134,161 +284,51 @@ sync_zivpn_password() {
     fi
 }
 
-#=========================================================
-# INSTALAR CONTROLADOR DE LÍMITE
-#=========================================================
+#========================#
+#         TÍTULO
+#========================#
 
-install_limit_system() {
+titulo() {
 
-    msg_info "Instalando sistema de límite IP..."
+    clear
 
-    cat > "$LIMIT_SCRIPT" <<'LIMITEOF'
-#!/bin/bash
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${MAGENTA}               ⚜ KevinTech Multi Script ⚜                ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${WHITE}                 CREAR USUARIO SSH PREMIUM               ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
-#=========================================================
-# KevinTech - Controlador de límite IP SSH
-#=========================================================
-
-LIMITS_FILE="/etc/kevintech/limits.conf"
-
-[[ ! -f "$LIMITS_FILE" ]] && exit 0
-
-#---------------------------------------------------------
-# Obtener sesiones SSH del usuario
-#---------------------------------------------------------
-
-get_sessions() {
-
-    local USERNAME="$1"
-
-    who 2>/dev/null |
-    awk -v user="$USERNAME" '
-    $1 == user {
-        tty=$2
-        ip=$5
-
-        gsub(/[()]/, "", ip)
-
-        if (tty != "" && ip != "")
-            print tty "|" ip
-    }'
+    echo
 }
 
-#---------------------------------------------------------
-# Procesar cada usuario
-#---------------------------------------------------------
+#========================#
+#      VARIABLES
+#========================#
 
-while IFS=: read -r USER LIMIT; do
+SERVER_DOMAIN="${SERVER_DOMAIN:-}"
+OPENSSH="${OPENSSH:-OFF}"
+DROPBEAR="${DROPBEAR:-OFF}"
+WEBSOCKET="${WEBSOCKET:-OFF}"
+SSL="${SSL:-OFF}"
+SLOWDNS="${SLOWDNS:-OFF}"
 
-    # Ignorar líneas vacías
-    [[ -z "$USER" ]] && continue
+#========================#
+#    OBTENER IP PÚBLICA
+#========================#
 
-    # Ignorar comentarios
-    [[ "$USER" =~ ^# ]] && continue
+obtener_ip() {
 
-    # Validar límite
-    [[ ! "$LIMIT" =~ ^[0-9]+$ ]] && continue
+    IP=$(curl -4 -s --max-time 5 ifconfig.me)
 
-    # 0 = ilimitado
-    (( LIMIT == 0 )) && continue
+    [[ -z "$IP" ]] &&
+        IP=$(hostname -I | awk '{print $1}')
 
-    # Verificar que el usuario exista
-    id "$USER" >/dev/null 2>&1 || continue
-
-    #-----------------------------------------------------
-    # Obtener sesiones
-    #-----------------------------------------------------
-
-    SESSIONS=$(get_sessions "$USER")
-
-    [[ -z "$SESSIONS" ]] && continue
-
-    #-----------------------------------------------------
-    # Obtener IPs únicas manteniendo el orden
-    #-----------------------------------------------------
-
-    IPS=$(echo "$SESSIONS" |
-        cut -d'|' -f2 |
-        awk '!seen[$0]++')
-
-    COUNT=0
-
-    ALLOWED_IPS=""
-
-    while IFS= read -r IP; do
-
-        [[ -z "$IP" ]] && continue
-
-        ((COUNT++))
-
-        if (( COUNT <= LIMIT )); then
-
-            ALLOWED_IPS+="${IP}"$'\n'
-
-        fi
-
-    done <<< "$IPS"
-
-    #-----------------------------------------------------
-    # Expulsar sesiones de IPs que superan el límite
-    #-----------------------------------------------------
-
-    while IFS='|' read -r TTY IP; do
-
-        [[ -z "$TTY" || -z "$IP" ]] && continue
-
-        # Verificar si la IP está dentro de las permitidas
-        if ! echo "$ALLOWED_IPS" |
-            grep -Fxq "$IP"; then
-
-            # Expulsar únicamente la sesión correspondiente
-            pkill -KILL -t "$TTY" 2>/dev/null
-
-        fi
-
-    done <<< "$SESSIONS"
-
-done < "$LIMITS_FILE"
-
-exit 0
-LIMITEOF
-
-    chmod 755 "$LIMIT_SCRIPT"
-
-    #=====================================================
-    # SERVICE
-    #=====================================================
-
-    cat > /etc/systemd/system/kevintech-limit.service <<'SERVICEEOF'
-[Unit]
-Description=KevinTech SSH IP Limit
-After=network.target ssh.service sshd.service
-
-[Service]
-Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/kevintech-limit; sleep 2; done'
-Restart=always
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
-SERVICEEOF
-
-    systemctl daemon-reload
-
-    systemctl enable kevintech-limit.service >/dev/null 2>&1
-    systemctl restart kevintech-limit.service >/dev/null 2>&1
-
-    if systemctl is-active --quiet kevintech-limit.service; then
-        msg_ok "Controlador de límite IP activo."
-    else
-        msg_error "No se pudo iniciar el controlador de límite."
-    fi
+    [[ -z "$IP" ]] &&
+        IP="0.0.0.0"
 }
 
-#=========================================================
-# INICIO
-#=========================================================
+#=========================================================#
+#                  INICIO DEL PROGRAMA
+#=========================================================#
 
 while true; do
 
@@ -296,9 +336,9 @@ while true; do
 
     obtener_ip
 
-    #=====================================================
-    # USUARIO
-    #=====================================================
+    #========================#
+    #   DATOS DEL USUARIO
+    #========================#
 
     while true; do
 
@@ -326,9 +366,9 @@ while true; do
 
     echo
 
-    #=====================================================
-    # CONTRASEÑA
-    #=====================================================
+    #========================#
+    #       CONTRASEÑA
+    #========================#
 
     while true; do
 
@@ -340,14 +380,18 @@ while true; do
             continue
         fi
 
+        if [[ ${#PASS} -lt 4 ]]; then
+            msg_warn "Se recomienda una contraseña de al menos 4 caracteres."
+        fi
+
         break
     done
 
     echo
 
-    #=====================================================
-    # DURACIÓN
-    #=====================================================
+    #========================#
+    #       DURACIÓN
+    #========================#
 
     while true; do
 
@@ -370,13 +414,13 @@ while true; do
 
     echo
 
-    #=====================================================
-    # LÍMITE IP REAL
-    #=====================================================
+    #========================#
+    #       LÍMITE REAL
+    #========================#
 
     while true; do
 
-        read -rp "$(echo -e "${GREEN}👥 Límite IP (0=Ilimitado): ${RESET}")" LIMITE
+        read -rp "$(echo -e "${GREEN}👥 Límite (0=Ilimitado) : ${RESET}")" LIMITE
 
         [[ -z "$LIMITE" ]] && LIMITE=0
 
@@ -389,37 +433,47 @@ while true; do
     done
 
     #=====================================================
-    # GUARDAR LÍMITE
+    # GUARDAR LÍMITE DEL USUARIO
     #=====================================================
 
     touch "$LIMITS_FILE"
 
-    # Eliminar cualquier entrada anterior
+    # Eliminar una posible entrada anterior
     sed -i "/^${USER}:/d" "$LIMITS_FILE"
 
-    # Guardar usuario y límite
+    # Guardar usuario:límite
     echo "${USER}:${LIMITE}" >> "$LIMITS_FILE"
 
     chmod 600 "$LIMITS_FILE"
 
+    #=====================================================
+    # MOSTRAR LÍMITE
+    #=====================================================
+
     if (( LIMITE == 0 )); then
+
         LIMITE_MOSTRAR="♾ Ilimitado"
+
     elif (( LIMITE == 1 )); then
+
         LIMITE_MOSTRAR="1 IP"
+
     else
-        LIMITE_MOSTRAR="${LIMITE} IPs"
+
+        LIMITE_MOSTRAR="$LIMITE IPs"
+
     fi
 
-    #=====================================================
-    # FECHA
-    #=====================================================
+    #========================#
+    #   FECHA DE EXPIRACIÓN
+    #========================#
 
     FECHA=$(date -d "+${DIAS} days" +"%Y-%m-%d")
     FECHA_MOSTRAR=$(date -d "$FECHA" +"%d/%m/%Y")
 
-    #=====================================================
-    # CREAR USUARIO
-    #=====================================================
+    #========================#
+    #    CREAR USUARIO SSH
+    #========================#
 
     msg_info "Creando usuario SSH..."
 
@@ -439,9 +493,9 @@ while true; do
         continue
     fi
 
-    #=====================================================
-    # CONTRASEÑA
-    #=====================================================
+    #========================#
+    # ESTABLECER CONTRASEÑA
+    #========================#
 
     echo "${USER}:${PASS}" | chpasswd
 
@@ -450,27 +504,24 @@ while true; do
         msg_error "No fue posible establecer la contraseña."
 
         userdel -f "$USER" &>/dev/null
+
         sed -i "/^${USER}:/d" "$LIMITS_FILE"
 
         sleep 2
         continue
     fi
 
-    #=====================================================
-    # ZIVPN
-    #=====================================================
+    #========================#
+    # SINCRONIZAR CON ZIVPN
+    #========================#
 
     sync_zivpn_password "$PASS"
 
-    #=====================================================
-    # INSTALAR CONTROLADOR
-    #=====================================================
+    #========================#
+    # INSTALAR LIMITADOR
+    #========================#
 
-    install_limit_system
-
-    #=====================================================
-    # INFORMACIÓN
-    #=====================================================
+    instalar_limitador
 
     msg_ok "Usuario creado correctamente."
 
@@ -478,38 +529,305 @@ while true; do
 
     echo
 
+    #========================#
+    # DETECTAR SERVICIOS
+    #========================#
+
+    SSH_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/sshd/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+    [[ -z "$SSH_PORTS" ]] && SSH_PORTS="22"
+
+    DROPBEAR_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/dropbear/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+    HAPROXY_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/haproxy/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+    BADVPN_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/badvpn/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+    #========================#
+    # WEBSOCKET
+    #========================#
+
+    WS_PORT="80"
+    WSS_PORT="443"
+    WS_CDN_PORT="8080"
+
+    if [[ -n "$HAPROXY_PORTS" ]]; then
+
+        [[ "$HAPROXY_PORTS" == *"80"* ]] &&
+            WS_PORT="80"
+
+        [[ "$HAPROXY_PORTS" == *"443"* ]] &&
+            WSS_PORT="443"
+
+        [[ "$HAPROXY_PORTS" == *"8080"* ]] &&
+            WS_CDN_PORT="8080"
+
+    fi
+
+    #========================#
+    # DOMINIO
+    #========================#
+
+    HOST="${SERVER_DOMAIN:-$IP}"
+
+    #========================#
+    # SLOWDNS
+    #========================#
+
+    if [[ -f /etc/slowdns/domain.conf ]]; then
+        SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
+    else
+        SLOWDNS_NS="N/D"
+    fi
+
+    if [[ -f /etc/slowdns/server.pub ]]; then
+        SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+    else
+        SLOWDNS_KEY="N/D"
+    fi
+
+    #========================#
+    # ESTADO DE SERVICIOS
+    #========================#
+
+    OPENSSH_STATUS="OFF"
+    DROPBEAR_STATUS="OFF"
+    SSL_STATUS="OFF"
+    WEBSOCKET_STATUS="OFF"
+    SLOWDNS_STATUS="OFF"
+
+    [[ -n "$SSH_PORTS" ]] &&
+        OPENSSH_STATUS="ON"
+
+    [[ -n "$DROPBEAR_PORTS" ]] &&
+        DROPBEAR_STATUS="ON"
+
+    [[ -n "$HAPROXY_PORTS" ]] &&
+        SSL_STATUS="ON"
+
+    if [[ "$SSL_STATUS" == "ON" ]]; then
+        WEBSOCKET_STATUS="ON"
+    fi
+
+    if systemctl is-active --quiet slowdns 2>/dev/null; then
+        SLOWDNS_STATUS="ON"
+    fi
+
+    #========================#
+    # CONEXIONES LISTAS
+    #========================#
+
+    WS_HTTP="${HOST}:${WS_PORT}@${USER}:${PASS}"
+
+    WS_SSL="${HOST}:${WSS_PORT}@${USER}:${PASS}"
+
+    if [[ -n "$DROPBEAR_PORTS" ]]; then
+
+        DB_CONN="${HOST}:$(echo "$DROPBEAR_PORTS" | cut -d',' -f1)@${USER}:${PASS}"
+
+    else
+
+        DB_CONN=""
+
+    fi
+
+    SSH_UDP="${IP}:1-65535@${USER}:${PASS}"
+
+    #==================================================#
+    # PANEL PREMIUM
+    #==================================================#
+
+    clear
+
+    #========================#
+    # HYSTERIA
+    #========================#
+
+    HYSTERIA_PORT=$(
+        grep -oP '"listen":\s*":\K[0-9]+' \
+        /etc/hysteria/config.json 2>/dev/null
+    )
+
+    [[ -z "$HYSTERIA_PORT" ]] &&
+        HYSTERIA_PORT="No instalado"
+
+    #========================#
+    # OBFS
+    #========================#
+
+    HYSTERIA_OBFS=$(
+        grep -oP '"obfs":\s*"\K[^"]+' \
+        /etc/hysteria/config.json 2>/dev/null
+    )
+
+    [[ -z "$HYSTERIA_OBFS" ]] &&
+        HYSTERIA_OBFS="No configurado"
+
+    #========================#
+    # DETECTAR PUERTO ZIVPN
+    #========================#
+
+    if [[ -f /etc/zivpn/config.json ]] &&
+       command -v jq >/dev/null 2>&1; then
+
+        ZIVPN_PORT=$(
+            jq -r '.listen // empty' \
+            /etc/zivpn/config.json 2>/dev/null |
+            tr -d ':'
+        )
+
+    else
+
+        ZIVPN_PORT=""
+
+    fi
+
+    [[ -z "$ZIVPN_PORT" ]] &&
+        ZIVPN_PORT="No instalado"
+
+    HOST="${SERVER_DOMAIN:-$IP}"
+
+    #==================================================#
+    # PANEL
+    #==================================================#
+
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${MAGENTA}          ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜             ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
+    #========================#
+    # DATOS DEL USUARIO
+    #========================#
+
     echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
 
     echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
     echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
-    echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET}"
-    echo -e " ${WHITE}Duración     : ${GREEN}${DIAS} días${RESET}"
-    echo -e " ${WHITE}Límite IP    : ${GREEN}${LIMITE_MOSTRAR}${RESET}"
+    echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
+    echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
 
     echo
 
-    echo -e "${YELLOW}══════════ CONEXIONES ══════════${RESET}"
+    #========================#
+    # INFORMACIÓN SERVIDOR
+    #========================#
 
-    echo -e " ${GREEN}${HOST}:22@${USER}:${PASS}${RESET}"
-    echo -e " ${GREEN}${HOST}:80@${USER}:${PASS}${RESET}"
+    echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
+
+    echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
+    echo -e " ${WHITE}SSH          : ${GREEN}$SSH_PORTS${RESET}"
+    echo -e " ${WHITE}Dropbear     : ${GREEN}${DROPBEAR_PORTS:-No instalado}${RESET}"
+    echo -e " ${WHITE}SSL Tunnel   : ${GREEN}${HAPROXY_PORTS:-No instalado}${RESET}"
+    echo -e " ${WHITE}OpenVPN      : ${GREEN}1194,2200,443${RESET}"
+    echo -e " ${WHITE}BadVPN       : ${GREEN}${BADVPN_PORTS:-No instalado}${RESET}"
+
+    echo
+
+    #========================#
+    # HTTP CUSTOM
+    #========================#
+
+    echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
+
     echo -e " ${GREEN}${HOST}:443@${USER}:${PASS}${RESET}"
+    echo -e " ${GREEN}${HOST}:80@${USER}:${PASS}${RESET}"
     echo -e " ${GREEN}${HOST}:8080@${USER}:${PASS}${RESET}"
 
     echo
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${WHITE} Límite configurado: ${GREEN}${LIMITE_MOSTRAR}${WHITE}                         ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE} Las IPs que superen el límite serán expulsadas. ${CYAN}║${RESET}"
+    #========================#
+    # UDP CUSTOM
+    #========================#
+
+    echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
+
+    echo -e " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
+
+    echo
+
+    #========================#
+    # HYSTERIA V1
+    #========================#
+
+    echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
+
+    echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${HYSTERIA_PORT}${RESET}"
+    echo -e " ${WHITE}OBFS         : ${GREEN}${HYSTERIA_OBFS}${RESET}"
+    echo -e " ${WHITE}Credenciales : ${GREEN}${USER}:${PASS}${RESET}"
+
+    echo
+
+    #========================#
+    # ZIVPN UDP
+    #========================#
+
+    echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
+
+    echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT}${RESET}"
+    echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
+    echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
+
+    #========================#
+    # SLOWDNS
+    #========================#
+
+    if [[ -f /etc/slowdns/domain.conf &&
+          -f /etc/slowdns/server.pub ]]; then
+
+        SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
+        SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
+
+        echo
+
+        echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
+
+        echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
+        echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
+
+    fi
+
+    echo
+
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
-    read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
+    echo -e "${YELLOW}          Presione ENTER para continuar...${RESET}"
+
+    read
 
     exec bash "$BASE/usuarios/menu.sh"
 
