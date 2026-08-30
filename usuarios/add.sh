@@ -4,7 +4,14 @@
 # Módulo: Crear Usuario SSH
 # Versión: Premium
 # Autor: KevinTech
-# Límite IP real por usuario
+#
+# FUNCIONES:
+# - Crear usuario SSH
+# - Expiración automática
+# - Límite IP por usuario
+# - CheckUser dinámico
+# - Integración ZiVPN
+# - Detección de puertos
 #=========================================================
 
 #========================#
@@ -28,7 +35,9 @@ RESET='\e[0m'
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 LIMITS_FILE="$BASE/limits.conf"
+
 LIMIT_SCRIPT="/usr/local/bin/kevintech-limit"
+CHECKUSER_SCRIPT="/usr/local/bin/kevintech-checkuser"
 
 mkdir -p "$BASE"
 
@@ -37,9 +46,9 @@ chmod 600 "$LIMITS_FILE"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
-#========================#
-#       FUNCIONES
-#========================#
+#=========================================================
+# FUNCIONES GENERALES
+#=========================================================
 
 line() {
     printf "%b━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n" \
@@ -65,6 +74,215 @@ msg_info() {
 
 msg_warn() {
     echo -e "${YELLOW}⚠ $1${RESET}"
+}
+
+#=========================================================
+# INSTALAR CHECKUSER DINÁMICO
+#=========================================================
+
+instalar_checkuser() {
+
+    #=====================================================
+    # SCRIPT QUE GENERA EL CHECKUSER
+    #=====================================================
+
+    cat > "$CHECKUSER_SCRIPT" <<'EOF'
+#!/bin/bash
+
+#=========================================================
+# KevinTech Dynamic CheckUser
+#=========================================================
+
+BASE="/etc/kevintech"
+LIMITS_FILE="$BASE/limits.conf"
+
+USER_NAME="${USER:-${LOGNAME:-}}"
+
+[[ -z "$USER_NAME" ]] && exit 0
+
+#=========================================================
+# VERIFICAR USUARIO
+#=========================================================
+
+id "$USER_NAME" >/dev/null 2>&1 || exit 0
+
+#=========================================================
+# OBTENER LÍMITE
+#=========================================================
+
+LIMIT=$(awk -F: -v u="$USER_NAME" '
+    $1 == u {
+        print $2
+        exit
+}
+' "$LIMITS_FILE" 2>/dev/null)
+
+[[ -z "$LIMIT" ]] && LIMIT=0
+
+#=========================================================
+# OBTENER IPs ACTUALES
+#=========================================================
+
+IPS=$(
+    who 2>/dev/null |
+    awk -v u="$USER_NAME" '
+        $1 == u {
+            ip=$5
+            gsub(/[()]/, "", ip)
+
+            if (ip != "")
+                print ip
+        }
+    ' |
+    sort -u
+)
+
+#=========================================================
+# CONTAR IPs ÚNICAS
+#=========================================================
+
+if [[ -n "$IPS" ]]; then
+    CONNECTIONS=$(printf '%s\n' "$IPS" | grep -c .)
+else
+    CONNECTIONS=0
+fi
+
+#=========================================================
+# FECHA DE EXPIRACIÓN
+#=========================================================
+
+EXPIRATION=$(chage -l "$USER_NAME" 2>/dev/null |
+    awk -F': ' '/Account expires/ {
+        print $2
+        exit
+    }')
+
+if [[ -z "$EXPIRATION" ]]; then
+    EXPIRATION="Ilimitada"
+fi
+
+#=========================================================
+# CONVERTIR FECHA
+#=========================================================
+
+if [[ "$EXPIRATION" != "Ilimitada" &&
+      "$EXPIRATION" != "never" &&
+      "$EXPIRATION" != "Nunca" ]]; then
+
+    EXP_DATE=$(date -d "$EXPIRATION" +%s 2>/dev/null)
+    TODAY=$(date +%s)
+
+    if [[ -n "$EXP_DATE" ]]; then
+
+        DIFF=$(( (EXP_DATE - TODAY) / 86400 ))
+
+        if (( DIFF < 0 )); then
+            DAYS=0
+        else
+            DAYS=$DIFF
+        fi
+
+        EXPIRATION=$(date -d "$EXPIRATION" +"%d/%m/%Y")
+
+    else
+
+        DAYS="N/D"
+
+    fi
+
+else
+
+    DAYS="∞"
+
+fi
+
+#=========================================================
+# FORMATO DEL LÍMITE
+#=========================================================
+
+if (( LIMIT == 0 )); then
+    LIMIT_TEXT="♾"
+else
+    LIMIT_TEXT="$LIMIT"
+fi
+
+#=========================================================
+# BANNER
+#=========================================================
+
+printf '\n'
+printf '%s\n' '═══════════════════════════════════════════════════'
+printf '%s\n' '                    CHECK USER'
+printf '%s\n' '═══════════════════════════════════════════════════'
+printf '\n'
+printf '👤 Usuario        : %s\n' "$USER_NAME"
+printf '🔌 Conexiones     : %s/%s\n' "$CONNECTIONS" "$LIMIT_TEXT"
+printf '📅 Expiración     : %s\n' "$EXPIRATION"
+printf '⏳ Días restantes : %s\n' "$DAYS"
+printf '\n'
+printf '%s\n' '═══════════════════════════════════════════════════'
+printf '\n'
+
+exit 0
+EOF
+
+    chmod 755 "$CHECKUSER_SCRIPT"
+
+    #=====================================================
+    # OPENSSH SSHRC
+    #=====================================================
+
+    local SSHRC="/etc/ssh/sshrc"
+
+    # Crear archivo si no existe.
+    touch "$SSHRC"
+
+    chmod 755 "$SSHRC"
+
+    # Evitar duplicados.
+    if ! grep -q "kevintech-checkuser" "$SSHRC" 2>/dev/null; then
+
+        cat >> "$SSHRC" <<'EOF'
+
+#=========================================================
+# KevinTech Dynamic CheckUser
+#=========================================================
+
+if [[ -x /usr/local/bin/kevintech-checkuser ]]; then
+    /usr/local/bin/kevintech-checkuser
+fi
+
+EOF
+
+    fi
+
+    #=====================================================
+    # CONFIGURAR SSH PARA UTILIZAR SSHRC
+    #=====================================================
+
+    local SSHD="/etc/ssh/sshd_config"
+
+    if [[ -f "$SSHD" ]]; then
+
+        if ! grep -qE '^[[:space:]]*UsePAM[[:space:]]+yes' "$SSHD"; then
+
+            if grep -qE '^[[:space:]]*#?[[:space:]]*UsePAM' "$SSHD"; then
+
+                sed -i \
+                    's|^[[:space:]]*#\?[[:space:]]*UsePAM.*|UsePAM yes|' \
+                    "$SSHD"
+
+            else
+
+                echo "UsePAM yes" >> "$SSHD"
+
+            fi
+
+        fi
+
+    fi
+
+    msg_ok "CheckUser dinámico instalado."
 }
 
 #=========================================================
@@ -109,28 +327,23 @@ obtener_sesiones() {
 }
 
 #=========================================================
-# PROCESAR TODOS LOS USUARIOS
+# PROCESAR USUARIOS
 #=========================================================
 
 while IFS=: read -r USERNAME LIMIT; do
 
-    # Ignorar líneas vacías
     [[ -z "$USERNAME" ]] && continue
-
-    # Ignorar comentarios
     [[ "$USERNAME" =~ ^# ]] && continue
 
-    # Validar límite
     [[ ! "$LIMIT" =~ ^[0-9]+$ ]] && continue
 
     # 0 = ilimitado
     (( LIMIT == 0 )) && continue
 
-    # Verificar usuario
     id "$USERNAME" >/dev/null 2>&1 || continue
 
     #=====================================================
-    # OBTENER SESIONES
+    # SESIONES
     #=====================================================
 
     SESSIONS=$(obtener_sesiones "$USERNAME")
@@ -138,7 +351,7 @@ while IFS=: read -r USERNAME LIMIT; do
     [[ -z "$SESSIONS" ]] && continue
 
     #=====================================================
-    # OBTENER IPs ÚNICAS
+    # IPs ÚNICAS
     #=====================================================
 
     IPS=$(
@@ -151,7 +364,7 @@ while IFS=: read -r USERNAME LIMIT; do
     ALLOWED_IPS=""
 
     #=====================================================
-    # DETERMINAR IPs PERMITIDAS
+    # IPs PERMITIDAS
     #=====================================================
 
     while IFS= read -r IP; do
@@ -169,16 +382,13 @@ while IFS=: read -r USERNAME LIMIT; do
     done <<< "$IPS"
 
     #=====================================================
-    # EXPULSAR IPs QUE SUPEREN EL LÍMITE
+    # EXPULSAR EXCEDENTES
     #=====================================================
 
     while IFS='|' read -r TTY IP; do
 
         [[ -z "$TTY" ]] && continue
         [[ -z "$IP" ]] && continue
-
-        # Si la IP no está entre las permitidas,
-        # expulsar solamente esa sesión.
 
         if ! echo "$ALLOWED_IPS" |
             grep -Fxq "$IP"; then
@@ -228,10 +438,9 @@ EOF
     fi
 }
 
-#========================#
-# SINCRONIZAR CONTRASEÑA
-# CON ZIVPN
-#========================#
+#=========================================================
+# SINCRONIZAR CONTRASEÑA CON ZIVPN
+#=========================================================
 
 sync_zivpn_password() {
 
@@ -279,14 +488,16 @@ sync_zivpn_password() {
     else
 
         rm -f "$TMP"
+
         msg_error "No se pudo agregar la contraseña a ZiVPN."
+
         return 1
     fi
 }
 
-#========================#
-#         TÍTULO
-#========================#
+#=========================================================
+# TÍTULO
+#=========================================================
 
 titulo() {
 
@@ -300,20 +511,21 @@ titulo() {
     echo
 }
 
-#========================#
-#      VARIABLES
-#========================#
+#=========================================================
+# VARIABLES
+#=========================================================
 
 SERVER_DOMAIN="${SERVER_DOMAIN:-}"
+
 OPENSSH="${OPENSSH:-OFF}"
 DROPBEAR="${DROPBEAR:-OFF}"
 WEBSOCKET="${WEBSOCKET:-OFF}"
 SSL="${SSL:-OFF}"
 SLOWDNS="${SLOWDNS:-OFF}"
 
-#========================#
-#    OBTENER IP PÚBLICA
-#========================#
+#=========================================================
+# OBTENER IP PÚBLICA
+#=========================================================
 
 obtener_ip() {
 
@@ -326,9 +538,28 @@ obtener_ip() {
         IP="0.0.0.0"
 }
 
-#=========================================================#
-#                  INICIO DEL PROGRAMA
-#=========================================================#
+#=========================================================
+# INSTALAR COMPONENTES ANTES DE CREAR CUENTA
+#=========================================================
+
+instalar_componentes() {
+
+    msg_info "Preparando sistema de límite IP..."
+
+    instalar_limitador
+
+    echo
+
+    msg_info "Preparando CheckUser dinámico..."
+
+    instalar_checkuser
+
+    echo
+}
+
+#=========================================================
+# INICIO
+#=========================================================
 
 while true; do
 
@@ -336,118 +567,158 @@ while true; do
 
     obtener_ip
 
-    #========================#
-    #   DATOS DEL USUARIO
-    #========================#
+    #=====================================================
+    # INSTALAR SISTEMAS
+    #=====================================================
+
+    instalar_componentes
+
+    echo
+
+    #=====================================================
+    # USUARIO
+    #=====================================================
 
     while true; do
 
-        read -rp "$(echo -e "${GREEN}👤 Usuario               : ${RESET}")" USER
+        read -rp \
+            "$(echo -e "${GREEN}👤 Usuario               : ${RESET}")" USER
 
         USER=$(echo "$USER" | tr '[:upper:]' '[:lower:]')
 
         if [[ -z "$USER" ]]; then
+
             msg_error "Debe ingresar un nombre de usuario."
+
             continue
+
         fi
 
         if ! [[ "$USER" =~ ^[a-z][a-z0-9_-]{2,31}$ ]]; then
-            msg_error "Solo letras, números, _ y -. Mínimo 3 caracteres."
+
+            msg_error \
+                "Solo letras, números, _ y -. Mínimo 3 caracteres."
+
             continue
+
         fi
 
         if id "$USER" &>/dev/null; then
+
             msg_error "El usuario ya existe."
+
             continue
+
         fi
 
         break
+
     done
 
     echo
 
-    #========================#
-    #       CONTRASEÑA
-    #========================#
+    #=====================================================
+    # CONTRASEÑA
+    #=====================================================
 
     while true; do
 
-        read -rsp "$(echo -e "${GREEN}🔑 Contraseña            : ${RESET}")" PASS
+        read -rsp \
+            "$(echo -e "${GREEN}🔑 Contraseña            : ${RESET}")" PASS
+
         echo
 
         if [[ -z "$PASS" ]]; then
+
             msg_error "Debe ingresar una contraseña."
+
             continue
+
         fi
 
         if [[ ${#PASS} -lt 4 ]]; then
-            msg_warn "Se recomienda una contraseña de al menos 4 caracteres."
+
+            msg_warn \
+                "Se recomienda una contraseña de al menos 4 caracteres."
+
         fi
 
         break
+
     done
 
     echo
 
-    #========================#
-    #       DURACIÓN
-    #========================#
+    #=====================================================
+    # DURACIÓN
+    #=====================================================
 
     while true; do
 
-        read -rp "$(echo -e "${GREEN}📅 Duración (días)       : ${RESET}")" DIAS
+        read -rp \
+            "$(echo -e "${GREEN}📅 Duración (días)       : ${RESET}")" DIAS
 
         [[ -z "$DIAS" ]] && DIAS=30
 
         if ! [[ "$DIAS" =~ ^[0-9]+$ ]]; then
+
             msg_error "Debe ingresar un número."
+
             continue
+
         fi
 
         if (( DIAS <= 0 )); then
+
             msg_error "La duración debe ser mayor que 0."
+
             continue
+
         fi
 
         break
+
     done
 
     echo
 
-    #========================#
-    #       LÍMITE REAL
-    #========================#
+    #=====================================================
+    # LÍMITE IP
+    #=====================================================
 
     while true; do
 
-        read -rp "$(echo -e "${GREEN}👥 Límite (0=Ilimitado) : ${RESET}")" LIMITE
+        read -rp \
+            "$(echo -e "${GREEN}👥 Límite (0=Ilimitado) : ${RESET}")" LIMITE
 
         [[ -z "$LIMITE" ]] && LIMITE=0
 
         if ! [[ "$LIMITE" =~ ^[0-9]+$ ]]; then
+
             msg_error "El límite debe ser un número."
+
             continue
+
         fi
 
         break
+
     done
 
     #=====================================================
-    # GUARDAR LÍMITE DEL USUARIO
+    # GUARDAR LÍMITE
     #=====================================================
 
     touch "$LIMITS_FILE"
 
-    # Eliminar una posible entrada anterior
     sed -i "/^${USER}:/d" "$LIMITS_FILE"
 
-    # Guardar usuario:límite
     echo "${USER}:${LIMITE}" >> "$LIMITS_FILE"
 
     chmod 600 "$LIMITS_FILE"
 
     #=====================================================
-    # MOSTRAR LÍMITE
+    # TEXTO DEL LÍMITE
     #=====================================================
 
     if (( LIMITE == 0 )); then
@@ -464,16 +735,17 @@ while true; do
 
     fi
 
-    #========================#
-    #   FECHA DE EXPIRACIÓN
-    #========================#
+    #=====================================================
+    # FECHA
+    #=====================================================
 
     FECHA=$(date -d "+${DIAS} days" +"%Y-%m-%d")
+
     FECHA_MOSTRAR=$(date -d "$FECHA" +"%d/%m/%Y")
 
-    #========================#
-    #    CREAR USUARIO SSH
-    #========================#
+    #=====================================================
+    # CREAR USUARIO
+    #=====================================================
 
     msg_info "Creando usuario SSH..."
 
@@ -490,12 +762,14 @@ while true; do
         sed -i "/^${USER}:/d" "$LIMITS_FILE"
 
         sleep 2
+
         continue
+
     fi
 
-    #========================#
-    # ESTABLECER CONTRASEÑA
-    #========================#
+    #=====================================================
+    # CONTRASEÑA
+    #=====================================================
 
     echo "${USER}:${PASS}" | chpasswd
 
@@ -508,20 +782,28 @@ while true; do
         sed -i "/^${USER}:/d" "$LIMITS_FILE"
 
         sleep 2
+
         continue
+
     fi
 
-    #========================#
-    # SINCRONIZAR CON ZIVPN
-    #========================#
+    #=====================================================
+    # ZIVPN
+    #=====================================================
 
     sync_zivpn_password "$PASS"
 
-    #========================#
-    # INSTALAR LIMITADOR
-    #========================#
+    #=====================================================
+    # ACTUALIZAR LIMITADOR
+    #=====================================================
 
     instalar_limitador
+
+    #=====================================================
+    # ACTUALIZAR CHECKUSER
+    #=====================================================
+
+    instalar_checkuser
 
     msg_ok "Usuario creado correctamente."
 
@@ -529,9 +811,9 @@ while true; do
 
     echo
 
-    #========================#
-    # DETECTAR SERVICIOS
-    #========================#
+    #=====================================================
+    # PUERTOS SSH
+    #=====================================================
 
     SSH_PORTS=$(
         ss -ltnp 2>/dev/null |
@@ -545,6 +827,10 @@ while true; do
 
     [[ -z "$SSH_PORTS" ]] && SSH_PORTS="22"
 
+    #=====================================================
+    # DROPBEAR
+    #=====================================================
+
     DROPBEAR_PORTS=$(
         ss -ltnp 2>/dev/null |
         awk '/dropbear/ {
@@ -554,6 +840,10 @@ while true; do
         sort -nu |
         paste -sd "," -
     )
+
+    #=====================================================
+    # HAPROXY
+    #=====================================================
 
     HAPROXY_PORTS=$(
         ss -ltnp 2>/dev/null |
@@ -565,6 +855,10 @@ while true; do
         paste -sd "," -
     )
 
+    #=====================================================
+    # BADVPN
+    #=====================================================
+
     BADVPN_PORTS=$(
         ss -ltnp 2>/dev/null |
         awk '/badvpn/ {
@@ -575,36 +869,17 @@ while true; do
         paste -sd "," -
     )
 
-    #========================#
+    #=====================================================
     # WEBSOCKET
-    #========================#
+    #=====================================================
 
     WS_PORT="80"
     WSS_PORT="443"
     WS_CDN_PORT="8080"
 
-    if [[ -n "$HAPROXY_PORTS" ]]; then
-
-        [[ "$HAPROXY_PORTS" == *"80"* ]] &&
-            WS_PORT="80"
-
-        [[ "$HAPROXY_PORTS" == *"443"* ]] &&
-            WSS_PORT="443"
-
-        [[ "$HAPROXY_PORTS" == *"8080"* ]] &&
-            WS_CDN_PORT="8080"
-
-    fi
-
-    #========================#
-    # DOMINIO
-    #========================#
-
-    HOST="${SERVER_DOMAIN:-$IP}"
-
-    #========================#
+    #=====================================================
     # SLOWDNS
-    #========================#
+    #=====================================================
 
     if [[ -f /etc/slowdns/domain.conf ]]; then
         SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
@@ -618,62 +893,9 @@ while true; do
         SLOWDNS_KEY="N/D"
     fi
 
-    #========================#
-    # ESTADO DE SERVICIOS
-    #========================#
-
-    OPENSSH_STATUS="OFF"
-    DROPBEAR_STATUS="OFF"
-    SSL_STATUS="OFF"
-    WEBSOCKET_STATUS="OFF"
-    SLOWDNS_STATUS="OFF"
-
-    [[ -n "$SSH_PORTS" ]] &&
-        OPENSSH_STATUS="ON"
-
-    [[ -n "$DROPBEAR_PORTS" ]] &&
-        DROPBEAR_STATUS="ON"
-
-    [[ -n "$HAPROXY_PORTS" ]] &&
-        SSL_STATUS="ON"
-
-    if [[ "$SSL_STATUS" == "ON" ]]; then
-        WEBSOCKET_STATUS="ON"
-    fi
-
-    if systemctl is-active --quiet slowdns 2>/dev/null; then
-        SLOWDNS_STATUS="ON"
-    fi
-
-    #========================#
-    # CONEXIONES LISTAS
-    #========================#
-
-    WS_HTTP="${HOST}:${WS_PORT}@${USER}:${PASS}"
-
-    WS_SSL="${HOST}:${WSS_PORT}@${USER}:${PASS}"
-
-    if [[ -n "$DROPBEAR_PORTS" ]]; then
-
-        DB_CONN="${HOST}:$(echo "$DROPBEAR_PORTS" | cut -d',' -f1)@${USER}:${PASS}"
-
-    else
-
-        DB_CONN=""
-
-    fi
-
-    SSH_UDP="${IP}:1-65535@${USER}:${PASS}"
-
-    #==================================================#
-    # PANEL PREMIUM
-    #==================================================#
-
-    clear
-
-    #========================#
+    #=====================================================
     # HYSTERIA
-    #========================#
+    #=====================================================
 
     HYSTERIA_PORT=$(
         grep -oP '"listen":\s*":\K[0-9]+' \
@@ -683,10 +905,6 @@ while true; do
     [[ -z "$HYSTERIA_PORT" ]] &&
         HYSTERIA_PORT="No instalado"
 
-    #========================#
-    # OBFS
-    #========================#
-
     HYSTERIA_OBFS=$(
         grep -oP '"obfs":\s*"\K[^"]+' \
         /etc/hysteria/config.json 2>/dev/null
@@ -695,9 +913,9 @@ while true; do
     [[ -z "$HYSTERIA_OBFS" ]] &&
         HYSTERIA_OBFS="No configurado"
 
-    #========================#
-    # DETECTAR PUERTO ZIVPN
-    #========================#
+    #=====================================================
+    # ZIVPN PUERTO
+    #=====================================================
 
     if [[ -f /etc/zivpn/config.json ]] &&
        command -v jq >/dev/null 2>&1; then
@@ -717,21 +935,17 @@ while true; do
     [[ -z "$ZIVPN_PORT" ]] &&
         ZIVPN_PORT="No instalado"
 
-    HOST="${SERVER_DOMAIN:-$IP}"
-
-    #==================================================#
+    #=====================================================
     # PANEL
-    #==================================================#
+    #=====================================================
+
+    clear
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${MAGENTA}          ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜             ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
-
-    #========================#
-    # DATOS DEL USUARIO
-    #========================#
 
     echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
 
@@ -741,10 +955,6 @@ while true; do
     echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
 
     echo
-
-    #========================#
-    # INFORMACIÓN SERVIDOR
-    #========================#
 
     echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
 
@@ -757,10 +967,6 @@ while true; do
 
     echo
 
-    #========================#
-    # HTTP CUSTOM
-    #========================#
-
     echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
 
     echo -e " ${GREEN}${HOST}:443@${USER}:${PASS}${RESET}"
@@ -769,19 +975,11 @@ while true; do
 
     echo
 
-    #========================#
-    # UDP CUSTOM
-    #========================#
-
     echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
 
     echo -e " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
 
     echo
-
-    #========================#
-    # HYSTERIA V1
-    #========================#
 
     echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
 
@@ -791,25 +989,18 @@ while true; do
 
     echo
 
-    #========================#
-    # ZIVPN UDP
-    #========================#
-
     echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
 
     echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT}${RESET}"
     echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
     echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
 
-    #========================#
+    #=====================================================
     # SLOWDNS
-    #========================#
+    #=====================================================
 
     if [[ -f /etc/slowdns/domain.conf &&
           -f /etc/slowdns/server.pub ]]; then
-
-        SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
-        SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
 
         echo
 
@@ -829,6 +1020,14 @@ while true; do
 
     read
 
-    exec bash "$BASE/usuarios/menu.sh"
+    if [[ -f "$BASE/usuarios/menu.sh" ]]; then
+
+        exec bash "$BASE/usuarios/menu.sh"
+
+    else
+
+        break
+
+    fi
 
 done
