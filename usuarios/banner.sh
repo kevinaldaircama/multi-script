@@ -1,8 +1,8 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Banner Manager SSH / Dropbear
-# Versión mejorada
+# Banner Manager - SSH / Dropbear
+# Version: 3.0
 #==================================================
 
 #==============================
@@ -27,13 +27,11 @@ BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
 BANNER="/etc/issue.net"
-SSHD_CONFIG="/etc/ssh/sshd_config"
-DROPBEAR_CONFIG="/etc/default/dropbear"
+SSHD="/etc/ssh/sshd_config"
+DROPBEAR="/etc/default/dropbear"
+BACKUP_DIR="$BASE/banner-backups"
 
-BACKUP_DIR="$BASE/backups/banner"
-DATE_NOW="$(date '+%Y%m%d_%H%M%S')"
-
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$BASE" "$BACKUP_DIR"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
@@ -41,8 +39,8 @@ mkdir -p "$BACKUP_DIR"
 # COMPROBAR ROOT
 #==============================
 
-if [[ "$EUID" -ne 0 ]]; then
-    echo -e "${RED}❌ Debes ejecutar este script como root.${RESET}"
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}✘ Este script debe ejecutarse como root.${RESET}"
     exit 1
 fi
 
@@ -57,64 +55,103 @@ pause() {
 
 header() {
     clear
-
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}             KEVINTECH BANNER MANAGER              ${CYAN}║${RESET}"
-    echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${MAGENTA}          KEVINTECH BANNER MANAGER                ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+    echo
+}
+
+ssh_installed() {
+    [[ -f "$SSHD" ]] || return 1
+    command -v sshd >/dev/null 2>&1
+}
+
+dropbear_installed() {
+    [[ -f "$DROPBEAR" ]] || return 1
 }
 
 service_exists() {
-    systemctl list-unit-files 2>/dev/null | grep -q "^$1.service"
+    systemctl list-unit-files "$1.service" 2>/dev/null |
+        grep -q "^$1.service"
 }
 
-service_active() {
-    systemctl is-active --quiet "$1"
+#==============================
+# ESTADO
+#==============================
+
+service_status() {
+
+    if ssh_installed; then
+        if systemctl is-active --quiet ssh 2>/dev/null ||
+           systemctl is-active --quiet sshd 2>/dev/null; then
+            echo -e "${GREEN}✔ ACTIVO${RESET}"
+        else
+            echo -e "${YELLOW}⚠ INSTALADO / INACTIVO${RESET}"
+        fi
+    else
+        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
+    fi
+}
+
+dropbear_status() {
+
+    if dropbear_installed; then
+        if systemctl is-active --quiet dropbear 2>/dev/null; then
+            echo -e "${GREEN}✔ ACTIVO${RESET}"
+        else
+            echo -e "${YELLOW}⚠ INSTALADO / INACTIVO${RESET}"
+        fi
+    else
+        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
+    fi
 }
 
 show_status() {
 
-    local SSH_STATUS="${RED}✘ INACTIVO${RESET}"
-    local DROP_STATUS="${RED}✘ INACTIVO${RESET}"
-
-    if service_active ssh || service_active sshd; then
-        SSH_STATUS="${GREEN}✔ ACTIVO${RESET}"
-    fi
-
-    if service_active dropbear; then
-        DROP_STATUS="${GREEN}✔ ACTIVO${RESET}"
-    fi
-
-    local BANNER_STATUS="${RED}✘ NO EXISTE${RESET}"
+    echo -e "${CYAN}Estado del sistema${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
     if [[ -f "$BANNER" ]]; then
-        BANNER_STATUS="${GREEN}✔ ACTIVO${RESET}"
+        echo -e "Banner   : ${GREEN}✔ ACTIVO${RESET}"
+        echo -e "Archivo  : ${WHITE}$BANNER${RESET}"
+    else
+        echo -e "Banner   : ${RED}✘ NO EXISTE${RESET}"
     fi
 
-    echo -e "${WHITE}║${RESET} Banner  : $BANNER_STATUS"
-    echo -e "${WHITE}║${RESET} SSH     : $SSH_STATUS"
-    echo -e "${WHITE}║${RESET} Dropbear: $DROP_STATUS"
-    echo -e "${WHITE}║${RESET} Archivo : ${GRAY}$BANNER${RESET}"
+    echo -n "OpenSSH  : "
+    service_status
 
-    echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+    echo -n "Dropbear : "
+    dropbear_status
+
+    echo
 }
 
 #==============================
 # BACKUP
 #==============================
 
-backup_file() {
+create_backup() {
 
-    local FILE="$1"
+    local DATE
+    DATE=$(date +"%Y%m%d_%H%M%S")
 
-    [[ ! -f "$FILE" ]] && return
+    local DIR="$BACKUP_DIR/$DATE"
 
-    local NAME
-    NAME="$(basename "$FILE")"
+    mkdir -p "$DIR"
 
-    cp -a "$FILE" "$BACKUP_DIR/${NAME}_${DATE_NOW}.bak"
+    [[ -f "$BANNER" ]] &&
+        cp -a "$BANNER" "$DIR/issue.net"
 
-    echo -e "${GREEN}✔ Backup creado:${RESET}"
-    echo -e "${GRAY}$BACKUP_DIR/${NAME}_${DATE_NOW}.bak${RESET}"
+    [[ -f "$SSHD" ]] &&
+        cp -a "$SSHD" "$DIR/sshd_config"
+
+    [[ -f "$DROPBEAR" ]] &&
+        cp -a "$DROPBEAR" "$DIR/dropbear"
+
+    echo "$DIR" > "$BACKUP_DIR/latest"
+
+    echo -e "${GREEN}✔ Backup creado:${RESET} $DIR"
 }
 
 #==============================
@@ -123,29 +160,52 @@ backup_file() {
 
 configure_ssh() {
 
-    if [[ ! -f "$SSHD_CONFIG" ]]; then
-        echo -e "${YELLOW}⚠ OpenSSH no está instalado.${RESET}"
+    if ! ssh_installed; then
+        return 0
+    fi
+
+    # Eliminar configuraciones Banner anteriores
+    sed -i '/^[[:space:]]*Banner[[:space:]]/d' "$SSHD"
+
+    echo "Banner $BANNER" >> "$SSHD"
+
+    # Validar antes de reiniciar
+    if ! sshd -t 2>/dev/null; then
+
+        echo -e "${RED}✘ Error en la configuración de OpenSSH.${RESET}"
+        echo -e "${YELLOW}Restaurando configuración...${RESET}"
+
+        local BACKUP
+        BACKUP=$(cat "$BACKUP_DIR/latest" 2>/dev/null)
+
+        if [[ -f "$BACKUP/sshd_config" ]]; then
+            cp -a "$BACKUP/sshd_config" "$SSHD"
+        fi
+
         return 1
     fi
 
-    backup_file "$SSHD_CONFIG"
+    echo -e "${GREEN}✔ Configuración OpenSSH válida.${RESET}"
 
-    if grep -qE '^[[:space:]]*Banner[[:space:]]+' "$SSHD_CONFIG"; then
-        sed -i -E "s|^[[:space:]]*Banner[[:space:]]+.*$|Banner $BANNER|" "$SSHD_CONFIG"
-    else
-        echo "Banner $BANNER" >> "$SSHD_CONFIG"
+    local SERVICE=""
+
+    if systemctl list-unit-files 2>/dev/null |
+        grep -q "^ssh.service"; then
+        SERVICE="ssh"
+    elif systemctl list-unit-files 2>/dev/null |
+        grep -q "^sshd.service"; then
+        SERVICE="sshd"
     fi
 
-    if command -v sshd >/dev/null 2>&1; then
+    if [[ -n "$SERVICE" ]]; then
+        systemctl restart "$SERVICE"
 
-        if sshd -t 2>/dev/null; then
-            echo -e "${GREEN}✔ Configuración SSH válida.${RESET}"
+        if systemctl is-active --quiet "$SERVICE"; then
+            echo -e "${GREEN}✔ OpenSSH reiniciado correctamente.${RESET}"
         else
-            echo -e "${RED}❌ Error en la configuración SSH.${RESET}"
-            echo -e "${YELLOW}⚠ No se reiniciará SSH.${RESET}"
+            echo -e "${RED}✘ OpenSSH no está activo.${RESET}"
             return 1
         fi
-
     fi
 
     return 0
@@ -157,75 +217,119 @@ configure_ssh() {
 
 configure_dropbear() {
 
-    if [[ ! -f "$DROPBEAR_CONFIG" ]]; then
-        echo -e "${YELLOW}⚠ Dropbear no está instalado/configurado.${RESET}"
+    if ! dropbear_installed; then
         return 0
     fi
 
-    backup_file "$DROPBEAR_CONFIG"
-
-    if grep -q '^DROPBEAR_BANNER=' "$DROPBEAR_CONFIG"; then
+    if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
 
         sed -i \
         "s|^DROPBEAR_BANNER=.*|DROPBEAR_BANNER=\"$BANNER\"|" \
-        "$DROPBEAR_CONFIG"
+        "$DROPBEAR"
 
     else
 
-        echo "DROPBEAR_BANNER=\"$BANNER\"" >> "$DROPBEAR_CONFIG"
+        echo "DROPBEAR_BANNER=\"$BANNER\"" >> "$DROPBEAR"
 
     fi
 
-    echo -e "${GREEN}✔ Dropbear configurado.${RESET}"
+    if systemctl list-unit-files 2>/dev/null |
+        grep -q "^dropbear.service"; then
 
-    return 0
+        systemctl restart dropbear
+
+        if systemctl is-active --quiet dropbear; then
+            echo -e "${GREEN}✔ Dropbear reiniciado correctamente.${RESET}"
+        else
+            echo -e "${YELLOW}⚠ Dropbear no está activo.${RESET}"
+        fi
+    fi
 }
 
 #==============================
-# REINICIAR SERVICIOS
+# APLICAR CONFIGURACIÓN
 #==============================
 
-restart_services() {
+apply_banner() {
 
     echo
+    echo -e "${CYAN}Aplicando configuración...${RESET}"
+    echo
 
-    # SSH
+    configure_ssh
+    configure_dropbear
 
-    if service_exists ssh; then
+    echo
+    echo -e "${GREEN}✔ Proceso terminado.${RESET}"
+}
 
-        echo -e "${CYAN}Reiniciando SSH...${RESET}"
+#==============================
+# PLANTILLA 1
+#==============================
 
-        if systemctl restart ssh 2>/dev/null; then
-            echo -e "${GREEN}✔ SSH reiniciado correctamente.${RESET}"
-        else
-            echo -e "${RED}❌ No se pudo reiniciar SSH.${RESET}"
-        fi
+template_classic() {
 
-    elif service_exists sshd; then
+cat <<EOF
+╔════════════════════════════════════════════════════╗
+║                 $SERVER                         ║
+╠════════════════════════════════════════════════════╣
+║                                                    ║
+║ $PROMO                                             ║
+║                                                    ║
+║ 📢 Canal   : $CHANNEL                              ║
+║ 👤 Soporte : $SUPPORT                               ║
+║                                                    ║
+╠════════════════════════════════════════════════════╣
+║              Gracias por usar el servicio          ║
+╚════════════════════════════════════════════════════╝
+EOF
 
-        echo -e "${CYAN}Reiniciando SSHD...${RESET}"
+}
 
-        if systemctl restart sshd 2>/dev/null; then
-            echo -e "${GREEN}✔ SSHD reiniciado correctamente.${RESET}"
-        else
-            echo -e "${RED}❌ No se pudo reiniciar SSHD.${RESET}"
-        fi
+#==============================
+# PLANTILLA 2
+#==============================
 
-    fi
+template_premium() {
 
-    # DROPBEAR
+cat <<EOF
+╔════════════════════════════════════════════════════╗
+║                                                    ║
+║                 ★ $SERVER ★                       ║
+║                                                    ║
+╠════════════════════════════════════════════════════╣
+║                                                    ║
+║              $PROMO                               ║
+║                                                    ║
+║        Telegram : $CHANNEL                         ║
+║        Soporte  : $SUPPORT                         ║
+║                                                    ║
+╠════════════════════════════════════════════════════╣
+║              ★ SERVICIO PREMIUM ★                  ║
+╚════════════════════════════════════════════════════╝
+EOF
 
-    if service_exists dropbear; then
+}
 
-        echo -e "${CYAN}Reiniciando Dropbear...${RESET}"
+#==============================
+# PLANTILLA 3
+#==============================
 
-        if systemctl restart dropbear 2>/dev/null; then
-            echo -e "${GREEN}✔ Dropbear reiniciado correctamente.${RESET}"
-        else
-            echo -e "${RED}❌ No se pudo reiniciar Dropbear.${RESET}"
-        fi
+template_minimal() {
 
-    fi
+cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                 $SERVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+$PROMO
+
+Canal   : $CHANNEL
+Soporte : $SUPPORT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
 }
 
 #==============================
@@ -236,68 +340,151 @@ create_banner() {
 
     header
 
-    echo -e "${MAGENTA}                 CREAR NUEVO BANNER${RESET}"
+    echo -e "${MAGENTA}              CREAR NUEVO BANNER${RESET}"
+    echo
+    echo -e "${GREEN}[1]${WHITE} Usar plantilla"
+    echo -e "${BLUE}[2]${WHITE} Banner personalizado"
+    echo -e "${RED}[0]${WHITE} Cancelar"
     echo
 
-    read -rp "$(echo -e "${GREEN}Nombre del servidor: ${RESET}")" SERVER
+    read -rp "$(echo -e "${GREEN}Seleccione:${RESET} ")" TYPE
 
-    [[ -z "$SERVER" ]] && SERVER="${SERVER_NAME:-KevinTech VPN}"
+    case "$TYPE" in
 
-    read -rp "$(echo -e "${GREEN}Texto promocional: ${RESET}")" PROMO
+    1)
 
-    [[ -z "$PROMO" ]] && PROMO="🔥 Bienvenido a $SERVER 🔥"
+        clear
 
-    read -rp "$(echo -e "${GREEN}Canal Telegram: ${RESET}")" CHANNEL
+        echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${MAGENTA}              SELECCIONAR PLANTILLA              ${CYAN}║${RESET}"
+        echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+        echo
 
-    read -rp "$(echo -e "${GREEN}Soporte: ${RESET}")" SUPPORT
+        read -rp "$(echo -e "${GREEN}Nombre del servidor:${RESET} ")" SERVER
+        [[ -z "$SERVER" ]] && SERVER="KevinTech VPN"
+
+        read -rp "$(echo -e "${GREEN}Texto promocional:${RESET} ")" PROMO
+        [[ -z "$PROMO" ]] && PROMO="🔥 Bienvenido a $SERVER 🔥"
+
+        read -rp "$(echo -e "${GREEN}Canal Telegram:${RESET} ")" CHANNEL
+        [[ -z "$CHANNEL" ]] && CHANNEL="@KevinTech"
+
+        read -rp "$(echo -e "${GREEN}Soporte:${RESET} ")" SUPPORT
+        [[ -z "$SUPPORT" ]] && SUPPORT="@KevinSupport"
+
+        echo
+        echo -e "${GREEN}[1]${WHITE} Clásica"
+        echo -e "${BLUE}[2]${WHITE} Premium"
+        echo -e "${YELLOW}[3]${WHITE} Minimalista"
+        echo -e "${RED}[0]${WHITE} Cancelar"
+        echo
+
+        read -rp "$(echo -e "${GREEN}Plantilla:${RESET} ")" TEMPLATE
+
+        case "$TEMPLATE" in
+
+        1)
+            create_backup
+            template_classic > "$BANNER"
+            ;;
+
+        2)
+            create_backup
+            template_premium > "$BANNER"
+            ;;
+
+        3)
+            create_backup
+            template_minimal > "$BANNER"
+            ;;
+
+        0)
+            return
+            ;;
+
+        *)
+            echo -e "${RED}Plantilla inválida.${RESET}"
+            sleep 2
+            return
+            ;;
+
+        esac
+
+        ;;
+
+    2)
+
+        clear
+
+        echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${MAGENTA}            BANNER PERSONALIZADO                  ${CYAN}║${RESET}"
+        echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+        echo
+
+        echo -e "${YELLOW}Se abrirá Nano.${RESET}"
+        echo -e "${GRAY}Escribe o pega tu banner personalizado.${RESET}"
+        echo
+
+        create_backup
+
+        touch "$BANNER"
+
+        if ! command -v nano >/dev/null 2>&1; then
+            echo -e "${RED}✘ Nano no está instalado.${RESET}"
+            echo
+            echo "Instálalo con:"
+            echo "apt install nano -y"
+            pause
+            return
+        fi
+
+        nano "$BANNER"
+
+        ;;
+
+    0)
+        return
+        ;;
+
+    *)
+        echo -e "${RED}Opción inválida.${RESET}"
+        sleep 2
+        return
+        ;;
+
+    esac
 
     echo
-
-    # Backup del banner anterior
-
-    if [[ -f "$BANNER" ]]; then
-        backup_file "$BANNER"
-    fi
-
-    # Crear banner
-
-    cat > "$BANNER" <<EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              $SERVER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-$PROMO
-
-📢 Canal  : $CHANNEL
-👤 Soporte: $SUPPORT
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-           Gracias por usar nuestros servicios
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EOF
-
-    chmod 644 "$BANNER"
-
-    echo -e "${GREEN}✔ Banner creado:${RESET} $BANNER"
+    echo -e "${GREEN}✔ Banner preparado correctamente.${RESET}"
 
     echo
+    echo -e "${CYAN}Vista previa:${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-    # Configurar SSH
+    cat "$BANNER"
 
-    configure_ssh
-
-    # Configurar Dropbear
-
-    configure_dropbear
-
-    # Reiniciar
-
-    restart_services
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
     echo
-    echo -e "${GREEN}✔ Banner instalado correctamente.${RESET}"
+    read -rp "$(echo -e "${YELLOW}¿Aplicar este banner? [S/N]: ${RESET}")" APPLY
 
-    pause
+    case "$APPLY" in
+
+    s|S|si|SI|sí|Sí)
+
+        apply_banner
+
+        ;;
+
+    *)
+
+        echo -e "${YELLOW}Banner guardado, pero no aplicado.${RESET}"
+
+        ;;
+
+    esac
+
+    sleep 2
 }
 
 #==============================
@@ -308,208 +495,134 @@ view_banner() {
 
     header
 
-    echo -e "${MAGENTA}                    BANNER ACTUAL${RESET}"
+    echo -e "${MAGENTA}                 BANNER ACTUAL${RESET}"
     echo
 
     if [[ ! -f "$BANNER" ]]; then
-
-        echo -e "${RED}❌ No existe ningún banner.${RESET}"
-
+        echo -e "${RED}✘ No existe ningún banner.${RESET}"
         pause
         return
-
     fi
 
-    echo -e "${GREEN}Ruta:${RESET} $BANNER"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${GREEN}Archivo:${RESET} $BANNER"
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
     cat "$BANNER"
 
-    echo
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
     pause
 }
 
 #==============================
-# EDITAR BANNER
+# EDITAR
 #==============================
 
 edit_banner() {
 
     header
 
-    echo -e "${MAGENTA}                    EDITAR BANNER${RESET}"
+    echo -e "${MAGENTA}                 EDITAR BANNER${RESET}"
     echo
 
-    if ! command -v nano >/dev/null 2>&1; then
-
-        echo -e "${RED}❌ Nano no está instalado.${RESET}"
+    if [[ ! -f "$BANNER" ]]; then
+        echo -e "${YELLOW}No existe un banner.${RESET}"
         echo
-
-        read -rp "¿Desea instalar nano? [S/N]: " RESP
+        read -rp "¿Crear uno vacío? [S/N]: " RESP
 
         case "$RESP" in
-
-            s|S|si|SI|sí|Sí)
-
-                apt-get update -qq
-                apt-get install -y nano
-
+            s|S|si|SI)
+                touch "$BANNER"
                 ;;
-
             *)
-
                 return
                 ;;
-
         esac
-
     fi
 
-    if [[ ! -f "$BANNER" ]]; then
+    create_backup
 
-        echo -e "${YELLOW}⚠ El banner no existe.${RESET}"
-        echo "Creando banner básico..."
-
-        cat > "$BANNER" <<EOF
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-              ${SERVER_NAME:-KevinTech VPN}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-             Bienvenido a nuestro servidor
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EOF
-
-    else
-
-        backup_file "$BANNER"
-
+    if ! command -v nano >/dev/null 2>&1; then
+        echo -e "${RED}✘ Nano no está instalado.${RESET}"
+        pause
+        return
     fi
 
     nano "$BANNER"
 
     echo
-
-    configure_ssh
-
-    configure_dropbear
-
-    restart_services
+    echo -e "${GREEN}✔ Banner editado.${RESET}"
 
     echo
-    echo -e "${GREEN}✔ Banner actualizado.${RESET}"
+    read -rp "$(echo -e "${YELLOW}¿Aplicar cambios? [S/N]: ${RESET}")" RESP
 
-    pause
+    case "$RESP" in
+        s|S|si|SI|sí|Sí)
+            apply_banner
+            ;;
+        *)
+            echo -e "${YELLOW}Cambios guardados pero no aplicados.${RESET}"
+            ;;
+    esac
+
+    sleep 2
 }
 
 #==============================
-# PROBAR BANNER
+# PROBAR
 #==============================
 
 test_banner() {
 
     header
 
-    echo -e "${MAGENTA}                    PRUEBA DEL SISTEMA${RESET}"
+    echo -e "${MAGENTA}                 PRUEBA DEL BANNER${RESET}"
     echo
 
-    # Banner
-
-    if [[ -f "$BANNER" ]]; then
-        echo -e "${GREEN}✔ Banner:${RESET} $BANNER"
-    else
-        echo -e "${RED}✘ Banner:${RESET} No existe"
+    if [[ ! -f "$BANNER" ]]; then
+        echo -e "${RED}✘ El banner no existe.${RESET}"
+        pause
+        return
     fi
 
-    # SSH
+    echo -e "${GREEN}✔ Archivo del banner existe${RESET}"
 
-    if [[ -f "$SSHD_CONFIG" ]]; then
+    if ssh_installed; then
 
-        if grep -qE '^[[:space:]]*Banner[[:space:]]+' "$SSHD_CONFIG"; then
-            echo -e "${GREEN}✔ OpenSSH:${RESET} Banner configurado"
+        if sshd -t 2>/dev/null; then
+            echo -e "${GREEN}✔ Configuración OpenSSH válida${RESET}"
         else
-            echo -e "${RED}✘ OpenSSH:${RESET} Banner no configurado"
+            echo -e "${RED}✘ Configuración OpenSSH inválida${RESET}"
         fi
 
-        if command -v sshd >/dev/null 2>&1; then
-
-            if sshd -t 2>/dev/null; then
-                echo -e "${GREEN}✔ OpenSSH:${RESET} Configuración válida"
-            else
-                echo -e "${RED}✘ OpenSSH:${RESET} Configuración inválida"
-            fi
-
-        fi
-
-    else
-
-        echo -e "${YELLOW}⚠ OpenSSH:${RESET} No encontrado"
-
-    fi
-
-    # Dropbear
-
-    if [[ -f "$DROPBEAR_CONFIG" ]]; then
-
-        if grep -q '^DROPBEAR_BANNER=' "$DROPBEAR_CONFIG"; then
-            echo -e "${GREEN}✔ Dropbear:${RESET} Banner configurado"
+        if grep -qE "^[[:space:]]*Banner[[:space:]]+$BANNER" "$SSHD"; then
+            echo -e "${GREEN}✔ OpenSSH apunta al banner${RESET}"
         else
-            echo -e "${RED}✘ Dropbear:${RESET} Banner no configurado"
+            echo -e "${YELLOW}⚠ OpenSSH no apunta al banner${RESET}"
         fi
 
     else
-
-        echo -e "${YELLOW}⚠ Dropbear:${RESET} No encontrado"
-
+        echo -e "${GRAY}⚠ OpenSSH no instalado${RESET}"
     fi
 
-    echo
+    if dropbear_installed; then
 
-    # Servicios
+        if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
+            echo -e "${GREEN}✔ Dropbear apunta al banner${RESET}"
+        else
+            echo -e "${YELLOW}⚠ Dropbear no apunta al banner${RESET}"
+        fi
 
-    if service_active ssh || service_active sshd; then
-        echo -e "${GREEN}✔ Servicio SSH activo${RESET}"
     else
-        echo -e "${RED}✘ Servicio SSH inactivo${RESET}"
-    fi
-
-    if service_active dropbear; then
-        echo -e "${GREEN}✔ Servicio Dropbear activo${RESET}"
-    else
-        echo -e "${GRAY}• Dropbear no está activo${RESET}"
+        echo -e "${GRAY}⚠ Dropbear no instalado${RESET}"
     fi
 
     pause
 }
 
 #==============================
-# BACKUPS
-#==============================
-
-show_backups() {
-
-    header
-
-    echo -e "${MAGENTA}                     BACKUPS${RESET}"
-    echo
-
-    if [[ -z "$(find "$BACKUP_DIR" -type f 2>/dev/null)" ]]; then
-
-        echo -e "${YELLOW}No existen backups.${RESET}"
-
-    else
-
-        ls -lah "$BACKUP_DIR"
-
-    fi
-
-    pause
-}
-
-#==============================
-# RESTAURAR
+# RESTAURAR BACKUP
 #==============================
 
 restore_backup() {
@@ -519,104 +632,59 @@ restore_backup() {
     echo -e "${MAGENTA}                 RESTAURAR BACKUP${RESET}"
     echo
 
-    mapfile -t FILES < <(find "$BACKUP_DIR" -type f -name '*.bak' 2>/dev/null | sort -r)
-
-    if [[ "${#FILES[@]}" -eq 0 ]]; then
-
-        echo -e "${YELLOW}No existen backups.${RESET}"
+    if [[ ! -f "$BACKUP_DIR/latest" ]]; then
+        echo -e "${RED}✘ No existe ningún backup.${RESET}"
         pause
         return
-
     fi
 
-    local I=1
+    BACKUP=$(cat "$BACKUP_DIR/latest")
 
-    for FILE in "${FILES[@]}"; do
-
-        echo -e "${GREEN}[$I]${WHITE} $(basename "$FILE")"
-
-        ((I++))
-
-    done
-
-    echo
-    read -rp "Seleccione backup: " NUM
-
-    if ! [[ "$NUM" =~ ^[0-9]+$ ]] ||
-       (( NUM < 1 || NUM > ${#FILES[@]} )); then
-
-        echo -e "${RED}❌ Opción inválida.${RESET}"
-        sleep 2
-        return
-
-    fi
-
-    SELECTED="${FILES[$((NUM-1))]}"
-
-    echo
-    echo -e "${YELLOW}Backup seleccionado:${RESET}"
-    echo "$(basename "$SELECTED")"
-
+    echo -e "${GREEN}Último backup:${RESET}"
+    echo "$BACKUP"
     echo
 
-    read -rp "¿Restaurar este backup? [S/N]: " RESP
+    read -rp "$(echo -e "${YELLOW}¿Restaurar este backup? [S/N]: ${RESET}")" RESP
 
     case "$RESP" in
 
-        s|S|si|SI|sí|Sí)
+    s|S|si|SI|sí|Sí)
 
-            NAME="$(basename "$SELECTED")"
+        [[ -f "$BACKUP/issue.net" ]] &&
+            cp -a "$BACKUP/issue.net" "$BANNER"
 
-            # Detectar tipo de backup
+        [[ -f "$BACKUP/sshd_config" ]] &&
+            cp -a "$BACKUP/sshd_config" "$SSHD"
 
-            if [[ "$NAME" == issue.net_* ]]; then
+        [[ -f "$BACKUP/dropbear" ]] &&
+            cp -a "$BACKUP/dropbear" "$DROPBEAR"
 
-                cp -a "$SELECTED" "$BANNER"
+        echo
+        echo -e "${GREEN}✔ Backup restaurado.${RESET}"
 
-                echo -e "${GREEN}✔ Banner restaurado.${RESET}"
+        if ssh_installed && sshd -t 2>/dev/null; then
 
-            elif [[ "$NAME" == sshd_config_* ]]; then
-
-                cp -a "$SELECTED" "$SSHD_CONFIG"
-
-                if command -v sshd >/dev/null 2>&1 &&
-                   sshd -t 2>/dev/null; then
-
-                    systemctl restart ssh 2>/dev/null ||
-                    systemctl restart sshd 2>/dev/null
-
-                    echo -e "${GREEN}✔ SSH restaurado.${RESET}"
-
-                else
-
-                    echo -e "${RED}❌ La configuración restaurada de SSH no es válida.${RESET}"
-
-                fi
-
-            elif [[ "$NAME" == dropbear_* ]]; then
-
-                cp -a "$SELECTED" "$DROPBEAR_CONFIG"
-
-                systemctl restart dropbear 2>/dev/null
-
-                echo -e "${GREEN}✔ Dropbear restaurado.${RESET}"
-
-            else
-
-                echo -e "${RED}❌ Tipo de backup desconocido.${RESET}"
+            if systemctl list-unit-files 2>/dev/null |
+                grep -q "^ssh.service"; then
+                systemctl restart ssh
+            elif systemctl list-unit-files 2>/dev/null |
+                grep -q "^sshd.service"; then
+                systemctl restart sshd
             fi
 
-            ;;
+        fi
 
-        *)
+        systemctl restart dropbear 2>/dev/null
 
-            echo -e "${YELLOW}Operación cancelada.${RESET}"
+        ;;
 
-            ;;
+    *)
+        echo -e "${YELLOW}Operación cancelada.${RESET}"
+        ;;
 
     esac
 
-    pause
+    sleep 2
 }
 
 #==============================
@@ -627,76 +695,63 @@ delete_banner() {
 
     header
 
-    echo -e "${MAGENTA}                   ELIMINAR BANNER${RESET}"
+    echo -e "${MAGENTA}                 ELIMINAR BANNER${RESET}"
     echo
 
     if [[ ! -f "$BANNER" ]]; then
-
-        echo -e "${RED}❌ No existe ningún banner.${RESET}"
-
+        echo -e "${RED}✘ No existe ningún banner.${RESET}"
         pause
         return
-
     fi
 
-    echo -e "${YELLOW}⚠ Se creará un backup antes de eliminarlo.${RESET}"
+    echo -e "${YELLOW}Se creará un backup antes de eliminarlo.${RESET}"
     echo
 
-    read -rp "¿Desea eliminar el banner? [S/N]: " RESP
+    read -rp "$(echo -e "${RED}¿Eliminar el banner? [S/N]: ${RESET}")" RESP
 
     case "$RESP" in
 
-        s|S|si|SI|sí|Sí)
+    s|S|si|SI|sí|Sí)
 
-            backup_file "$BANNER"
+        create_backup
 
-            rm -f "$BANNER"
+        rm -f "$BANNER"
 
-            # OpenSSH
+        if ssh_installed; then
 
-            if [[ -f "$SSHD_CONFIG" ]]; then
+            sed -i '/^[[:space:]]*Banner[[:space:]]/d' "$SSHD"
 
-                backup_file "$SSHD_CONFIG"
+            if sshd -t 2>/dev/null; then
 
-                sed -i -E '/^[[:space:]]*Banner[[:space:]]+/d' "$SSHD_CONFIG"
-
-                if command -v sshd >/dev/null 2>&1 &&
-                   sshd -t 2>/dev/null; then
-
-                    systemctl restart ssh 2>/dev/null ||
-                    systemctl restart sshd 2>/dev/null
-
+                if systemctl list-unit-files 2>/dev/null |
+                    grep -q "^ssh.service"; then
+                    systemctl restart ssh
+                elif systemctl list-unit-files 2>/dev/null |
+                    grep -q "^sshd.service"; then
+                    systemctl restart sshd
                 fi
 
             fi
 
-            # Dropbear
+        fi
 
-            if [[ -f "$DROPBEAR_CONFIG" ]]; then
+        if dropbear_installed; then
+            sed -i '/^DROPBEAR_BANNER=/d' "$DROPBEAR"
+            systemctl restart dropbear 2>/dev/null
+        fi
 
-                backup_file "$DROPBEAR_CONFIG"
+        echo
+        echo -e "${GREEN}✔ Banner eliminado correctamente.${RESET}"
 
-                sed -i '/^DROPBEAR_BANNER=/d' "$DROPBEAR_CONFIG"
+        ;;
 
-                systemctl restart dropbear 2>/dev/null
-
-            fi
-
-            echo
-            echo -e "${GREEN}✔ Banner eliminado correctamente.${RESET}"
-
-            ;;
-
-        *)
-
-            echo
-            echo -e "${YELLOW}Operación cancelada.${RESET}"
-
-            ;;
+    *)
+        echo -e "${YELLOW}Operación cancelada.${RESET}"
+        ;;
 
     esac
 
-    pause
+    sleep 2
 }
 
 #==============================
@@ -706,61 +761,57 @@ delete_banner() {
 while true; do
 
     header
+
     show_status
 
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo
     echo -e "${GREEN}[1]${WHITE} Crear nuevo Banner"
     echo -e "${BLUE}[2]${WHITE} Ver Banner actual"
     echo -e "${YELLOW}[3]${WHITE} Editar Banner"
     echo -e "${CYAN}[4]${WHITE} Probar configuración"
-    echo -e "${MAGENTA}[5]${WHITE} Ver Backups"
-    echo -e "${BLUE}[6]${WHITE} Restaurar Backup"
-    echo -e "${RED}[7]${WHITE} Eliminar Banner"
+    echo -e "${MAGENTA}[5]${WHITE} Restaurar último Backup"
+    echo -e "${RED}[6]${WHITE} Eliminar Banner"
     echo -e "${GRAY}[0]${WHITE} Regresar"
-
     echo
 
     read -rp "$(echo -e "${GREEN}Seleccione una opción:${RESET} ")" OP
 
     case "$OP" in
 
-        1)
-            create_banner
-            ;;
+    1)
+        create_banner
+        ;;
 
-        2)
-            view_banner
-            ;;
+    2)
+        view_banner
+        ;;
 
-        3)
-            edit_banner
-            ;;
+    3)
+        edit_banner
+        ;;
 
-        4)
-            test_banner
-            ;;
+    4)
+        test_banner
+        ;;
 
-        5)
-            show_backups
-            ;;
+    5)
+        restore_backup
+        ;;
 
-        6)
-            restore_backup
-            ;;
+    6)
+        delete_banner
+        ;;
 
-        7)
-            delete_banner
-            ;;
+    0)
+        break
+        ;;
 
-        0)
-            break
-            ;;
-
-        *)
-            echo
-            echo -e "${RED}❌ Opción inválida.${RESET}"
-            sleep 2
-            ;;
+    *)
+        echo
+        echo -e "${RED}✘ Opción inválida.${RESET}"
+        sleep 2
+        ;;
 
     esac
 
