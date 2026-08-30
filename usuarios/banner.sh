@@ -1,8 +1,8 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Banner SSH / Dropbear + CheckUser
-# Independiente de checkgestor
+# Banner SSH / Dropbear
+# Banner Normal + CheckUser Dinámico
 #==================================================
 
 GREEN="\e[1;92m"
@@ -43,14 +43,6 @@ SSHD="/etc/ssh/sshd_config"
 DROPBEAR="/etc/default/dropbear"
 
 #==================================================
-# CREAR ARCHIVOS NECESARIOS
-#==================================================
-
-touch "$LIMITS_FILE"
-
-chmod 600 "$LIMITS_FILE"
-
-#==================================================
 # MENSAJES
 #==================================================
 
@@ -71,19 +63,19 @@ msg_warn() {
 }
 
 #==================================================
-# CONFIGURAR BANNER OPENSSH
+# CONFIGURAR BANNER SSH
 #==================================================
 
-configurar_ssh_banner() {
+configurar_ssh() {
 
     local ARCHIVO="$1"
 
-    [[ ! -f "$SSHD" ]] && return 0
+    [[ ! -f "$SSHD" ]] && return
 
-    # Eliminar Banner anterior
+    # Eliminar Banner anteriores
     sed -i '/^[[:space:]]*Banner[[:space:]]/d' "$SSHD"
 
-    # Agregar nuevo
+    # Agregar banner
     echo "Banner $ARCHIVO" >> "$SSHD"
 }
 
@@ -91,11 +83,11 @@ configurar_ssh_banner() {
 # CONFIGURAR DROPBEAR
 #==================================================
 
-configurar_dropbear_banner() {
+configurar_dropbear() {
 
     local ARCHIVO="$1"
 
-    [[ ! -f "$DROPBEAR" ]] && return 0
+    [[ ! -f "$DROPBEAR" ]] && return
 
     sed -i '/^DROPBEAR_BANNER=/d' "$DROPBEAR"
 
@@ -106,313 +98,11 @@ configurar_dropbear_banner() {
 # REINICIAR SERVICIOS
 #==================================================
 
-reiniciar_servicios() {
+reiniciar() {
 
     systemctl restart ssh 2>/dev/null
     systemctl restart sshd 2>/dev/null
     systemctl restart dropbear 2>/dev/null
-}
-
-#==================================================
-# OBTENER LÍMITE
-#==================================================
-
-obtener_limite() {
-
-    local USERNAME="$1"
-    local LIMITE="0"
-
-    if [[ -f "$LIMITS_FILE" ]]; then
-
-        LIMITE=$(
-            awk -F: -v U="$USERNAME" '
-                $1 == U {
-                    print $2
-                    exit
-                }
-            ' "$LIMITS_FILE"
-        )
-
-    fi
-
-    [[ -z "$LIMITE" ]] && LIMITE="0"
-
-    echo "$LIMITE"
-}
-
-#==================================================
-# FORMATEAR LÍMITE
-#==================================================
-
-formatear_limite() {
-
-    local LIMITE="$1"
-
-    if [[ "$LIMITE" == "0" ]]; then
-
-        echo "Ilimitado"
-
-    elif [[ "$LIMITE" == "1" ]]; then
-
-        echo "1 IP"
-
-    else
-
-        echo "$LIMITE IPs"
-
-    fi
-}
-
-#==================================================
-# OBTENER EXPIRACIÓN
-#==================================================
-
-obtener_expiracion() {
-
-    local USERNAME="$1"
-    local FECHA
-
-    FECHA=$(
-        chage -l "$USERNAME" 2>/dev/null |
-        awk -F: '/Account expires/ {
-            gsub(/^[ \t]+/, "", $2);
-            print $2
-        }'
-    )
-
-    if [[ -z "$FECHA" ||
-          "$FECHA" == "never" ||
-          "$FECHA" == "Nunca" ]]; then
-
-        echo "Ilimitada"
-        return
-
-    fi
-
-    local FECHA_FORMATO
-
-    FECHA_FORMATO=$(date -d "$FECHA" +"%d/%m/%Y" 2>/dev/null)
-
-    if [[ -n "$FECHA_FORMATO" ]]; then
-        echo "$FECHA_FORMATO"
-    else
-        echo "$FECHA"
-    fi
-}
-
-#==================================================
-# OBTENER DÍAS RESTANTES
-#==================================================
-
-obtener_dias() {
-
-    local USERNAME="$1"
-
-    local FECHA
-    local FECHA_EXP
-    local HOY
-    local DIAS
-
-    FECHA=$(
-        chage -l "$USERNAME" 2>/dev/null |
-        awk -F: '/Account expires/ {
-            gsub(/^[ \t]+/, "", $2);
-            print $2
-        }'
-    )
-
-    if [[ -z "$FECHA" ||
-          "$FECHA" == "never" ||
-          "$FECHA" == "Nunca" ]]; then
-
-        echo "∞"
-        return
-
-    fi
-
-    FECHA_EXP=$(date -d "$FECHA" +%s 2>/dev/null)
-
-    if [[ -z "$FECHA_EXP" ]]; then
-        echo "N/D"
-        return
-    fi
-
-    HOY=$(date +%s)
-
-    DIAS=$(( (FECHA_EXP - HOY) / 86400 ))
-
-    (( DIAS < 0 )) && DIAS=0
-
-    echo "$DIAS"
-}
-
-#==================================================
-# CREAR CHECKUSER DINÁMICO
-#==================================================
-
-crear_checkuser() {
-
-    cat > "$CHECK_SCRIPT" <<'EOF'
-#!/bin/bash
-
-#==================================================
-# KevinTech CheckUser
-# Independiente de checkgestor
-#==================================================
-
-USERNAME="${PAM_USER:-$USER}"
-
-# Si no existe usuario, salir
-id "$USERNAME" >/dev/null 2>&1 || exit 0
-
-BASE="/etc/kevintech"
-LIMITS_FILE="$BASE/limits.conf"
-
-#==================================================
-# OBTENER LÍMITE
-#==================================================
-
-LIMIT="0"
-
-if [[ -f "$LIMITS_FILE" ]]; then
-
-    LIMIT=$(
-        awk -F: -v U="$USERNAME" '
-            $1 == U {
-                print $2
-                exit
-            }
-        ' "$LIMITS_FILE"
-    )
-
-fi
-
-[[ -z "$LIMIT" ]] && LIMIT="0"
-
-#==================================================
-# FORMATO LÍMITE
-#==================================================
-
-if [[ "$LIMIT" == "0" ]]; then
-
-    LIMIT_TEXT="Ilimitado"
-
-elif [[ "$LIMIT" == "1" ]]; then
-
-    LIMIT_TEXT="1 IP"
-
-else
-
-    LIMIT_TEXT="${LIMIT} IPs"
-
-fi
-
-#==================================================
-# EXPIRACIÓN
-#==================================================
-
-EXPIRATION=$(
-    chage -l "$USERNAME" 2>/dev/null |
-    awk -F: '/Account expires/ {
-        gsub(/^[ \t]+/, "", $2);
-        print $2
-    }'
-)
-
-#==================================================
-# DÍAS
-#==================================================
-
-if [[ -z "$EXPIRATION" ||
-      "$EXPIRATION" == "never" ||
-      "$EXPIRATION" == "Nunca" ]]; then
-
-    DAYS="∞"
-    EXPIRATION_TEXT="Ilimitada"
-
-else
-
-    EXPIRATION_SECONDS=$(date -d "$EXPIRATION" +%s 2>/dev/null)
-    TODAY_SECONDS=$(date +%s)
-
-    if [[ -n "$EXPIRATION_SECONDS" ]]; then
-
-        DAYS=$(( (EXPIRATION_SECONDS - TODAY_SECONDS) / 86400 ))
-
-        (( DAYS < 0 )) && DAYS=0
-
-    else
-
-        DAYS="N/D"
-
-    fi
-
-    EXPIRATION_TEXT=$(
-        date -d "$EXPIRATION" +"%d/%m/%Y" 2>/dev/null
-    )
-
-    [[ -z "$EXPIRATION_TEXT" ]] &&
-        EXPIRATION_TEXT="$EXPIRATION"
-
-fi
-
-#==================================================
-# BANNER CHECKUSER
-#==================================================
-
-echo
-echo -e "\033[1;96m╔════════════════════════════════════════════════════╗\033[0m"
-echo -e "\033[1;96m║\033[1;95m              ⚜ KEVINTECH CHECKUSER ⚜              \033[1;96m║\033[0m"
-echo -e "\033[1;96m╠════════════════════════════════════════════════════╣\033[0m"
-echo -e "\033[1;96m║\033[1;97m Usuario      : \033[1;92m${USERNAME}\033[1;96m                       ║\033[0m"
-echo -e "\033[1;96m║\033[1;97m Días         : \033[1;92m${DAYS}\033[1;96m                           ║\033[0m"
-echo -e "\033[1;96m║\033[1;97m Límite       : \033[1;92m${LIMIT_TEXT}\033[1;96m                     ║\033[0m"
-echo -e "\033[1;96m║\033[1;97m Expiración   : \033[1;92m${EXPIRATION_TEXT}\033[1;96m                    ║\033[0m"
-echo -e "\033[1;96m╚════════════════════════════════════════════════════╝\033[0m"
-echo
-
-exit 0
-EOF
-
-    chmod 755 "$CHECK_SCRIPT"
-}
-
-#==================================================
-# INSTALAR PAM CHECKUSER
-#==================================================
-
-instalar_pam_checkuser() {
-
-    local PAM_FILE="/etc/pam.d/sshd"
-
-    [[ ! -f "$PAM_FILE" ]] && return 1
-
-    # Quitar instalación anterior
-    sed -i '/KevinTech CheckUser/d' "$PAM_FILE"
-    sed -i '/kevintech\/checkuser-banner.sh/d' "$PAM_FILE"
-
-    # Agregar solamente una vez
-    cat >> "$PAM_FILE" <<EOF
-
-# KevinTech CheckUser
-session optional pam_exec.so stdout $CHECK_SCRIPT
-EOF
-
-    return 0
-}
-
-#==================================================
-# DESINSTALAR PAM CHECKUSER
-#==================================================
-
-desinstalar_pam_checkuser() {
-
-    local PAM_FILE="/etc/pam.d/sshd"
-
-    [[ ! -f "$PAM_FILE" ]] && return 0
-
-    sed -i '/KevinTech CheckUser/d' "$PAM_FILE"
-    sed -i '/kevintech\/checkuser-banner.sh/d' "$PAM_FILE"
 }
 
 #==================================================
@@ -444,7 +134,7 @@ crear_banner_normal() {
     read -rp "$(echo -e "${GREEN}Soporte:${RESET} ")" SUPPORT
 
     #==================================================
-    # BANNER DE TEXTO
+    # TEXTO PLANO
     #==================================================
 
     cat > "$BANNER_NORMAL" <<EOF
@@ -462,26 +152,153 @@ EOF
 
     chmod 644 "$BANNER_NORMAL"
 
-    # Activar banner normal
-    configurar_ssh_banner "$BANNER_NORMAL"
-    configurar_dropbear_banner "$BANNER_NORMAL"
-
-    # Desactivar CheckUser
-    desinstalar_pam_checkuser
+    # Activar normal
+    configurar_ssh "$BANNER_NORMAL"
+    configurar_dropbear "$BANNER_NORMAL"
 
     echo "normal" > "$BANNER_ACTIVE"
 
-    reiniciar_servicios
+    reiniciar
 
     echo
-
     msg_ok "Banner normal creado y activado."
 
     sleep 2
 }
 
 #==================================================
-# ACTIVAR CHECKUSER
+# CREAR CHECKUSER DINÁMICO
+#==================================================
+
+crear_checkuser_script() {
+
+    cat > "$CHECK_SCRIPT" <<'EOF'
+#!/bin/bash
+
+#==================================================
+# KevinTech CheckUser
+#==================================================
+
+USER_NAME="${PAM_USER:-$USER}"
+
+[[ -z "$USER_NAME" ]] && exit 0
+
+id "$USER_NAME" >/dev/null 2>&1 || exit 0
+
+BASE="/etc/kevintech"
+LIMITS_FILE="$BASE/limits.conf"
+
+#==================================================
+# OBTENER LÍMITE
+#==================================================
+
+LIMIT="0"
+
+if [[ -f "$LIMITS_FILE" ]]; then
+
+    LIMIT=$(
+        awk -F: -v U="$USER_NAME" '
+            $1 == U {
+                print $2
+                exit
+            }
+        ' "$LIMITS_FILE"
+    )
+
+fi
+
+[[ -z "$LIMIT" ]] && LIMIT="0"
+
+if [[ "$LIMIT" == "0" ]]; then
+
+    LIMIT_TEXT="Ilimitado"
+
+elif [[ "$LIMIT" == "1" ]]; then
+
+    LIMIT_TEXT="1 IP"
+
+else
+
+    LIMIT_TEXT="${LIMIT} IPs"
+
+fi
+
+#==================================================
+# OBTENER EXPIRACIÓN
+#==================================================
+
+EXPIRATION=$(
+    chage -l "$USER_NAME" 2>/dev/null |
+    awk -F: '/Account expires/ {
+        gsub(/^[ \t]+/, "", $2);
+        print $2
+    }'
+)
+
+#==================================================
+# DÍAS RESTANTES
+#==================================================
+
+if [[ -z "$EXPIRATION" ||
+      "$EXPIRATION" == "never" ||
+      "$EXPIRATION" == "Nunca" ]]; then
+
+    DAYS="∞"
+    EXPIRATION_TEXT="Ilimitada"
+
+else
+
+    EXP_SECONDS=$(date -d "$EXPIRATION" +%s 2>/dev/null)
+    NOW_SECONDS=$(date +%s)
+
+    if [[ -n "$EXP_SECONDS" ]]; then
+
+        DAYS=$(( (EXP_SECONDS - NOW_SECONDS) / 86400 ))
+
+        (( DAYS < 0 )) && DAYS=0
+
+    else
+
+        DAYS="N/D"
+
+    fi
+
+    EXPIRATION_TEXT=$(
+        date -d "$EXPIRATION" +"%d/%m/%Y" 2>/dev/null
+    )
+
+    [[ -z "$EXPIRATION_TEXT" ]] &&
+        EXPIRATION_TEXT="$EXPIRATION"
+
+fi
+
+#==================================================
+# CHECKUSER
+#==================================================
+
+echo
+
+echo -e "\033[1;96m╔════════════════════════════════════════════════════╗\033[0m"
+echo -e "\033[1;96m║\033[1;95m              ⚜ KEVINTECH CHECKUSER ⚜              \033[1;96m║\033[0m"
+echo -e "\033[1;96m╠════════════════════════════════════════════════════╣\033[0m"
+
+printf "\033[1;96m║\033[1;97m Usuario      : \033[1;92m%-36s\033[1;96m║\033[0m\n" "$USER_NAME"
+printf "\033[1;96m║\033[1;97m Días         : \033[1;92m%-36s\033[1;96m║\033[0m\n" "$DAYS"
+printf "\033[1;96m║\033[1;97m Límite       : \033[1;92m%-36s\033[1;96m║\033[0m\n" "$LIMIT_TEXT"
+printf "\033[1;96m║\033[1;97m Expiración   : \033[1;92m%-36s\033[1;96m║\033[0m\n" "$EXPIRATION_TEXT"
+
+echo -e "\033[1;96m╚════════════════════════════════════════════════════╝\033[0m"
+
+echo
+
+exit 0
+EOF
+
+    chmod 755 "$CHECK_SCRIPT"
+}
+
+#==================================================
+# INSTALAR CHECKUSER
 #==================================================
 
 activar_checkuser() {
@@ -496,53 +313,63 @@ activar_checkuser() {
 
     if [[ ! -f "$BANNER_NORMAL" ]]; then
 
-        msg_error "Primero debes crear el Banner normal."
+        msg_error "Primero crea el Banner normal."
 
-        echo
-        read -n1 -s -r -p "Presione cualquier tecla..."
+        sleep 2
         return
 
     fi
 
-    #==================================================
-    # CREAR CHECKUSER
-    #==================================================
-
-    crear_checkuser
+    # Crear CheckUser
+    crear_checkuser_script
 
     #==================================================
-    # BANNER NORMAL
+    # CREAR ARCHIVO CHECKUSER
     #==================================================
 
-    configurar_ssh_banner "$BANNER_NORMAL"
-    configurar_dropbear_banner "$BANNER_NORMAL"
+    cat > "$BANNER_CHECK" <<EOF
+# KevinTech CheckUser
+# Generado automáticamente
+EOF
 
     #==================================================
-    # ACTIVAR CHECKUSER DESPUÉS DEL LOGIN
+    # CONFIGURAR BANNER NORMAL
     #==================================================
 
-    if instalar_pam_checkuser; then
+    configurar_ssh "$BANNER_NORMAL"
+    configurar_dropbear "$BANNER_NORMAL"
 
-        echo "checkuser" > "$BANNER_ACTIVE"
+    #==================================================
+    # PAM SSH
+    #==================================================
 
-        reiniciar_servicios
+    PAM="/etc/pam.d/sshd"
 
-        echo
+    if [[ -f "$PAM" ]]; then
 
-        msg_ok "Banner CheckUser activado."
+        # Evitar duplicados
+        sed -i '/KevinTech CheckUser/d' "$PAM"
+        sed -i '/checkuser-banner.sh/d' "$PAM"
 
-        echo
-        echo -e "${WHITE}El usuario verá:${RESET}"
-        echo
-        echo -e "${GRAY}Banner normal${RESET}"
-        echo -e "${GRAY}        ↓${RESET}"
-        echo -e "${GRAY}CheckUser dinámico${RESET}"
+        cat >> "$PAM" <<EOF
 
-    else
-
-        msg_error "No se pudo configurar PAM."
+# KevinTech CheckUser
+session optional pam_exec.so stdout $CHECK_SCRIPT
+EOF
 
     fi
+
+    echo "checkuser" > "$BANNER_ACTIVE"
+
+    reiniciar
+
+    echo
+
+    msg_ok "Banner CheckUser activado."
+
+    echo
+    echo -e "${WHITE}El banner normal continuará apareciendo primero.${RESET}"
+    echo -e "${WHITE}Después del login aparecerá el CheckUser.${RESET}"
 
     echo
 
@@ -550,7 +377,7 @@ activar_checkuser() {
 }
 
 #==================================================
-# VER BANNER ACTUAL
+# VER BANNER
 #==================================================
 
 ver_banner() {
@@ -568,19 +395,21 @@ ver_banner() {
     [[ -f "$BANNER_ACTIVE" ]] &&
         ACTIVO=$(cat "$BANNER_ACTIVE")
 
-    if [[ "$ACTIVO" == "normal" ]]; then
+    case "$ACTIVO" in
 
-        echo -e "${GREEN}✔ Banner normal ACTIVO${RESET}"
+        normal)
+            echo -e "${GREEN}✔ Banner normal activo${RESET}"
+            ;;
 
-    elif [[ "$ACTIVO" == "checkuser" ]]; then
+        checkuser)
+            echo -e "${GREEN}✔ Banner CheckUser activo${RESET}"
+            ;;
 
-        echo -e "${GREEN}✔ Banner CheckUser ACTIVO${RESET}"
+        *)
+            echo -e "${YELLOW}⚠ Sin banner activo${RESET}"
+            ;;
 
-    else
-
-        echo -e "${YELLOW}⚠ Sin banner activo${RESET}"
-
-    fi
+    esac
 
     echo
 
@@ -600,12 +429,13 @@ ver_banner() {
     if [[ "$ACTIVO" == "checkuser" ]]; then
 
         echo
-        echo -e "${YELLOW}══════════ CHECKUSER ══════════${RESET}"
+        echo -e "${YELLOW}══════════ CHECKUSER DINÁMICO ══════════${RESET}"
         echo
-        echo -e "${WHITE}Usuario      : ${GREEN}<usuario conectado>${RESET}"
-        echo -e "${WHITE}Días         : ${GREEN}<dinámico>${RESET}"
-        echo -e "${WHITE}Límite       : ${GREEN}<desde limits.conf>${RESET}"
-        echo -e "${WHITE}Expiración   : ${GREEN}<desde cuenta SSH>${RESET}"
+        echo -e "${WHITE}Usuario      : ${GREEN}usuario conectado${RESET}"
+        echo -e "${WHITE}Días         : ${GREEN}calculado automáticamente${RESET}"
+        echo -e "${WHITE}Límite       : ${GREEN}desde limits.conf${RESET}"
+        echo -e "${WHITE}Expiración   : ${GREEN}desde la cuenta SSH${RESET}"
+
     fi
 
     echo
@@ -619,7 +449,7 @@ ver_banner() {
 # EDITAR BANNER NORMAL
 #==================================================
 
-editar_banner_normal() {
+editar_banner() {
 
     clear
 
@@ -631,7 +461,7 @@ editar_banner_normal() {
 
     if [[ ! -f "$BANNER_NORMAL" ]]; then
 
-        msg_error "No existe el Banner normal."
+        msg_error "No existe Banner normal."
 
         sleep 2
         return
@@ -649,10 +479,10 @@ editar_banner_normal() {
 
     nano "$BANNER_NORMAL"
 
-    configurar_ssh_banner "$BANNER_NORMAL"
-    configurar_dropbear_banner "$BANNER_NORMAL"
+    configurar_ssh "$BANNER_NORMAL"
+    configurar_dropbear "$BANNER_NORMAL"
 
-    reiniciar_servicios
+    reiniciar
 
     echo
 
@@ -697,7 +527,7 @@ eliminar_banner() {
 
             echo "none" > "$BANNER_ACTIVE"
 
-            reiniciar_servicios
+            reiniciar
 
             msg_ok "Banner normal eliminado."
 
@@ -708,22 +538,28 @@ eliminar_banner() {
             rm -f "$BANNER_CHECK"
             rm -f "$CHECK_SCRIPT"
 
-            desinstalar_pam_checkuser
+            PAM="/etc/pam.d/sshd"
 
-            # Si existe el banner normal,
+            if [[ -f "$PAM" ]]; then
+
+                sed -i '/KevinTech CheckUser/d' "$PAM"
+                sed -i '/checkuser-banner.sh/d' "$PAM"
+
+            fi
+
+            # Si existe banner normal,
             # volver a dejarlo activo.
 
             if [[ -f "$BANNER_NORMAL" ]]; then
 
-                configurar_ssh_banner "$BANNER_NORMAL"
-                configurar_dropbear_banner "$BANNER_NORMAL"
+                configurar_ssh "$BANNER_NORMAL"
+                configurar_dropbear "$BANNER_NORMAL"
 
                 echo "normal" > "$BANNER_ACTIVE"
 
             else
 
-                sed -i '/^[[:space:]]*Banner[[:space:]]/d' \
-                    "$SSHD" 2>/dev/null
+                sed -i '/^[[:space:]]*Banner[[:space:]]/d' "$SSHD" 2>/dev/null
 
                 [[ -f "$DROPBEAR" ]] &&
                     sed -i '/^DROPBEAR_BANNER=/d' "$DROPBEAR"
@@ -732,7 +568,7 @@ eliminar_banner() {
 
             fi
 
-            reiniciar_servicios
+            reiniciar
 
             msg_ok "Banner CheckUser eliminado."
 
@@ -744,17 +580,23 @@ eliminar_banner() {
             rm -f "$BANNER_CHECK"
             rm -f "$CHECK_SCRIPT"
 
-            sed -i '/^[[:space:]]*Banner[[:space:]]/d' \
-                "$SSHD" 2>/dev/null
+            sed -i '/^[[:space:]]*Banner[[:space:]]/d' "$SSHD" 2>/dev/null
 
             [[ -f "$DROPBEAR" ]] &&
                 sed -i '/^DROPBEAR_BANNER=/d' "$DROPBEAR"
 
-            desinstalar_pam_checkuser
+            PAM="/etc/pam.d/sshd"
+
+            if [[ -f "$PAM" ]]; then
+
+                sed -i '/KevinTech CheckUser/d' "$PAM"
+                sed -i '/checkuser-banner.sh/d' "$PAM"
+
+            fi
 
             echo "none" > "$BANNER_ACTIVE"
 
-            reiniciar_servicios
+            reiniciar
 
             msg_ok "Banner normal y CheckUser eliminados."
 
@@ -774,7 +616,7 @@ eliminar_banner() {
 }
 
 #==================================================
-# MENÚ PRINCIPAL
+# MENÚ
 #==================================================
 
 while true; do
@@ -811,7 +653,7 @@ while true; do
             ;;
 
         4)
-            editar_banner_normal
+            editar_banner
             ;;
 
         5)
@@ -823,7 +665,6 @@ while true; do
             ;;
 
         *)
-            echo
             msg_error "Opción inválida."
             sleep 2
             ;;
