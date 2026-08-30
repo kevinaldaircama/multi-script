@@ -2,7 +2,8 @@
 #==================================================
 # KevinTech Multi Script
 # Módulo: Banner SSH / Dropbear
-# Banner Normal + CheckUser
+# Banner Normal
+# CheckUser dinámico separado
 # Versión: Premium
 #==================================================
 
@@ -30,8 +31,9 @@ BANNER_DIR="$BASE/banners"
 BANNER_NORMAL="$BANNER_DIR/banner_normal"
 BANNER_CHECKUSER="$BANNER_DIR/banner_checkuser"
 
-# Banner que realmente utilizarán SSH y Dropbear
 BANNER_ACTIVE="/etc/issue.net"
+
+CHECKUSER_SCRIPT="/usr/local/bin/kevintech-checkuser"
 
 SSHD="/etc/ssh/sshd_config"
 DROPBEAR="/etc/default/dropbear"
@@ -86,17 +88,13 @@ configurar_openssh() {
 
     [[ ! -f "$SSHD" ]] && return 0
 
-    if grep -qE "^[[:space:]]*Banner[[:space:]]" "$SSHD"; then
+    # Eliminar todas las directivas Banner anteriores
+    sed -i \
+        '/^[[:space:]]*#\?[[:space:]]*Banner[[:space:]]/d' \
+        "$SSHD"
 
-        sed -i \
-            "s|^[[:space:]]*Banner[[:space:]].*|Banner $BANNER_ACTIVE|" \
-            "$SSHD"
-
-    else
-
-        echo "Banner $BANNER_ACTIVE" >> "$SSHD"
-
-    fi
+    # Agregar nuestro Banner
+    echo "Banner $BANNER_ACTIVE" >> "$SSHD"
 }
 
 #==================================================
@@ -107,21 +105,36 @@ configurar_dropbear() {
 
     [[ ! -f "$DROPBEAR" ]] && return 0
 
-    if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
+    # Eliminar configuración anterior
+    sed -i \
+        '/^DROPBEAR_BANNER=/d' \
+        "$DROPBEAR"
 
-        sed -i \
-            "s|^DROPBEAR_BANNER=.*|DROPBEAR_BANNER=\"$BANNER_ACTIVE\"|" \
-            "$DROPBEAR"
-
-    else
-
-        echo "DROPBEAR_BANNER=\"$BANNER_ACTIVE\"" >> "$DROPBEAR"
-
-    fi
+    # Agregar banner actual
+    echo "DROPBEAR_BANNER=\"$BANNER_ACTIVE\"" >> "$DROPBEAR"
 }
 
 #==================================================
-# ACTIVAR BANNER
+# LIMPIAR VARIABLES ANTIGUAS
+#==================================================
+
+limpiar_variables_checkuser() {
+
+    local ARCHIVO="$1"
+
+    [[ ! -f "$ARCHIVO" ]] && return 0
+
+    sed -i \
+        -e '/%USERNAME%/d' \
+        -e '/%CONNECTIONS%/d' \
+        -e '/%LIMIT%/d' \
+        -e '/%EXPIRATION%/d' \
+        -e '/%DAYS%/d' \
+        "$ARCHIVO"
+}
+
+#==================================================
+# ACTIVAR BANNER NORMAL
 #==================================================
 
 activar_banner() {
@@ -131,9 +144,18 @@ activar_banner() {
     if [[ ! -f "$ARCHIVO" ]]; then
 
         msg_error "El banner no existe."
+
         return 1
 
     fi
+
+    #==================================================
+    # IMPORTANTE:
+    # El Banner SSH debe ser estático.
+    # No colocamos variables dinámicas aquí.
+    #==================================================
+
+    limpiar_variables_checkuser "$ARCHIVO"
 
     cp -f "$ARCHIVO" "$BANNER_ACTIVE"
 
@@ -142,46 +164,27 @@ activar_banner() {
     configurar_openssh
     configurar_dropbear
 
+    #==================================================
+    # Comprobar configuración SSH antes de reiniciar
+    #==================================================
+
+    if command -v sshd >/dev/null 2>&1; then
+
+        if ! sshd -t 2>/dev/null; then
+
+            msg_error "La configuración de OpenSSH tiene un error."
+
+            return 1
+
+        fi
+
+    fi
+
     reiniciar_servicios
 
+    msg_ok "Banner activado correctamente."
+
     return 0
-}
-
-#==================================================
-# ACTIVAR AUTOMÁTICAMENTE
-# BANNER NORMAL + CHECKUSER
-#==================================================
-
-activar_banner_actual() {
-
-    # Si existe CheckUser, utilizarlo.
-    if [[ -f "$BANNER_CHECKUSER" ]]; then
-
-        if activar_banner "$BANNER_CHECKUSER"; then
-
-            msg_ok "Banner Normal + CheckUser activado."
-            return 0
-
-        fi
-
-    fi
-
-    # Si no existe CheckUser,
-    # utilizar únicamente Banner Normal.
-    if [[ -f "$BANNER_NORMAL" ]]; then
-
-        if activar_banner "$BANNER_NORMAL"; then
-
-            msg_ok "Banner Normal activado."
-            return 0
-
-        fi
-
-    fi
-
-    msg_error "No existe ningún banner para activar."
-
-    return 1
 }
 
 #==================================================
@@ -190,43 +193,185 @@ activar_banner_actual() {
 
 crear_checkuser() {
 
-    if [[ ! -f "$BANNER_NORMAL" ]]; then
+    #==================================================
+    # CheckUser YA NO SE METE EN /etc/issue.net
+    #==================================================
 
-        msg_error "Primero debes crear el Banner Normal."
+    cat > "$CHECKUSER_SCRIPT" <<'EOF'
+#!/bin/bash
 
-        return 1
+#==================================================
+# KevinTech CheckUser
+# Datos dinámicos del usuario SSH
+#==================================================
+
+BASE="/etc/kevintech"
+LIMITS_FILE="$BASE/limits.conf"
+
+USER_NAME="${USER:-${LOGNAME:-}}"
+
+[[ -z "$USER_NAME" ]] && exit 0
+
+id "$USER_NAME" >/dev/null 2>&1 || exit 0
+
+#==================================================
+# OBTENER LÍMITE
+#==================================================
+
+LIMIT=$(
+    awk -F: -v U="$USER_NAME" '
+        $1 == U {
+            print $2
+            exit
+        }
+    ' "$LIMITS_FILE" 2>/dev/null
+)
+
+[[ -z "$LIMIT" ]] && LIMIT=0
+
+#==================================================
+# OBTENER IPs
+#==================================================
+
+IPS=$(
+    who 2>/dev/null |
+    awk -v U="$USER_NAME" '
+        $1 == U {
+            IP=$5
+            gsub(/[()]/, "", IP)
+
+            if (IP != "")
+                print IP
+        }
+    ' |
+    sort -u
+)
+
+#==================================================
+# CONTAR IPs
+#==================================================
+
+if [[ -n "$IPS" ]]; then
+
+    CONNECTIONS=$(
+        printf '%s\n' "$IPS" |
+        grep -c .
+    )
+
+else
+
+    CONNECTIONS=0
+
+fi
+
+#==================================================
+# EXPIRACIÓN
+#==================================================
+
+EXPIRATION=$(
+    chage -l "$USER_NAME" 2>/dev/null |
+    awk -F': ' '
+        /Account expires/ {
+            print $2
+            exit
+        }
+    '
+)
+
+#==================================================
+# CALCULAR DÍAS
+#==================================================
+
+if [[ -z "$EXPIRATION" ||
+      "$EXPIRATION" == "never" ||
+      "$EXPIRATION" == "Nunca" ]]; then
+
+    EXPIRATION="Ilimitada"
+    DAYS="∞"
+
+else
+
+    EXP_DATE=$(date -d "$EXPIRATION" +%s 2>/dev/null)
+    NOW=$(date +%s)
+
+    if [[ -n "$EXP_DATE" ]]; then
+
+        DAYS=$(( (EXP_DATE - NOW) / 86400 ))
+
+        (( DAYS < 0 )) && DAYS=0
+
+        EXPIRATION=$(date \
+            -d "$EXPIRATION" \
+            +"%d/%m/%Y" \
+            2>/dev/null)
+
+    else
+
+        EXPIRATION="N/D"
+        DAYS="N/D"
 
     fi
 
+fi
+
+#==================================================
+# LÍMITE MOSTRAR
+#==================================================
+
+if (( LIMIT == 0 )); then
+
+    LIMIT_SHOW="♾"
+
+else
+
+    LIMIT_SHOW="$LIMIT"
+
+fi
+
+#==================================================
+# MOSTRAR CHECKUSER
+#==================================================
+
+echo
+echo "═══════════════════════════════════════════════════"
+echo "                    CHECK USER"
+echo "═══════════════════════════════════════════════════"
+echo
+echo "👤 Usuario        : $USER_NAME"
+echo "🔌 Conexiones     : $CONNECTIONS/$LIMIT_SHOW"
+echo "📅 Expiración     : $EXPIRATION"
+echo "⏳ Días restantes : $DAYS"
+echo
+echo "═══════════════════════════════════════════════════"
+echo
+
+exit 0
+EOF
+
+    chmod 755 "$CHECKUSER_SCRIPT"
+
     #==================================================
-    # COPIAR BANNER NORMAL
+    # ARCHIVO PARA VISUALIZACIÓN
     #==================================================
 
-    cp -f "$BANNER_NORMAL" "$BANNER_CHECKUSER"
-
-    #==================================================
-    # AGREGAR CHECKUSER DEBAJO
-    #==================================================
-
-    cat >> "$BANNER_CHECKUSER" <<'EOF'
-
-════════════════════════════════════════════════════
-                    CHECK USER
-════════════════════════════════════════════════════
-
-👤 Usuario        : %USERNAME%
-🔌 Conexiones     : %CONNECTIONS%/%LIMIT%
-📅 Expiración     : %EXPIRATION%
-⏳ Días restantes : %DAYS%
-
-════════════════════════════════════════════════════
+    cat > "$BANNER_CHECKUSER" <<'EOF'
+#==================================================
+# CHECK USER DINÁMICO
+#
+# Este archivo NO se utiliza como /etc/issue.net.
+#
+# El Banner SSH es estático.
+# Los datos del usuario se generan dinámicamente
+# mediante:
+#
+# /usr/local/bin/kevintech-checkuser
+#==================================================
 EOF
 
     chmod 644 "$BANNER_CHECKUSER"
 
-    msg_ok "Banner CheckUser creado."
+    msg_ok "CheckUser dinámico preparado."
 
-    return 0
 }
 
 #==================================================
@@ -243,7 +388,6 @@ pegar_banner() {
 
     echo
     echo -e "${YELLOW}Pega tu banner completo.${RESET}"
-    echo -e "${GRAY}Puedes utilizar varias líneas.${RESET}"
     echo -e "${GRAY}Cuando termines escribe FIN en una línea nueva.${RESET}"
     echo
 
@@ -271,7 +415,13 @@ pegar_banner() {
     fi
 
     #==================================================
-    # GUARDAR BANNER NORMAL
+    # LIMPIAR VARIABLES VIEJAS
+    #==================================================
+
+    limpiar_variables_checkuser "$TEMP"
+
+    #==================================================
+    # GUARDAR
     #==================================================
 
     cp -f "$TEMP" "$BANNER_NORMAL"
@@ -289,46 +439,39 @@ pegar_banner() {
     #==================================================
 
     read -rp \
-        "$(echo -e "${YELLOW}¿Deseas incluir CheckUser? [S/N]: ${RESET}")" RESP
+        "$(echo -e "${YELLOW}¿Deseas activar CheckUser dinámico? [S/N]: ${RESET}")" RESP
 
     case "$RESP" in
 
         s|S|si|SI|sí|Sí)
 
-            if crear_checkuser; then
-
-                echo
-                activar_banner_actual
-
-            fi
+            crear_checkuser
 
             ;;
 
         n|N|no|NO)
 
             rm -f "$BANNER_CHECKUSER"
+            rm -f "$CHECKUSER_SCRIPT"
 
-            msg_ok "Banner creado sin CheckUser."
-
-            echo
-
-            activar_banner_actual
+            msg_ok "CheckUser desactivado."
 
             ;;
 
         *)
 
             rm -f "$BANNER_CHECKUSER"
+            rm -f "$CHECKUSER_SCRIPT"
 
-            msg_warn "Respuesta inválida. Se creó sin CheckUser."
-
-            echo
-
-            activar_banner_actual
+            msg_warn "Respuesta inválida. CheckUser desactivado."
 
             ;;
 
     esac
+
+    echo
+
+    activar_banner "$BANNER_NORMAL"
 
     sleep 2
 }
@@ -366,22 +509,22 @@ crear_plantilla() {
         "$(echo -e "${GREEN}Soporte: ${RESET}")" SUPPORT
 
     #==================================================
-    # BANNER NORMAL
+    # CREAR BANNER
     #==================================================
 
     cat > "$BANNER_NORMAL" <<EOF
-════════════════════════════════════════════════════
+═══════════════════════════════════════════════════
               $SERVER ★
-════════════════════════════════════════════════════
+═══════════════════════════════════════════════════
 
 $PROMO
 
 📢 Canal   : $CHANNEL
 👤 Soporte : $SUPPORT
 
-════════════════════════════════════════════════════
+═══════════════════════════════════════════════════
        Gracias por usar nuestros servicios
-════════════════════════════════════════════════════
+═══════════════════════════════════════════════════
 EOF
 
     chmod 644 "$BANNER_NORMAL"
@@ -391,50 +534,43 @@ EOF
     echo
 
     #==================================================
-    # PREGUNTAR CHECKUSER
+    # CHECKUSER
     #==================================================
 
     read -rp \
-        "$(echo -e "${YELLOW}¿Deseas incluir CheckUser? [S/N]: ${RESET}")" RESP
+        "$(echo -e "${YELLOW}¿Deseas activar CheckUser dinámico? [S/N]: ${RESET}")" RESP
 
     case "$RESP" in
 
         s|S|si|SI|sí|Sí)
 
-            if crear_checkuser; then
-
-                echo
-                activar_banner_actual
-
-            fi
+            crear_checkuser
 
             ;;
 
         n|N|no|NO)
 
             rm -f "$BANNER_CHECKUSER"
+            rm -f "$CHECKUSER_SCRIPT"
 
             msg_ok "Plantilla sin CheckUser."
-
-            echo
-
-            activar_banner_actual
 
             ;;
 
         *)
 
             rm -f "$BANNER_CHECKUSER"
+            rm -f "$CHECKUSER_SCRIPT"
 
-            msg_warn "Respuesta inválida. Se creó sin CheckUser."
-
-            echo
-
-            activar_banner_actual
+            msg_warn "Respuesta inválida. CheckUser desactivado."
 
             ;;
 
     esac
+
+    echo
+
+    activar_banner "$BANNER_NORMAL"
 
     sleep 2
 }
@@ -468,16 +604,18 @@ ver_banner() {
 
     echo
 
-    if [[ -f "$BANNER_CHECKUSER" ]]; then
+    echo -e "${YELLOW}══════════ CHECKUSER ══════════${RESET}"
+    echo
 
-        echo -e "${YELLOW}══════════ BANNER CHECKUSER ══════════${RESET}"
+    if [[ -x "$CHECKUSER_SCRIPT" ]]; then
+
+        echo -e "${GREEN}✔ CheckUser dinámico instalado${RESET}"
         echo
-
-        cat "$BANNER_CHECKUSER"
+        echo -e "${GRAY}Archivo:${RESET} $CHECKUSER_SCRIPT"
 
     else
 
-        echo -e "${GRAY}No existe Banner CheckUser.${RESET}"
+        echo -e "${GRAY}CheckUser dinámico no instalado.${RESET}"
 
     fi
 
@@ -487,7 +625,7 @@ ver_banner() {
 }
 
 #==================================================
-# EDITAR BANNER NORMAL
+# EDITAR BANNER
 #==================================================
 
 editar_banner() {
@@ -522,17 +660,21 @@ editar_banner() {
 
     nano "$BANNER_NORMAL"
 
+    #==================================================
+    # ELIMINAR VARIABLES ANTIGUAS
+    #==================================================
+
+    limpiar_variables_checkuser "$BANNER_NORMAL"
+
     chmod 644 "$BANNER_NORMAL"
 
     #==================================================
-    # REGENERAR CHECKUSER
+    # RECREAR CHECKUSER
     #==================================================
 
-    if [[ -f "$BANNER_CHECKUSER" ]]; then
+    if [[ -x "$CHECKUSER_SCRIPT" ]]; then
 
-        crear_checkuser >/dev/null
-
-        msg_ok "Banner CheckUser actualizado."
+        crear_checkuser
 
     fi
 
@@ -540,9 +682,7 @@ editar_banner() {
     # ACTIVAR
     #==================================================
 
-    activar_banner_actual
-
-    echo
+    activar_banner "$BANNER_NORMAL"
 
     msg_ok "Banner actualizado."
 
@@ -564,7 +704,7 @@ eliminar_banner() {
         echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
 
         echo -e "${RED}[1]${WHITE} Eliminar Banner Normal"
-        echo -e "${MAGENTA}[2]${WHITE} Eliminar Banner CheckUser"
+        echo -e "${MAGENTA}[2]${WHITE} Eliminar CheckUser"
         echo -e "${CYAN}[0]${WHITE} Regresar"
 
         echo
@@ -575,20 +715,10 @@ eliminar_banner() {
         case "$OP" in
 
             #==================================================
-            # ELIMINAR NORMAL
+            # NORMAL
             #==================================================
 
             1)
-
-                if [[ ! -f "$BANNER_NORMAL" ]]; then
-
-                    msg_error "No existe Banner Normal."
-
-                    sleep 2
-
-                    continue
-
-                fi
 
                 echo
 
@@ -606,7 +736,7 @@ eliminar_banner() {
                         if [[ -f "$SSHD" ]]; then
 
                             sed -i \
-                                '/^[[:space:]]*Banner[[:space:]]/d' \
+                                '/^[[:space:]]*#\?[[:space:]]*Banner[[:space:]]/d' \
                                 "$SSHD"
 
                         fi
@@ -621,7 +751,7 @@ eliminar_banner() {
 
                         reiniciar_servicios
 
-                        msg_ok "Todos los banners fueron eliminados."
+                        msg_ok "Banner eliminado."
 
                         ;;
 
@@ -637,44 +767,24 @@ eliminar_banner() {
                 ;;
 
             #==================================================
-            # ELIMINAR CHECKUSER
+            # CHECKUSER
             #==================================================
 
             2)
 
-                if [[ ! -f "$BANNER_CHECKUSER" ]]; then
-
-                    msg_error "No existe Banner CheckUser."
-
-                    sleep 2
-
-                    continue
-
-                fi
-
                 echo
 
                 read -rp \
-                    "$(echo -e "${YELLOW}¿Eliminar Banner CheckUser? [S/N]: ${RESET}")" RESP
+                    "$(echo -e "${YELLOW}¿Eliminar CheckUser? [S/N]: ${RESET}")" RESP
 
                 case "$RESP" in
 
                     s|S|si|SI|sí|Sí)
 
                         rm -f "$BANNER_CHECKUSER"
+                        rm -f "$CHECKUSER_SCRIPT"
 
-                        # Volver automáticamente
-                        # al Banner Normal
-
-                        if [[ -f "$BANNER_NORMAL" ]]; then
-
-                            activar_banner "$BANNER_NORMAL"
-
-                            msg_ok "Banner Normal restaurado."
-
-                        fi
-
-                        msg_ok "Banner CheckUser eliminado."
+                        msg_ok "CheckUser eliminado."
 
                         ;;
 
@@ -754,9 +864,7 @@ while true; do
 
         *)
             msg_error "Opción inválida."
-
             sleep 2
-
             ;;
 
     esac
