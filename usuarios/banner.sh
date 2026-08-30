@@ -3,6 +3,7 @@
 # KevinTech Multi Script
 # Módulo: Banner SSH / Dropbear
 # Banner Normal + CheckUser
+# Versión: Premium
 #==================================================
 
 GREEN="\e[1;92m"
@@ -29,6 +30,7 @@ BANNER_DIR="$BASE/banners"
 BANNER_NORMAL="$BANNER_DIR/banner_normal"
 BANNER_CHECKUSER="$BANNER_DIR/banner_checkuser"
 
+# Banner que realmente utilizarán SSH y Dropbear
 BANNER_ACTIVE="/etc/issue.net"
 
 SSHD="/etc/ssh/sshd_config"
@@ -82,7 +84,7 @@ reiniciar_servicios() {
 
 configurar_openssh() {
 
-    [[ ! -f "$SSHD" ]] && return
+    [[ ! -f "$SSHD" ]] && return 0
 
     if grep -qE "^[[:space:]]*Banner[[:space:]]" "$SSHD"; then
 
@@ -103,7 +105,7 @@ configurar_openssh() {
 
 configurar_dropbear() {
 
-    [[ ! -f "$DROPBEAR" ]] && return
+    [[ ! -f "$DROPBEAR" ]] && return 0
 
     if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
 
@@ -127,8 +129,10 @@ activar_banner() {
     local ARCHIVO="$1"
 
     if [[ ! -f "$ARCHIVO" ]]; then
+
         msg_error "El banner no existe."
         return 1
+
     fi
 
     cp -f "$ARCHIVO" "$BANNER_ACTIVE"
@@ -140,6 +144,44 @@ activar_banner() {
 
     reiniciar_servicios
 
+    return 0
+}
+
+#==================================================
+# ACTIVAR AUTOMÁTICAMENTE
+# BANNER NORMAL + CHECKUSER
+#==================================================
+
+activar_banner_actual() {
+
+    # Si existe CheckUser, utilizarlo.
+    if [[ -f "$BANNER_CHECKUSER" ]]; then
+
+        if activar_banner "$BANNER_CHECKUSER"; then
+
+            msg_ok "Banner Normal + CheckUser activado."
+            return 0
+
+        fi
+
+    fi
+
+    # Si no existe CheckUser,
+    # utilizar únicamente Banner Normal.
+    if [[ -f "$BANNER_NORMAL" ]]; then
+
+        if activar_banner "$BANNER_NORMAL"; then
+
+            msg_ok "Banner Normal activado."
+            return 0
+
+        fi
+
+    fi
+
+    msg_error "No existe ningún banner para activar."
+
+    return 1
 }
 
 #==================================================
@@ -149,14 +191,23 @@ activar_banner() {
 crear_checkuser() {
 
     if [[ ! -f "$BANNER_NORMAL" ]]; then
+
         msg_error "Primero debes crear el Banner Normal."
+
         return 1
+
     fi
 
-    # Copiar banner normal
+    #==================================================
+    # COPIAR BANNER NORMAL
+    #==================================================
+
     cp -f "$BANNER_NORMAL" "$BANNER_CHECKUSER"
 
-    # Agregar CheckUser
+    #==================================================
+    # AGREGAR CHECKUSER DEBAJO
+    #==================================================
+
     cat >> "$BANNER_CHECKUSER" <<'EOF'
 
 ════════════════════════════════════════════════════
@@ -175,6 +226,7 @@ EOF
 
     msg_ok "Banner CheckUser creado."
 
+    return 0
 }
 
 #==================================================
@@ -195,6 +247,7 @@ pegar_banner() {
     echo -e "${GRAY}Cuando termines escribe FIN en una línea nueva.${RESET}"
     echo
 
+    local TEMP
     TEMP=$(mktemp)
 
     while IFS= read -r LINEA; do
@@ -210,10 +263,16 @@ pegar_banner() {
         rm -f "$TEMP"
 
         msg_error "El banner está vacío."
+
         sleep 2
+
         return
 
     fi
+
+    #==================================================
+    # GUARDAR BANNER NORMAL
+    #==================================================
 
     cp -f "$TEMP" "$BANNER_NORMAL"
 
@@ -225,6 +284,10 @@ pegar_banner() {
 
     echo
 
+    #==================================================
+    # CHECKUSER
+    #==================================================
+
     read -rp \
         "$(echo -e "${YELLOW}¿Deseas incluir CheckUser? [S/N]: ${RESET}")" RESP
 
@@ -232,7 +295,13 @@ pegar_banner() {
 
         s|S|si|SI|sí|Sí)
 
-            crear_checkuser
+            if crear_checkuser; then
+
+                echo
+                activar_banner_actual
+
+            fi
+
             ;;
 
         n|N|no|NO)
@@ -240,6 +309,11 @@ pegar_banner() {
             rm -f "$BANNER_CHECKUSER"
 
             msg_ok "Banner creado sin CheckUser."
+
+            echo
+
+            activar_banner_actual
+
             ;;
 
         *)
@@ -247,13 +321,14 @@ pegar_banner() {
             rm -f "$BANNER_CHECKUSER"
 
             msg_warn "Respuesta inválida. Se creó sin CheckUser."
+
+            echo
+
+            activar_banner_actual
+
             ;;
 
     esac
-
-    activar_banner "$BANNER_NORMAL"
-
-    msg_ok "Banner Normal activado."
 
     sleep 2
 }
@@ -326,7 +401,13 @@ EOF
 
         s|S|si|SI|sí|Sí)
 
-            crear_checkuser
+            if crear_checkuser; then
+
+                echo
+                activar_banner_actual
+
+            fi
+
             ;;
 
         n|N|no|NO)
@@ -334,6 +415,11 @@ EOF
             rm -f "$BANNER_CHECKUSER"
 
             msg_ok "Plantilla sin CheckUser."
+
+            echo
+
+            activar_banner_actual
+
             ;;
 
         *)
@@ -341,62 +427,16 @@ EOF
             rm -f "$BANNER_CHECKUSER"
 
             msg_warn "Respuesta inválida. Se creó sin CheckUser."
+
+            echo
+
+            activar_banner_actual
+
             ;;
 
     esac
 
-    activar_banner "$BANNER_NORMAL"
-
-    msg_ok "Banner activado."
-
     sleep 2
-}
-
-#==================================================
-# SUBMENÚ CREAR BANNER
-#==================================================
-
-crear_banner() {
-
-    while true; do
-
-        clear
-
-        echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${CYAN}║${MAGENTA}                  CREAR BANNER                     ${CYAN}║${RESET}"
-        echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
-
-        echo -e "${GREEN}[1]${WHITE} Pegar Banner Personalizado"
-        echo -e "${BLUE}[2]${WHITE} Crear una Plantilla"
-        echo -e "${CYAN}[0]${WHITE} Regresar"
-
-        echo
-
-        read -rp \
-            "$(echo -e "${GREEN}Seleccione una opción: ${RESET}")" OP
-
-        case "$OP" in
-
-            1)
-                pegar_banner
-                ;;
-
-            2)
-                crear_plantilla
-                ;;
-
-            0)
-                break
-                ;;
-
-            *)
-                msg_error "Opción inválida."
-                sleep 2
-                ;;
-
-        esac
-
-    done
 }
 
 #==================================================
@@ -447,7 +487,7 @@ ver_banner() {
 }
 
 #==================================================
-# EDITAR SOLO BANNER NORMAL
+# EDITAR BANNER NORMAL
 #==================================================
 
 editar_banner() {
@@ -465,6 +505,7 @@ editar_banner() {
         msg_error "No existe Banner Normal."
 
         sleep 2
+
         return
 
     fi
@@ -474,6 +515,7 @@ editar_banner() {
         msg_error "Nano no está instalado."
 
         sleep 2
+
         return
 
     fi
@@ -482,11 +524,27 @@ editar_banner() {
 
     chmod 644 "$BANNER_NORMAL"
 
-    activar_banner "$BANNER_NORMAL"
+    #==================================================
+    # REGENERAR CHECKUSER
+    #==================================================
+
+    if [[ -f "$BANNER_CHECKUSER" ]]; then
+
+        crear_checkuser >/dev/null
+
+        msg_ok "Banner CheckUser actualizado."
+
+    fi
+
+    #==================================================
+    # ACTIVAR
+    #==================================================
+
+    activar_banner_actual
 
     echo
-    msg_ok "Banner Normal actualizado."
-    echo -e "${GRAY}El Banner CheckUser no fue modificado.${RESET}"
+
+    msg_ok "Banner actualizado."
 
     sleep 2
 }
@@ -517,7 +575,7 @@ eliminar_banner() {
         case "$OP" in
 
             #==================================================
-            # NORMAL
+            # ELIMINAR NORMAL
             #==================================================
 
             1)
@@ -527,6 +585,7 @@ eliminar_banner() {
                     msg_error "No existe Banner Normal."
 
                     sleep 2
+
                     continue
 
                 fi
@@ -541,6 +600,8 @@ eliminar_banner() {
                     s|S|si|SI|sí|Sí)
 
                         rm -f "$BANNER_NORMAL"
+                        rm -f "$BANNER_CHECKUSER"
+                        rm -f "$BANNER_ACTIVE"
 
                         if [[ -f "$SSHD" ]]; then
 
@@ -558,11 +619,9 @@ eliminar_banner() {
 
                         fi
 
-                        rm -f "$BANNER_ACTIVE"
-
                         reiniciar_servicios
 
-                        msg_ok "Banner Normal eliminado."
+                        msg_ok "Todos los banners fueron eliminados."
 
                         ;;
 
@@ -578,7 +637,7 @@ eliminar_banner() {
                 ;;
 
             #==================================================
-            # CHECKUSER
+            # ELIMINAR CHECKUSER
             #==================================================
 
             2)
@@ -588,6 +647,7 @@ eliminar_banner() {
                     msg_error "No existe Banner CheckUser."
 
                     sleep 2
+
                     continue
 
                 fi
@@ -602,6 +662,17 @@ eliminar_banner() {
                     s|S|si|SI|sí|Sí)
 
                         rm -f "$BANNER_CHECKUSER"
+
+                        # Volver automáticamente
+                        # al Banner Normal
+
+                        if [[ -f "$BANNER_NORMAL" ]]; then
+
+                            activar_banner "$BANNER_NORMAL"
+
+                            msg_ok "Banner Normal restaurado."
+
+                        fi
 
                         msg_ok "Banner CheckUser eliminado."
 
@@ -626,7 +697,9 @@ eliminar_banner() {
             *)
 
                 msg_error "Opción inválida."
+
                 sleep 2
+
                 ;;
 
         esac
@@ -660,7 +733,7 @@ while true; do
     case "$OP" in
 
         1)
-            crear_banner
+            pegar_banner
             ;;
 
         2)
@@ -681,7 +754,9 @@ while true; do
 
         *)
             msg_error "Opción inválida."
+
             sleep 2
+
             ;;
 
     esac
