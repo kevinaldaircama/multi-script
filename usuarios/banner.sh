@@ -2,7 +2,19 @@
 #==================================================
 # KevinTech Multi Script
 # Banner SSH / Dropbear
-# Banner Normal + CheckUser
+#
+# FUNCIONES:
+#   1. Crear Banner
+#      1. Pegar Banner Personalizado
+#      2. Crear Plantilla
+#         -> ¿Incluir CheckUser?
+#
+#   2. Ver Banner
+#   3. Editar Banner Normal
+#   4. Eliminar Banner
+#      1. Banner Normal
+#      2. Banner CheckUser
+#   0. Regresar
 #==================================================
 
 GREEN="\e[1;92m"
@@ -16,7 +28,7 @@ GRAY="\e[1;90m"
 RESET="\e[0m"
 
 #==================================================
-# CONFIG KEVINTECH
+# CONFIGURACIÓN
 #==================================================
 
 BASE="/etc/kevintech"
@@ -63,28 +75,14 @@ reiniciar_servicios() {
 }
 
 #==================================================
-# CONFIGURAR BANNER SSH / DROPBEAR
+# CONFIGURAR OPENSSH
 #==================================================
 
-aplicar_banner() {
+configurar_openssh() {
 
-    local ARCHIVO="$1"
-
-    if [[ ! -f "$ARCHIVO" ]]; then
-
-        echo -e "${RED}✘ El banner no existe.${RESET}"
-        return 1
-
+    if [[ ! -f "$SSHD" ]]; then
+        return
     fi
-
-    # Copiar exactamente el contenido
-    cp -f "$ARCHIVO" "$BANNER_ACTIVE"
-
-    chmod 644 "$BANNER_ACTIVE"
-
-    #==================================================
-    # OPENSSH
-    #==================================================
 
     if grep -qE "^[[:space:]]*Banner[[:space:]]" "$SSHD"; then
 
@@ -98,55 +96,78 @@ aplicar_banner() {
 
     fi
 
-    #==================================================
-    # DROPBEAR
-    #==================================================
+}
 
-    if [[ -f "$DROPBEAR" ]]; then
+#==================================================
+# CONFIGURAR DROPBEAR
+#==================================================
 
-        if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
+configurar_dropbear() {
 
-            sed -i \
-                "s|^DROPBEAR_BANNER=.*|DROPBEAR_BANNER=\"$BANNER_ACTIVE\"|" \
-                "$DROPBEAR"
+    if [[ ! -f "$DROPBEAR" ]]; then
+        return
+    fi
 
-        else
+    if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
 
-            echo "DROPBEAR_BANNER=\"$BANNER_ACTIVE\"" >> "$DROPBEAR"
+        sed -i \
+            "s|^DROPBEAR_BANNER=.*|DROPBEAR_BANNER=\"$BANNER_ACTIVE\"|" \
+            "$DROPBEAR"
 
-        fi
+    else
+
+        echo "DROPBEAR_BANNER=\"$BANNER_ACTIVE\"" >> "$DROPBEAR"
 
     fi
+
+}
+
+#==================================================
+# ACTIVAR BANNER NORMAL
+#==================================================
+
+activar_banner_normal() {
+
+    if [[ ! -f "$BANNER_NORMAL" ]]; then
+
+        echo -e "${RED}✘ No existe Banner Normal.${RESET}"
+        return 1
+
+    fi
+
+    cp -f "$BANNER_NORMAL" "$BANNER_ACTIVE"
+
+    chmod 644 "$BANNER_ACTIVE"
+
+    configurar_openssh
+    configurar_dropbear
 
     reiniciar_servicios
 
 }
 
 #==================================================
-# CREAR BLOQUE CHECKUSER
+# CREAR CHECKUSER
 #==================================================
 
 crear_checkuser() {
 
     if [[ ! -f "$BANNER_NORMAL" ]]; then
 
-        echo -e "${RED}✘ Primero debes crear el Banner Normal.${RESET}"
+        echo -e "${RED}✘ No existe Banner Normal.${RESET}"
         return 1
 
     fi
 
-    #==================================================
+    #----------------------------------------------
     # COPIAR BANNER NORMAL
-    #==================================================
+    #----------------------------------------------
 
-    cat "$BANNER_NORMAL" > "$BANNER_CHECKUSER"
+    cp -f "$BANNER_NORMAL" "$BANNER_CHECKUSER"
 
-    #==================================================
-    # CHECKUSER
-    #
-    # ESTOS MARCADORES SERÁN REEMPLAZADOS
-    # POR TU SISTEMA CHECKUSER
-    #==================================================
+    #----------------------------------------------
+    # AGREGAR CHECK USER
+    #----------------------------------------------
 
     cat >> "$BANNER_CHECKUSER" <<'EOF'
 
@@ -175,14 +196,12 @@ pegar_banner() {
     clear
 
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}          PEGAR BANNER PERSONALIZADO              ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}       PEGAR BANNER PERSONALIZADO                  ${CYAN}║${RESET}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
     echo
-
-    echo -e "${YELLOW}Pega aquí tu banner completo.${RESET}"
-    echo -e "${YELLOW}Puedes usar varias líneas.${RESET}"
-    echo
+    echo -e "${YELLOW}Pega tu banner completo.${RESET}"
+    echo -e "${GRAY}Puedes utilizar varias líneas.${RESET}"
     echo -e "${GRAY}Cuando termines escribe FIN en una línea nueva.${RESET}"
     echo
 
@@ -190,33 +209,27 @@ pegar_banner() {
 
     while IFS= read -r LINEA; do
 
-        if [[ "$LINEA" == "FIN" ]]; then
-            break
-        fi
+        [[ "$LINEA" == "FIN" ]] && break
 
         printf '%s\n' "$LINEA" >> "$TEMP"
 
     done
-
-    #==================================================
-    # VALIDAR
-    #==================================================
 
     if [[ ! -s "$TEMP" ]]; then
 
         rm -f "$TEMP"
 
         echo
-        echo -e "${RED}✘ No se ingresó ningún banner.${RESET}"
+        echo -e "${RED}✘ Banner vacío.${RESET}"
 
         sleep 2
         return
 
     fi
 
-    #==================================================
+    #----------------------------------------------
     # GUARDAR NORMAL
-    #==================================================
+    #----------------------------------------------
 
     cp -f "$TEMP" "$BANNER_NORMAL"
 
@@ -225,13 +238,13 @@ pegar_banner() {
     rm -f "$TEMP"
 
     echo
-    echo -e "${GREEN}✔ Banner Normal guardado correctamente.${RESET}"
+    echo -e "${GREEN}✔ Banner Normal guardado.${RESET}"
 
     echo
 
-    #==================================================
+    #----------------------------------------------
     # CHECKUSER
-    #==================================================
+    #----------------------------------------------
 
     read -rp \
         "$(echo -e "${YELLOW}¿Deseas incluir CheckUser? [S/N]: ${RESET}")" RESP
@@ -243,7 +256,7 @@ pegar_banner() {
             crear_checkuser
 
             echo
-            echo -e "${GREEN}✔ CheckUser agregado correctamente.${RESET}"
+            echo -e "${GREEN}✔ CheckUser agregado.${RESET}"
 
             ;;
 
@@ -262,17 +275,13 @@ pegar_banner() {
 
             echo
             echo -e "${YELLOW}Respuesta inválida.${RESET}"
-            echo -e "${YELLOW}Se creará solamente el Banner Normal.${RESET}"
+            echo -e "${YELLOW}Se creó sin CheckUser.${RESET}"
 
             ;;
 
     esac
 
-    #==================================================
-    # ACTIVAR BANNER NORMAL
-    #==================================================
-
-    aplicar_banner "$BANNER_NORMAL"
+    activar_banner_normal
 
     echo
     echo -e "${GREEN}✔ Banner Normal activado.${RESET}"
@@ -289,7 +298,7 @@ crear_plantilla() {
     clear
 
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}               CREAR UNA PLANTILLA                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}             CREAR UNA PLANTILLA                   ${CYAN}║${RESET}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
     echo
@@ -307,14 +316,14 @@ crear_plantilla() {
         PROMO="🔥 Bienvenido a $SERVER 🔥"
 
     read -rp \
-        "$(echo -e "${GREEN}Canal Telegram: ${RESET}")" CHANNEL
+        "$(echo -e "${GREEN}Canal: ${RESET}")" CHANNEL
 
     read -rp \
         "$(echo -e "${GREEN}Soporte: ${RESET}")" SUPPORT
 
-    #==================================================
-    # CREAR BANNER NORMAL
-    #==================================================
+    #----------------------------------------------
+    # BANNER NORMAL
+    #----------------------------------------------
 
     cat > "$BANNER_NORMAL" <<EOF
 ════════════════════════════════════════════════════
@@ -334,13 +343,13 @@ EOF
     chmod 644 "$BANNER_NORMAL"
 
     echo
-    echo -e "${GREEN}✔ Plantilla Normal creada.${RESET}"
+    echo -e "${GREEN}✔ Banner Normal creado.${RESET}"
 
     echo
 
-    #==================================================
+    #----------------------------------------------
     # CHECKUSER
-    #==================================================
+    #----------------------------------------------
 
     read -rp \
         "$(echo -e "${YELLOW}¿Deseas incluir CheckUser? [S/N]: ${RESET}")" RESP
@@ -361,7 +370,7 @@ EOF
             rm -f "$BANNER_CHECKUSER"
 
             echo
-            echo -e "${GREEN}✔ Plantilla creada sin CheckUser.${RESET}"
+            echo -e "${GREEN}✔ Plantilla sin CheckUser.${RESET}"
 
             ;;
 
@@ -371,26 +380,21 @@ EOF
 
             echo
             echo -e "${YELLOW}Respuesta inválida.${RESET}"
-            echo -e "${YELLOW}Se creará sin CheckUser.${RESET}"
 
             ;;
 
     esac
 
-    #==================================================
-    # ACTIVAR NORMAL
-    #==================================================
-
-    aplicar_banner "$BANNER_NORMAL"
+    activar_banner_normal
 
     echo
-    echo -e "${GREEN}✔ Banner Normal activado.${RESET}"
+    echo -e "${GREEN}✔ Banner activado.${RESET}"
 
     sleep 2
 }
 
 #==================================================
-# SUBMENÚ CREAR BANNER
+# SUBMENÚ CREAR
 #==================================================
 
 crear_banner() {
@@ -446,14 +450,14 @@ ver_banner() {
     clear
 
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}                  VER BANNER                        ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}                    VER BANNER                      ${CYAN}║${RESET}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
-    #==================================================
+    #----------------------------------------------
     # NORMAL
-    #==================================================
+    #----------------------------------------------
 
     echo -e "${YELLOW}══════════ BANNER NORMAL ══════════${RESET}"
     echo
@@ -470,9 +474,9 @@ ver_banner() {
 
     echo
 
-    #==================================================
+    #----------------------------------------------
     # CHECKUSER
-    #==================================================
+    #----------------------------------------------
 
     if [[ -f "$BANNER_CHECKUSER" ]]; then
 
@@ -493,7 +497,7 @@ ver_banner() {
 }
 
 #==================================================
-# EDITAR SOLO BANNER NORMAL
+# EDITAR BANNER NORMAL
 #==================================================
 
 editar_banner() {
@@ -501,7 +505,7 @@ editar_banner() {
     clear
 
     echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}               EDITAR BANNER NORMAL                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}              EDITAR BANNER NORMAL                 ${CYAN}║${RESET}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
 
     echo
@@ -524,25 +528,16 @@ editar_banner() {
 
     fi
 
-    #==================================================
-    # EDITAR SOLO NORMAL
-    #==================================================
-
     nano "$BANNER_NORMAL"
 
     chmod 644 "$BANNER_NORMAL"
 
-    #==================================================
-    # IMPORTANTE
-    #
-    # NO SE MODIFICA BANNER_CHECKUSER
-    #==================================================
-
-    aplicar_banner "$BANNER_NORMAL"
+    # SOLO NORMAL
+    activar_banner_normal
 
     echo
     echo -e "${GREEN}✔ Banner Normal actualizado.${RESET}"
-    echo -e "${GRAY}✔ Banner CheckUser no fue modificado.${RESET}"
+    echo -e "${GRAY}El Banner CheckUser no fue modificado.${RESET}"
 
     sleep 2
 }
@@ -558,7 +553,7 @@ eliminar_banner() {
         clear
 
         echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${CYAN}║${MAGENTA}                ELIMINAR BANNER                     ${CYAN}║${RESET}"
+        echo -e "${CYAN}║${MAGENTA}                ELIMINAR BANNER                    ${CYAN}║${RESET}"
         echo -e "${CYAN}╠════════════════════════════════════════════════════╣${RESET}"
 
         echo -e "${RED}[1]${WHITE} Eliminar Banner Normal"
@@ -572,19 +567,15 @@ eliminar_banner() {
 
         case "$OP" in
 
-            #==================================================
-            # ELIMINAR NORMAL
-            #==================================================
+            #------------------------------------------
+            # NORMAL
+            #------------------------------------------
 
             1)
 
-                clear
-
-                echo -e "${YELLOW}══════════ ELIMINAR BANNER NORMAL ══════════${RESET}"
-                echo
-
                 if [[ ! -f "$BANNER_NORMAL" ]]; then
 
+                    echo
                     echo -e "${RED}✘ No existe Banner Normal.${RESET}"
 
                     sleep 2
@@ -592,8 +583,10 @@ eliminar_banner() {
 
                 fi
 
+                echo
+
                 read -rp \
-                    "$(echo -e "${YELLOW}¿Desea eliminarlo? [S/N]: ${RESET}")" RESP
+                    "$(echo -e "${YELLOW}¿Eliminar Banner Normal? [S/N]: ${RESET}")" RESP
 
                 case "$RESP" in
 
@@ -601,12 +594,16 @@ eliminar_banner() {
 
                         rm -f "$BANNER_NORMAL"
 
-                        # Quitar Banner de OpenSSH
-                        sed -i \
-                            '/^[[:space:]]*Banner[[:space:]]/d' \
-                            "$SSHD"
+                        # Quitar OpenSSH
+                        if [[ -f "$SSHD" ]]; then
 
-                        # Quitar Banner de Dropbear
+                            sed -i \
+                                '/^[[:space:]]*Banner[[:space:]]/d' \
+                                "$SSHD"
+
+                        fi
+
+                        # Quitar Dropbear
                         if [[ -f "$DROPBEAR" ]]; then
 
                             sed -i \
@@ -636,19 +633,15 @@ eliminar_banner() {
                 sleep 2
                 ;;
 
-            #==================================================
-            # ELIMINAR CHECKUSER
-            #==================================================
+            #------------------------------------------
+            # CHECKUSER
+            #------------------------------------------
 
             2)
 
-                clear
-
-                echo -e "${YELLOW}══════════ ELIMINAR BANNER CHECKUSER ══════════${RESET}"
-                echo
-
                 if [[ ! -f "$BANNER_CHECKUSER" ]]; then
 
+                    echo
                     echo -e "${RED}✘ No existe Banner CheckUser.${RESET}"
 
                     sleep 2
@@ -656,8 +649,10 @@ eliminar_banner() {
 
                 fi
 
+                echo
+
                 read -rp \
-                    "$(echo -e "${YELLOW}¿Desea eliminarlo? [S/N]: ${RESET}")" RESP
+                    "$(echo -e "${YELLOW}¿Eliminar Banner CheckUser? [S/N]: ${RESET}")" RESP
 
                 case "$RESP" in
 
@@ -683,6 +678,7 @@ eliminar_banner() {
                 ;;
 
             0)
+
                 break
                 ;;
 
