@@ -2,30 +2,34 @@
 
 # ==============================================================
 #              🛡️ KEVINTECH MULTI SCRIPT
-#                    XRAY MANAGER v5.5
+#                 XRAY MANAGER v6.0
 # ==============================================================
-#
-# Core:
-#   Xray
 #
 # Protocolos:
 #   VLESS
 #   VMess
 #   Trojan
-#   gRPC (VLESS + gRPC)
+#   gRPC
 #
-# Administración:
-#   Crear cuenta
-#   Listar cuentas
-#   Eliminar cuenta
-#   Generar enlaces
+# Frontend:
+#   HAProxy
 #
-# Host:
-#   Dominio si existe
-#   IP pública si no existe dominio
+# Puertos públicos:
+#   80
+#   443
+#   8080
 #
-# IMPORTANTE:
-#   Este script NO CREA BACKUPS.
+# Puertos internos Xray:
+#   VLESS  : 10001
+#   VMess  : 10002
+#   Trojan : 10003
+#   gRPC   : 10004
+#
+# Config:
+#   /etc/kevintech/config.conf
+#
+# Xray:
+#   /usr/local/etc/xray/config.json
 #
 # ==============================================================
 
@@ -40,7 +44,7 @@ XRAY_LOG="$XRAY_LOG_DIR/access.log"
 
 XRAY_SERVICE="xray"
 
-VERSION="5.5"
+VERSION="6.0"
 
 # ==============================================================
 # PUERTOS INTERNOS
@@ -52,7 +56,15 @@ TROJAN_PORT="10003"
 GRPC_PORT="10004"
 
 # ==============================================================
-# PATH / SERVICE
+# PUERTOS PUBLICOS HAProxy
+# ==============================================================
+
+PUBLIC_HTTP_PORT="80"
+PUBLIC_TLS_PORT="443"
+PUBLIC_ALT_PORT="8080"
+
+# ==============================================================
+# PATHS
 # ==============================================================
 
 VLESS_PATH="/vless"
@@ -60,8 +72,6 @@ VMESS_PATH="/vmess"
 TROJAN_PATH="/trojan-ws"
 
 GRPC_SERVICE="xray-grpc"
-
-PUBLIC_PORT="443"
 
 # ==============================================================
 # COLORES
@@ -90,7 +100,7 @@ if [[ $EUID -ne 0 ]]; then
     echo
     echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
     echo
-    echo -e "${WHITE}Xray Manager requiere permisos de root.${RESET}"
+    echo -e "${WHITE}Este administrador requiere root.${RESET}"
     echo
 
     exit 1
@@ -118,7 +128,7 @@ fi
 source "$CONFIG" 2>/dev/null
 
 # ==============================================================
-# VISUAL
+# VISUALES
 # ==============================================================
 
 line() {
@@ -135,16 +145,13 @@ header() {
         "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 
     echo -e \
-        "${CYAN}║${RESET}             ${MAGENTA}${BOLD}🚀 KEVINTECH XRAY MANAGER${RESET}                  ${CYAN}║${RESET}"
+        "${CYAN}║${RESET}             ${MAGENTA}${BOLD}🚀 KEVINTECH XRAY MANAGER${RESET}                 ${CYAN}║${RESET}"
 
     echo -e \
-        "${CYAN}║${RESET}                   ${GRAY}v$VERSION${RESET}                            ${CYAN}║${RESET}"
+        "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
 
     echo -e \
-        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-
-    echo -e \
-        "${CYAN}║${RESET}       ${WHITE}VLESS / VMess / Trojan / gRPC${RESET}                    ${CYAN}║${RESET}"
+        "${CYAN}║${RESET}        ${GRAY}VLESS / VMess / Trojan / gRPC${RESET}                 ${CYAN}║${RESET}"
 
     echo -e \
         "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
@@ -153,22 +160,18 @@ header() {
 }
 
 ok() {
-
     echo -e "${GREEN}✔ $1${RESET}"
 }
 
 error_msg() {
-
     echo -e "${RED}✘ $1${RESET}"
 }
 
 warning() {
-
     echo -e "${YELLOW}⚠ $1${RESET}"
 }
 
 info() {
-
     echo -e "${CYAN}➜ $1${RESET}"
 }
 
@@ -198,99 +201,46 @@ set_config() {
     else
 
         echo "${KEY}=${VALUE}" >> "$CONFIG"
-
     fi
 }
 
 # ==============================================================
-# XRAY
+# DOMINIO / IP
 # ==============================================================
-
-xray_installed() {
-
-    command -v xray >/dev/null 2>&1
-}
-
-xray_active() {
-
-    systemctl is-active \
-        --quiet "$XRAY_SERVICE" 2>/dev/null
-}
-
-# ==============================================================
-# OBTENER HOST
-# ==============================================================
-
-get_public_ip() {
-
-    local IP=""
-
-    if command -v curl >/dev/null 2>&1; then
-
-        IP=$(curl -4 -fsS \
-            --connect-timeout 3 \
-            --max-time 5 \
-            https://api.ipify.org 2>/dev/null)
-
-    fi
-
-    if [[ -z "$IP" ]]; then
-
-        IP=$(
-            ip -4 route get 1.1.1.1 2>/dev/null |
-            awk '
-                {
-                    for (i=1;i<=NF;i++)
-                        if ($i=="src") {
-                            print $(i+1)
-                            exit
-                        }
-                }
-            '
-        )
-
-    fi
-
-    echo "$IP"
-}
 
 load_host() {
 
     # shellcheck disable=SC1090
     source "$CONFIG" 2>/dev/null
 
-    DOMAIN="${SERVER_DOMAIN:-}"
+    HOST="${SERVER_DOMAIN:-}"
 
-    DOMAIN="$(echo "$DOMAIN" | xargs 2>/dev/null)"
-
-    if [[ -z "$DOMAIN" &&
+    if [[ -z "$HOST" &&
           -f /etc/xray/domain ]]; then
 
-        DOMAIN=$(cat /etc/xray/domain 2>/dev/null |
-            head -1 |
-            xargs)
-
+        HOST=$(cat /etc/xray/domain 2>/dev/null)
     fi
 
-    if [[ -n "$DOMAIN" ]]; then
+    HOST="$(echo "$HOST" | xargs 2>/dev/null)"
 
-        XRAY_HOST="$DOMAIN"
-        HOST_TYPE="DOMINIO"
+    # Si no existe dominio, obtener IPv4 pública/local
+    if [[ -z "$HOST" ]]; then
 
-    else
+        HOST=$(hostname -I 2>/dev/null |
+            awk '{print $1}')
+    fi
 
-        XRAY_HOST=$(get_public_ip)
-        HOST_TYPE="IP"
+    # Último recurso
+    if [[ -z "$HOST" ]]; then
 
+        HOST="127.0.0.1"
     fi
 }
 
-# Compatibilidad con funciones antiguas
+# Alias para compatibilidad
 load_domain() {
-
     load_host
-
-    DOMAIN="$XRAY_HOST"
+    DOMAIN="$HOST"
 }
 
 # ==============================================================
@@ -316,6 +266,47 @@ generate_uuid() {
     error_msg "No se pudo generar UUID."
 
     return 1
+}
+
+# ==============================================================
+# PASSWORD TROJAN
+# ==============================================================
+
+generate_password() {
+    generate_uuid
+}
+
+# ==============================================================
+# XRAY
+# ==============================================================
+
+xray_binary() {
+
+    if command -v xray >/dev/null 2>&1; then
+
+        command -v xray
+        return 0
+    fi
+
+    if [[ -x /usr/local/bin/xray ]]; then
+
+        echo "/usr/local/bin/xray"
+        return 0
+    fi
+
+    return 1
+}
+
+xray_installed() {
+
+    xray_binary >/dev/null 2>&1 &&
+        [[ -f "$XRAY_CFG" ]]
+}
+
+xray_active() {
+
+    systemctl is-active \
+        --quiet "$XRAY_SERVICE" 2>/dev/null
 }
 
 # ==============================================================
@@ -369,7 +360,6 @@ create_directories() {
 
     chmod 755 "$XRAY_DIR"
     chmod 755 "$XRAY_LOG_DIR"
-
     chmod 640 "$XRAY_LOG"
 }
 
@@ -394,19 +384,21 @@ validate_json() {
 }
 
 # ==============================================================
-# VALIDAR CONFIGURACIÓN XRAY
+# VALIDAR XRAY
 # ==============================================================
 
 validate_xray_file() {
 
     local FILE="$1"
 
-    if [[ ! -f "$FILE" ]]; then
+    local XRAY_BIN
 
-        error_msg "Archivo de configuración inexistente."
+    XRAY_BIN=$(xray_binary) || {
+
+        error_msg "Xray Core no está instalado."
 
         return 1
-    fi
+    }
 
     if ! validate_json_file "$FILE"; then
 
@@ -415,115 +407,42 @@ validate_xray_file() {
         return 1
     fi
 
-    local TEST_LOG
-
-    TEST_LOG=$(mktemp --suffix=.log)
-
-    if ! xray run \
+    if ! "$XRAY_BIN" run \
         -test \
         -config "$FILE" \
-        >"$TEST_LOG" 2>&1; then
+        >/tmp/kevintech-xray-test.log 2>&1; then
 
-        cat "$TEST_LOG"
+        error_msg "Xray rechazó la configuración."
 
-        rm -f "$TEST_LOG"
+        echo
+        echo -e \
+            "${RED}──── ERROR DE XRAY ───────────────────────────────────────${RESET}"
+
+        cat /tmp/kevintech-xray-test.log
+
+        echo -e \
+            "${RED}──────────────────────────────────────────────────────────${RESET}"
+
+        rm -f /tmp/kevintech-xray-test.log
 
         return 1
     fi
 
-    rm -f "$TEST_LOG"
+    rm -f /tmp/kevintech-xray-test.log
 
     return 0
 }
 
 validate_xray_config() {
 
-    if ! xray_installed; then
-
-        error_msg "Xray no está instalado."
-
-        return 1
-    fi
-
     validate_xray_file "$XRAY_CFG"
 }
 
 # ==============================================================
-# ÍNDICES
+# CREAR CONFIGURACIÓN BASE
 # ==============================================================
 
-inbound_index() {
-
-    case "$1" in
-
-        vless)
-            echo 0
-            ;;
-
-        vmess)
-            echo 1
-            ;;
-
-        trojan)
-            echo 2
-            ;;
-
-        grpc)
-            echo 3
-            ;;
-
-        *)
-            return 1
-            ;;
-
-    esac
-}
-
-# ==============================================================
-# PROTOCOLO
-# ==============================================================
-
-protocol_name() {
-
-    case "$1" in
-
-        vless)
-            echo "VLESS"
-            ;;
-
-        vmess)
-            echo "VMess"
-            ;;
-
-        trojan)
-            echo "Trojan"
-            ;;
-
-        grpc)
-            echo "gRPC"
-            ;;
-
-        *)
-            echo "$1"
-            ;;
-
-    esac
-}
-
-# ==============================================================
-# CLIENTES VACÍOS
-# ==============================================================
-
-empty_clients() {
-
-    echo '[]'
-}
-
-# ==============================================================
-# CONFIGURACIÓN BASE LIMPIA
-# ==============================================================
-
-create_clean_config() {
+create_base_config() {
 
     mkdir -p "$XRAY_DIR"
 
@@ -649,7 +568,6 @@ create_clean_config() {
   ],
 
   "outbounds": [
-
     {
       "protocol": "freedom",
       "tag": "direct"
@@ -659,348 +577,20 @@ create_clean_config() {
       "protocol": "blackhole",
       "tag": "block"
     }
-
   ]
 }
 EOF
 
     chmod 600 "$XRAY_CFG"
 
-    validate_json
-}
+    if ! validate_json; then
 
-# ==============================================================
-# ASEGURAR CONFIGURACIÓN MULTIPROTOCOLO
-# ==============================================================
-
-ensure_multiprotocol_config() {
-
-    create_directories
-
-    # ----------------------------------------------------------
-    # Si no existe o no es JSON válido, crear limpio.
-    # ----------------------------------------------------------
-
-    if [[ ! -f "$XRAY_CFG" ]] ||
-       ! validate_json; then
-
-        info "Creando configuración Xray multiprotocolo..."
-
-        if ! create_clean_config; then
-
-            error_msg "No se pudo crear config.json."
-
-            return 1
-        fi
-
-        ok "Configuración multiprotocolo creada."
-
-        return 0
-    fi
-
-    # ----------------------------------------------------------
-    # Detectar inbounds.
-    # ----------------------------------------------------------
-
-    local COUNT
-
-    COUNT=$(jq '.inbounds | length' \
-        "$XRAY_CFG" 2>/dev/null)
-
-    COUNT="${COUNT:-0}"
-
-    # ----------------------------------------------------------
-    # Si no hay inbounds, crear configuración limpia.
-    # ----------------------------------------------------------
-
-    if [[ "$COUNT" -eq 0 ]]; then
-
-        info "No existen inbounds."
-
-        info "Inicializando configuración multiprotocolo..."
-
-        if ! create_clean_config; then
-
-            error_msg "No se pudo inicializar Xray."
-
-            return 1
-        fi
-
-        ok "VLESS / VMess / Trojan / gRPC preparados."
-
-        return 0
-    fi
-
-    # ----------------------------------------------------------
-    # Verificar que existan los cuatro protocolos.
-    # Si falta alguno, reconstruimos conservando clientes.
-    # ----------------------------------------------------------
-
-    local HAS_VLESS
-    local HAS_VMESS
-    local HAS_TROJAN
-    local HAS_GRPC
-
-    HAS_VLESS=$(
-        jq '[.inbounds[]? | select(.protocol=="vless" and
-            (.streamSettings.network=="ws"))] | length' \
-            "$XRAY_CFG" 2>/dev/null
-    )
-
-    HAS_VMESS=$(
-        jq '[.inbounds[]? | select(.protocol=="vmess" and
-            (.streamSettings.network=="ws"))] | length' \
-            "$XRAY_CFG" 2>/dev/null
-    )
-
-    HAS_TROJAN=$(
-        jq '[.inbounds[]? | select(.protocol=="trojan" and
-            (.streamSettings.network=="ws"))] | length' \
-            "$XRAY_CFG" 2>/dev/null
-    )
-
-    HAS_GRPC=$(
-        jq '[.inbounds[]? | select(.protocol=="vless" and
-            (.streamSettings.network=="grpc"))] | length' \
-            "$XRAY_CFG" 2>/dev/null
-    )
-
-    if [[ "$HAS_VLESS" -ge 1 &&
-          "$HAS_VMESS" -ge 1 &&
-          "$HAS_TROJAN" -ge 1 &&
-          "$HAS_GRPC" -ge 1 ]]; then
-
-        return 0
-    fi
-
-    # ----------------------------------------------------------
-    # Crear configuración nueva conservando clientes.
-    # NO BACKUP.
-    # ----------------------------------------------------------
-
-    info "Actualizando estructura multiprotocolo..."
-
-    local OLD="$XRAY_CFG"
-    local NEW
-
-    NEW=$(mktemp --suffix=.json)
-
-    local VLESS_CLIENTS='[]'
-    local VMESS_CLIENTS='[]'
-    local TROJAN_CLIENTS='[]'
-    local GRPC_CLIENTS='[]'
-
-    VLESS_CLIENTS=$(
-        jq -c '
-            [
-                .inbounds[]?
-                | select(
-                    .protocol=="vless"
-                    and
-                    .streamSettings.network=="ws"
-                )
-                | .settings.clients[]?
-            ]
-        ' "$OLD" 2>/dev/null
-    )
-
-    VMESS_CLIENTS=$(
-        jq -c '
-            [
-                .inbounds[]?
-                | select(
-                    .protocol=="vmess"
-                    and
-                    .streamSettings.network=="ws"
-                )
-                | .settings.clients[]?
-            ]
-        ' "$OLD" 2>/dev/null
-    )
-
-    TROJAN_CLIENTS=$(
-        jq -c '
-            [
-                .inbounds[]?
-                | select(
-                    .protocol=="trojan"
-                    and
-                    .streamSettings.network=="ws"
-                )
-                | .settings.clients[]?
-            ]
-        ' "$OLD" 2>/dev/null
-    )
-
-    GRPC_CLIENTS=$(
-        jq -c '
-            [
-                .inbounds[]?
-                | select(
-                    .protocol=="vless"
-                    and
-                    .streamSettings.network=="grpc"
-                )
-                | .settings.clients[]?
-            ]
-        ' "$OLD" 2>/dev/null
-    )
-
-    [[ -z "$VLESS_CLIENTS" ]] && VLESS_CLIENTS='[]'
-    [[ -z "$VMESS_CLIENTS" ]] && VMESS_CLIENTS='[]'
-    [[ -z "$TROJAN_CLIENTS" ]] && TROJAN_CLIENTS='[]'
-    [[ -z "$GRPC_CLIENTS" ]] && GRPC_CLIENTS='[]'
-
-    cat > "$NEW" <<EOF
-{
-  "log": {
-    "loglevel": "warning",
-    "access": "$XRAY_LOG"
-  },
-
-  "inbounds": [
-
-    {
-      "tag": "vless-ws",
-      "listen": "127.0.0.1",
-      "port": $VLESS_PORT,
-      "protocol": "vless",
-      "settings": {
-        "clients": $VLESS_CLIENTS,
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "$VLESS_PATH"
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      }
-    },
-
-    {
-      "tag": "vmess-ws",
-      "listen": "127.0.0.1",
-      "port": $VMESS_PORT,
-      "protocol": "vmess",
-      "settings": {
-        "clients": $VMESS_CLIENTS
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "$VMESS_PATH"
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      }
-    },
-
-    {
-      "tag": "trojan-ws",
-      "listen": "127.0.0.1",
-      "port": $TROJAN_PORT,
-      "protocol": "trojan",
-      "settings": {
-        "clients": $TROJAN_CLIENTS
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "$TROJAN_PATH"
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      }
-    },
-
-    {
-      "tag": "grpc",
-      "listen": "127.0.0.1",
-      "port": $GRPC_PORT,
-      "protocol": "vless",
-      "settings": {
-        "clients": $GRPC_CLIENTS,
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "grpcSettings": {
-          "serviceName": "$GRPC_SERVICE"
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      }
-    }
-
-  ],
-
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    }
-  ]
-}
-EOF
-
-    if ! validate_json_file "$NEW"; then
-
-        rm -f "$NEW"
-
-        error_msg "La nueva configuración JSON es inválida."
+        error_msg "No se pudo crear config.json."
 
         return 1
     fi
 
-    # ----------------------------------------------------------
-    # MUY IMPORTANTE:
-    # probar el archivo temporal ANTES de reemplazar.
-    # ----------------------------------------------------------
-
-    info "Validando configuración multiprotocolo..."
-
-    if ! validate_xray_file "$NEW"; then
-
-        rm -f "$NEW"
-
-        error_msg "Xray rechazó la nueva configuración."
-
-        warning "El config.json actual NO fue modificado."
-
-        return 1
-    fi
-
-    mv -f "$NEW" "$XRAY_CFG"
-
-    chmod 600 "$XRAY_CFG"
-
-    ok "Configuración multiprotocolo actualizada."
+    ok "Configuración base creada."
 
     return 0
 }
@@ -1041,7 +631,7 @@ install_xray_core() {
 
     rm -f "$INSTALLER"
 
-    if ! command -v xray >/dev/null 2>&1; then
+    if ! xray_binary >/dev/null 2>&1; then
 
         error_msg "Xray no quedó disponible."
 
@@ -1084,7 +674,7 @@ EOF
 }
 
 # ==============================================================
-# INSTALAR / ACTUALIZAR XRAY
+# INSTALAR XRAY COMPLETO
 # ==============================================================
 
 install_xray() {
@@ -1092,7 +682,7 @@ install_xray() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}          INSTALACIÓN XRAY MULTIPROTOCOLO${RESET}"
+        "${WHITE}${BOLD}          ⭐ INSTALACIÓN XRAY MULTIPROTOCOLO${RESET}"
 
     line
 
@@ -1101,35 +691,48 @@ install_xray() {
     install_dependencies || {
 
         pause
-
         return 1
     }
 
     install_xray_core || {
 
         pause
-
         return 1
     }
 
     create_directories
 
-    if ! ensure_multiprotocol_config; then
+    if [[ ! -f "$XRAY_CFG" ]]; then
 
-        pause
+        create_base_config || {
 
-        return 1
+            pause
+            return 1
+        }
+
+    elif ! validate_json; then
+
+        warning "config.json existente es inválido."
+
+        info "Creando una configuración limpia..."
+
+        create_base_config || {
+
+            pause
+            return 1
+        }
+
+    else
+
+        ok "Configuración existente conservada."
+
     fi
 
     ensure_xray_resilience
 
-    echo
-
-    info "Validando configuración final..."
-
     if ! validate_xray_config; then
 
-        error_msg "Xray rechazó config.json."
+        error_msg "La configuración no es válida."
 
         pause
 
@@ -1146,7 +749,9 @@ install_xray() {
 
         set_config "XRAY" "ON"
 
-        ok "Xray está activo."
+        echo
+
+        ok "Xray instalado y activo."
 
     else
 
@@ -1158,7 +763,7 @@ install_xray() {
 
         journalctl \
             -u "$XRAY_SERVICE" \
-            -n 25 \
+            -n 30 \
             --no-pager 2>/dev/null
 
         pause
@@ -1166,23 +771,39 @@ install_xray() {
         return 1
     fi
 
-    echo
-
-    load_host
-
-    echo -e \
-        "${WHITE}Host:${RESET} ${GREEN}$XRAY_HOST${RESET}"
-
-    echo -e \
-        "${WHITE}Tipo:${RESET} ${GREEN}$HOST_TYPE${RESET}"
-
-    echo
-
-    ok "VLESS / VMess / Trojan / gRPC disponibles."
-
     pause
 
     return 0
+}
+
+# ==============================================================
+# BUSCAR INBOUND
+# ==============================================================
+
+inbound_index() {
+
+    case "$1" in
+
+        vless)
+            echo 0
+            ;;
+
+        vmess)
+            echo 1
+            ;;
+
+        trojan)
+            echo 2
+            ;;
+
+        grpc)
+            echo 3
+            ;;
+
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # ==============================================================
@@ -1198,11 +819,13 @@ user_exists() {
 
     INDEX=$(inbound_index "$PROTOCOL") || return 1
 
+    [[ -f "$XRAY_CFG" ]] || return 1
+
     jq -e \
         --arg email "$USERNAME" \
         --argjson index "$INDEX" \
         '
-        .inbounds[$index].settings.clients
+        (.inbounds[$index].settings.clients // [])
         | any(.email == $email)
         ' \
         "$XRAY_CFG" \
@@ -1226,18 +849,20 @@ get_user_id() {
         --arg email "$USERNAME" \
         --argjson index "$INDEX" \
         '
-        .inbounds[$index].settings.clients[]
+        (.inbounds[$index].settings.clients // [])
+        | .[]
         | select(.email == $email)
         | (.id // .password)
         ' \
-        "$XRAY_CFG" 2>/dev/null
+        "$XRAY_CFG" 2>/dev/null |
+        head -1
 }
 
 # ==============================================================
-# TOTAL USUARIOS
+# OBTENER TOTAL
 # ==============================================================
 
-count_users() {
+get_total() {
 
     local PROTOCOL="$1"
 
@@ -1246,25 +871,138 @@ count_users() {
     INDEX=$(inbound_index "$PROTOCOL") || {
 
         echo 0
-
         return
     }
 
     jq -r \
         --argjson index "$INDEX" \
-        '
-        .inbounds[$index].settings.clients | length
-        ' \
+        '(.inbounds[$index].settings.clients // []) | length' \
         "$XRAY_CFG" 2>/dev/null
 }
 
 # ==============================================================
-# CREAR UNA CUENTA
+# AGREGAR USUARIO A CONFIGURACIÓN TEMPORAL
 # ==============================================================
 
-create_user() {
+add_user_to_file() {
+
+    local FILE="$1"
+    local PROTOCOL="$2"
+    local USERNAME="$3"
+    local ID="$4"
+
+    local INDEX
+
+    INDEX=$(inbound_index "$PROTOCOL") || return 1
+
+    if [[ "$PROTOCOL" == "trojan" ]]; then
+
+        jq \
+            --arg email "$USERNAME" \
+            --arg password "$ID" \
+            --argjson index "$INDEX" \
+            '
+            .inbounds[$index].settings.clients += [
+                {
+                    "password": $password,
+                    "email": $email,
+                    "level": 0
+                }
+            ]
+            ' \
+            "$FILE" > "${FILE}.new"
+
+    else
+
+        jq \
+            --arg email "$USERNAME" \
+            --arg uuid "$ID" \
+            --argjson index "$INDEX" \
+            '
+            .inbounds[$index].settings.clients += [
+                {
+                    "id": $uuid,
+                    "level": 0,
+                    "email": $email
+                }
+            ]
+            ' \
+            "$FILE" > "${FILE}.new"
+    fi
+
+    if [[ $? -ne 0 ]]; then
+
+        rm -f "${FILE}.new"
+
+        return 1
+    fi
+
+    mv "${FILE}.new" "$FILE"
+
+    return 0
+}
+
+# ==============================================================
+# CREAR CUENTA INDIVIDUAL
+# ==============================================================
+
+create_single_user() {
 
     local PROTOCOL="$1"
+    local USERNAME="$2"
+    local ID="$3"
+
+    if user_exists "$PROTOCOL" "$USERNAME"; then
+
+        error_msg "$USERNAME ya existe en ${PROTOCOL^^}."
+
+        return 1
+    fi
+
+    local TMP
+
+    TMP=$(mktemp --suffix=.json)
+
+    if ! cp -f "$XRAY_CFG" "$TMP"; then
+
+        rm -f "$TMP"
+
+        return 1
+    fi
+
+    if ! add_user_to_file \
+        "$TMP" \
+        "$PROTOCOL" \
+        "$USERNAME" \
+        "$ID"; then
+
+        rm -f "$TMP"
+
+        return 1
+    fi
+
+    if ! validate_xray_file "$TMP"; then
+
+        rm -f "$TMP"
+
+        return 1
+    fi
+
+    # Sin backup:
+    # solo se reemplaza cuando Xray ya aceptó la configuración.
+
+    mv -f "$TMP" "$XRAY_CFG"
+
+    chmod 600 "$XRAY_CFG"
+
+    return 0
+}
+
+# ==============================================================
+# CREAR CUENTA COMPLETA
+# ==============================================================
+
+create_all_user() {
 
     if ! xray_installed; then
 
@@ -1273,40 +1011,12 @@ create_user() {
         return 1
     fi
 
-    if ! ensure_multiprotocol_config; then
-
-        return 1
-    fi
-
     if ! validate_xray_config; then
-
-        error_msg "La configuración actual de Xray no es válida."
 
         return 1
     fi
 
     load_host
-
-    if [[ -z "$XRAY_HOST" ]]; then
-
-        error_msg "No se pudo obtener dominio ni IP."
-
-        return 1
-    fi
-
-    local INDEX
-
-    INDEX=$(inbound_index "$PROTOCOL") || {
-
-        error_msg "Protocolo inválido."
-
-        return 1
-    }
-
-    echo
-
-    echo -e \
-        "${WHITE}${BOLD}Crear cuenta $(protocol_name "$PROTOCOL")${RESET}"
 
     echo
 
@@ -1330,219 +1040,19 @@ create_user() {
         return 1
     fi
 
-    if user_exists "$PROTOCOL" "$USERNAME"; then
-
-        error_msg \
-            "El usuario '$USERNAME' ya existe en $(protocol_name "$PROTOCOL")."
-
-        return 1
-    fi
-
-    local ID
-
-    ID=$(generate_uuid) || return 1
-
-    local TMP
-
-    TMP=$(mktemp --suffix=.json)
-
-    # ----------------------------------------------------------
-    # VMESS / VLESS / GRPC
-    # ----------------------------------------------------------
-
-    if [[ "$PROTOCOL" == "vmess" ||
-          "$PROTOCOL" == "vless" ||
-          "$PROTOCOL" == "grpc" ]]; then
-
-        if ! jq \
-            --arg uuid "$ID" \
-            --arg email "$USERNAME" \
-            --argjson index "$INDEX" \
-            '
-            .inbounds[$index].settings.clients += [
-                {
-                    "id": $uuid,
-                    "level": 0,
-                    "email": $email
-                }
-            ]
-            ' \
-            "$XRAY_CFG" > "$TMP"; then
-
-            rm -f "$TMP"
-
-            error_msg "No se pudo crear la cuenta."
-
-            return 1
-        fi
-
-    # ----------------------------------------------------------
-    # TROJAN
-    # ----------------------------------------------------------
-
-    else
-
-        if ! jq \
-            --arg password "$ID" \
-            --arg email "$USERNAME" \
-            --argjson index "$INDEX" \
-            '
-            .inbounds[$index].settings.clients += [
-                {
-                    "password": $password,
-                    "level": 0,
-                    "email": $email
-                }
-            ]
-            ' \
-            "$XRAY_CFG" > "$TMP"; then
-
-            rm -f "$TMP"
-
-            error_msg "No se pudo crear la cuenta."
-
-            return 1
-        fi
-
-    fi
-
-    # ----------------------------------------------------------
-    # JSON
-    # ----------------------------------------------------------
-
-    if ! validate_json_file "$TMP"; then
-
-        rm -f "$TMP"
-
-        error_msg "La configuración generada no es JSON válida."
-
-        return 1
-    fi
-
-    # ----------------------------------------------------------
-    # VALIDAR CON XRAY ANTES DE MODIFICAR
-    # ----------------------------------------------------------
-
-    info "Validando configuración..."
-
-    if ! validate_xray_file "$TMP"; then
-
-        rm -f "$TMP"
-
-        error_msg "Xray rechazó la configuración."
-
-        warning "El config.json NO fue modificado."
-
-        return 1
-    fi
-
-    # ----------------------------------------------------------
-    # AHORA SÍ REEMPLAZAR
-    # ----------------------------------------------------------
-
-    mv -f "$TMP" "$XRAY_CFG"
-
-    chmod 600 "$XRAY_CFG"
-
-    systemctl restart "$XRAY_SERVICE"
-
-    sleep 2
-
-    if ! xray_active; then
-
-        error_msg "Xray no inició después de crear la cuenta."
-
-        return 1
-    fi
-
-    CREATED_PROTOCOL="$PROTOCOL"
-    CREATED_USER="$USERNAME"
-    CREATED_ID="$ID"
-
-    ok "Cuenta $(protocol_name "$PROTOCOL") creada."
-
-    return 0
-}
-
-# ==============================================================
-# CREAR TODOS
-# ==============================================================
-
-create_all_user() {
-
-    if ! xray_installed; then
-
-        error_msg "Xray no está instalado."
-
-        return 1
-    fi
-
-    if ! ensure_multiprotocol_config; then
-
-        return 1
-    fi
-
-    load_host
-
-    if [[ -z "$XRAY_HOST" ]]; then
-
-        error_msg "No se pudo obtener dominio ni IP."
-
-        return 1
-    fi
-
-    echo
-
-    echo -e \
-        "${WHITE}${BOLD}⭐ CREAR CUENTA MULTIPROTOCOLO${RESET}"
-
-    line
-
-    echo
-
-    read -rp \
-        "$(echo -e "${CYAN}👤 Nombre del usuario: ${RESET}")" \
-        USERNAME
-
-    USERNAME="$(echo "$USERNAME" | xargs)"
-
-    if [[ -z "$USERNAME" ]]; then
-
-        error_msg "Usuario vacío."
-
-        return 1
-    fi
-
-    if ! [[ "$USERNAME" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-
-        error_msg "Nombre de usuario inválido."
-
-        return 1
-    fi
-
-    # ----------------------------------------------------------
-    # Comprobar duplicados.
-    # ----------------------------------------------------------
-
-    local P
-
-    for P in vless vmess trojan grpc; do
-
-        if user_exists "$P" "$USERNAME"; then
-
-            error_msg \
-                "'$USERNAME' ya existe en $(protocol_name "$P")."
-
-            return 1
-        fi
-
-    done
-
     echo
 
     echo -e "${WHITE}Usuario:${RESET} ${GREEN}$USERNAME${RESET}"
-    echo -e "${WHITE}Host:${RESET}   ${GREEN}$XRAY_HOST${RESET}"
-    echo -e "${WHITE}Tipo:${RESET}   ${GREEN}$HOST_TYPE${RESET}"
+    echo -e "${WHITE}Host:${RESET}    ${GREEN}$HOST${RESET}"
+
+    if [[ "$HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+
+        echo -e "${WHITE}Tipo:${RESET}    ${YELLOW}IP${RESET}"
+
+    else
+
+        echo -e "${WHITE}Tipo:${RESET}    ${GREEN}DOMINIO${RESET}"
+    fi
 
     echo
 
@@ -1560,100 +1070,70 @@ create_all_user() {
 
     [[ -z "$CONFIRM" ]] && CONFIRM="s"
 
-    case "$CONFIRM" in
+    if [[ ! "$CONFIRM" =~ ^[sS]$ ]]; then
 
-        s|S|si|SI|Si)
+        warning "Operación cancelada."
 
-            ;;
+        return
+    fi
 
-        *)
+    local ID
 
-            warning "Operación cancelada."
-
-            return 0
-
-            ;;
-
-    esac
-
-    local VLESS_ID
-    local VMESS_ID
-    local TROJAN_ID
-    local GRPC_ID
-
-    VLESS_ID=$(generate_uuid) || return 1
-    VMESS_ID=$(generate_uuid) || return 1
-    TROJAN_ID=$(generate_uuid) || return 1
-    GRPC_ID=$(generate_uuid) || return 1
+    ID=$(generate_uuid) || return 1
 
     local TMP
 
     TMP=$(mktemp --suffix=.json)
 
-    # ----------------------------------------------------------
-    # UNA SOLA OPERACIÓN JQ
-    # ----------------------------------------------------------
-
-    if ! jq \
-        --arg user "$USERNAME" \
-        --arg vless "$VLESS_ID" \
-        --arg vmess "$VMESS_ID" \
-        --arg trojan "$TROJAN_ID" \
-        --arg grpc "$GRPC_ID" \
-        '
-        .inbounds[0].settings.clients += [
-            {
-                "id": $vless,
-                "level": 0,
-                "email": $user
-            }
-        ]
-        |
-        .inbounds[1].settings.clients += [
-            {
-                "id": $vmess,
-                "level": 0,
-                "email": $user
-            }
-        ]
-        |
-        .inbounds[2].settings.clients += [
-            {
-                "password": $trojan,
-                "level": 0,
-                "email": $user
-            }
-        ]
-        |
-        .inbounds[3].settings.clients += [
-            {
-                "id": $grpc,
-                "level": 0,
-                "email": $user
-            }
-        ]
-        ' \
-        "$XRAY_CFG" > "$TMP"; then
+    if ! cp -f "$XRAY_CFG" "$TMP"; then
 
         rm -f "$TMP"
 
-        error_msg "No se pudo preparar la cuenta."
-
-        return 1
-    fi
-
-    if ! validate_json_file "$TMP"; then
-
-        rm -f "$TMP"
-
-        error_msg "JSON generado inválido."
+        error_msg "No se pudo preparar la configuración."
 
         return 1
     fi
 
     # ----------------------------------------------------------
-    # VALIDAR COMPLETO
+    # Comprobar que no exista en ninguno
     # ----------------------------------------------------------
+
+    for PROTOCOL in vless vmess trojan grpc; do
+
+        if user_exists "$PROTOCOL" "$USERNAME"; then
+
+            rm -f "$TMP"
+
+            error_msg \
+                "El usuario '$USERNAME' ya existe en ${PROTOCOL^^}."
+
+            return 1
+        fi
+
+    done
+
+    # ----------------------------------------------------------
+    # Agregar los cuatro protocolos al TEMP
+    # ----------------------------------------------------------
+
+    for PROTOCOL in vless vmess trojan grpc; do
+
+        if ! add_user_to_file \
+            "$TMP" \
+            "$PROTOCOL" \
+            "$USERNAME" \
+            "$ID"; then
+
+            rm -f "$TMP"
+
+            error_msg \
+                "No se pudo preparar ${PROTOCOL^^}."
+
+            return 1
+        fi
+
+        ok "${PROTOCOL^^} preparado."
+    done
 
     echo
 
@@ -1663,330 +1143,212 @@ create_all_user() {
 
         rm -f "$TMP"
 
-        error_msg "Xray rechazó la configuración."
+        error_msg "El config.json original NO fue modificado."
 
-        warning "El config.json NO fue modificado."
+        pause
 
         return 1
     fi
 
     # ----------------------------------------------------------
-    # APLICAR
+    # Reemplazo solamente después de validación
     # ----------------------------------------------------------
 
     mv -f "$TMP" "$XRAY_CFG"
 
     chmod 600 "$XRAY_CFG"
 
-    echo
-
-    ok "VLESS preparado."
-    ok "VMess preparado."
-    ok "Trojan preparado."
-    ok "gRPC preparado."
-
     info "Reiniciando Xray..."
 
-    systemctl restart "$XRAY_SERVICE"
+    if ! systemctl restart "$XRAY_SERVICE"; then
+
+        error_msg "El comando de reinicio devolvió error."
+
+        echo
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+
+        return 1
+    fi
 
     sleep 2
 
     if ! xray_active; then
 
-        error_msg "Xray no pudo iniciar."
+        error_msg "Xray no pudo reiniciar."
+
+        echo
+
+        echo -e \
+            "${RED}──── DIAGNÓSTICO ─────────────────────────────────────────${RESET}"
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+
+        echo -e \
+            "${RED}──────────────────────────────────────────────────────────${RESET}"
 
         return 1
     fi
 
-    show_all_created_account \
+    show_created_all \
         "$USERNAME" \
-        "$VLESS_ID" \
-        "$VMESS_ID" \
-        "$TROJAN_ID" \
-        "$GRPC_ID"
+        "$ID"
+
+    return 0
 }
 
 # ==============================================================
-# MOSTRAR CUENTA CREADA
+# SUBMENÚ CREAR
 # ==============================================================
 
-show_all_created_account() {
+create_menu() {
 
-    local USER="$1"
-    local VLESS_ID="$2"
-    local VMESS_ID="$3"
-    local TROJAN_ID="$4"
-    local GRPC_ID="$5"
+    while true; do
 
-    load_host
+        header
 
-    clear
+        echo -e \
+            "${WHITE}${BOLD}                 ⭐ CREAR CUENTA${RESET}"
 
-    echo -e \
-        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        line
 
-    echo -e \
-        "${CYAN}║${RESET}            ${GREEN}${BOLD}🎉 CUENTA MULTIPROTOCOLO${RESET}                    ${CYAN}║${RESET}"
+        echo
 
-    echo -e \
-        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo -e \
+            "  ${GREEN}[01]${RESET} VLESS"
 
-    echo -e \
-        "${WHITE}👤 Usuario:${RESET} ${GREEN}$USER${RESET}"
+        echo -e \
+            "  ${GREEN}[02]${RESET} VMess"
 
-    echo -e \
-        "${WHITE}🌐 Host:${RESET}    ${GREEN}$XRAY_HOST${RESET}"
+        echo -e \
+            "  ${GREEN}[03]${RESET} Trojan"
 
-    echo -e \
-        "${WHITE}📡 Tipo:${RESET}    ${GREEN}$HOST_TYPE${RESET}"
+        echo -e \
+            "  ${GREEN}[04]${RESET} gRPC"
 
-    echo
+        echo
 
-    line
+        echo -e \
+            "  ${MAGENTA}[05]${RESET} 🚀 TODOS LOS PROTOCOLOS"
 
-    echo -e "${MAGENTA}${BOLD}🔐 VLESS${RESET}"
+        echo
 
-    echo -e "${WHITE}ID:${RESET} $VLESS_ID"
+        echo -e \
+            "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
 
-    echo -e "${WHITE}Path:${RESET} $VLESS_PATH"
+        echo -e \
+            "  ${RED}[00]${RESET} ↩️ Regresar"
 
-    echo -e "${WHITE}Puerto:${RESET} $PUBLIC_PORT"
+        echo
 
-    echo
+        read -rp \
+            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
+            OP
 
-    echo -e "${YELLOW}vless://$(build_vless_link "$USER" "$VLESS_ID")${RESET}"
+        case "$OP" in
 
-    echo
+            1)
+                create_protocol_account "vless"
+                ;;
 
-    line
+            2)
+                create_protocol_account "vmess"
+                ;;
 
-    echo -e "${MAGENTA}${BOLD}⚡ VMess${RESET}"
+            3)
+                create_protocol_account "trojan"
+                ;;
 
-    echo -e "${WHITE}ID:${RESET} $VMESS_ID"
+            4)
+                create_protocol_account "grpc"
+                ;;
 
-    echo -e "${WHITE}Path:${RESET} $VMESS_PATH"
+            5)
+                create_all_user
+                pause
+                ;;
 
-    echo -e "${WHITE}Puerto:${RESET} $PUBLIC_PORT"
+            0)
+                return
+                ;;
 
-    echo
-
-    echo -e "${YELLOW}vmess://$(generate_vmess_base64 "$USER" "$VMESS_ID")${RESET}"
-
-    echo
-
-    line
-
-    echo -e "${MAGENTA}${BOLD}🛡️ TROJAN${RESET}"
-
-    echo -e "${WHITE}Password:${RESET} $TROJAN_ID"
-
-    echo -e "${WHITE}Path:${RESET} $TROJAN_PATH"
-
-    echo -e "${WHITE}Puerto:${RESET} $PUBLIC_PORT"
-
-    echo
-
-    echo -e \
-        "${YELLOW}$(build_trojan_link "$USER" "$TROJAN_ID")${RESET}"
-
-    echo
-
-    line
-
-    echo -e "${MAGENTA}${BOLD}🚀 gRPC${RESET}"
-
-    echo -e "${WHITE}ID:${RESET} $GRPC_ID"
-
-    echo -e "${WHITE}Service:${RESET} $GRPC_SERVICE"
-
-    echo -e "${WHITE}Puerto:${RESET} $PUBLIC_PORT"
-
-    echo
-
-    echo -e \
-        "${YELLOW}$(build_grpc_link "$USER" "$GRPC_ID")${RESET}"
-
-    echo
-
-    line
-
-    ok "Los 4 protocolos fueron creados correctamente."
-
-    pause
+            *)
+                error_msg "Opción inválida."
+                sleep 1
+                ;;
+        esac
+    done
 }
 
 # ==============================================================
-# VLESS LINK
+# CREAR PROTOCOLO INDIVIDUAL
 # ==============================================================
 
-build_vless_link() {
+create_protocol_account() {
 
-    local USER="$1"
-    local ID="$2"
+    local PROTOCOL="$1"
 
-    load_host
+    if ! xray_installed; then
 
-    echo -n \
-        "${ID}@${XRAY_HOST}:${PUBLIC_PORT}?encryption=none&security=tls&type=ws&host=${XRAY_HOST}&path=${VLESS_PATH}&sni=${XRAY_HOST}#${USER}"
-}
+        error_msg "Xray no está instalado."
 
-# ==============================================================
-# TROJAN LINK
-# ==============================================================
+        pause
 
-build_trojan_link() {
-
-    local USER="$1"
-    local PASSWORD="$2"
-
-    load_host
-
-    echo -n \
-        "trojan://${PASSWORD}@${XRAY_HOST}:${PUBLIC_PORT}?security=tls&type=ws&host=${XRAY_HOST}&path=${TROJAN_PATH}&sni=${XRAY_HOST}#${USER}"
-}
-
-# ==============================================================
-# gRPC LINK
-# ==============================================================
-
-build_grpc_link() {
-
-    local USER="$1"
-    local ID="$2"
-
-    load_host
-
-    echo -n \
-        "vless://${ID}@${XRAY_HOST}:${PUBLIC_PORT}?encryption=none&security=tls&type=grpc&serviceName=${GRPC_SERVICE}&sni=${XRAY_HOST}#${USER}"
-}
-
-# ==============================================================
-# BASE64
-# ==============================================================
-
-base64_encode() {
-
-    if base64 --help 2>/dev/null |
-        grep -q -- '-w'; then
-
-        base64 -w 0
-
-    else
-
-        base64 | tr -d '\n'
+        return
     fi
-}
 
-# ==============================================================
-# VMESS BASE64
-# ==============================================================
+    if ! validate_xray_config; then
 
-generate_vmess_base64() {
+        pause
 
-    local USER="$1"
-    local UUID="$2"
+        return
+    fi
 
     load_host
-
-    cat <<EOF | base64_encode
-{
-  "v":"2",
-  "ps":"$USER",
-  "add":"$XRAY_HOST",
-  "port":"$PUBLIC_PORT",
-  "id":"$UUID",
-  "aid":"0",
-  "scy":"auto",
-  "net":"ws",
-  "type":"none",
-  "host":"$XRAY_HOST",
-  "path":"$VMESS_PATH",
-  "tls":"tls",
-  "sni":"$XRAY_HOST",
-  "alpn":""
-}
-EOF
-}
-
-# ==============================================================
-# GENERAR LINK
-# ==============================================================
-
-generate_link() {
-
-    local PROTOCOL="$1"
-    local USER="$2"
-
-    local ID
-
-    ID=$(get_user_id "$PROTOCOL" "$USER")
-
-    [[ -z "$ID" ||
-       "$ID" == "null" ]] && return 1
-
-    case "$PROTOCOL" in
-
-        vless)
-
-            echo \
-                "vless://$(build_vless_link "$USER" "$ID")"
-
-            ;;
-
-        vmess)
-
-            echo \
-                "vmess://$(generate_vmess_base64 "$USER" "$ID")"
-
-            ;;
-
-        trojan)
-
-            echo \
-                "$(build_trojan_link "$USER" "$ID")"
-
-            ;;
-
-        grpc)
-
-            echo \
-                "$(build_grpc_link "$USER" "$ID")"
-
-            ;;
-
-        *)
-
-            return 1
-
-            ;;
-
-    esac
-}
-
-# ==============================================================
-# MOSTRAR CUENTA
-# ==============================================================
-
-show_user_account() {
-
-    local PROTOCOL="$1"
 
     header
 
     echo -e \
-        "${WHITE}${BOLD}🔗 MOSTRAR CUENTA $(protocol_name "$PROTOCOL")${RESET}"
+        "${WHITE}${BOLD}              ⭐ CREAR ${PROTOCOL^^}${RESET}"
 
     line
 
     echo
 
-    read -rp "👤 Usuario: " USERNAME
+    read -rp \
+        "$(echo -e "${CYAN}👤 Nombre del usuario: ${RESET}")" \
+        USERNAME
 
     USERNAME="$(echo "$USERNAME" | xargs)"
 
-    if ! user_exists "$PROTOCOL" "$USERNAME"; then
+    if [[ -z "$USERNAME" ]]; then
 
-        error_msg "Usuario no encontrado."
+        error_msg "El usuario no puede estar vacío."
+
+        pause
+
+        return
+    fi
+
+    if ! [[ "$USERNAME" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+
+        error_msg "Nombre de usuario inválido."
+
+        pause
+
+        return
+    fi
+
+    if user_exists "$PROTOCOL" "$USERNAME"; then
+
+        error_msg \
+            "El usuario '$USERNAME' ya existe en ${PROTOCOL^^}."
 
         pause
 
@@ -1995,78 +1357,320 @@ show_user_account() {
 
     local ID
 
-    ID=$(get_user_id "$PROTOCOL" "$USERNAME")
+    ID=$(generate_uuid) || {
 
-    load_host
+        pause
+        return
+    }
 
-    local LINK
+    if create_single_user \
+        "$PROTOCOL" \
+        "$USERNAME" \
+        "$ID"; then
 
-    LINK=$(generate_link "$PROTOCOL" "$USERNAME")
+        info "Reiniciando Xray..."
 
-    echo
+        if systemctl restart "$XRAY_SERVICE"; then
 
-    echo -e "${WHITE}Protocolo:${RESET} ${GREEN}$(protocol_name "$PROTOCOL")${RESET}"
-    echo -e "${WHITE}Usuario:${RESET}   ${GREEN}$USERNAME${RESET}"
-    echo -e "${WHITE}Host:${RESET}      ${GREEN}$XRAY_HOST${RESET}"
-    echo -e "${WHITE}Tipo:${RESET}      ${GREEN}$HOST_TYPE${RESET}"
-    echo -e "${WHITE}ID:${RESET}        ${YELLOW}$ID${RESET}"
-    echo -e "${WHITE}Puerto:${RESET}    ${GREEN}$PUBLIC_PORT${RESET}"
+            sleep 2
 
-    echo
+        fi
 
-    case "$PROTOCOL" in
+        if xray_active; then
 
-        vless)
+            show_created_single \
+                "$PROTOCOL" \
+                "$USERNAME" \
+                "$ID"
 
-            echo -e "${WHITE}Path:${RESET} ${GREEN}$VLESS_PATH${RESET}"
-            ;;
+        else
 
-        vmess)
+            error_msg "Xray no pudo reiniciar."
 
-            echo -e "${WHITE}Path:${RESET} ${GREEN}$VMESS_PATH${RESET}"
-            ;;
+            echo
 
-        trojan)
+            journalctl \
+                -u "$XRAY_SERVICE" \
+                -n 30 \
+                --no-pager 2>/dev/null
 
-            echo -e "${WHITE}Path:${RESET} ${GREEN}$TROJAN_PATH${RESET}"
-            ;;
+            pause
+        fi
 
-        grpc)
+    else
 
-            echo -e "${WHITE}Service:${RESET} ${GREEN}$GRPC_SERVICE${RESET}"
-            ;;
+        error_msg \
+            "No se pudo crear la cuenta ${PROTOCOL^^}."
 
-    esac
+        pause
+    fi
+}
 
-    echo
+# ==============================================================
+# ELIMINAR DE ARCHIVO TEMPORAL
+# ==============================================================
+
+remove_user_from_file() {
+
+    local FILE="$1"
+    local PROTOCOL="$2"
+    local USERNAME="$3"
+
+    local INDEX
+
+    INDEX=$(inbound_index "$PROTOCOL") || return 1
+
+    jq \
+        --arg email "$USERNAME" \
+        --argjson index "$INDEX" \
+        '
+        .inbounds[$index].settings.clients =
+        (
+            .inbounds[$index].settings.clients // []
+            | map(select(.email != $email))
+        )
+        ' \
+        "$FILE" > "${FILE}.new"
+
+    if [[ $? -ne 0 ]]; then
+
+        rm -f "${FILE}.new"
+
+        return 1
+    fi
+
+    mv "${FILE}.new" "$FILE"
+
+    return 0
+}
+
+# ==============================================================
+# ELIMINAR USUARIO
+# ==============================================================
+
+remove_user() {
+
+    if ! xray_installed; then
+
+        error_msg "Xray no está instalado."
+
+        return 1
+    fi
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}                🗑️ ELIMINAR CUENTA${RESET}"
 
     line
 
-    echo -e "${YELLOW}${BOLD}🔗 ENLACE${RESET}"
+    echo
+
+    read -rp \
+        "$(echo -e "${CYAN}👤 Usuario a eliminar: ${RESET}")" \
+        USERNAME
+
+    USERNAME="$(echo "$USERNAME" | xargs)"
+
+    if [[ -z "$USERNAME" ]]; then
+
+        return
+    fi
+
+    local FOUND=0
+
+    for PROTOCOL in vless vmess trojan grpc; do
+
+        if user_exists "$PROTOCOL" "$USERNAME"; then
+
+            FOUND=1
+
+            break
+        fi
+    done
+
+    if [[ "$FOUND" -eq 0 ]]; then
+
+        error_msg "El usuario '$USERNAME' no existe."
+
+        pause
+
+        return 1
+    fi
 
     echo
 
-    echo -e "${GREEN}$LINK${RESET}"
+    echo -e \
+        "${YELLOW}Se eliminará $USERNAME de los protocolos donde exista.${RESET}"
 
     echo
+
+    read -rp \
+        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+        CONFIRM
+
+    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
+
+        warning "Operación cancelada."
+
+        pause
+
+        return
+    fi
+
+    local TMP
+
+    TMP=$(mktemp --suffix=.json)
+
+    if ! cp -f "$XRAY_CFG" "$TMP"; then
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo preparar la configuración."
+
+        pause
+
+        return 1
+    fi
+
+    local REMOVED=0
+
+    echo
+
+    for PROTOCOL in vless vmess trojan grpc; do
+
+        if user_exists "$PROTOCOL" "$USERNAME"; then
+
+            if remove_user_from_file \
+                "$TMP" \
+                "$PROTOCOL" \
+                "$USERNAME"; then
+
+                ok "${PROTOCOL^^} eliminado."
+
+                REMOVED=$((REMOVED + 1))
+
+            else
+
+                rm -f "$TMP"
+
+                error_msg \
+                    "No se pudo eliminar de ${PROTOCOL^^}."
+
+                pause
+
+                return 1
+            fi
+        fi
+    done
+
+    echo
+
+    info "Validando configuración..."
+
+    if ! validate_xray_file "$TMP"; then
+
+        rm -f "$TMP"
+
+        error_msg "El config.json NO fue modificado."
+
+        pause
+
+        return 1
+    fi
+
+    # ----------------------------------------------------------
+    # Sin backup.
+    # La configuración solamente se reemplaza después
+    # de que Xray la haya validado.
+    # ----------------------------------------------------------
+
+    mv -f "$TMP" "$XRAY_CFG"
+
+    chmod 600 "$XRAY_CFG"
+
+    echo
+
+    info "Reiniciando Xray..."
+
+    if ! systemctl restart "$XRAY_SERVICE"; then
+
+        error_msg "El comando de reinicio falló."
+
+        echo
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+
+        pause
+
+        return 1
+    fi
+
+    sleep 2
+
+    if xray_active; then
+
+        echo
+
+        ok "Xray reiniciado correctamente."
+
+        ok "Usuario '$USERNAME' eliminado."
+
+        echo
+        echo -e \
+            "${WHITE}Protocolos modificados:${RESET} ${GREEN}$REMOVED${RESET}"
+
+    else
+
+        echo
+
+        error_msg "Xray no pudo reiniciar."
+
+        echo
+
+        echo -e \
+            "${RED}──── ERROR REAL DE XRAY ──────────────────────────────────${RESET}"
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+
+        echo -e \
+            "${RED}──────────────────────────────────────────────────────────${RESET}"
+
+        return 1
+    fi
 
     pause
 }
 
 # ==============================================================
-# LISTAR UN PROTOCOLO
+# LISTAR PROTOCOLO
 # ==============================================================
 
-list_users() {
+list_protocol_users() {
 
     local PROTOCOL="$1"
 
     header
 
     echo -e \
-        "${WHITE}${BOLD}👥 USUARIOS $(protocol_name "$PROTOCOL")${RESET}"
+        "${WHITE}${BOLD}              👥 USUARIOS ${PROTOCOL^^}${RESET}"
 
     line
+
+    if ! xray_installed; then
+
+        error_msg "Xray no está instalado."
+
+        pause
+
+        return
+    fi
 
     local INDEX
 
@@ -2081,53 +1685,59 @@ list_users() {
 
     local TOTAL
 
-    TOTAL=$(count_users "$PROTOCOL")
+    TOTAL=$(get_total "$PROTOCOL")
 
     TOTAL="${TOTAL:-0}"
 
     echo
+
+    printf \
+        "${CYAN}%-5s %-25s %-38s${RESET}\n" \
+        "#" "USUARIO" "ID / UUID"
+
+    echo -e \
+        "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
 
     if [[ "$TOTAL" -eq 0 ]]; then
 
         echo -e \
             "${YELLOW}No existen usuarios registrados.${RESET}"
 
-        pause
+    else
 
-        return
+        local I=0
+
+        while IFS=$'\t' read -r USER ID; do
+
+            I=$((I + 1))
+
+            printf \
+                "${GREEN}%-5s${RESET} ${WHITE}%-25s${RESET} ${YELLOW}%-38s${RESET}\n" \
+                "$I" \
+                "$USER" \
+                "$ID"
+
+        done < <(
+
+            jq -r \
+                --argjson index "$INDEX" \
+                '
+                (.inbounds[$index].settings.clients // [])
+                | .[]
+                | [
+                    .email,
+                    (.id // .password)
+                  ]
+                | @tsv
+                ' \
+                "$XRAY_CFG"
+        )
     fi
 
-    local I=0
-
-    while IFS=$'\t' read -r USER ID; do
-
-        I=$((I + 1))
-
-        echo -e \
-            "${GREEN}[$I]${RESET} ${WHITE}$USER${RESET}"
-
-        echo -e \
-            "    ${GRAY}$ID${RESET}"
-
-        echo -e \
-            "    ${CYAN}$(generate_link "$PROTOCOL" "$USER")${RESET}"
-
-        echo
-
-    done < <(
-
-        jq -r \
-            --argjson index "$INDEX" \
-            '
-            .inbounds[$index].settings.clients[] |
-            [.email, (.id // .password)] |
-            @tsv
-            ' \
-            "$XRAY_CFG"
-    )
+    echo
 
     echo -e \
-        "${WHITE}Total $(protocol_name "$PROTOCOL"):${RESET} ${GREEN}$TOTAL${RESET}"
+        "${WHITE}Total ${PROTOCOL^^}:${RESET} ${GREEN}$TOTAL${RESET}"
 
     pause
 }
@@ -2141,237 +1751,605 @@ list_all_users() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}👥 TODAS LAS CUENTAS${RESET}"
+        "${WHITE}${BOLD}             👥 TODOS LOS USUARIOS${RESET}"
 
     line
 
-    local P
-    local TOTAL_ALL=0
+    echo
 
-    for P in vless vmess trojan grpc; do
+    for PROTOCOL in vless vmess trojan grpc; do
 
         local TOTAL
 
-        TOTAL=$(count_users "$P")
-
+        TOTAL=$(get_total "$PROTOCOL")
         TOTAL="${TOTAL:-0}"
 
-        echo
-
         echo -e \
-            "${MAGENTA}${BOLD}◆ $(protocol_name "$P")${RESET} ${GRAY}($TOTAL)${RESET}"
+            "${BLUE}${BOLD}${PROTOCOL^^}${RESET} ${GRAY}($TOTAL)${RESET}"
 
         if [[ "$TOTAL" -eq 0 ]]; then
 
             echo -e \
-                "  ${GRAY}Sin usuarios.${RESET}"
+                "  ${YELLOW}Sin usuarios.${RESET}"
 
-            continue
+        else
+
+            while IFS=$'\t' read -r USER ID; do
+
+                echo -e \
+                    "  ${GREEN}•${RESET} ${WHITE}$USER${RESET}"
+
+                echo -e \
+                    "    ${GRAY}$ID${RESET}"
+
+            done < <(
+
+                local INDEX
+
+                INDEX=$(inbound_index "$PROTOCOL")
+
+                jq -r \
+                    --argjson index "$INDEX" \
+                    '
+                    (.inbounds[$index].settings.clients // [])
+                    | .[]
+                    | [
+                        .email,
+                        (.id // .password)
+                      ]
+                    | @tsv
+                    ' \
+                    "$XRAY_CFG"
+            )
         fi
 
-        while IFS=$'\t' read -r USER ID; do
-
-            echo -e \
-                "  ${GREEN}●${RESET} ${WHITE}$USER${RESET}"
-
-            echo -e \
-                "    ${GRAY}$ID${RESET}"
-
-        done < <(
-
-            local INDEX
-
-            INDEX=$(inbound_index "$P")
-
-            jq -r \
-                --argjson index "$INDEX" \
-                '
-                .inbounds[$index].settings.clients[] |
-                [.email, (.id // .password)] |
-                @tsv
-                ' \
-                "$XRAY_CFG"
-
-        )
-
-        TOTAL_ALL=$((TOTAL_ALL + TOTAL))
-
+        echo
     done
-
-    echo
-
-    line
-
-    echo -e \
-        "${WHITE}Total de cuentas:${RESET} ${GREEN}$TOTAL_ALL${RESET}"
 
     pause
 }
 
 # ==============================================================
-# ELIMINAR UN USUARIO
+# GENERAR VMESS
 # ==============================================================
 
-remove_user() {
+generate_vmess_link() {
+
+    local USER="$1"
+    local UUID="$2"
+    local PORT="$3"
+    local SECURITY="$4"
+
+    load_host
+
+    local TLS_VALUE=""
+
+    if [[ "$SECURITY" == "tls" ]]; then
+
+        TLS_VALUE="tls"
+
+    else
+
+        TLS_VALUE=""
+    fi
+
+    cat <<EOF | base64 -w 0
+{
+  "v":"2",
+  "ps":"$USER",
+  "add":"$HOST",
+  "port":"$PORT",
+  "id":"$UUID",
+  "aid":"0",
+  "scy":"auto",
+  "net":"ws",
+  "type":"none",
+  "host":"$HOST",
+  "path":"$VMESS_PATH",
+  "tls":"$TLS_VALUE",
+  "sni":"$HOST"
+}
+EOF
+}
+
+# ==============================================================
+# GENERAR LINK
+# ==============================================================
+
+generate_link() {
 
     local PROTOCOL="$1"
+    local USER="$2"
+    local PUBLIC_PORT="$3"
 
-    header
-
-    echo -e \
-        "${WHITE}${BOLD}🗑️ ELIMINAR $(protocol_name "$PROTOCOL")${RESET}"
-
-    line
-
-    echo
-
-    read -rp "👤 Usuario a eliminar: " USERNAME
-
-    USERNAME="$(echo "$USERNAME" | xargs)"
-
-    [[ -z "$USERNAME" ]] && return
-
-    if ! user_exists "$PROTOCOL" "$USERNAME"; then
-
-        error_msg "Usuario no encontrado."
-
-        pause
-
-        return
-    fi
+    load_host
 
     local ID
 
-    ID=$(get_user_id "$PROTOCOL" "$USERNAME")
+    ID=$(get_user_id "$PROTOCOL" "$USER")
+
+    [[ -z "$ID" ||
+       "$ID" == "null" ]] && return 1
+
+    case "$PROTOCOL" in
+
+        vmess)
+
+            local VMESS_SECURITY="none"
+
+            [[ "$PUBLIC_PORT" == "443" ]] &&
+                VMESS_SECURITY="tls"
+
+            echo \
+                "vmess://$(generate_vmess_link \
+                    "$USER" \
+                    "$ID" \
+                    "$PUBLIC_PORT" \
+                    "$VMESS_SECURITY")"
+
+            ;;
+
+        vless)
+
+            if [[ "$PUBLIC_PORT" == "443" ]]; then
+
+                echo \
+                    "vless://${ID}@${HOST}:443?encryption=none&security=tls&type=ws&host=${HOST}&path=${VLESS_PATH}&sni=${HOST}#${USER}"
+
+            else
+
+                echo \
+                    "vless://${ID}@${HOST}:${PUBLIC_PORT}?encryption=none&security=none&type=ws&host=${HOST}&path=${VLESS_PATH}#${USER}"
+
+            fi
+
+            ;;
+
+        trojan)
+
+            if [[ "$PUBLIC_PORT" == "443" ]]; then
+
+                echo \
+                    "trojan://${ID}@${HOST}:443?security=tls&type=ws&host=${HOST}&path=${TROJAN_PATH}&sni=${HOST}#${USER}"
+
+            else
+
+                echo \
+                    "trojan://${ID}@${HOST}:${PUBLIC_PORT}?security=none&type=ws&host=${HOST}&path=${TROJAN_PATH}#${USER}"
+
+            fi
+
+            ;;
+
+        grpc)
+
+            if [[ "$PUBLIC_PORT" == "443" ]]; then
+
+                echo \
+                    "vless://${ID}@${HOST}:443?encryption=none&security=tls&type=grpc&serviceName=${GRPC_SERVICE}&sni=${HOST}#${USER}"
+
+            else
+
+                echo \
+                    "vless://${ID}@${HOST}:${PUBLIC_PORT}?encryption=none&security=none&type=grpc&serviceName=${GRPC_SERVICE}#${USER}"
+
+            fi
+
+            ;;
+
+        *)
+
+            return 1
+            ;;
+    esac
+}
+
+# ==============================================================
+# SELECCIONAR PUERTO
+# ==============================================================
+
+select_public_port() {
 
     echo
 
-    echo -e "${WHITE}Protocolo:${RESET} ${GREEN}$(protocol_name "$PROTOCOL")${RESET}"
-    echo -e "${WHITE}Usuario:${RESET}   ${GREEN}$USERNAME${RESET}"
-    echo -e "${WHITE}ID:${RESET}        ${YELLOW}$ID${RESET}"
+    echo -e \
+        "${WHITE}${BOLD}Selecciona puerto público HAProxy:${RESET}"
+
+    echo
+
+    echo -e \
+        "${GREEN}[1]${RESET} 443 ${GRAY}(TLS)${RESET}"
+
+    echo -e \
+        "${GREEN}[2]${RESET} 80  ${GRAY}(HTTP)${RESET}"
+
+    echo -e \
+        "${GREEN}[3]${RESET} 8080 ${GRAY}(Alternativo)${RESET}"
 
     echo
 
     read -rp \
-        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
-        CONFIRM
+        "$(echo -e "${CYAN}➜ Puerto [1]: ${RESET}")" \
+        PORT_OP
 
-    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
+    case "$PORT_OP" in
 
-        warning "Operación cancelada."
+        2)
+            echo "80"
+            ;;
 
-        pause
+        3)
+            echo "8080"
+            ;;
 
-        return
-    fi
+        *)
+            echo "443"
+            ;;
+    esac
+}
 
-    local INDEX
+# ==============================================================
+# MOSTRAR CUENTA INDIVIDUAL
+# ==============================================================
 
-    INDEX=$(inbound_index "$PROTOCOL")
+show_created_single() {
 
-    local TMP
+    local PROTOCOL="$1"
+    local USER="$2"
+    local ID="$3"
 
-    TMP=$(mktemp --suffix=.json)
+    load_host
 
-    if ! jq \
-        --arg email "$USERNAME" \
-        --argjson index "$INDEX" \
-        '
-        .inbounds[$index].settings.clients |=
-        map(select(.email != $email))
-        ' \
-        "$XRAY_CFG" > "$TMP"; then
+    local PORT
 
-        rm -f "$TMP"
+    PORT=$(select_public_port)
 
-        error_msg "No se pudo modificar config.json."
+    local LINK
 
-        pause
+    LINK=$(generate_link \
+        "$PROTOCOL" \
+        "$USER" \
+        "$PORT")
 
-        return
-    fi
+    clear
 
-    if ! validate_json_file "$TMP"; then
+    echo -e \
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
 
-        rm -f "$TMP"
+    echo -e \
+        "${CYAN}║${RESET}              ${GREEN}${BOLD}🎉 CUENTA CREADA${RESET}                          ${CYAN}║${RESET}"
 
-        error_msg "JSON inválido."
+    echo -e \
+        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
-        pause
+    echo -e \
+        "${WHITE}👤 Usuario:${RESET}  ${GREEN}$USER${RESET}"
 
-        return
-    fi
+    echo -e \
+        "${WHITE}🔐 Protocolo:${RESET} ${GREEN}${PROTOCOL^^}${RESET}"
 
-    info "Validando configuración..."
+    echo -e \
+        "${WHITE}🆔 ID:${RESET}       ${YELLOW}$ID${RESET}"
 
-    if ! validate_xray_file "$TMP"; then
+    echo -e \
+        "${WHITE}🌐 Host:${RESET}     ${GREEN}$HOST${RESET}"
 
-        rm -f "$TMP"
+    echo -e \
+        "${WHITE}🔌 Puerto:${RESET}   ${GREEN}$PORT${RESET}"
 
-        error_msg "Xray rechazó la configuración."
+    case "$PROTOCOL" in
 
-        warning "El config.json NO fue modificado."
+        vless)
 
-        pause
+            echo -e \
+                "${WHITE}📡 Network:${RESET}  ${GREEN}WebSocket${RESET}"
 
-        return
-    fi
+            echo -e \
+                "${WHITE}📂 Path:${RESET}     ${GREEN}$VLESS_PATH${RESET}"
 
-    mv -f "$TMP" "$XRAY_CFG"
+            ;;
 
-    chmod 600 "$XRAY_CFG"
+        vmess)
 
-    systemctl restart "$XRAY_SERVICE"
+            echo -e \
+                "${WHITE}📡 Network:${RESET}  ${GREEN}WebSocket${RESET}"
 
-    sleep 2
+            echo -e \
+                "${WHITE}📂 Path:${RESET}     ${GREEN}$VMESS_PATH${RESET}"
 
-    if xray_active; then
+            ;;
 
-        ok \
-            "Usuario '$USERNAME' eliminado de $(protocol_name "$PROTOCOL")."
+        trojan)
+
+            echo -e \
+                "${WHITE}📡 Network:${RESET}  ${GREEN}WebSocket${RESET}"
+
+            echo -e \
+                "${WHITE}📂 Path:${RESET}     ${GREEN}$TROJAN_PATH${RESET}"
+
+            ;;
+
+        grpc)
+
+            echo -e \
+                "${WHITE}📡 Network:${RESET}  ${GREEN}gRPC${RESET}"
+
+            echo -e \
+                "${WHITE}⚙️ Service:${RESET}  ${GREEN}$GRPC_SERVICE${RESET}"
+
+            ;;
+    esac
+
+    if [[ "$PORT" == "443" ]]; then
+
+        echo -e \
+            "${WHITE}🛡️ TLS:${RESET}      ${GREEN}Activado${RESET}"
 
     else
 
-        error_msg "Xray no pudo reiniciar."
+        echo -e \
+            "${WHITE}🛡️ TLS:${RESET}      ${YELLOW}Según HAProxy${RESET}"
 
     fi
+
+    line
+
+    echo -e \
+        "${YELLOW}${BOLD}🔗 ENLACE${RESET}"
+
+    echo
+
+    echo -e \
+        "${GREEN}$LINK${RESET}"
+
+    echo
+
+    ok "Cuenta lista para utilizar."
 
     pause
 }
 
 # ==============================================================
-# ELIMINAR TODOS LOS PROTOCOLOS DE UN USUARIO
+# MOSTRAR CUATRO CUENTAS
 # ==============================================================
 
-remove_all_user() {
+show_created_all() {
+
+    local USER="$1"
+    local ID="$2"
+
+    load_host
+
+    clear
+
+    echo -e \
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
+    echo -e \
+        "${CYAN}║${RESET}          ${GREEN}${BOLD}🎉 CUENTA MULTIPROTOCOLO CREADA${RESET}               ${CYAN}║${RESET}"
+
+    echo -e \
+        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    echo -e \
+        "${WHITE}👤 Usuario:${RESET} ${GREEN}$USER${RESET}"
+
+    echo -e \
+        "${WHITE}🌐 Host:${RESET}    ${GREEN}$HOST${RESET}"
+
+    echo -e \
+        "${WHITE}🆔 ID:${RESET}      ${YELLOW}$ID${RESET}"
+
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    # ----------------------------------------------------------
+    # VLESS
+    # ----------------------------------------------------------
+
+    echo -e \
+        "${BLUE}${BOLD}🔐 VLESS${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto interno:${RESET} ${GREEN}$VLESS_PORT${RESET}"
+
+    echo -e \
+        "${WHITE}Path:${RESET}          ${GREEN}$VLESS_PATH${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto público:${RESET} ${GREEN}443 / 80 / 8080${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VLESS 443 TLS:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vless "$USER" 443)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VLESS 80:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vless "$USER" 80)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VLESS 8080:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vless "$USER" 8080)${RESET}"
+
+    echo
+
+    line
+
+    # ----------------------------------------------------------
+    # VMESS
+    # ----------------------------------------------------------
+
+    echo -e \
+        "${BLUE}${BOLD}⚡ VMess${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto interno:${RESET} ${GREEN}$VMESS_PORT${RESET}"
+
+    echo -e \
+        "${WHITE}Path:${RESET}          ${GREEN}$VMESS_PATH${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VMess 443 TLS:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vmess "$USER" 443)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VMess 80:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vmess "$USER" 80)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}VMess 8080:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link vmess "$USER" 8080)${RESET}"
+
+    echo
+
+    line
+
+    # ----------------------------------------------------------
+    # TROJAN
+    # ----------------------------------------------------------
+
+    echo -e \
+        "${BLUE}${BOLD}🛡️ Trojan${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto interno:${RESET} ${GREEN}$TROJAN_PORT${RESET}"
+
+    echo -e \
+        "${WHITE}Path:${RESET}          ${GREEN}$TROJAN_PATH${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}Trojan 443 TLS:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link trojan "$USER" 443)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}Trojan 80:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link trojan "$USER" 80)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}Trojan 8080:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link trojan "$USER" 8080)${RESET}"
+
+    echo
+
+    line
+
+    # ----------------------------------------------------------
+    # GRPC
+    # ----------------------------------------------------------
+
+    echo -e \
+        "${BLUE}${BOLD}🚀 gRPC${RESET}"
+
+    echo -e \
+        "${WHITE}Puerto interno:${RESET} ${GREEN}$GRPC_PORT${RESET}"
+
+    echo -e \
+        "${WHITE}Service:${RESET}       ${GREEN}$GRPC_SERVICE${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}gRPC 443 TLS:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link grpc "$USER" 443)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}gRPC 80:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link grpc "$USER" 80)${RESET}"
+
+    echo
+
+    echo -e \
+        "${YELLOW}gRPC 8080:${RESET}"
+
+    echo -e \
+        "${GREEN}$(generate_link grpc "$USER" 8080)${RESET}"
+
+    echo
+
+    echo -e \
+        "${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+
+    ok "Los 4 protocolos fueron creados correctamente."
+
+    pause
+}
+
+# ==============================================================
+# MOSTRAR CUENTA
+# ==============================================================
+
+show_account() {
 
     header
 
     echo -e \
-        "${WHITE}${BOLD}🗑️ ELIMINAR CUENTA MULTIPROTOCOLO${RESET}"
+        "${WHITE}${BOLD}                 📄 MOSTRAR CUENTA${RESET}"
 
     line
 
     echo
 
-    read -rp "👤 Usuario: " USERNAME
+    read -rp \
+        "$(echo -e "${CYAN}👤 Usuario: ${RESET}")" \
+        USERNAME
 
     USERNAME="$(echo "$USERNAME" | xargs)"
 
     [[ -z "$USERNAME" ]] && return
 
     local FOUND=0
-    local P
 
-    for P in vless vmess trojan grpc; do
+    for PROTOCOL in vless vmess trojan grpc; do
 
-        if user_exists "$P" "$USERNAME"; then
+        if user_exists "$PROTOCOL" "$USERNAME"; then
 
             FOUND=1
-
             break
         fi
-
     done
 
     if [[ "$FOUND" -eq 0 ]]; then
@@ -2383,447 +2361,165 @@ remove_all_user() {
         return
     fi
 
-    echo
+    load_host
+
+    clear
 
     echo -e \
-        "${WHITE}Se eliminará ${GREEN}$USERNAME${RESET} de los protocolos donde exista."
+        "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
+    echo -e \
+        "${CYAN}║${RESET}                 ${GREEN}${BOLD}📄 CUENTA${RESET}                            ${CYAN}║${RESET}"
+
+    echo -e \
+        "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    echo -e \
+        "${WHITE}👤 Usuario:${RESET} ${GREEN}$USERNAME${RESET}"
+
+    echo -e \
+        "${WHITE}🌐 Host:${RESET}    ${GREEN}$HOST${RESET}"
+
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
-    read -rp \
-        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
-        CONFIRM
+    for PROTOCOL in vless vmess trojan grpc; do
 
-    if [[ "$CONFIRM" != "ELIMINAR" ]]; then
+        if user_exists "$PROTOCOL" "$USERNAME"; then
 
-        warning "Operación cancelada."
+            local ID
 
-        pause
+            ID=$(get_user_id "$PROTOCOL" "$USERNAME")
 
-        return
-    fi
+            echo -e \
+                "${BLUE}${BOLD}━━ ${PROTOCOL^^} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-    local TMP
+            echo -e \
+                "${WHITE}ID:${RESET} ${YELLOW}$ID${RESET}"
 
-    TMP=$(mktemp --suffix=.json)
+            echo
 
-    if ! jq \
-        --arg email "$USERNAME" \
-        '
-        .inbounds |=
-        map(
-            .settings.clients =
-            (
-                (.settings.clients // [])
-                | map(select(.email != $email))
-            )
-        )
-        ' \
-        "$XRAY_CFG" > "$TMP"; then
+            echo -e \
+                "${YELLOW}443:${RESET}"
 
-        rm -f "$TMP"
+            echo -e \
+                "${GREEN}$(generate_link "$PROTOCOL" "$USERNAME" 443)${RESET}"
 
-        error_msg "No se pudo preparar la eliminación."
+            echo
 
-        pause
+            echo -e \
+                "${YELLOW}80:${RESET}"
 
-        return
-    fi
+            echo -e \
+                "${GREEN}$(generate_link "$PROTOCOL" "$USERNAME" 80)${RESET}"
 
-    if ! validate_json_file "$TMP"; then
+            echo
 
-        rm -f "$TMP"
+            echo -e \
+                "${YELLOW}8080:${RESET}"
 
-        error_msg "JSON inválido."
+            echo -e \
+                "${GREEN}$(generate_link "$PROTOCOL" "$USERNAME" 8080)${RESET}"
 
-        pause
-
-        return
-    fi
-
-    info "Validando configuración..."
-
-    if ! validate_xray_file "$TMP"; then
-
-        rm -f "$TMP"
-
-        error_msg "Xray rechazó la configuración."
-
-        warning "El config.json NO fue modificado."
-
-        pause
-
-        return
-    fi
-
-    mv -f "$TMP" "$XRAY_CFG"
-
-    chmod 600 "$XRAY_CFG"
-
-    systemctl restart "$XRAY_SERVICE"
-
-    sleep 2
-
-    if xray_active; then
-
-        ok "Cuenta '$USERNAME' eliminada de todos los protocolos."
-
-    else
-
-        error_msg "Xray no pudo reiniciar."
-
-    fi
+            echo
+        fi
+    done
 
     pause
 }
 
 # ==============================================================
-# SUBMENÚ CREAR
+# GENERAR LINK
 # ==============================================================
 
-create_menu() {
+show_link() {
 
-    while true; do
+    header
 
-        header
+    echo -e \
+        "${WHITE}${BOLD}                 🔗 GENERAR ENLACE${RESET}"
 
-        echo -e \
-            "${WHITE}${BOLD}⭐ CREAR CUENTA${RESET}"
+    line
 
-        line
+    echo
 
-        echo
+    echo -e "${GREEN}[1]${RESET} VLESS"
+    echo -e "${GREEN}[2]${RESET} VMess"
+    echo -e "${GREEN}[3]${RESET} Trojan"
+    echo -e "${GREEN}[4]${RESET} gRPC"
 
-        echo -e "  ${GREEN}[01]${RESET} VLESS"
-        echo -e "  ${GREEN}[02]${RESET} VMess"
-        echo -e "  ${GREEN}[03]${RESET} Trojan"
-        echo -e "  ${GREEN}[04]${RESET} gRPC"
+    echo
 
-        echo
+    read -rp \
+        "$(echo -e "${CYAN}➜ Protocolo: ${RESET}")" \
+        OP
 
-        echo -e \
-            "  ${MAGENTA}[05]${RESET} ⭐ TODOS LOS PROTOCOLOS"
+    case "$OP" in
 
-        echo
+        1)
+            PROTOCOL="vless"
+            ;;
 
-        echo -e \
-            "  ${RED}[00]${RESET} ↩️ Regresar"
+        2)
+            PROTOCOL="vmess"
+            ;;
 
-        echo
+        3)
+            PROTOCOL="trojan"
+            ;;
 
-        read -rp \
-            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
-            OP
+        4)
+            PROTOCOL="grpc"
+            ;;
 
-        case "$OP" in
+        *)
+            error_msg "Protocolo inválido."
+            pause
+            return
+            ;;
+    esac
 
-            1)
+    echo
 
-                create_user "vless"
+    read -rp \
+        "$(echo -e "${CYAN}👤 Usuario: ${RESET}")" \
+        USERNAME
 
-                pause
+    USERNAME="$(echo "$USERNAME" | xargs)"
 
-                ;;
+    if ! user_exists "$PROTOCOL" "$USERNAME"; then
 
-            2)
+        error_msg "Usuario no encontrado."
 
-                create_user "vmess"
+        pause
 
-                pause
+        return
+    fi
 
-                ;;
+    local PORT
 
-            3)
+    PORT=$(select_public_port)
 
-                create_user "trojan"
+    local LINK
 
-                pause
+    LINK=$(generate_link \
+        "$PROTOCOL" \
+        "$USERNAME" \
+        "$PORT")
 
-                ;;
+    echo
 
-            4)
+    echo -e \
+        "${YELLOW}${BOLD}🔗 ENLACE${RESET}"
 
-                create_user "grpc"
+    echo
 
-                pause
+    echo -e \
+        "${GREEN}$LINK${RESET}"
 
-                ;;
-
-            5)
-
-                create_all_user
-
-                ;;
-
-            0)
-
-                return
-                ;;
-
-            *)
-
-                error_msg "Opción inválida."
-
-                sleep 1
-
-                ;;
-
-        esac
-
-    done
-}
-
-# ==============================================================
-# SUBMENÚ LISTAR
-# ==============================================================
-
-list_menu() {
-
-    while true; do
-
-        header
-
-        echo -e \
-            "${WHITE}${BOLD}👥 LISTAR CUENTAS${RESET}"
-
-        line
-
-        echo
-
-        echo -e "  ${GREEN}[01]${RESET} VLESS"
-        echo -e "  ${GREEN}[02]${RESET} VMess"
-        echo -e "  ${GREEN}[03]${RESET} Trojan"
-        echo -e "  ${GREEN}[04]${RESET} gRPC"
-
-        echo
-
-        echo -e \
-            "  ${MAGENTA}[05]${RESET} ⭐ TODOS LOS PROTOCOLOS"
-
-        echo
-
-        echo -e \
-            "  ${RED}[00]${RESET} ↩️ Regresar"
-
-        echo
-
-        read -rp \
-            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
-            OP
-
-        case "$OP" in
-
-            1)
-
-                list_users "vless"
-
-                ;;
-
-            2)
-
-                list_users "vmess"
-
-                ;;
-
-            3)
-
-                list_users "trojan"
-
-                ;;
-
-            4)
-
-                list_users "grpc"
-
-                ;;
-
-            5)
-
-                list_all_users
-
-                ;;
-
-            0)
-
-                return
-                ;;
-
-            *)
-
-                error_msg "Opción inválida."
-
-                sleep 1
-
-                ;;
-
-        esac
-
-    done
-}
-
-# ==============================================================
-# SUBMENÚ ELIMINAR
-# ==============================================================
-
-delete_menu() {
-
-    while true; do
-
-        header
-
-        echo -e \
-            "${WHITE}${BOLD}🗑️ ELIMINAR CUENTA${RESET}"
-
-        line
-
-        echo
-
-        echo -e "  ${GREEN}[01]${RESET} VLESS"
-        echo -e "  ${GREEN}[02]${RESET} VMess"
-        echo -e "  ${GREEN}[03]${RESET} Trojan"
-        echo -e "  ${GREEN}[04]${RESET} gRPC"
-
-        echo
-
-        echo -e \
-            "  ${MAGENTA}[05]${RESET} ⭐ TODOS LOS PROTOCOLOS"
-
-        echo
-
-        echo -e \
-            "  ${RED}[00]${RESET} ↩️ Regresar"
-
-        echo
-
-        read -rp \
-            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
-            OP
-
-        case "$OP" in
-
-            1)
-
-                remove_user "vless"
-
-                ;;
-
-            2)
-
-                remove_user "vmess"
-
-                ;;
-
-            3)
-
-                remove_user "trojan"
-
-                ;;
-
-            4)
-
-                remove_user "grpc"
-
-                ;;
-
-            5)
-
-                remove_all_user
-
-                ;;
-
-            0)
-
-                return
-                ;;
-
-            *)
-
-                error_msg "Opción inválida."
-
-                sleep 1
-
-                ;;
-
-        esac
-
-    done
-}
-
-# ==============================================================
-# MOSTRAR CUENTA / LINK
-# ==============================================================
-
-account_link_menu() {
-
-    while true; do
-
-        header
-
-        echo -e \
-            "${WHITE}${BOLD}🔗 CUENTA / ENLACE${RESET}"
-
-        line
-
-        echo
-
-        echo -e "  ${GREEN}[01]${RESET} Mostrar VLESS"
-        echo -e "  ${GREEN}[02]${RESET} Mostrar VMess"
-        echo -e "  ${GREEN}[03]${RESET} Mostrar Trojan"
-        echo -e "  ${GREEN}[04]${RESET} Mostrar gRPC"
-
-        echo
-
-        echo -e \
-            "${RED}[00]${RESET} ↩️ Regresar"
-
-        echo
-
-        read -rp \
-            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
-            OP
-
-        case "$OP" in
-
-            1)
-
-                show_user_account "vless"
-
-                ;;
-
-            2)
-
-                show_user_account "vmess"
-
-                ;;
-
-            3)
-
-                show_user_account "trojan"
-
-                ;;
-
-            4)
-
-                show_user_account "grpc"
-
-                ;;
-
-            0)
-
-                return
-                ;;
-
-            *)
-
-                error_msg "Opción inválida."
-
-                sleep 1
-
-                ;;
-
-        esac
-
-    done
+    pause
 }
 
 # ==============================================================
@@ -2835,7 +2531,7 @@ xray_online_users() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}🌐 USUARIOS ONLINE${RESET}"
+        "${WHITE}${BOLD}              🌐 USUARIOS ONLINE${RESET}"
 
     line
 
@@ -2850,7 +2546,7 @@ xray_online_users() {
 
     echo
 
-    tail -n 300 "$XRAY_LOG" |
+    tail -n 500 "$XRAY_LOG" |
         grep -E \
             'email:|accepted' |
         tail -n 50
@@ -2869,7 +2565,7 @@ xray_status() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}📊 ESTADO DE XRAY${RESET}"
+        "${WHITE}${BOLD}                 📊 ESTADO XRAY${RESET}"
 
     line
 
@@ -2877,54 +2573,68 @@ xray_status() {
 
     if xray_active; then
 
-        echo -e \
-            "${WHITE}Estado:${RESET} ${GREEN}🟢 ACTIVO${RESET}"
+        STATUS="${GREEN}🟢 ACTIVO${RESET}"
 
     elif xray_installed; then
 
-        echo -e \
-            "${WHITE}Estado:${RESET} ${RED}🔴 DETENIDO${RESET}"
+        STATUS="${RED}🔴 DETENIDO${RESET}"
 
     else
 
-        echo -e \
-            "${WHITE}Estado:${RESET} ${GRAY}⚪ NO INSTALADO${RESET}"
+        STATUS="${GRAY}⚪ NO INSTALADO${RESET}"
 
     fi
 
-    local XV
+    local VERSION_INFO
 
-    XV=$(
+    VERSION_INFO=$(
         xray version 2>/dev/null |
         head -1
     )
 
-    echo -e \
-        "${WHITE}Versión:${RESET} ${GREEN}${XV:-NO INSTALADO}${RESET}"
+    VERSION_INFO="${VERSION_INFO:-NO INSTALADO}"
 
     load_host
 
+    echo -e \
+        "${WHITE}Estado:${RESET}        $STATUS"
+
+    echo -e \
+        "${WHITE}Versión:${RESET}       ${GREEN}$VERSION_INFO${RESET}"
+
+    echo -e \
+        "${WHITE}Servicio:${RESET}      ${GREEN}$XRAY_SERVICE${RESET}"
+
+    echo -e \
+        "${WHITE}Host:${RESET}          ${GREEN}$HOST${RESET}"
+
+    echo -e \
+        "${WHITE}Config:${RESET}        ${GREEN}$XRAY_CFG${RESET}"
+
     echo
 
     echo -e \
-        "${WHITE}Host:${RESET} ${GREEN}${XRAY_HOST:-NO DISPONIBLE}${RESET}"
+        "${WHITE}Puertos internos:${RESET}"
 
     echo -e \
-        "${WHITE}Tipo:${RESET} ${GREEN}${HOST_TYPE:-N/A}${RESET}"
+        "  VLESS  : ${GREEN}127.0.0.1:$VLESS_PORT${RESET}"
+
+    echo -e \
+        "  VMess  : ${GREEN}127.0.0.1:$VMESS_PORT${RESET}"
+
+    echo -e \
+        "  Trojan : ${GREEN}127.0.0.1:$TROJAN_PORT${RESET}"
+
+    echo -e \
+        "  gRPC   : ${GREEN}127.0.0.1:$GRPC_PORT${RESET}"
 
     echo
 
     echo -e \
-        "${WHITE}VLESS:${RESET}  ${GREEN}127.0.0.1:$VLESS_PORT${RESET}"
+        "${WHITE}Puertos públicos HAProxy:${RESET}"
 
     echo -e \
-        "${WHITE}VMess:${RESET}  ${GREEN}127.0.0.1:$VMESS_PORT${RESET}"
-
-    echo -e \
-        "${WHITE}Trojan:${RESET} ${GREEN}127.0.0.1:$TROJAN_PORT${RESET}"
-
-    echo -e \
-        "${WHITE}gRPC:${RESET}   ${GREEN}127.0.0.1:$GRPC_PORT${RESET}"
+        "  ${GREEN}80${RESET} / ${GREEN}443${RESET} / ${GREEN}8080${RESET}"
 
     echo
 
@@ -2932,14 +2642,13 @@ xray_status() {
 
         if validate_xray_config; then
 
-            ok "Configuración Xray válida."
+            ok "Xray acepta la configuración."
 
         else
 
-            error_msg "Configuración Xray inválida."
+            error_msg "Xray rechaza la configuración."
 
         fi
-
     fi
 
     pause
@@ -2954,13 +2663,13 @@ xray_diagnostic() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}🔎 DIAGNÓSTICO XRAY${RESET}"
+        "${WHITE}${BOLD}                 🔎 DIAGNÓSTICO XRAY${RESET}"
 
     line
 
     echo
 
-    if command -v xray >/dev/null 2>&1; then
+    if xray_binary >/dev/null 2>&1; then
         ok "Xray Core instalado"
     else
         error_msg "Xray Core no instalado"
@@ -2978,45 +2687,20 @@ xray_diagnostic() {
         error_msg "config.json inexistente"
     fi
 
-    if [[ -f "$XRAY_CFG" ]] &&
-       validate_json; then
-
+    if validate_json; then
         ok "JSON válido"
-
     else
-
         error_msg "JSON inválido"
-
     fi
 
-    echo
+    if xray_installed; then
 
-    if [[ -f "$XRAY_CFG" ]]; then
-
-        echo -e "${WHITE}Inbounds:${RESET}"
-
-        jq -r '
-            .inbounds[]? |
-            "  \(.tag // "SIN TAG") | \(.protocol) | \(.listen // "N/A"):\(.port // "N/A") | \(.streamSettings.network // "N/A")"
-        ' \
-        "$XRAY_CFG" 2>/dev/null
-
+        if validate_xray_config; then
+            ok "Xray acepta la configuración"
+        else
+            error_msg "Xray rechaza la configuración"
+        fi
     fi
-
-    echo
-
-    if [[ -f "$XRAY_CFG" ]] &&
-       validate_xray_config; then
-
-        ok "Xray acepta la configuración."
-
-    else
-
-        error_msg "Xray rechaza la configuración."
-
-    fi
-
-    echo
 
     if xray_active; then
         ok "Servicio Xray activo"
@@ -3025,6 +2709,29 @@ xray_diagnostic() {
     fi
 
     echo
+
+    echo -e \
+        "${WHITE}Puertos internos:${RESET}"
+
+    ss -lntp 2>/dev/null |
+        grep -E \
+            ":(10001|10002|10003|10004)\b" ||
+        warning "No se detectaron puertos internos."
+
+    echo
+
+    echo -e \
+        "${WHITE}Puertos públicos esperados por HAProxy:${RESET}"
+
+    ss -lntp 2>/dev/null |
+        grep -E \
+            ":(80|443|8080)\b" ||
+        warning "No se detectaron 80/443/8080."
+
+    echo
+
+    echo -e \
+        "${WHITE}Últimos registros:${RESET}"
 
     journalctl \
         -u "$XRAY_SERVICE" \
@@ -3055,24 +2762,24 @@ show_xray_logs() {
 
     journalctl \
         -u "$XRAY_SERVICE" \
-        -n 40 \
+        -n 50 \
         --no-pager 2>/dev/null
 
     echo
 
     if [[ -f "$XRAY_LOG" ]]; then
 
-        echo -e "${WHITE}access.log:${RESET}"
+        echo -e \
+            "${WHITE}Últimas líneas de access.log:${RESET}"
 
         tail -n 30 "$XRAY_LOG"
-
     fi
 
     pause
 }
 
 # ==============================================================
-# REINICIAR XRAY
+# REINICIAR
 # ==============================================================
 
 restart_xray_service() {
@@ -3080,11 +2787,13 @@ restart_xray_service() {
     header
 
     echo -e \
-        "${WHITE}${BOLD}♻️ REINICIAR XRAY${RESET}"
+        "${WHITE}${BOLD}                 ♻️ REINICIAR XRAY${RESET}"
 
     line
 
     echo
+
+    info "Validando configuración..."
 
     if ! validate_xray_config; then
 
@@ -3095,7 +2804,21 @@ restart_xray_service() {
 
     info "Reiniciando Xray..."
 
-    systemctl restart "$XRAY_SERVICE"
+    if ! systemctl restart "$XRAY_SERVICE"; then
+
+        error_msg "El comando de reinicio falló."
+
+        echo
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+
+        pause
+
+        return 1
+    fi
 
     sleep 2
 
@@ -3111,11 +2834,12 @@ restart_xray_service() {
 
         error_msg "Xray no pudo iniciar."
 
+        echo
+
         journalctl \
             -u "$XRAY_SERVICE" \
-            -n 20 \
+            -n 30 \
             --no-pager 2>/dev/null
-
     fi
 
     pause
@@ -3129,16 +2853,7 @@ remove_xray() {
 
     header
 
-    echo -e \
-        "${RED}${BOLD}🗑️ DESINSTALAR XRAY${RESET}"
-
-    line
-
-    echo
-
     warning "Se eliminará Xray Core y su configuración."
-
-    warning "Esta acción NO crea backup."
 
     echo
 
@@ -3160,7 +2875,6 @@ remove_xray() {
     info "Deteniendo Xray..."
 
     systemctl stop "$XRAY_SERVICE" 2>/dev/null || true
-
     systemctl disable "$XRAY_SERVICE" 2>/dev/null || true
 
     info "Eliminando Xray..."
@@ -3177,6 +2891,10 @@ remove_xray() {
 
         rm -f "$INSTALLER"
 
+    else
+
+        warning "No se pudo descargar el desinstalador."
+
     fi
 
     rm -rf "$XRAY_DIR"
@@ -3186,20 +2904,304 @@ remove_xray() {
         /etc/systemd/system/xray.service.d
 
     systemctl daemon-reload
-
-    systemctl reset-failed xray 2>/dev/null || true
+    systemctl reset-failed xray 2>/dev/null
 
     set_config "XRAY" "OFF"
 
     echo
 
-    ok "Xray eliminado correctamente."
+    ok "Xray fue eliminado correctamente."
 
     pause
 }
 
 # ==============================================================
-# AUTO
+# SUBMENÚ LISTAR
+# ==============================================================
+
+list_menu() {
+
+    while true; do
+
+        header
+
+        echo -e \
+            "${WHITE}${BOLD}                 📋 LISTAR CUENTAS${RESET}"
+
+        line
+
+        echo
+
+        echo -e \
+            "${GREEN}[01]${RESET} VLESS"
+
+        echo -e \
+            "${GREEN}[02]${RESET} VMess"
+
+        echo -e \
+            "${GREEN}[03]${RESET} Trojan"
+
+        echo -e \
+            "${GREEN}[04]${RESET} gRPC"
+
+        echo
+
+        echo -e \
+            "${MAGENTA}[05]${RESET} 👥 TODOS"
+
+        echo
+
+        echo -e \
+            "${RED}[00]${RESET} ↩️ Regresar"
+
+        echo
+
+        read -rp \
+            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
+            OP
+
+        case "$OP" in
+
+            1)
+                list_protocol_users "vless"
+                ;;
+
+            2)
+                list_protocol_users "vmess"
+                ;;
+
+            3)
+                list_protocol_users "trojan"
+                ;;
+
+            4)
+                list_protocol_users "grpc"
+                ;;
+
+            5)
+                list_all_users
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                error_msg "Opción inválida."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ==============================================================
+# SUBMENÚ ELIMINAR
+# ==============================================================
+
+remove_menu() {
+
+    while true; do
+
+        header
+
+        echo -e \
+            "${WHITE}${BOLD}                 🗑️ ELIMINAR CUENTA${RESET}"
+
+        line
+
+        echo
+
+        echo -e \
+            "${GREEN}[01]${RESET} Eliminar VLESS"
+
+        echo -e \
+            "${GREEN}[02]${RESET} Eliminar VMess"
+
+        echo -e \
+            "${GREEN}[03]${RESET} Eliminar Trojan"
+
+        echo -e \
+            "${GREEN}[04]${RESET} Eliminar gRPC"
+
+        echo
+
+        echo -e \
+            "${MAGENTA}[05]${RESET} 🗑️ Eliminar de TODOS"
+
+        echo
+
+        echo -e \
+            "${RED}[00]${RESET} ↩️ Regresar"
+
+        echo
+
+        read -rp \
+            "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" \
+            OP
+
+        case "$OP" in
+
+            1)
+                remove_single_protocol "vless"
+                ;;
+
+            2)
+                remove_single_protocol "vmess"
+                ;;
+
+            3)
+                remove_single_protocol "trojan"
+                ;;
+
+            4)
+                remove_single_protocol "grpc"
+                ;;
+
+            5)
+                remove_user
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                error_msg "Opción inválida."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ==============================================================
+# ELIMINAR UN SOLO PROTOCOLO
+# ==============================================================
+
+remove_single_protocol() {
+
+    local PROTOCOL="$1"
+
+    header
+
+    echo -e \
+        "${WHITE}${BOLD}              🗑️ ELIMINAR ${PROTOCOL^^}${RESET}"
+
+    line
+
+    echo
+
+    read -rp \
+        "$(echo -e "${CYAN}👤 Usuario: ${RESET}")" \
+        USERNAME
+
+    USERNAME="$(echo "$USERNAME" | xargs)"
+
+    [[ -z "$USERNAME" ]] && return
+
+    if ! user_exists "$PROTOCOL" "$USERNAME"; then
+
+        error_msg "Usuario no encontrado."
+
+        pause
+
+        return
+    fi
+
+    local ID
+
+    ID=$(get_user_id "$PROTOCOL" "$USERNAME")
+
+    echo
+
+    echo -e \
+        "${WHITE}Usuario:${RESET} ${GREEN}$USERNAME${RESET}"
+
+    echo -e \
+        "${WHITE}ID:${RESET}      ${YELLOW}$ID${RESET}"
+
+    echo
+
+    read -rp \
+        "$(echo -e "${RED}Escribe ELIMINAR para confirmar: ${RESET}")" \
+        CONFIRM
+
+    [[ "$CONFIRM" != "ELIMINAR" ]] && {
+
+        warning "Operación cancelada."
+
+        pause
+
+        return
+    }
+
+    local TMP
+
+    TMP=$(mktemp --suffix=.json)
+
+    cp -f "$XRAY_CFG" "$TMP"
+
+    if ! remove_user_from_file \
+        "$TMP" \
+        "$PROTOCOL" \
+        "$USERNAME"; then
+
+        rm -f "$TMP"
+
+        error_msg "No se pudo modificar la configuración."
+
+        pause
+
+        return
+    fi
+
+    echo
+
+    info "Validando configuración..."
+
+    if ! validate_xray_file "$TMP"; then
+
+        rm -f "$TMP"
+
+        error_msg "El config.json NO fue modificado."
+
+        pause
+
+        return
+    fi
+
+    mv -f "$TMP" "$XRAY_CFG"
+
+    chmod 600 "$XRAY_CFG"
+
+    info "Reiniciando Xray..."
+
+    systemctl restart "$XRAY_SERVICE"
+
+    sleep 2
+
+    if xray_active; then
+
+        ok "Xray reiniciado correctamente."
+
+        ok "Usuario '$USERNAME' eliminado de ${PROTOCOL^^}."
+
+    else
+
+        error_msg "Xray no pudo reiniciar."
+
+        echo
+
+        journalctl \
+            -u "$XRAY_SERVICE" \
+            -n 30 \
+            --no-pager 2>/dev/null
+    fi
+
+    pause
+}
+
+# ==============================================================
+# MODO AUTOMÁTICO
 # ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
@@ -3249,20 +3251,27 @@ xray_menu() {
 
         VERSION_INFO="${VERSION_INFO:-NO INSTALADO}"
 
-        local TOTAL_VLESS=0
-        local TOTAL_VMESS=0
-        local TOTAL_TROJAN=0
-        local TOTAL_GRPC=0
+        local TOTAL_VLESS
+        local TOTAL_VMESS
+        local TOTAL_TROJAN
+        local TOTAL_GRPC
 
-        if [[ -f "$XRAY_CFG" ]] &&
-           validate_json; then
+        TOTAL_VLESS=$(get_total vless)
+        TOTAL_VMESS=$(get_total vmess)
+        TOTAL_TROJAN=$(get_total trojan)
+        TOTAL_GRPC=$(get_total grpc)
 
-            TOTAL_VLESS=$(count_users "vless")
-            TOTAL_VMESS=$(count_users "vmess")
-            TOTAL_TROJAN=$(count_users "trojan")
-            TOTAL_GRPC=$(count_users "grpc")
+        TOTAL_VLESS="${TOTAL_VLESS:-0}"
+        TOTAL_VMESS="${TOTAL_VMESS:-0}"
+        TOTAL_TROJAN="${TOTAL_TROJAN:-0}"
+        TOTAL_GRPC="${TOTAL_GRPC:-0}"
 
-        fi
+        local TOTAL_USERS=$(
+            echo $((TOTAL_VLESS +
+                TOTAL_VMESS +
+                TOTAL_TROJAN +
+                TOTAL_GRPC))
+        )
 
         echo -e \
             "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
@@ -3271,7 +3280,7 @@ xray_menu() {
             "${CYAN}║${RESET}             ${MAGENTA}${BOLD}🚀 KEVINTECH XRAY MANAGER${RESET}                  ${CYAN}║${RESET}"
 
         echo -e \
-            "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                            ${CYAN}║${RESET}"
+            "${CYAN}║${RESET}                     ${GRAY}v$VERSION${RESET}                             ${CYAN}║${RESET}"
 
         echo -e \
             "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
@@ -3280,13 +3289,16 @@ xray_menu() {
             "${WHITE}Estado:${RESET}        $STATUS"
 
         echo -e \
-            "${WHITE}Host:${RESET}          ${GREEN}${XRAY_HOST:-NO DISPONIBLE}${RESET}"
+            "${WHITE}Host:${RESET}          ${GREEN}$HOST${RESET}"
 
         echo -e \
-            "${WHITE}Tipo:${RESET}          ${GREEN}${HOST_TYPE:-N/A}${RESET}"
+            "${WHITE}Frontend:${RESET}      ${GREEN}HAProxy${RESET}"
 
         echo -e \
-            "${WHITE}Puerto público:${RESET} ${GREEN}$PUBLIC_PORT${RESET}"
+            "${WHITE}Públicos:${RESET}      ${GREEN}80 / 443 / 8080${RESET}"
+
+        echo -e \
+            "${WHITE}Versión:${RESET}       ${GREEN}$VERSION_INFO${RESET}"
 
         echo -e \
             "${WHITE}VLESS:${RESET}         ${GREEN}$TOTAL_VLESS${RESET}"
@@ -3301,70 +3313,96 @@ xray_menu() {
             "${WHITE}gRPC:${RESET}          ${GREEN}$TOTAL_GRPC${RESET}"
 
         echo -e \
-            "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+            "${WHITE}Total cuentas:${RESET} ${GREEN}$TOTAL_USERS${RESET}"
 
-        echo -e \
-            "${BLUE}${BOLD}  👥 GESTIÓN DE CUENTAS${RESET}"
+        line
+
+        if xray_installed; then
+
+            echo -e \
+                "${BLUE}${BOLD}  👥 GESTIÓN DE CUENTAS${RESET}"
+
+            echo
+
+            echo -e \
+                "  ${GREEN}[01]${RESET} 👤 Crear Cuenta"
+
+            echo -e \
+                "  ${GREEN}[02]${RESET} 📋 Listar Cuentas"
+
+            echo -e \
+                "  ${GREEN}[03]${RESET} 🗑️  Eliminar Cuenta"
+
+            echo -e \
+                "  ${GREEN}[04]${RESET} 📄 Mostrar Cuenta"
+
+            echo
+
+            echo -e \
+                "${BLUE}${BOLD}  🔗 HERRAMIENTAS${RESET}"
+
+            echo
+
+            echo -e \
+                "  ${GREEN}[05]${RESET} 🔗 Generar Enlace"
+
+            echo -e \
+                "  ${GREEN}[06]${RESET} 🌐 Usuarios Online"
+
+            echo
+
+            echo -e \
+                "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN XRAY${RESET}"
+
+            echo
+
+            echo -e \
+                "  ${GREEN}[07]${RESET} ♻️  Reiniciar Xray"
+
+            echo -e \
+                "  ${GREEN}[08]${RESET} 📊 Estado"
+
+            echo -e \
+                "  ${GREEN}[09]${RESET} 🔎 Diagnóstico"
+
+            echo -e \
+                "  ${GREEN}[10]${RESET} 📜 Logs"
+
+            echo -e \
+                "  ${GREEN}[11]${RESET} 🔄 Reinstalar / Actualizar"
+
+            echo -e \
+                "  ${RED}[12]${RESET} 🗑️  Desinstalar Xray"
+
+        else
+
+            echo -e \
+                "${BLUE}${BOLD}  🚀 INSTALACIÓN${RESET}"
+
+            echo
+
+            echo -e \
+                "  ${GREEN}[01]${RESET} 🚀 Instalar Xray Core"
+
+        fi
 
         echo
 
         echo -e \
-            "  ${GREEN}[01]${RESET} 👤 Crear cuenta"
+            "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
 
         echo -e \
-            "  ${GREEN}[02]${RESET} 👥 Listar cuentas"
-
-        echo -e \
-            "  ${GREEN}[03]${RESET} 🗑️  Eliminar cuenta"
-
-        echo -e \
-            "  ${GREEN}[04]${RESET} 🔗 Mostrar cuenta / enlace"
+            "  ${RED}${BOLD}[00]${RESET} ↩️ Regresar"
 
         echo
 
         echo -e \
-            "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN XRAY${RESET}"
-
-        echo
-
-        echo -e \
-            "  ${GREEN}[05]${RESET} 🌐 Usuarios online"
-
-        echo -e \
-            "  ${GREEN}[06]${RESET} 📊 Estado"
-
-        echo -e \
-            "  ${GREEN}[07]${RESET} 🔎 Diagnóstico"
-
-        echo -e \
-            "  ${GREEN}[08]${RESET} 📜 Logs"
-
-        echo -e \
-            "  ${GREEN}[09]${RESET} ♻️  Reiniciar Xray"
-
-        echo -e \
-            "  ${GREEN}[10]${RESET} 🔄 Instalar / Actualizar"
-
-        echo -e \
-            "  ${RED}[11]${RESET} 🗑️  Desinstalar Xray"
-
-        echo
-
-        echo -e \
-            "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
-
-        echo -e \
-            "  ${RED}${BOLD}[00]${RESET} ↩️  Regresar"
-
-        echo
-
-        echo -e \
-            "${GRAY}  KevinTech Multi Script • Xray v$VERSION${RESET}"
+            "${GRAY}KevinTech Multi Script • Xray Manager v$VERSION${RESET}"
 
         echo
 
         read -rp \
-            "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" \
+            "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" \
             OP
 
         case "$OP" in
@@ -3377,10 +3415,7 @@ xray_menu() {
 
                 else
 
-                    error_msg "Xray no está instalado."
-
-                    sleep 1
-
+                    install_xray
                 fi
 
                 ;;
@@ -3396,7 +3431,6 @@ xray_menu() {
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
 
                 ;;
@@ -3405,14 +3439,13 @@ xray_menu() {
 
                 if xray_installed; then
 
-                    delete_menu
+                    remove_menu
 
                 else
 
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
 
                 ;;
@@ -3421,19 +3454,33 @@ xray_menu() {
 
                 if xray_installed; then
 
-                    account_link_menu
+                    show_account
 
                 else
 
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
 
                 ;;
 
             5)
+
+                if xray_installed; then
+
+                    show_link
+
+                else
+
+                    error_msg "Xray no está instalado."
+
+                    sleep 1
+                fi
+
+                ;;
+
+            6)
 
                 if xray_installed; then
 
@@ -3444,40 +3491,11 @@ xray_menu() {
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
-
-                ;;
-
-            6)
-
-                xray_status
 
                 ;;
 
             7)
-
-                xray_diagnostic
-
-                ;;
-
-            8)
-
-                if xray_installed; then
-
-                    show_xray_logs
-
-                else
-
-                    error_msg "Xray no está instalado."
-
-                    sleep 1
-
-                fi
-
-                ;;
-
-            9)
 
                 if xray_installed; then
 
@@ -3488,18 +3506,44 @@ xray_menu() {
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
+
+                ;;
+
+            8)
+
+                xray_status
+
+                ;;
+
+            9)
+
+                xray_diagnostic
 
                 ;;
 
             10)
 
-                install_xray
+                if xray_installed; then
+
+                    show_xray_logs
+
+                else
+
+                    error_msg "Xray no está instalado."
+
+                    sleep 1
+                fi
 
                 ;;
 
             11)
+
+                install_xray
+
+                ;;
+
+            12)
 
                 if xray_installed; then
 
@@ -3510,7 +3554,6 @@ xray_menu() {
                     error_msg "Xray no está instalado."
 
                     sleep 1
-
                 fi
 
                 ;;
@@ -3535,9 +3578,7 @@ xray_menu() {
                 sleep 1
 
                 ;;
-
         esac
-
     done
 }
 
