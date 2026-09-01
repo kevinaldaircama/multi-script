@@ -2,12 +2,12 @@
 
 # ==============================================================
 #                 🛡️ KEVINTECH MULTI SCRIPT
-#                    PROTOCOL MANAGEMENT PANEL
+#                  PROTOCOL MANAGEMENT PANEL
 # ==============================================================
 #
 # Archivo : /etc/kevintech/protocolos/menu.sh
 # Config  : /etc/kevintech/config.conf
-# Versión : 3.0 Premium
+# Versión : 3.1 Premium
 #
 # ==============================================================
 #                    KEVINTECH / PRIVANOX
@@ -24,7 +24,7 @@ CONFIG="$BASE/config.conf"
 PROTOCOL_DIR="$BASE/protocolos"
 TOOLS_DIR="$BASE/herramientas"
 
-VERSION="3.0"
+VERSION="3.1"
 PANEL_NAME="KEVINTECH MULTI SCRIPT"
 
 # ==============================================================
@@ -115,13 +115,17 @@ run_module() {
     fi
 
     if ! module_exists "$FILE"; then
+
         echo
         echo -e "${RED}${BOLD}✘ MÓDULO NO ENCONTRADO${RESET}"
         echo
+
         echo -e "${WHITE}Archivo:${RESET}"
         echo -e "${YELLOW}$FILE${RESET}"
+
         echo
         pause
+
         return 1
     fi
 
@@ -141,6 +145,7 @@ run_module() {
     echo
 
     bash "$FILE"
+
     local EXIT_CODE=$?
 
     echo
@@ -159,15 +164,24 @@ run_module() {
 # ==============================================================
 
 service_exists() {
-    systemctl cat "$1" &>/dev/null
+
+    local SERVICE="$1"
+
+    systemctl cat "$SERVICE" &>/dev/null
 }
 
 service_active() {
-    systemctl is-active --quiet "$1" 2>/dev/null
+
+    local SERVICE="$1"
+
+    systemctl is-active --quiet "$SERVICE" 2>/dev/null
 }
 
 service_enabled() {
-    systemctl is-enabled --quiet "$1" 2>/dev/null
+
+    local SERVICE="$1"
+
+    systemctl is-enabled --quiet "$SERVICE" 2>/dev/null
 }
 
 status_service() {
@@ -178,22 +192,31 @@ status_service() {
     if service_exists "$SERVICE"; then
 
         if service_active "$SERVICE"; then
+
             echo -e "${GREEN}● ONLINE${RESET}"
 
         elif service_enabled "$SERVICE"; then
+
             echo -e "${YELLOW}● STOPPED${RESET}"
 
         else
+
             echo -e "${RED}● OFF${RESET}"
+
         fi
 
     else
 
-        if [[ "$CONFIG_STATUS" == "ON" ]]; then
+        if [[ "${CONFIG_STATUS^^}" == "ON" ]]; then
+
             echo -e "${YELLOW}● CONFIG${RESET}"
+
         else
+
             echo -e "${GRAY}● OFF${RESET}"
+
         fi
+
     fi
 }
 
@@ -204,12 +227,17 @@ status_config() {
     case "${VALUE^^}" in
 
         ON|1|YES|TRUE)
+
             echo -e "${GREEN}● ON${RESET}"
+
             ;;
 
         *)
+
             echo -e "${GRAY}● OFF${RESET}"
+
             ;;
+
     esac
 }
 
@@ -218,6 +246,7 @@ status_config() {
 # ==============================================================
 
 get_hostname() {
+
     hostname 2>/dev/null || echo "Servidor"
 }
 
@@ -244,10 +273,12 @@ get_ram_percent() {
 
     free 2>/dev/null |
         awk '/^Mem:/ {
+
             if ($2 > 0)
                 printf "%.0f", ($3/$2)*100
             else
                 print "0"
+
         }'
 }
 
@@ -263,6 +294,7 @@ get_cpu() {
                 if($i ~ /id,/) {
 
                     value=$(i-1)
+
                     gsub(",", "", value)
 
                     printf "%.0f", 100-value
@@ -270,6 +302,7 @@ get_cpu() {
                     exit
                 }
             }
+
         }')
 
     [[ "$CPU" =~ ^[0-9]+$ ]] || CPU=0
@@ -282,7 +315,10 @@ get_disk_percent() {
     local DISK
 
     DISK=$(df / 2>/dev/null |
-        awk 'NR==2 {gsub("%","",$5); print $5}')
+        awk 'NR==2 {
+            gsub("%","",$5)
+            print $5
+        }')
 
     [[ "$DISK" =~ ^[0-9]+$ ]] || DISK=0
 
@@ -292,7 +328,9 @@ get_disk_percent() {
 get_disk_used() {
 
     df -h / 2>/dev/null |
-        awk 'NR==2 {print $3 "/" $2}'
+        awk 'NR==2 {
+            print $3 "/" $2
+        }'
 }
 
 get_uptime() {
@@ -357,11 +395,22 @@ progress_bar() {
 
 show_header() {
 
-    local HOST IP RAM CPU DISK DISK_USED UPTIME ONLINE
-    local PROCESSES KERNEL ARCH RAM_PERCENT
+    local HOST
+    local IP
+    local RAM
+    local CPU
+    local DISK
+    local DISK_USED
+    local UPTIME
+    local ONLINE
+    local PROCESSES
+    local KERNEL
+    local ARCH
+    local RAM_PERCENT
 
     HOST=$(get_hostname)
     IP=$(get_ip)
+
     RAM=$(get_ram)
     RAM_PERCENT=$(get_ram_percent)
 
@@ -374,23 +423,29 @@ show_header() {
     ONLINE=$(get_online)
 
     PROCESSES=$(get_processes)
+
     KERNEL=$(get_kernel)
     ARCH=$(get_arch)
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🛡️ $PANEL_NAME${RESET}              ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${RESET}                  ${GRAY}PROTOCOL PANEL v$VERSION${RESET}                   ${CYAN}║${RESET}"
+
+    echo -e "${CYAN}║${RESET}        ${MAGENTA}${BOLD}🛡️  $PANEL_NAME${RESET}        ${CYAN}║${RESET}"
+
+    echo -e "${CYAN}║${RESET}              ${GRAY}PROTOCOL PANEL • v$VERSION${RESET}              ${CYAN}║${RESET}"
 
     separator
 
     printf "${CYAN}║${RESET} ${WHITE}🖥 SERVIDOR${RESET} %-17s ${WHITE}🌐 IP${RESET} %-20s ${CYAN}║${RESET}\n" \
-        "${HOST:0:17}" "${IP:0:20}"
+        "${HOST:0:17}" \
+        "${IP:0:20}"
 
     printf "${CYAN}║${RESET} ${WHITE}⏱ UPTIME${RESET}  %-17s ${WHITE}👥 ONLINE${RESET} %-20s ${CYAN}║${RESET}\n" \
-        "${UPTIME:0:17}" "$ONLINE"
+        "${UPTIME:0:17}" \
+        "$ONLINE"
 
     printf "${CYAN}║${RESET} ${WHITE}⚙ PROCESOS${RESET} %-15s ${WHITE}🧩 ARCH${RESET} %-20s ${CYAN}║${RESET}\n" \
-        "$PROCESSES" "$ARCH"
+        "$PROCESSES" \
+        "$ARCH"
 
     printf "${CYAN}║${RESET} ${WHITE}🐧 KERNEL${RESET} %-44s ${CYAN}║${RESET}\n" \
         "${KERNEL:0:44}"
@@ -415,13 +470,14 @@ show_header() {
 }
 
 # ==============================================================
-# ESTADOS
+# ESTADOS DE PROTOCOLOS
 # ==============================================================
-# Se calculan nuevamente cada vez que se muestra el menú.
 
 get_statuses() {
 
-    OPENSSH_STATUS=$(status_service "ssh" "${OPENSSH:-OFF}")
+    OPENSSH_STATUS=$(status_service \
+        "ssh" \
+        "${OPENSSH:-OFF}")
 
     CHECKUSER_STATUS=$(status_service \
         "checkuser" \
@@ -455,9 +511,15 @@ get_statuses() {
         "hysteria1-server" \
         "${HYSTERIA:-OFF}")
 
-    ZIPVPN_STATUS=$(status_config "${ZIPVPN:-OFF}")
+    BHTTP_STATUS=$(status_service \
+        "bhttp" \
+        "${BHTTP:-OFF}")
 
-    BADVPN_STATUS=$(status_config "${BADVPN:-OFF}")
+    ZIPVPN_STATUS=$(status_config \
+        "${ZIPVPN:-OFF}")
+
+    BADVPN_STATUS=$(status_config \
+        "${BADVPN:-OFF}")
 }
 
 # ==============================================================
@@ -469,58 +531,83 @@ show_protocol_menu() {
     get_statuses
 
     echo
+
     echo -e "${BLUE}${BOLD}  🔐 PROTOCOLOS DE CONEXIÓN${RESET}"
+
     line
 
     printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 %-20s %b\n" \
-        "OpenSSH" "$OPENSSH_STATUS"
+        "OpenSSH" \
+        "$OPENSSH_STATUS"
 
     printf "  ${GREEN}${BOLD}[02]${RESET} 📦 %-20s %b\n" \
-        "ZIPVPN" "$ZIPVPN_STATUS"
+        "ZIPVPN" \
+        "$ZIPVPN_STATUS"
 
     printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 %-20s %b\n" \
-        "Dropbear" "$DROPBEAR_STATUS"
+        "Dropbear" \
+        "$DROPBEAR_STATUS"
 
     printf "  ${GREEN}${BOLD}[04]${RESET} 🔒 %-20s %b\n" \
-        "SSL / TLS" "$SSL_STATUS"
+        "SSL / TLS" \
+        "$SSL_STATUS"
 
     printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ %-20s %b\n" \
-        "BadVPN" "$BADVPN_STATUS"
+        "BadVPN" \
+        "$BADVPN_STATUS"
 
     printf "  ${GREEN}${BOLD}[06]${RESET} 🚀 %-20s %b\n" \
-        "UDP Custom" "$UDP_STATUS"
+        "UDP Custom" \
+        "$UDP_STATUS"
 
     printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 %-20s %b\n" \
-        "SlowDNS" "$SLOWDNS_STATUS"
+        "SlowDNS" \
+        "$SLOWDNS_STATUS"
 
     printf "  ${GREEN}${BOLD}[08]${RESET} ☁️  %-20s %b\n" \
-        "Xray / V2Ray" "$XRAY_STATUS"
+        "Xray / V2Ray" \
+        "$XRAY_STATUS"
 
     printf "  ${GREEN}${BOLD}[09]${RESET} 👤 %-20s %b\n" \
-        "CheckUser" "$CHECKUSER_STATUS"
+        "CheckUser" \
+        "$CHECKUSER_STATUS"
 
     printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-20s %b\n" \
-        "OpenVPN" "$OPENVPN_STATUS"
+        "OpenVPN" \
+        "$OPENVPN_STATUS"
 
     printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  %-20s %b\n" \
-        "Hysteria" "$HYSTERIA_STATUS"
+        "Hysteria" \
+        "$HYSTERIA_STATUS"
+
+    printf "  ${MAGENTA}${BOLD}[12]${RESET} 🌐 %-20s %b\n" \
+        "BHTTP" \
+        "$BHTTP_STATUS"
 
     echo
-    echo -e "${BLUE}${BOLD}  🛠️ ADMINISTRACIÓN DEL SISTEMA${RESET}"
+
+    echo -e "${BLUE}${BOLD}  🛠️  ADMINISTRACIÓN DEL SISTEMA${RESET}"
+
     line
 
-    echo -e "  ${GREEN}${BOLD}[12]${RESET} 🧰 Herramientas"
-    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🔄 Reiniciar Servicios"
-    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔥 Firewall"
-    echo -e "  ${GREEN}${BOLD}[15]${RESET} 🤖 Bot Telegram"
+    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas"
+
+    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔄 Reiniciar Servicios"
+
+    echo -e "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall"
+
+    echo -e "  ${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram"
 
     echo
+
     line
 
     echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  Regresar al Menú Principal"
 
     echo
+
     echo -e "${GRAY}  KevinTech Multi Script • Privanox VPN • v${VERSION}${RESET}"
+
     echo
 }
 
@@ -535,82 +622,139 @@ process_option() {
     case "$OP" in
 
         1|01)
+
             run_module "$PROTOCOL_DIR/openssh.sh"
+
             ;;
 
         2|02)
+
             run_module "$PROTOCOL_DIR/zipvpn.sh"
+
             ;;
 
         3|03)
+
             run_module "$PROTOCOL_DIR/dropbear.sh"
+
             ;;
 
         4|04)
+
             run_module "$PROTOCOL_DIR/ssl.sh"
+
             ;;
 
         5|05)
+
             run_module "$PROTOCOL_DIR/badvpn.sh"
+
             ;;
 
         6|06)
+
             run_module "$PROTOCOL_DIR/udpcustom.sh"
+
             ;;
 
         7|07)
+
             run_module "$PROTOCOL_DIR/slowdns.sh"
+
             ;;
 
         8|08)
+
             run_module "$PROTOCOL_DIR/v2ray.sh"
+
             ;;
 
         9|09)
+
             run_module "$PROTOCOL_DIR/checkuser.sh"
+
             ;;
 
         10)
+
             run_module "$PROTOCOL_DIR/openvpn.sh"
+
             ;;
 
         11)
+
             run_module "$PROTOCOL_DIR/histeria.sh"
+
             ;;
+
+        # ======================================================
+        # BHTTP
+        # ======================================================
 
         12)
-            run_module "$TOOLS_DIR/menu.sh"
+
+            run_module "$PROTOCOL_DIR/bhttp.sh"
+
             ;;
 
+        # ======================================================
+        # ADMINISTRACIÓN
+        # ======================================================
+
         13)
-            run_module "$TOOLS_DIR/reiniciar.sh"
+
+            run_module "$TOOLS_DIR/menu.sh"
+
             ;;
 
         14)
-            run_module "$TOOLS_DIR/firewall.sh"
+
+            run_module "$TOOLS_DIR/reiniciar.sh"
+
             ;;
 
         15)
+
+            run_module "$TOOLS_DIR/firewall.sh"
+
+            ;;
+
+        16)
+
             run_module "$BASE/telegram/install.sh"
+
             ;;
 
         0|00)
+
             clear
+
             if [[ -f "$BASE/menu.sh" ]]; then
+
                 exec bash "$BASE/menu.sh"
+
             else
+
                 exit 0
+
             fi
+
             ;;
 
         "")
+
             ;;
 
         *)
+
             echo
+
             echo -e "  ${RED}${BOLD}✘ Opción inválida: $OP${RESET}"
+
             sleep 1
+
             ;;
+
     esac
 }
 
@@ -619,11 +763,13 @@ process_option() {
 # ==============================================================
 
 trap '
+
     echo
     echo -e "${YELLOW}⚠️  Regresando...${RESET}"
     sleep 1
     clear
     exit 0
+
 ' INT TERM
 
 # ==============================================================
