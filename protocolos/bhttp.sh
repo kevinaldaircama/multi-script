@@ -8,7 +8,7 @@
 # Archivo : /etc/kevintech/protocolos/bhttp.sh
 # Config  : /etc/kevintech/bhttp.conf
 # Servicio: bhttp.service
-# Versión : 3.2 Premium
+# Versión : 3.3 Premium
 #
 # ==============================================================
 
@@ -19,10 +19,13 @@ set -o pipefail
 # ==============================================================
 
 BASE="/etc/kevintech"
+
 BHTTP_DIR="/usr/local/lib/bhttp"
 SERVER_PY="$BHTTP_DIR/bhttp-server.py"
+
 UNIT="/etc/systemd/system/bhttp.service"
 SERVICE="bhttp"
+
 CONFIG="$BASE/bhttp.conf"
 
 BHTTP_HOST="0.0.0.0"
@@ -31,20 +34,10 @@ BHTTP_PORT="8080"
 SSH_HOST="127.0.0.1"
 SSH_PORT="22"
 
-CANDIDATOS=(
-    8080
-    80
-    8443
-    443
-    2082
-    2095
-    8880
-    2052
-    3128
-)
+VERSION="3.3"
 
 # ==============================================================
-# COLORES KEVINTECH
+# COLORES
 # ==============================================================
 
 RESET="\e[0m"
@@ -64,16 +57,46 @@ GRAY="\e[1;90m"
 # ==============================================================
 
 if [[ $EUID -ne 0 ]]; then
+
     clear
+
     echo
     echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
     echo
     echo -e "${WHITE}Este módulo requiere permisos de root.${RESET}"
     echo
+
     exit 1
 fi
 
 mkdir -p "$BASE"
+
+# ==============================================================
+# UTILIDADES
+# ==============================================================
+
+line() {
+
+    echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
+}
+
+separator() {
+
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+}
+
+pause() {
+
+    echo
+    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+}
+
+valid_port() {
+
+    [[ "$1" =~ ^[0-9]+$ ]] &&
+    (( "$1" >= 1 )) &&
+    (( "$1" <= 65535 ))
+}
 
 # ==============================================================
 # CONFIGURACIÓN
@@ -123,97 +146,7 @@ EOF
 cargar_config
 
 # ==============================================================
-# UTILIDADES
-# ==============================================================
-
-pause() {
-
-    echo
-    read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
-}
-
-line() {
-
-    echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
-}
-
-separator() {
-
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-}
-
-valid_port() {
-
-    [[ "$1" =~ ^[0-9]+$ ]] &&
-    (( "$1" >= 1 )) &&
-    (( "$1" <= 65535 ))
-}
-
-# ==============================================================
-# PUERTOS
-# ==============================================================
-
-puertos_ocupados() {
-
-    if command -v ss >/dev/null 2>&1; then
-
-        ss -H -tln 2>/dev/null |
-            awk '{print $4}' |
-            sed 's/.*://'
-
-    elif command -v netstat >/dev/null 2>&1; then
-
-        netstat -tln 2>/dev/null |
-            awk '/^tcp/ {print $4}' |
-            sed 's/.*://'
-
-    fi |
-        grep -E '^[0-9]+$' |
-        sort -u
-}
-
-puerto_libre() {
-
-    local PORT="$1"
-
-    ! puertos_ocupados | grep -qx "$PORT"
-}
-
-primer_puerto_libre() {
-
-    local P
-
-    for P in "${CANDIDATOS[@]}"; do
-
-        if puerto_libre "$P"; then
-            echo "$P"
-            return
-        fi
-
-    done
-
-    echo "8080"
-}
-
-puerto_escuchando() {
-
-    local PORT="$1"
-
-    if command -v ss >/dev/null 2>&1; then
-
-        ss -H -tln 2>/dev/null |
-            awk '{print $4}' |
-            grep -qE ":${PORT}$"
-
-    else
-
-        return 1
-
-    fi
-}
-
-# ==============================================================
-# ESTADO
+# DETECCIÓN DE SERVICIO
 # ==============================================================
 
 servicio_instalado() {
@@ -227,17 +160,63 @@ servicio_online() {
     systemctl is-active --quiet "$SERVICE" 2>/dev/null
 }
 
-mostrar_estado_simple() {
+servicio_habilitado() {
+
+    systemctl is-enabled --quiet "$SERVICE" 2>/dev/null
+}
+
+# ==============================================================
+# DETECCIÓN DE PUERTO
+# ==============================================================
+
+puerto_escuchando() {
+
+    local PORT="$1"
+
+    [[ "$PORT" =~ ^[0-9]+$ ]] || return 1
+
+    if command -v ss >/dev/null 2>&1; then
+
+        ss -H -ltn 2>/dev/null |
+            awk '{print $4}' |
+            grep -qE ":${PORT}$"
+
+        return $?
+
+    fi
+
+    return 1
+}
+
+puerto_ocupado() {
+
+    local PORT="$1"
+
+    puerto_escuchando "$PORT"
+}
+
+# ==============================================================
+# ESTADO VISUAL
+# ==============================================================
+
+estado_servicio() {
 
     if ! servicio_instalado; then
 
         echo -e "${GRAY}● NO INSTALADO${RESET}"
 
-    elif servicio_online; then
+        return
+    fi
+
+    if servicio_online && puerto_escuchando "$BHTTP_PORT"; then
 
         echo -e "${GREEN}● ONLINE${RESET}"
 
-    elif systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+    elif servicio_online; then
+
+        echo -e "${YELLOW}● ONLINE / PUERTO NO DETECTADO${RESET}"
+
+    elif servicio_habilitado; then
 
         echo -e "${YELLOW}● STOPPED${RESET}"
 
@@ -249,171 +228,7 @@ mostrar_estado_simple() {
 }
 
 # ==============================================================
-# CREAR USUARIO SSH
-# ==============================================================
-
-crear_usuario() {
-
-    local USERNAME="$1"
-    local PASSWORD="$2"
-
-    if [[ -z "$USERNAME" ]]; then
-
-        echo
-        read -rp "$(echo -e "${CYAN}Usuario SSH: ${RESET}")" USERNAME
-
-    fi
-
-    if [[ -z "$USERNAME" ]]; then
-
-        echo -e "${RED}✘ Usuario vacío.${RESET}"
-        return 1
-
-    fi
-
-    if [[ ! "$USERNAME" =~ ^[a-zA-Z0-9._-]+$ ]]; then
-
-        echo -e "${RED}✘ Nombre de usuario inválido.${RESET}"
-        return 1
-
-    fi
-
-    if id "$USERNAME" >/dev/null 2>&1; then
-
-        echo -e "${YELLOW}⚠ El usuario ya existe.${RESET}"
-
-    else
-
-        useradd -M -s /bin/bash "$USERNAME"
-
-        if [[ $? -ne 0 ]]; then
-
-            echo -e "${RED}✘ No se pudo crear el usuario.${RESET}"
-            return 1
-
-        fi
-
-        echo -e "${GREEN}✔ Usuario creado.${RESET}"
-
-    fi
-
-    if [[ -z "$PASSWORD" ]]; then
-
-        PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 12)
-
-    fi
-
-    if [[ -z "$PASSWORD" ]]; then
-
-        PASSWORD="kt$(date +%s)"
-
-    fi
-
-    echo "$USERNAME:$PASSWORD" | chpasswd
-
-    if [[ $? -ne 0 ]]; then
-
-        echo -e "${RED}✘ No se pudo establecer la contraseña.${RESET}"
-        return 1
-
-    fi
-
-    echo
-    echo -e "${GREEN}${BOLD}✔ CUENTA SSH LISTA${RESET}"
-    line
-    echo -e "${WHITE}Usuario :${RESET} ${CYAN}$USERNAME${RESET}"
-    echo -e "${WHITE}Clave   :${RESET} ${CYAN}$PASSWORD${RESET}"
-    echo -e "${WHITE}SSH     :${RESET} ${CYAN}$SSH_PORT${RESET}"
-    line
-
-    pause
-}
-
-# ==============================================================
-# DIAGNÓSTICO SSH
-# ==============================================================
-
-diagnostico() {
-
-    clear
-
-    echo -e "${CYAN}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                    🔎 BHTTP DIAGNÓSTICO                     ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${RESET}"
-
-    echo -e "${WHITE}Servicio${RESET}"
-    line
-
-    if servicio_online; then
-        echo -e "  Estado       : ${GREEN}ONLINE${RESET}"
-    else
-        echo -e "  Estado       : ${RED}OFFLINE${RESET}"
-    fi
-
-    echo
-    echo -e "${WHITE}Configuración${RESET}"
-    line
-
-    echo -e "  Host BHTTP   : ${CYAN}$BHTTP_HOST${RESET}"
-    echo -e "  Puerto BHTTP : ${CYAN}$BHTTP_PORT${RESET}"
-    echo -e "  Backend SSH  : ${CYAN}$SSH_HOST:$SSH_PORT${RESET}"
-
-    echo
-    echo -e "${WHITE}SSH${RESET}"
-    line
-
-    if systemctl is-active --quiet ssh 2>/dev/null ||
-       systemctl is-active --quiet sshd 2>/dev/null; then
-
-        echo -e "  SSH          : ${GREEN}ACTIVO${RESET}"
-
-    else
-
-        echo -e "  SSH          : ${RED}INACTIVO${RESET}"
-
-    fi
-
-    if puerto_escuchando "$SSH_PORT"; then
-
-        echo -e "  Puerto SSH   : ${GREEN}ESCUCHANDO${RESET}"
-
-    else
-
-        echo -e "  Puerto SSH   : ${RED}NO DETECTADO${RESET}"
-
-    fi
-
-    echo
-    echo -e "${WHITE}BHTTP${RESET}"
-    line
-
-    if puerto_escuchando "$BHTTP_PORT"; then
-
-        echo -e "  Puerto $BHTTP_PORT : ${GREEN}ESCUCHANDO${RESET}"
-
-    else
-
-        echo -e "  Puerto $BHTTP_PORT : ${RED}NO ESCUCHA${RESET}"
-
-    fi
-
-    echo
-    echo -e "${WHITE}Últimos registros${RESET}"
-    line
-
-    journalctl \
-        -u "$SERVICE" \
-        -n 8 \
-        --no-pager \
-        2>/dev/null
-
-    pause
-}
-
-# ==============================================================
-# ESCRIBIR SERVIDOR PYTHON
+# ESCRIBIR SERVIDOR BHTTP
 # ==============================================================
 
 instalar_servidor_python() {
@@ -433,11 +248,21 @@ LONGPOLL = 2.0
 
 
 def log(msg):
-    sys.stderr.write("[bhttp] %s\n" % msg)
+
+    sys.stderr.write(
+        "[bhttp] %s\n" % msg
+    )
+
     sys.stderr.flush()
 
 
-def keystream(sess, mode, seq, direction, length):
+def keystream(
+    sess,
+    mode,
+    seq,
+    direction,
+    length
+):
 
     base = hashlib.sha256(
         sess +
@@ -452,7 +277,10 @@ def keystream(sess, mode, seq, direction, length):
     while len(output) < length:
 
         h = base.copy()
-        h.update(counter.to_bytes(4, "big"))
+
+        h.update(
+            counter.to_bytes(4, "big")
+        )
 
         output += h.digest()
 
@@ -461,7 +289,13 @@ def keystream(sess, mode, seq, direction, length):
     return bytes(output[:length])
 
 
-def mask(data, sess, mode, seq, direction):
+def mask(
+    data,
+    sess,
+    mode,
+    seq,
+    direction
+):
 
     stream = keystream(
         sess,
@@ -479,7 +313,11 @@ def mask(data, sess, mode, seq, direction):
 
 def probe_reply(mode, size):
 
-    length = size if mode == 2 and size >= 10 else 10
+    length = (
+        size
+        if mode == 2 and size >= 10
+        else 10
+    )
 
     output = bytearray(
         MAGIC +
@@ -489,14 +327,20 @@ def probe_reply(mode, size):
 
     for i in range(10, length):
 
-        output.append((i * 31) & 255)
+        output.append(
+            (i * 31) & 255
+        )
 
     return bytes(output)
 
 
 class Session:
 
-    def __init__(self, session_id, backend):
+    def __init__(
+        self,
+        session_id,
+        backend
+    ):
 
         self.session_id = session_id
         self.backend = backend
@@ -520,9 +364,11 @@ class Session:
 
         host, port = self.backend
 
-        self.reader, self.writer = await asyncio.open_connection(
-            host,
-            port
+        self.reader, self.writer = (
+            await asyncio.open_connection(
+                host,
+                port
+            )
         )
 
         log(
@@ -534,7 +380,9 @@ class Session:
             )
         )
 
-        asyncio.create_task(self.backend_reader())
+        asyncio.create_task(
+            self.backend_reader()
+        )
 
     async def backend_reader(self):
 
@@ -544,7 +392,9 @@ class Session:
 
             while True:
 
-                data = await self.reader.read(65536)
+                data = await self.reader.read(
+                    65536
+                )
 
                 if not data:
                     break
@@ -583,15 +433,24 @@ class Session:
 
                 self.condition.notify_all()
 
-    async def upload(self, sequence, data):
+    async def upload(
+        self,
+        sequence,
+        data
+    ):
 
         async with self.condition:
 
             if data:
 
-                self.upload_pending[sequence] = data
+                self.upload_pending[
+                    sequence
+                ] = data
 
-            while self.upload_next in self.upload_pending:
+            while (
+                self.upload_next
+                in self.upload_pending
+            ):
 
                 chunk = self.upload_pending.pop(
                     self.upload_next
@@ -682,7 +541,9 @@ class Session:
 
                     continue
 
-                while self.download_assign <= sequence:
+                while (
+                    self.download_assign <= sequence
+                ):
 
                     self.download_assign += 1
 
@@ -690,7 +551,10 @@ class Session:
 
                 return b""
 
-    async def acknowledge(self, sequence):
+    async def acknowledge(
+        self,
+        sequence
+    ):
 
         async with self.condition:
 
@@ -736,7 +600,10 @@ class Server:
 
         self.session_lock = asyncio.Lock()
 
-    async def get_session(self, session_id):
+    async def get_session(
+        self,
+        session_id
+    ):
 
         async with self.session_lock:
 
@@ -744,9 +611,16 @@ class Server:
                 session_id
             )
 
-            if session is None or session.closed:
+            if (
+                session is None
+                or
+                session.closed
+            ):
 
-                for old_id, old_session in list(
+                for (
+                    old_id,
+                    old_session
+                ) in list(
                     self.sessions.items()
                 ):
 
@@ -789,7 +663,9 @@ class Server:
 
             while True:
 
-                header = await reader.readexactly(29)
+                header = await reader.readexactly(
+                    29
+                )
 
                 mode = header[0]
 
@@ -855,7 +731,10 @@ class Server:
 
                     writer.write(
                         bytes([0]) +
-                        len(reply).to_bytes(4, "big") +
+                        len(reply).to_bytes(
+                            4,
+                            "big"
+                        ) +
                         reply
                     )
 
@@ -885,7 +764,9 @@ class Server:
 
                     chunk = await session.download(
                         sequence,
-                        length if length > 0 else 1399,
+                        length
+                        if length > 0
+                        else 1399,
                         asyncio.get_running_loop().time()
                         + LONGPOLL
                     )
@@ -1011,14 +892,20 @@ class Server:
         )
 
         body = (
-            real_length.to_bytes(4, "big")
+            real_length.to_bytes(
+                4,
+                "big"
+            )
             +
             encrypted
         )
 
         writer.write(
             bytes([2]) +
-            len(body).to_bytes(4, "big") +
+            len(body).to_bytes(
+                4,
+                "big"
+            ) +
             body
         )
 
@@ -1093,11 +980,11 @@ if __name__ == "__main__":
 
 PYEOF
 
-    chmod +x "$SERVER_PY"
+    chmod 755 "$SERVER_PY"
 }
 
 # ==============================================================
-# CREAR SYSTEMD
+# CREAR SERVICIO SYSTEMD
 # ==============================================================
 
 crear_servicio() {
@@ -1109,185 +996,132 @@ crear_servicio() {
     if [[ -z "$PYTHON" ]]; then
 
         echo -e "${RED}✘ Python3 no está instalado.${RESET}"
-        return 1
 
+        return 1
     fi
 
     cat > "$UNIT" <<EOF
 [Unit]
 Description=KevinTech BHTTP Server
 After=network.target ssh.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
+WorkingDirectory=$BHTTP_DIR
 ExecStart=$PYTHON $SERVER_PY --host $BHTTP_HOST --port $BHTTP_PORT --backend-host $SSH_HOST --backend-port $SSH_PORT
 Restart=always
 RestartSec=3
 KillMode=mixed
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+    chmod 644 "$UNIT"
 }
 
 # ==============================================================
-# VERIFICACIÓN REAL DEL PROTOCOLO
+# DETENER SERVICIO
 # ==============================================================
 
-verificar_bhttp() {
+detener_servicio_silencioso() {
 
-    python3 - "$BHTTP_PORT" <<'PY'
-import hashlib
-import os
-import socket
-import sys
+    systemctl stop "$SERVICE" 2>/dev/null || true
 
-PORT = int(sys.argv[1])
-
-MAGIC = b"BHP1"
-
-SESSION = os.urandom(16)
-
-
-def stream(mode, sequence, direction, length):
-
-    output = b""
-    counter = 0
-
-    while len(output) < length:
-
-        data = (
-            SESSION +
-            bytes([mode]) +
-            sequence.to_bytes(8, "big") +
-            bytes([direction]) +
-            counter.to_bytes(4, "big")
-        )
-
-        output += hashlib.sha256(data).digest()
-
-        counter += 1
-
-    return output[:length]
-
-
-def mask(data, mode, sequence, direction):
-
-    key = stream(
-        mode,
-        sequence,
-        direction,
-        len(data)
-    )
-
-    return bytes(
-        a ^ b
-        for a, b in zip(data, key)
-    )
-
-
-def recv_all(sock, size):
-
-    data = b""
-
-    while len(data) < size:
-
-        part = sock.recv(
-            size - len(data)
-        )
-
-        if not part:
-            raise RuntimeError(
-                "conexion cerrada"
-            )
-
-        data += part
-
-    return data
-
-
-try:
-
-    sock = socket.create_connection(
-        ("127.0.0.1", PORT),
-        timeout=5
-    )
-
-    payload = (
-        MAGIC +
-        bytes([1, 0]) +
-        (0).to_bytes(4, "big")
-    )
-
-    encrypted = mask(
-        payload,
-        0,
-        0,
-        0
-    )
-
-    header = (
-        bytes([0]) +
-        SESSION +
-        (0).to_bytes(8, "big") +
-        len(encrypted).to_bytes(4, "big")
-    )
-
-    sock.sendall(
-        header +
-        encrypted
-    )
-
-    status = recv_all(
-        sock,
-        1
-    )[0]
-
-    length = int.from_bytes(
-        recv_all(sock, 4),
-        "big"
-    )
-
-    body = (
-        recv_all(sock, length)
-        if length
-        else b""
-    )
-
-    sock.close()
-
-    if status != 0:
-        raise RuntimeError(
-            "status=%d" % status
-        )
-
-    decoded = mask(
-        body,
-        0,
-        0,
-        1
-    )
-
-    if decoded[:4] != MAGIC:
-        raise RuntimeError(
-            "respuesta BHP1 inválida"
-        )
-
-    print("OK")
-
-except Exception as error:
-
-    print(
-        "ERROR:%s" % error
-    )
-
-PY
+    sleep 1
 }
 
 # ==============================================================
-# INSTALAR
+# INICIAR Y VERIFICAR
+# ==============================================================
+
+iniciar_y_verificar() {
+
+    systemctl daemon-reload
+
+    systemctl enable "$SERVICE" >/dev/null 2>&1
+
+    systemctl restart "$SERVICE"
+
+    local ONLINE=0
+    local LISTEN=0
+
+    echo
+    echo -e "${GRAY}▸ Verificando BHTTP...${RESET}"
+
+    for ((i=1; i<=10; i++)); do
+
+        if servicio_online; then
+            ONLINE=1
+        fi
+
+        if puerto_escuchando "$BHTTP_PORT"; then
+            LISTEN=1
+        fi
+
+        if [[ "$ONLINE" == "1" &&
+              "$LISTEN" == "1" ]]; then
+            break
+        fi
+
+        sleep 1
+
+    done
+
+    if [[ "$ONLINE" == "1" &&
+          "$LISTEN" == "1" ]]; then
+
+        BHTTP="ON"
+
+        guardar_config
+
+        return 0
+
+    fi
+
+    BHTTP="OFF"
+
+    guardar_config
+
+    return 1
+}
+
+# ==============================================================
+# MOSTRAR ERROR DE SERVICIO
+# ==============================================================
+
+mostrar_error_servicio() {
+
+    echo
+
+    echo -e "${RED}${BOLD}✘ BHTTP no quedó funcionando correctamente.${RESET}"
+
+    echo
+
+    echo -e "${WHITE}Estado:${RESET}"
+
+    systemctl status "$SERVICE" \
+        --no-pager \
+        -l \
+        2>/dev/null
+
+    echo
+
+    echo -e "${YELLOW}Últimos registros:${RESET}"
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 20 \
+        --no-pager \
+        -l \
+        2>/dev/null
+}
+
+# ==============================================================
+# INSTALAR / ACTUALIZAR
 # ==============================================================
 
 instalar_bhttp() {
@@ -1296,257 +1130,226 @@ instalar_bhttp() {
 
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                                                              ║"
     echo "║                    🌐 INSTALAR BHTTP                        ║"
+    echo "║                                                              ║"
+    echo "║                 KEVINTECH PREMIUM v3.3                     ║"
+    echo "║                                                              ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 
     cargar_config
 
-    if ! command -v python3 >/dev/null 2>&1; then
-
-        echo -e "${YELLOW}▸ Instalando Python3...${RESET}"
-
-        apt-get update -qq >/dev/null 2>&1
-        apt-get install -y python3 >/dev/null 2>&1
-
-        if ! command -v python3 >/dev/null 2>&1; then
-
-            echo -e "${RED}✘ No se pudo instalar Python3.${RESET}"
-            pause
-            return 1
-
-        fi
-
-        echo -e "${GREEN}✔ Python3 instalado.${RESET}"
-
-    fi
-
     echo
     echo -e "${WHITE}Configuración del servidor${RESET}"
     line
 
-    local DEFAULT_PORT
+    local OLD_PORT="$BHTTP_PORT"
 
-    DEFAULT_PORT="$BHTTP_PORT"
+    read -rp \
+        "$(echo -e "${CYAN}Puerto BHTTP [${BHTTP_PORT}]: ${RESET}")" NEW_PORT
 
-    if [[ ! "$DEFAULT_PORT" =~ ^[0-9]+$ ]]; then
-
-        DEFAULT_PORT=$(primer_puerto_libre)
-
-    fi
-
-    read -rp "$(echo -e "${CYAN}Puerto BHTTP [${DEFAULT_PORT}]: ${RESET}")" NEW_PORT
-
-    [[ -z "$NEW_PORT" ]] && NEW_PORT="$DEFAULT_PORT"
+    [[ -z "$NEW_PORT" ]] && NEW_PORT="$BHTTP_PORT"
 
     if ! valid_port "$NEW_PORT"; then
 
+        echo
         echo -e "${RED}✘ Puerto inválido.${RESET}"
+
         pause
+
         return 1
-
-    fi
-
-    # Si el puerto ya pertenece al BHTTP, se permite reinstalar.
-    if puerto_escuchando "$NEW_PORT"; then
-
-        if ! servicio_online ||
-           [[ "$NEW_PORT" != "$BHTTP_PORT" ]]; then
-
-            echo
-            echo -e "${RED}✘ El puerto $NEW_PORT ya está ocupado.${RESET}"
-            echo
-            echo -e "${GRAY}Puertos sugeridos:${RESET}"
-
-            primer_puerto_libre
-
-            pause
-
-            return 1
-
-        fi
-
     fi
 
     BHTTP_PORT="$NEW_PORT"
 
-    read -rp "$(echo -e "${CYAN}Puerto SSH backend [${SSH_PORT}]: ${RESET}")" NEW_SSH
+    read -rp \
+        "$(echo -e "${CYAN}Puerto SSH backend [${SSH_PORT}]: ${RESET}")" NEW_SSH
 
     [[ -z "$NEW_SSH" ]] && NEW_SSH="$SSH_PORT"
 
     if ! valid_port "$NEW_SSH"; then
 
+        echo
         echo -e "${RED}✘ Puerto SSH inválido.${RESET}"
-        pause
-        return 1
 
+        BHTTP_PORT="$OLD_PORT"
+
+        pause
+
+        return 1
     fi
 
     SSH_PORT="$NEW_SSH"
 
     BHTTP_HOST="0.0.0.0"
     SSH_HOST="127.0.0.1"
-
     BHTTP="ON"
+
+    # ==========================================================
+    # SI EL PUERTO ESTÁ OCUPADO
+    # ==========================================================
+
+    if puerto_ocupado "$BHTTP_PORT"; then
+
+        # Si es nuestro propio BHTTP, podemos reutilizarlo.
+        if [[ "$BHTTP_PORT" == "$OLD_PORT" ]] &&
+           servicio_online; then
+
+            echo
+            echo -e "${YELLOW}⚠ El puerto $BHTTP_PORT pertenece actualmente a BHTTP.${RESET}"
+            echo -e "${GRAY}Se actualizará y reiniciará el servicio.${RESET}"
+
+        else
+
+            echo
+            echo -e "${RED}✘ El puerto $BHTTP_PORT ya está ocupado.${RESET}"
+            echo
+            echo -e "${GRAY}Comprueba con:${RESET}"
+            echo -e "${WHITE}ss -ltnp | grep :$BHTTP_PORT${RESET}"
+
+            pause
+
+            return 1
+        fi
+    fi
 
     guardar_config
 
     echo
-    echo -e "${MAGENTA}${BOLD}▸ Instalando servidor BHTTP...${RESET}"
+    echo -e "${MAGENTA}${BOLD}▸ Preparando BHTTP...${RESET}"
 
-    instalar_servidor_python || {
+    # ==========================================================
+    # DETENER VERSIÓN ANTERIOR
+    # ==========================================================
 
-        echo -e "${RED}✘ No se pudo escribir el servidor.${RESET}"
+    if servicio_instalado; then
 
-        pause
+        echo -e "${GRAY}▸ Deteniendo versión anterior...${RESET}"
 
-        return 1
-    }
-
-    crear_servicio || {
-
-        echo -e "${RED}✘ No se pudo crear el servicio.${RESET}"
-
-        pause
-
-        return 1
-    }
-
-    systemctl daemon-reload
-
-    systemctl enable "$SERVICE" >/dev/null 2>&1
-
-    systemctl restart "$SERVICE"
-
-    echo
-    echo -e "${GRAY}▸ Verificando servicio...${RESET}"
-
-    local ONLINE=0
-
-    for ((i=1; i<=10; i++)); do
-
-        if servicio_online; then
-
-            ONLINE=1
-            break
-
-        fi
+        systemctl stop "$SERVICE" 2>/dev/null || true
 
         sleep 1
 
-    done
+    fi
 
     # ==========================================================
-    # CORRECCIÓN DEL FALSO ERROR
+    # PYTHON
     # ==========================================================
 
-    if [[ "$ONLINE" != "1" ]]; then
+    if ! command -v python3 >/dev/null 2>&1; then
 
-        echo
-        echo -e "${RED}${BOLD}✘ BHTTP no pudo iniciar.${RESET}"
-        echo
+        echo -e "${YELLOW}▸ Instalando Python3...${RESET}"
 
-        systemctl status "$SERVICE" \
-            --no-pager \
-            -l \
-            2>/dev/null
+        apt-get update -qq >/dev/null 2>&1
 
-        echo
-        echo -e "${YELLOW}Últimos registros:${RESET}"
+        apt-get install -y python3 >/dev/null 2>&1
 
-        journalctl \
-            -u "$SERVICE" \
-            -n 20 \
-            --no-pager \
-            2>/dev/null
+        if ! command -v python3 >/dev/null 2>&1; then
 
-        pause
+            echo -e "${RED}✘ No se pudo instalar Python3.${RESET}"
 
-        return 1
+            pause
+
+            return 1
+        fi
+
+        echo -e "${GREEN}✔ Python3 instalado.${RESET}"
 
     fi
 
     # ==========================================================
-    # VERIFICAR PUERTO
+    # SERVIDOR
     # ==========================================================
 
-    if ! puerto_escuchando "$BHTTP_PORT"; then
+    echo -e "${GRAY}▸ Instalando servidor BHTTP...${RESET}"
 
-        echo
-        echo -e "${RED}✘ El servicio está activo pero el puerto no escucha.${RESET}"
+    if ! instalar_servidor_python; then
 
-        journalctl \
-            -u "$SERVICE" \
-            -n 20 \
-            --no-pager \
-            2>/dev/null
+        echo -e "${RED}✘ No se pudo instalar el servidor BHTTP.${RESET}"
 
         pause
 
         return 1
-
     fi
 
-    echo
-    echo -e "${GREEN}${BOLD}✔ BHTTP está ONLINE${RESET}"
+    echo -e "${GREEN}✔ Servidor BHTTP instalado.${RESET}"
 
-    echo
-    echo -e "${GRAY}▸ Verificando protocolo BHP1...${RESET}"
+    # ==========================================================
+    # SYSTEMD
+    # ==========================================================
 
-    local TEST
+    echo -e "${GRAY}▸ Configurando servicio systemd...${RESET}"
 
-    TEST=$(verificar_bhttp 2>/dev/null)
+    if ! crear_servicio; then
 
-    if [[ "$TEST" == "OK" ]]; then
+        echo -e "${RED}✘ No se pudo crear bhttp.service.${RESET}"
 
-        echo -e "${GREEN}✔ Protocolo BHTTP responde correctamente.${RESET}"
+        pause
+
+        return 1
+    fi
+
+    echo -e "${GREEN}✔ Servicio creado.${RESET}"
+
+    # ==========================================================
+    # INICIAR AUTOMÁTICAMENTE
+    # ==========================================================
+
+    echo -e "${GRAY}▸ Activando inicio automático...${RESET}"
+
+    systemctl daemon-reload
+
+    if systemctl enable "$SERVICE" >/dev/null 2>&1; then
+
+        echo -e "${GREEN}✔ Inicio automático activado.${RESET}"
 
     else
 
-        echo -e "${YELLOW}⚠ Servicio activo, pero no se pudo completar la prueba BHP1.${RESET}"
-        echo -e "${GRAY}Esto no significa necesariamente que el servicio esté detenido.${RESET}"
+        echo -e "${YELLOW}⚠ No se pudo activar el inicio automático.${RESET}"
 
     fi
 
-    guardar_config
+    # ==========================================================
+    # ARRANCAR
+    # ==========================================================
+
+    echo -e "${GRAY}▸ Iniciando BHTTP...${RESET}"
+
+    if iniciar_y_verificar; then
+
+        echo
+        echo -e "${GREEN}${BOLD}✔ BHTTP INICIADO CORRECTAMENTE${RESET}"
+
+        echo
+        echo -e "${WHITE}Servicio :${RESET} ${GREEN}ONLINE${RESET}"
+        echo -e "${WHITE}Puerto   :${RESET} ${CYAN}$BHTTP_PORT${RESET}"
+        echo -e "${WHITE}Backend  :${RESET} ${CYAN}$SSH_HOST:$SSH_PORT${RESET}"
+        echo -e "${WHITE}Listener :${RESET} ${GREEN}0.0.0.0:$BHTTP_PORT${RESET}"
+
+    else
+
+        mostrar_error_servicio
+
+        pause
+
+        return 1
+    fi
 
     echo
-    mostrar_resumen
-
-    pause
-}
-
-# ==============================================================
-# RESUMEN
-# ==============================================================
-
-mostrar_resumen() {
-
-    cargar_config
 
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                     🌐 BHTTP STATUS                         ║"
+    echo "║                    🌐 BHTTP LISTO                           ║"
+    echo "╠══════════════════════════════════════════════════════════════╣"
+    echo -e "║  Estado      : ${GREEN}● ONLINE${CYAN}                                     ║"
+    echo -e "║  Puerto      : ${WHITE}$BHTTP_PORT${CYAN}                                         ║"
+    echo -e "║  SSH Backend : ${WHITE}$SSH_HOST:$SSH_PORT${CYAN}                               ║"
+    echo -e "║  AutoInicio  : ${GREEN}✔ ACTIVADO${CYAN}                                  ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 
-    echo -e "${WHITE}Servicio :${RESET} $(mostrar_estado_simple)"
-    echo -e "${WHITE}Unidad   :${RESET} ${GRAY}$UNIT${RESET}"
-    echo -e "${WHITE}Servidor :${RESET} ${GRAY}$SERVER_PY${RESET}"
-    echo -e "${WHITE}Puerto   :${RESET} ${CYAN}$BHTTP_PORT${RESET}"
-    echo -e "${WHITE}SSH      :${RESET} ${CYAN}$SSH_HOST:$SSH_PORT${RESET}"
-
-    if puerto_escuchando "$BHTTP_PORT"; then
-        echo -e "${WHITE}Listener :${RESET} ${GREEN}0.0.0.0:$BHTTP_PORT${RESET}"
-    else
-        echo -e "${WHITE}Listener :${RESET} ${RED}NO ESCUCHANDO${RESET}"
-    fi
-
-    if puerto_escuchando "$SSH_PORT"; then
-        echo -e "${WHITE}SSH      :${RESET} ${GREEN}✔ SSH activo${RESET}"
-    else
-        echo -e "${WHITE}SSH      :${RESET} ${RED}✘ SSH no detectado${RESET}"
-    fi
+    pause
 }
 
 # ==============================================================
@@ -1555,31 +1358,32 @@ mostrar_resumen() {
 
 iniciar_bhttp() {
 
+    cargar_config
+
     if ! servicio_instalado; then
 
+        echo
         echo -e "${RED}✘ BHTTP no está instalado.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
 
-    systemctl start "$SERVICE"
+    echo
+    echo -e "${GRAY}▸ Iniciando BHTTP...${RESET}"
 
-    sleep 1
+    systemctl enable "$SERVICE" >/dev/null 2>&1
 
-    if servicio_online; then
+    if iniciar_y_verificar; then
 
-        echo -e "${GREEN}✔ BHTTP iniciado correctamente.${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}✔ BHTTP ONLINE${RESET}"
+        echo -e "${WHITE}Puerto:${RESET} ${CYAN}$BHTTP_PORT${RESET}"
 
     else
 
-        echo -e "${RED}✘ No se pudo iniciar BHTTP.${RESET}"
-
-        journalctl \
-            -u "$SERVICE" \
-            -n 15 \
-            --no-pager
+        mostrar_error_servicio
 
     fi
 
@@ -1592,31 +1396,31 @@ iniciar_bhttp() {
 
 reiniciar_bhttp() {
 
+    cargar_config
+
     if ! servicio_instalado; then
 
+        echo
         echo -e "${RED}✘ BHTTP no está instalado.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
 
-    systemctl restart "$SERVICE"
+    echo
+    echo -e "${GRAY}▸ Reiniciando BHTTP...${RESET}"
 
-    sleep 1
+    if iniciar_y_verificar; then
 
-    if servicio_online; then
-
-        echo -e "${GREEN}✔ BHTTP reiniciado correctamente.${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}✔ BHTTP REINICIADO${RESET}"
+        echo
+        echo -e "${WHITE}Puerto:${RESET} ${CYAN}$BHTTP_PORT${RESET}"
 
     else
 
-        echo -e "${RED}✘ BHTTP no pudo reiniciar.${RESET}"
-
-        journalctl \
-            -u "$SERVICE" \
-            -n 15 \
-            --no-pager
+        mostrar_error_servicio
 
     fi
 
@@ -1631,14 +1435,20 @@ detener_bhttp() {
 
     if ! servicio_instalado; then
 
+        echo
         echo -e "${RED}✘ BHTTP no está instalado.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
 
+    echo
+    echo -e "${GRAY}▸ Deteniendo BHTTP...${RESET}"
+
     systemctl stop "$SERVICE"
+
+    sleep 1
 
     if ! servicio_online; then
 
@@ -1646,11 +1456,13 @@ detener_bhttp() {
 
         guardar_config
 
-        echo -e "${GREEN}✔ BHTTP detenido.${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}✔ BHTTP DETENIDO${RESET}"
 
     else
 
-        echo -e "${RED}✘ No se pudo detener BHTTP.${RESET}"
+        echo
+        echo -e "${RED}✘ BHTTP no pudo detenerse.${RESET}"
 
     fi
 
@@ -1663,72 +1475,204 @@ detener_bhttp() {
 
 cambiar_puerto() {
 
+    cargar_config
+
     if ! servicio_instalado; then
 
+        echo
         echo -e "${RED}✘ Primero instala BHTTP.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
 
     echo
     echo -e "${WHITE}Puerto actual:${RESET} ${CYAN}$BHTTP_PORT${RESET}"
 
-    read -rp "$(echo -e "${CYAN}Nuevo puerto: ${RESET}")" NEW_PORT
+    read -rp \
+        "$(echo -e "${CYAN}Nuevo puerto: ${RESET}")" NEW_PORT
 
     if ! valid_port "$NEW_PORT"; then
 
+        echo
         echo -e "${RED}✘ Puerto inválido.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
 
     if [[ "$NEW_PORT" != "$BHTTP_PORT" ]] &&
-       puerto_escuchando "$NEW_PORT"; then
+       puerto_ocupado "$NEW_PORT"; then
 
-        echo -e "${RED}✘ El puerto $NEW_PORT está ocupado.${RESET}"
+        echo
+        echo -e "${RED}✘ El puerto $NEW_PORT ya está ocupado.${RESET}"
 
         pause
 
-        return
+        return 1
     fi
+
+    local OLD_PORT="$BHTTP_PORT"
+
+    echo
+    echo -e "${GRAY}▸ Cambiando puerto...${RESET}"
 
     systemctl stop "$SERVICE"
 
     BHTTP_PORT="$NEW_PORT"
 
+    BHTTP="ON"
+
     guardar_config
 
-    crear_servicio
+    if ! crear_servicio; then
+
+        BHTTP_PORT="$OLD_PORT"
+
+        guardar_config
+
+        crear_servicio
+
+        systemctl daemon-reload
+        systemctl restart "$SERVICE"
+
+        echo
+        echo -e "${RED}✘ No se pudo actualizar el servicio.${RESET}"
+
+        pause
+
+        return 1
+    fi
 
     systemctl daemon-reload
 
-    systemctl restart "$SERVICE"
-
-    sleep 2
-
-    if servicio_online &&
-       puerto_escuchando "$BHTTP_PORT"; then
+    if iniciar_y_verificar; then
 
         echo
-        echo -e "${GREEN}${BOLD}✔ Puerto cambiado correctamente.${RESET}"
+        echo -e "${GREEN}${BOLD}✔ PUERTO CAMBIADO${RESET}"
         echo
-        echo -e "${WHITE}Nuevo puerto:${RESET} ${CYAN}$BHTTP_PORT${RESET}"
+        echo -e "${WHITE}Anterior :${RESET} ${GRAY}$OLD_PORT${RESET}"
+        echo -e "${WHITE}Nuevo    :${RESET} ${CYAN}$BHTTP_PORT${RESET}"
+        echo -e "${WHITE}Estado   :${RESET} ${GREEN}ONLINE${RESET}"
 
     else
 
         echo
-        echo -e "${RED}✘ No se pudo cambiar el puerto.${RESET}"
+        echo -e "${RED}✘ No se pudo iniciar en el puerto $NEW_PORT.${RESET}"
 
-        journalctl \
-            -u "$SERVICE" \
-            -n 15 \
-            --no-pager
+        # Intentar restaurar el puerto anterior.
+
+        BHTTP_PORT="$OLD_PORT"
+
+        guardar_config
+
+        crear_servicio
+
+        systemctl daemon-reload
+        systemctl restart "$SERVICE"
+
+        sleep 2
+
+        if servicio_online &&
+           puerto_escuchando "$OLD_PORT"; then
+
+            echo
+            echo -e "${YELLOW}⚠ Se restauró el puerto anterior: $OLD_PORT${RESET}"
+
+        else
+
+            echo
+            echo -e "${RED}✘ No se pudo restaurar el puerto anterior.${RESET}"
+
+        fi
 
     fi
+
+    pause
+}
+
+# ==============================================================
+# DIAGNÓSTICO
+# ==============================================================
+
+diagnostico() {
+
+    clear
+
+    cargar_config
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                    🔎 BHTTP DIAGNÓSTICO                     ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    echo -e "${WHITE}SERVICIO${RESET}"
+    line
+
+    echo -e "  Estado       : $(estado_servicio)"
+    echo -e "  Habilitado   : $(
+
+        if servicio_habilitado; then
+            echo -e "${GREEN}SÍ${RESET}"
+        else
+            echo -e "${RED}NO${RESET}"
+        fi
+
+    )"
+
+    echo
+    echo -e "${WHITE}CONFIGURACIÓN${RESET}"
+    line
+
+    echo -e "  Host BHTTP   : ${CYAN}$BHTTP_HOST${RESET}"
+    echo -e "  Puerto BHTTP : ${CYAN}$BHTTP_PORT${RESET}"
+    echo -e "  Backend SSH  : ${CYAN}$SSH_HOST:$SSH_PORT${RESET}"
+
+    echo
+    echo -e "${WHITE}PUERTOS${RESET}"
+    line
+
+    if puerto_escuchando "$BHTTP_PORT"; then
+
+        echo -e "  BHTTP        : ${GREEN}✔ 0.0.0.0:$BHTTP_PORT${RESET}"
+
+    else
+
+        echo -e "  BHTTP        : ${RED}✘ $BHTTP_PORT no escucha${RESET}"
+
+    fi
+
+    if puerto_escuchando "$SSH_PORT"; then
+
+        echo -e "  SSH          : ${GREEN}✔ $SSH_PORT escuchando${RESET}"
+
+    else
+
+        echo -e "  SSH          : ${RED}✘ $SSH_PORT no detectado${RESET}"
+
+    fi
+
+    echo
+    echo -e "${WHITE}PROCESO${RESET}"
+    line
+
+    ps aux |
+        grep '[b]http-server.py' ||
+        echo -e "${GRAY}No hay proceso BHTTP activo.${RESET}"
+
+    echo
+    echo -e "${WHITE}ÚLTIMOS LOGS${RESET}"
+    line
+
+    journalctl \
+        -u "$SERVICE" \
+        -n 12 \
+        --no-pager \
+        2>/dev/null
 
     pause
 }
@@ -1749,85 +1693,60 @@ ver_logs() {
 
     journalctl \
         -u "$SERVICE" \
-        -n 40 \
+        -n 50 \
         --no-pager \
+        -l \
         2>/dev/null
 
     pause
 }
 
 # ==============================================================
-# PRUEBA BHTTP
+# PRUEBA DEL PUERTO
 # ==============================================================
 
 probar_bhttp() {
 
     clear
 
+    cargar_config
+
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                    🧪 PRUEBA BHTTP                          ║"
+    echo "║                     🧪 PRUEBA BHTTP                         ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 
-    if ! servicio_online; then
-
-        echo -e "${RED}✘ BHTTP está detenido.${RESET}"
-
-        pause
-
-        return
-    fi
-
-    echo
-    echo -e "${GRAY}Puerto :${RESET} ${CYAN}$BHTTP_PORT${RESET}"
     echo
 
-    local RESULT
+    if servicio_online; then
 
-    RESULT=$(verificar_bhttp 2>/dev/null)
-
-    if [[ "$RESULT" == "OK" ]]; then
-
-        echo -e "${GREEN}${BOLD}✔ HANDSHAKE BHTTP OK${RESET}"
-        echo
-        echo -e "${GREEN}El servidor respondió correctamente.${RESET}"
+        echo -e "${WHITE}Servicio :${RESET} ${GREEN}ONLINE${RESET}"
 
     else
 
-        echo -e "${RED}${BOLD}✘ HANDSHAKE FALLIDO${RESET}"
-        echo
-        echo -e "${GRAY}Revisa los logs del servicio.${RESET}"
+        echo -e "${WHITE}Servicio :${RESET} ${RED}OFFLINE${RESET}"
 
     fi
 
-    pause
-}
+    if puerto_escuchando "$BHTTP_PORT"; then
 
-# ==============================================================
-# CREAR USUARIO DESDE MENÚ
-# ==============================================================
+        echo -e "${WHITE}Puerto   :${RESET} ${GREEN}$BHTTP_PORT ESCUCHANDO${RESET}"
 
-menu_usuario() {
+    else
 
-    clear
+        echo -e "${WHITE}Puerto   :${RESET} ${RED}$BHTTP_PORT NO ESCUCHA${RESET}"
 
-    echo -e "${CYAN}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                    👤 CUENTA SSH                            ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${RESET}"
-
-    local USERNAME
-    local PASSWORD
-
-    read -rp "$(echo -e "${CYAN}Usuario: ${RESET}")" USERNAME
-
-    read -rsp "$(echo -e "${CYAN}Contraseña [ENTER = automática]: ${RESET}")" PASSWORD
+    fi
 
     echo
+    echo -e "${GRAY}Listener:${RESET}"
 
-    crear_usuario "$USERNAME" "$PASSWORD"
+    ss -ltnp 2>/dev/null |
+        grep ":$BHTTP_PORT" ||
+        echo -e "${GRAY}No se encontró listener.${RESET}"
+
+    pause
 }
 
 # ==============================================================
@@ -1838,24 +1757,29 @@ desinstalar_bhttp() {
 
     clear
 
+    cargar_config
+
     echo -e "${RED}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                   🗑️  DESINSTALAR BHTTP                    ║"
+    echo "║                    🗑️ DESINSTALAR BHTTP                    ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 
     echo
-    echo -e "${YELLOW}Esta acción eliminará:${RESET}"
+    echo -e "${YELLOW}Se eliminará:${RESET}"
     echo
-    echo -e "  • Servicio BHTTP"
-    echo -e "  • Servidor Python"
+    echo -e "  • Servicio bhttp.service"
+    echo -e "  • Servidor BHTTP"
     echo -e "  • Configuración BHTTP"
+    echo -e "  • Inicio automático"
     echo
-    read -rp "$(echo -e "${RED}¿Continuar? [s/N]: ${RESET}")" CONFIRM
+
+    read -rp \
+        "$(echo -e "${RED}¿Deseas continuar? [s/N]: ${RESET}")" CONFIRM
 
     case "${CONFIRM,,}" in
 
-        s|si|y|yes)
+        s|si|sí|y|yes)
 
             ;;
 
@@ -1863,6 +1787,7 @@ desinstalar_bhttp() {
 
             echo
             echo -e "${GRAY}Operación cancelada.${RESET}"
+
             pause
 
             return
@@ -1870,25 +1795,88 @@ desinstalar_bhttp() {
 
     esac
 
-    systemctl stop "$SERVICE" 2>/dev/null
-    systemctl disable "$SERVICE" 2>/dev/null
+    echo
+    echo -e "${GRAY}▸ Deteniendo BHTTP...${RESET}"
+
+    systemctl stop "$SERVICE" 2>/dev/null || true
+
+    sleep 1
+
+    echo -e "${GRAY}▸ Deshabilitando inicio automático...${RESET}"
+
+    systemctl disable "$SERVICE" 2>/dev/null || true
+
+    echo -e "${GRAY}▸ Eliminando unidad systemd...${RESET}"
 
     rm -f "$UNIT"
-    rm -rf "$BHTTP_DIR"
-    rm -f "$CONFIG"
 
     systemctl daemon-reload
+
+    systemctl reset-failed "$SERVICE" 2>/dev/null || true
+
+    echo -e "${GRAY}▸ Eliminando servidor BHTTP...${RESET}"
+
+    rm -rf "$BHTTP_DIR"
+
+    echo -e "${GRAY}▸ Eliminando configuración...${RESET}"
+
+    rm -f "$CONFIG"
 
     BHTTP="OFF"
 
     echo
-    echo -e "${GREEN}${BOLD}✔ BHTTP desinstalado correctamente.${RESET}"
+    echo -e "${GREEN}${BOLD}✔ BHTTP DESINSTALADO CORRECTAMENTE${RESET}"
+
+    echo
+    echo -e "${WHITE}Servicio :${RESET} ${GRAY}eliminado${RESET}"
+    echo -e "${WHITE}Servidor :${RESET} ${GRAY}eliminado${RESET}"
+    echo -e "${WHITE}Config   :${RESET} ${GRAY}eliminada${RESET}"
 
     pause
 }
 
 # ==============================================================
-# MENÚ PRINCIPAL BHTTP
+# RESUMEN
+# ==============================================================
+
+mostrar_resumen() {
+
+    cargar_config
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                     🌐 BHTTP STATUS                         ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    echo -e "${WHITE}Servicio :${RESET} $(estado_servicio)"
+    echo -e "${WHITE}Puerto   :${RESET} ${CYAN}$BHTTP_PORT${RESET}"
+    echo -e "${WHITE}Backend  :${RESET} ${CYAN}$SSH_HOST:$SSH_PORT${RESET}"
+
+    if servicio_habilitado; then
+
+        echo -e "${WHITE}AutoInicio:${RESET} ${GREEN}✔ ACTIVADO${RESET}"
+
+    else
+
+        echo -e "${WHITE}AutoInicio:${RESET} ${RED}✘ DESACTIVADO${RESET}"
+
+    fi
+
+    if puerto_escuchando "$BHTTP_PORT"; then
+
+        echo -e "${WHITE}Listener :${RESET} ${GREEN}0.0.0.0:$BHTTP_PORT${RESET}"
+
+    else
+
+        echo -e "${WHITE}Listener :${RESET} ${RED}NO ESCUCHANDO${RESET}"
+
+    fi
+}
+
+# ==============================================================
+# MENÚ
 # ==============================================================
 
 mostrar_menu() {
@@ -1900,25 +1888,27 @@ mostrar_menu() {
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║                                                              ║"
-    echo "║              🌐  KEVINTECH BHTTP  🌐                       ║"
+    echo "║                 🌐 KEVINTECH BHTTP 🌐                      ║"
     echo "║                                                              ║"
-    echo "║                 PREMIUM PROTOCOL                            ║"
+    echo "║                    PREMIUM PROTOCOL                         ║"
     echo "║                                                              ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 
-    echo -e "${GRAY}  Protocolo BHTTP • KevinTech Multi Script v3.2${RESET}"
-    echo
+    echo -e "${GRAY}  BHTTP • KevinTech Multi Script • v${VERSION}${RESET}"
 
+    echo
     echo -e "${WHITE}  ESTADO DEL SERVICIO${RESET}"
+
     line
 
-    echo -e "  Servicio : $(mostrar_estado_simple)"
+    echo -e "  Servicio : $(estado_servicio)"
     echo -e "  Puerto   : ${CYAN}$BHTTP_PORT${RESET}"
     echo -e "  SSH      : ${CYAN}$SSH_PORT${RESET}"
 
     echo
-    echo -e "${BLUE}${BOLD}  ⚙️  ADMINISTRACIÓN BHTTP${RESET}"
+    echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN BHTTP${RESET}"
+
     line
 
     echo -e "  ${GREEN}${BOLD}[01]${RESET} 🚀 Instalar / Actualizar"
@@ -1926,13 +1916,12 @@ mostrar_menu() {
     echo -e "  ${GREEN}${BOLD}[03]${RESET} 🔄 Reiniciar BHTTP"
     echo -e "  ${GREEN}${BOLD}[04]${RESET} ⏹️  Detener BHTTP"
     echo -e "  ${GREEN}${BOLD}[05]${RESET} 🔌 Cambiar puerto"
-    echo -e "  ${GREEN}${BOLD}[06]${RESET} 👤 Crear cuenta SSH"
-    echo -e "  ${GREEN}${BOLD}[07]${RESET} 🧪 Probar BHTTP"
-    echo -e "  ${GREEN}${BOLD}[08]${RESET} 🔎 Diagnóstico"
-    echo -e "  ${GREEN}${BOLD}[09]${RESET} 📜 Ver logs"
+    echo -e "  ${GREEN}${BOLD}[06]${RESET} 🧪 Probar BHTTP"
+    echo -e "  ${GREEN}${BOLD}[07]${RESET} 🔎 Diagnóstico"
+    echo -e "  ${GREEN}${BOLD}[08]${RESET} 📜 Ver logs"
 
     echo
-    echo -e "${RED}${BOLD}  [10] 🗑️  Desinstalar BHTTP${RESET}"
+    echo -e "  ${RED}${BOLD}[09]${RESET} 🗑️  Desinstalar BHTTP"
 
     echo
     line
@@ -1941,6 +1930,7 @@ mostrar_menu() {
 
     echo
     echo -e "${GRAY}  KevinTech Multi Script • Privanox VPN${RESET}"
+
     echo
 }
 
@@ -1953,30 +1943,37 @@ case "${1:-}" in
     --install|-i)
 
         if [[ -n "${2:-}" ]]; then
+
             BHTTP_PORT="$2"
             BHTTP="ON"
+
             guardar_config
+
         fi
 
         instalar_bhttp
+
         exit $?
         ;;
 
     --start)
 
         iniciar_bhttp
+
         exit $?
         ;;
 
     --restart)
 
         reiniciar_bhttp
+
         exit $?
         ;;
 
     --stop)
 
         detener_bhttp
+
         exit $?
         ;;
 
@@ -1986,12 +1983,15 @@ case "${1:-}" in
 
             BHTTP_PORT="$2"
 
+            BHTTP="ON"
+
             guardar_config
 
             crear_servicio
 
             systemctl daemon-reload
-            systemctl restart "$SERVICE"
+
+            iniciar_y_verificar
 
         else
 
@@ -2005,81 +2005,87 @@ case "${1:-}" in
     --status)
 
         mostrar_resumen
+
         exit 0
         ;;
 
     --probe)
 
         probar_bhttp
+
         exit $?
         ;;
 
     --diag)
 
         diagnostico
+
         exit $?
         ;;
 
     --logs)
 
         ver_logs
+
         exit 0
-        ;;
-
-    --crear-usuario)
-
-        crear_usuario "${2:-}" "${3:-}"
-        exit $?
         ;;
 
     --desinstalar|--uninstall)
 
         desinstalar_bhttp
+
         exit $?
         ;;
 
     --help|-h)
 
         echo
-        echo "KevinTech BHTTP 3.2"
+        echo "KevinTech BHTTP v${VERSION}"
         echo
         echo "Uso:"
         echo
         echo "  bash bhttp.sh"
-        echo "  bash bhttp.sh --install 8080"
+        echo "  bash bhttp.sh --install 970"
         echo "  bash bhttp.sh --start"
         echo "  bash bhttp.sh --restart"
         echo "  bash bhttp.sh --stop"
-        echo "  bash bhttp.sh --port 8080"
+        echo "  bash bhttp.sh --port 970"
         echo "  bash bhttp.sh --status"
         echo "  bash bhttp.sh --probe"
         echo "  bash bhttp.sh --diag"
         echo "  bash bhttp.sh --logs"
-        echo "  bash bhttp.sh --crear-usuario usuario clave"
         echo "  bash bhttp.sh --desinstalar"
         echo
+
         exit 0
         ;;
 
 esac
 
 # ==============================================================
-# BUCLE PRINCIPAL
+# CTRL+C
 # ==============================================================
 
 trap '
+
     echo
     echo -e "${YELLOW}⚠️  Regresando...${RESET}"
     sleep 1
     clear
     exit 0
+
 ' INT TERM
+
+# ==============================================================
+# BUCLE PRINCIPAL
+# ==============================================================
 
 while true; do
 
     mostrar_menu
 
-    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
+    read -rp \
+        "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
 
     case "$OP" in
 
@@ -2115,29 +2121,23 @@ while true; do
 
         6|06)
 
-            menu_usuario
+            probar_bhttp
 
             ;;
 
         7|07)
 
-            probar_bhttp
+            diagnostico
 
             ;;
 
         8|08)
 
-            diagnostico
-
-            ;;
-
-        9|09)
-
             ver_logs
 
             ;;
 
-        10)
+        9|09)
 
             desinstalar_bhttp
 
@@ -2146,6 +2146,7 @@ while true; do
         0|00)
 
             clear
+
             exit 0
 
             ;;
@@ -2158,6 +2159,7 @@ while true; do
 
             echo
             echo -e "${RED}${BOLD}✘ Opción inválida.${RESET}"
+
             sleep 1
 
             ;;
