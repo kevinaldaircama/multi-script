@@ -38,7 +38,7 @@ config_set() {
 }              
               
 config_get() {              
-    grep "^$1=" "$CONFIG" | cut -d= -f2-              
+    grep "^$1=" "$CONFIG" | cut -d= -f2- | sed 's/^"//; s/"$//'              
 }              
               
 # --- Crear comando permanente 'menuhy' ---              
@@ -96,6 +96,7 @@ show_config() {
     fi              
               
     DOMAIN=$(config_get SERVER_DOMAIN)              
+[[ -z "$DOMAIN" ]] && DOMAIN=$(config_get SERVER_IP)              
 if [[ -z "$DOMAIN" ]]; then              
     echo              
     echo -e "${COLOR[3]}No hay un dominio configurado.${NC}"              
