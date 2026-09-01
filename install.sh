@@ -53,6 +53,7 @@ INSTALL_PROTOCOLS="ON"
 
 SERVER_DOMAIN=""
 SERVER_IP=""
+SERVER_HOST=""
 DOMAIN_IP=""
 DOMAIN_IP_MATCH="NO"
 DNS_PROVIDER="Desconocido"
@@ -550,31 +551,10 @@ done
 
 #=========================================================
 # PASO 4
-# DOMINIO
+# DOMINIO / IP
 #=========================================================
 
-seccion "🌐 PASO 4  •  CONFIGURACIÓN DE DOMINIO"
-
-while true; do
-
-    read -r -p \
-        "$(echo -e "${CYAN}🌐 Dominio del VPS:${RESET} ")" \
-        SERVER_DOMAIN
-
-    SERVER_DOMAIN="$(
-        printf '%s' "$SERVER_DOMAIN" |
-        tr -d '[:space:]'
-    )"
-
-    if [[ "$SERVER_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] &&
-       [[ "$SERVER_DOMAIN" == *.* ]]; then
-
-        break
-
-    fi
-
-    warn "Dominio inválido."
-done
+seccion "🌐 PASO 4  •  CONFIGURACIÓN DE DOMINIO / IP"
 
 loading "Detectando IP pública"
 
@@ -586,42 +566,63 @@ SERVER_IP="$(
 )" || true
 
 if [[ -z "$SERVER_IP" ]]; then
-    SERVER_IP="Desconocida"
+    SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 fi
 
-DOMAIN_IP_MATCH="NO"
-DNS_PROVIDER="Desconocido"
+[[ -z "$SERVER_IP" ]] && SERVER_IP="Desconocida"
 
-loading "Comprobando DNS"
+echo
+echo -e " ${GRAY}IP pública detectada:${RESET} ${CYAN}$SERVER_IP${RESET}"
+echo -e " ${GRAY}Puedes escribir un dominio o presionar ENTER para usar la IP.${RESET}"
+echo
 
-DOMAIN_IP="$(
-    dig +short A "$SERVER_DOMAIN" |
-    grep -E \
-        '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' |
-    head -n1
+read -r -p \
+    "$(echo -e "${CYAN}🌐 Dominio del VPS [ENTER = IP]:${RESET} ")" \
+    SERVER_DOMAIN
+
+SERVER_DOMAIN="$(
+    printf '%s' "$SERVER_DOMAIN" |
+    tr -d '[:space:]'
 )"
 
-if [[ -n "$DOMAIN_IP" &&
-      "$DOMAIN_IP" == "$SERVER_IP" ]]; then
-
-    DOMAIN_IP_MATCH="YES"
-
-    ok "El dominio apunta correctamente al VPS."
-
+if [[ -z "$SERVER_DOMAIN" ]]; then
+    SERVER_HOST="$SERVER_IP"
+    DOMAIN_IP=""
+    DOMAIN_IP_MATCH="NO"
+    DNS_PROVIDER="Ninguno (IP)"
+    ok "Se utilizará la IP del VPS: $SERVER_IP"
 else
+    if [[ ! "$SERVER_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] ||
+       [[ "$SERVER_DOMAIN" != *.* ]]; then
+        error_msg "Dominio inválido."
+        exit 1
+    fi
 
-    warn "El dominio todavía no apunta a este VPS."
+    SERVER_HOST="$SERVER_DOMAIN"
+    DOMAIN_IP_MATCH="NO"
+    DNS_PROVIDER="Desconocido"
 
-    [[ -n "$DOMAIN_IP" ]] && {
+    loading "Comprobando DNS"
 
-        echo -e \
-            " ${GRAY}IP encontrada:${RESET} ${YELLOW}$DOMAIN_IP${RESET}"
+    DOMAIN_IP="$(
+        dig +short A "$SERVER_DOMAIN" |
+        grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' |
+        head -n1
+    )"
 
-        echo -e \
-            " ${GRAY}IP VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
-    }
-
+    if [[ -n "$DOMAIN_IP" && "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+        DOMAIN_IP_MATCH="YES"
+        ok "El dominio apunta correctamente al VPS."
+    else
+        warn "El dominio todavía no apunta a este VPS."
+        [[ -n "$DOMAIN_IP" ]] && {
+            echo -e " ${GRAY}IP encontrada:${RESET} ${YELLOW}$DOMAIN_IP${RESET}"
+            echo -e " ${GRAY}IP VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
+        }
+    fi
 fi
+
+if [[ -n "$SERVER_DOMAIN" ]]; then
 
 NS="$(
     dig +short NS "$SERVER_DOMAIN" |
@@ -661,6 +662,8 @@ fi
 echo
 echo -e \
     " ${GRAY}Proveedor DNS:${RESET} ${SKY}$DNS_PROVIDER${RESET}"
+
+fi
 
 #=========================================================
 # PASO 5
@@ -901,6 +904,7 @@ cat > "$BASE/config.conf" <<EOF
 
 SERVER_DOMAIN="$SERVER_DOMAIN"
 SERVER_IP="$SERVER_IP"
+SERVER_HOST="$SERVER_HOST"
 
 DNS_PROVIDER="$DNS_PROVIDER"
 DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"
