@@ -1,8 +1,9 @@
 #!/bin/bash
+
 #=========================================================
 # KevinTech Multi Script Premium
 # Módulo: Crear Usuario SSH
-# Versión: Premium
+# Versión: 3.3 Premium
 # Autor: KevinTech
 #
 # FUNCIONES:
@@ -11,7 +12,8 @@
 # - Límite IP por usuario
 # - CheckUser dinámico
 # - Integración ZiVPN
-# - Detección de puertos
+# - BHTTP 8088
+# - Detección real de protocolos
 #=========================================================
 
 #========================#
@@ -42,6 +44,7 @@ CHECKUSER_SCRIPT="/usr/local/bin/kevintech-checkuser"
 mkdir -p "$BASE"
 
 touch "$LIMITS_FILE"
+
 chmod 600 "$LIMITS_FILE"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
@@ -51,28 +54,36 @@ chmod 600 "$LIMITS_FILE"
 #=========================================================
 
 line() {
+
     printf "%b━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%b\n" \
         "$CYAN" "$RESET"
 }
 
 pause() {
+
     echo
-    read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
+
+    read -rp \
+        "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
 }
 
 msg_ok() {
+
     echo -e "${GREEN}✔ $1${RESET}"
 }
 
 msg_error() {
+
     echo -e "${RED}✘ $1${RESET}"
 }
 
 msg_info() {
+
     echo -e "${CYAN}➜ $1${RESET}"
 }
 
 msg_warn() {
+
     echo -e "${YELLOW}⚠ $1${RESET}"
 }
 
@@ -82,16 +93,8 @@ msg_warn() {
 
 instalar_checkuser() {
 
-    #=====================================================
-    # SCRIPT QUE GENERA EL CHECKUSER
-    #=====================================================
-
     cat > "$CHECKUSER_SCRIPT" <<'EOF'
 #!/bin/bash
-
-#=========================================================
-# KevinTech Dynamic CheckUser
-#=========================================================
 
 BASE="/etc/kevintech"
 LIMITS_FILE="$BASE/limits.conf"
@@ -100,15 +103,7 @@ USER_NAME="${USER:-${LOGNAME:-}}"
 
 [[ -z "$USER_NAME" ]] && exit 0
 
-#=========================================================
-# VERIFICAR USUARIO
-#=========================================================
-
 id "$USER_NAME" >/dev/null 2>&1 || exit 0
-
-#=========================================================
-# OBTENER LÍMITE
-#=========================================================
 
 LIMIT=$(awk -F: -v u="$USER_NAME" '
     $1 == u {
@@ -118,10 +113,6 @@ LIMIT=$(awk -F: -v u="$USER_NAME" '
 ' "$LIMITS_FILE" 2>/dev/null)
 
 [[ -z "$LIMIT" ]] && LIMIT=0
-
-#=========================================================
-# OBTENER IPs ACTUALES
-#=========================================================
 
 IPS=$(
     who 2>/dev/null |
@@ -137,19 +128,15 @@ IPS=$(
     sort -u
 )
 
-#=========================================================
-# CONTAR IPs ÚNICAS
-#=========================================================
-
 if [[ -n "$IPS" ]]; then
-    CONNECTIONS=$(printf '%s\n' "$IPS" | grep -c .)
-else
-    CONNECTIONS=0
-fi
 
-#=========================================================
-# FECHA DE EXPIRACIÓN
-#=========================================================
+    CONNECTIONS=$(printf '%s\n' "$IPS" | grep -c .)
+
+else
+
+    CONNECTIONS=0
+
+fi
 
 EXPIRATION=$(chage -l "$USER_NAME" 2>/dev/null |
     awk -F': ' '/Account expires/ {
@@ -158,18 +145,17 @@ EXPIRATION=$(chage -l "$USER_NAME" 2>/dev/null |
     }')
 
 if [[ -z "$EXPIRATION" ]]; then
-    EXPIRATION="Ilimitada"
-fi
 
-#=========================================================
-# CONVERTIR FECHA
-#=========================================================
+    EXPIRATION="Ilimitada"
+
+fi
 
 if [[ "$EXPIRATION" != "Ilimitada" &&
       "$EXPIRATION" != "never" &&
       "$EXPIRATION" != "Nunca" ]]; then
 
     EXP_DATE=$(date -d "$EXPIRATION" +%s 2>/dev/null)
+
     TODAY=$(date +%s)
 
     if [[ -n "$EXP_DATE" ]]; then
@@ -177,9 +163,13 @@ if [[ "$EXPIRATION" != "Ilimitada" &&
         DIFF=$(( (EXP_DATE - TODAY) / 86400 ))
 
         if (( DIFF < 0 )); then
+
             DAYS=0
+
         else
+
             DAYS=$DIFF
+
         fi
 
         EXPIRATION=$(date -d "$EXPIRATION" +"%d/%m/%Y")
@@ -196,19 +186,15 @@ else
 
 fi
 
-#=========================================================
-# FORMATO DEL LÍMITE
-#=========================================================
-
 if (( LIMIT == 0 )); then
-    LIMIT_TEXT="♾"
-else
-    LIMIT_TEXT="$LIMIT"
-fi
 
-#=========================================================
-# BANNER
-#=========================================================
+    LIMIT_TEXT="♾"
+
+else
+
+    LIMIT_TEXT="$LIMIT"
+
+fi
 
 printf '\n'
 printf '%s\n' '═══════════════════════════════════════════════════'
@@ -228,18 +214,12 @@ EOF
 
     chmod 755 "$CHECKUSER_SCRIPT"
 
-    #=====================================================
-    # OPENSSH SSHRC
-    #=====================================================
-
     local SSHRC="/etc/ssh/sshrc"
 
-    # Crear archivo si no existe.
     touch "$SSHRC"
 
     chmod 755 "$SSHRC"
 
-    # Evitar duplicados.
     if ! grep -q "kevintech-checkuser" "$SSHRC" 2>/dev/null; then
 
         cat >> "$SSHRC" <<'EOF'
@@ -255,10 +235,6 @@ fi
 EOF
 
     fi
-
-    #=====================================================
-    # CONFIGURAR SSH PARA UTILIZAR SSHRC
-    #=====================================================
 
     local SSHD="/etc/ssh/sshd_config"
 
@@ -294,18 +270,9 @@ instalar_limitador() {
     cat > "$LIMIT_SCRIPT" <<'EOF'
 #!/bin/bash
 
-#=========================================================
-# KevinTech Multi Script
-# Controlador de límite IP SSH
-#=========================================================
-
 LIMITS_FILE="/etc/kevintech/limits.conf"
 
 [[ ! -f "$LIMITS_FILE" ]] && exit 0
-
-#=========================================================
-# OBTENER SESIONES DE UN USUARIO
-#=========================================================
 
 obtener_sesiones() {
 
@@ -326,10 +293,6 @@ obtener_sesiones() {
     '
 }
 
-#=========================================================
-# PROCESAR USUARIOS
-#=========================================================
-
 while IFS=: read -r USERNAME LIMIT; do
 
     [[ -z "$USERNAME" ]] && continue
@@ -337,22 +300,13 @@ while IFS=: read -r USERNAME LIMIT; do
 
     [[ ! "$LIMIT" =~ ^[0-9]+$ ]] && continue
 
-    # 0 = ilimitado
     (( LIMIT == 0 )) && continue
 
     id "$USERNAME" >/dev/null 2>&1 || continue
 
-    #=====================================================
-    # SESIONES
-    #=====================================================
-
     SESSIONS=$(obtener_sesiones "$USERNAME")
 
     [[ -z "$SESSIONS" ]] && continue
-
-    #=====================================================
-    # IPs ÚNICAS
-    #=====================================================
 
     IPS=$(
         echo "$SESSIONS" |
@@ -362,10 +316,6 @@ while IFS=: read -r USERNAME LIMIT; do
 
     COUNT=0
     ALLOWED_IPS=""
-
-    #=====================================================
-    # IPs PERMITIDAS
-    #=====================================================
 
     while IFS= read -r IP; do
 
@@ -380,10 +330,6 @@ while IFS=: read -r USERNAME LIMIT; do
         fi
 
     done <<< "$IPS"
-
-    #=====================================================
-    # EXPULSAR EXCEDENTES
-    #=====================================================
 
     while IFS='|' read -r TTY IP; do
 
@@ -405,10 +351,6 @@ exit 0
 EOF
 
     chmod 755 "$LIMIT_SCRIPT"
-
-    #=====================================================
-    # SYSTEMD
-    #=====================================================
 
     cat > /etc/systemd/system/kevintech-limit.service <<'EOF'
 [Unit]
@@ -432,9 +374,13 @@ EOF
     systemctl restart kevintech-limit.service >/dev/null 2>&1
 
     if systemctl is-active --quiet kevintech-limit.service; then
+
         msg_ok "Sistema de límite IP activo."
+
     else
+
         msg_warn "El sistema de límite no pudo iniciarse."
+
     fi
 }
 
@@ -445,18 +391,25 @@ EOF
 sync_zivpn_password() {
 
     local PASS="$1"
+
     local ZIVPN_CONFIG="/etc/zivpn/config.json"
 
     [[ ! -f "$ZIVPN_CONFIG" ]] && return 0
 
     if ! command -v jq >/dev/null 2>&1; then
+
         msg_warn "ZiVPN está instalado pero jq no está disponible."
+
         return 1
+
     fi
 
     if ! jq empty "$ZIVPN_CONFIG" >/dev/null 2>&1; then
+
         msg_error "El archivo de configuración de ZiVPN no es válido."
+
         return 1
+
     fi
 
     if jq -e --arg pass "$PASS" \
@@ -464,10 +417,13 @@ sync_zivpn_password() {
         "$ZIVPN_CONFIG" >/dev/null 2>&1; then
 
         msg_info "La contraseña ya existe en ZiVPN."
+
         return 0
+
     fi
 
     local TMP
+
     TMP=$(mktemp)
 
     if jq --arg pass "$PASS" \
@@ -475,14 +431,19 @@ sync_zivpn_password() {
         "$ZIVPN_CONFIG" > "$TMP"; then
 
         chmod 600 "$TMP"
+
         mv "$TMP" "$ZIVPN_CONFIG"
 
         systemctl restart zivpn >/dev/null 2>&1
 
         if systemctl is-active --quiet zivpn; then
+
             msg_ok "Contraseña sincronizada con ZiVPN."
+
         else
+
             msg_warn "Contraseña agregada, pero ZiVPN no está activo."
+
         fi
 
     else
@@ -492,6 +453,7 @@ sync_zivpn_password() {
         msg_error "No se pudo agregar la contraseña a ZiVPN."
 
         return 1
+
     fi
 }
 
@@ -539,7 +501,7 @@ obtener_ip() {
 }
 
 #=========================================================
-# INSTALAR COMPONENTES ANTES DE CREAR CUENTA
+# INSTALAR COMPONENTES
 #=========================================================
 
 instalar_componentes() {
@@ -558,6 +520,512 @@ instalar_componentes() {
 }
 
 #=========================================================
+# DETECTAR PROTOCOLOS
+#=========================================================
+
+detectar_protocolos() {
+
+    #=====================================================
+    # SSH
+    #=====================================================
+
+    SSH_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/sshd/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+    [[ -z "$SSH_PORTS" ]] &&
+        SSH_PORTS="22"
+
+
+    #=====================================================
+    # DROPBEAR
+    #=====================================================
+
+    DROPBEAR_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/dropbear/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+
+    #=====================================================
+    # SSL / HAPROXY
+    #=====================================================
+
+    HAPROXY_PORTS=$(
+        ss -ltnp 2>/dev/null |
+        awk '/haproxy/ {
+            split($4,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+
+    #=====================================================
+    # BADVPN
+    #=====================================================
+
+    BADVPN_PORTS=$(
+        ss -lunp 2>/dev/null |
+        awk '/badvpn/ {
+            split($5,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+
+    #=====================================================
+    # UDP CUSTOM
+    #=====================================================
+
+    UDPCUSTOM_PORTS=$(
+        ss -lunp 2>/dev/null |
+        awk '/udp-custom|udpcustom/ {
+            split($5,a,":");
+            print a[length(a)]
+        }' |
+        sort -nu |
+        paste -sd "," -
+    )
+
+
+    #=====================================================
+    # SLOWDNS
+    #=====================================================
+
+    SLOWDNS_INSTALADO="NO"
+    SLOWDNS_NS=""
+    SLOWDNS_KEY=""
+
+    if [[ -f /etc/slowdns/domain.conf &&
+          -f /etc/slowdns/server.pub ]]; then
+
+        if systemctl is-active --quiet slowdns 2>/dev/null ||
+           systemctl is-active --quiet dnstt 2>/dev/null ||
+           pgrep -af "dnstt|slowdns" >/dev/null 2>&1; then
+
+            SLOWDNS_INSTALADO="SI"
+
+            SLOWDNS_NS=$(cat /etc/slowdns/domain.conf 2>/dev/null)
+
+            SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null)
+
+        fi
+    fi
+
+
+    #=====================================================
+    # BHTTP 8088
+    #=====================================================
+
+    BHTTP_INSTALADO="NO"
+
+    if [[ -f /etc/systemd/system/bhttp.service &&
+          -f /usr/local/lib/bhttp/bhttp-server.py ]]; then
+
+        if systemctl is-active --quiet bhttp 2>/dev/null &&
+           ss -H -ltn 2>/dev/null |
+           awk '{print $4}' |
+           grep -qE ':8088$'; then
+
+            BHTTP_INSTALADO="SI"
+
+        fi
+    fi
+
+
+    #=====================================================
+    # HYSTERIA
+    #=====================================================
+
+    HYSTERIA_INSTALADO="NO"
+    HYSTERIA_PORT=""
+    HYSTERIA_OBFS=""
+
+    if [[ -f /etc/hysteria/config.json ]]; then
+
+        if systemctl is-active --quiet hysteria 2>/dev/null ||
+           systemctl is-active --quiet hysteria-server 2>/dev/null ||
+           systemctl is-active --quiet hysteria1-server 2>/dev/null ||
+           pgrep -af hysteria >/dev/null 2>&1; then
+
+            HYSTERIA_INSTALADO="SI"
+
+            if command -v jq >/dev/null 2>&1 &&
+               jq empty /etc/hysteria/config.json >/dev/null 2>&1; then
+
+                HYSTERIA_PORT=$(
+                    jq -r '.listen // empty' \
+                    /etc/hysteria/config.json 2>/dev/null |
+                    sed 's/^://'
+                )
+
+                HYSTERIA_OBFS=$(
+                    jq -r '
+                        .obfs.password //
+                        .obfs //
+                        empty
+                    ' /etc/hysteria/config.json 2>/dev/null
+                )
+
+            else
+
+                HYSTERIA_PORT=$(
+                    grep -oP '"listen"\s*:\s*":\K[0-9]+' \
+                    /etc/hysteria/config.json 2>/dev/null |
+                    head -1
+                )
+
+                HYSTERIA_OBFS=$(
+                    grep -oP '"obfs"\s*:\s*"\K[^"]+' \
+                    /etc/hysteria/config.json 2>/dev/null |
+                    head -1
+                )
+
+            fi
+
+        fi
+    fi
+
+
+    #=====================================================
+    # ZIVPN
+    #=====================================================
+
+    ZIVPN_INSTALADO="NO"
+    ZIVPN_PORT=""
+
+    if [[ -f /etc/zivpn/config.json ]]; then
+
+        if systemctl is-active --quiet zivpn 2>/dev/null ||
+           pgrep -af zivpn >/dev/null 2>&1; then
+
+            ZIVPN_INSTALADO="SI"
+
+            if command -v jq >/dev/null 2>&1 &&
+               jq empty /etc/zivpn/config.json >/dev/null 2>&1; then
+
+                ZIVPN_PORT=$(
+                    jq -r '.listen // empty' \
+                    /etc/zivpn/config.json 2>/dev/null |
+                    tr -d ':'
+                )
+
+            fi
+
+        fi
+    fi
+
+
+    #=====================================================
+    # OPENVPN
+    #=====================================================
+
+    OPENVPN_INSTALADO="NO"
+    OPENVPN_PORTS=""
+
+    if systemctl is-active --quiet openvpn-server@server 2>/dev/null ||
+       systemctl is-active --quiet openvpn 2>/dev/null ||
+       pgrep -x openvpn >/dev/null 2>&1; then
+
+        OPENVPN_PORTS=$(
+            ss -ltnp 2>/dev/null |
+            awk '/openvpn/ {
+                split($4,a,":");
+                print a[length(a)]
+            }' |
+            sort -nu |
+            paste -sd "," -
+        )
+
+        OPENVPN_PORTS_UDP=$(
+            ss -lunp 2>/dev/null |
+            awk '/openvpn/ {
+                split($5,a,":");
+                print a[length(a)]
+            }' |
+            sort -nu |
+            paste -sd "," -
+        )
+
+        if [[ -n "$OPENVPN_PORTS" &&
+              -n "$OPENVPN_PORTS_UDP" ]]; then
+
+            OPENVPN_PORTS="$OPENVPN_PORTS,$OPENVPN_PORTS_UDP"
+
+        elif [[ -z "$OPENVPN_PORTS" ]]; then
+
+            OPENVPN_PORTS="$OPENVPN_PORTS_UDP"
+
+        fi
+
+        if [[ -n "$OPENVPN_PORTS" ]]; then
+
+            OPENVPN_INSTALADO="SI"
+
+        fi
+
+    fi
+
+
+    #=====================================================
+    # HTTP CUSTOM
+    #=====================================================
+
+    HTTP_PORTS=""
+
+    for PORT in 80 443 8080; do
+
+        if ss -H -ltn 2>/dev/null |
+           awk '{print $4}' |
+           grep -qE ":${PORT}$"; then
+
+            HTTP_PORTS="${HTTP_PORTS}${PORT},"
+
+        fi
+
+    done
+
+    HTTP_PORTS="${HTTP_PORTS%,}"
+
+}
+
+#=========================================================
+# MOSTRAR CUENTA
+#=========================================================
+
+mostrar_cuenta() {
+
+    clear
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${MAGENTA}          ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜             ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
+
+    echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
+    echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
+    echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
+    echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
+
+    echo
+
+    echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
+
+    echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
+
+    #=====================================================
+    # SSH
+    #=====================================================
+
+    if [[ -n "$SSH_PORTS" ]]; then
+
+        echo -e " ${WHITE}SSH          : ${GREEN}$SSH_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # DROPBEAR
+    #=====================================================
+
+    if [[ -n "$DROPBEAR_PORTS" ]]; then
+
+        echo -e " ${WHITE}Dropbear     : ${GREEN}$DROPBEAR_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # SSL
+    #=====================================================
+
+    if [[ -n "$HAPROXY_PORTS" ]]; then
+
+        echo -e " ${WHITE}SSL Tunnel   : ${GREEN}$HAPROXY_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # BADVPN
+    #=====================================================
+
+    if [[ -n "$BADVPN_PORTS" ]]; then
+
+        echo -e " ${WHITE}BadVPN       : ${GREEN}$BADVPN_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # UDP CUSTOM
+    #=====================================================
+
+    if [[ -n "$UDPCUSTOM_PORTS" ]]; then
+
+        echo -e " ${WHITE}UDP Custom   : ${GREEN}$UDPCUSTOM_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # OPENVPN
+    #=====================================================
+
+    if [[ "$OPENVPN_INSTALADO" == "SI" &&
+          -n "$OPENVPN_PORTS" ]]; then
+
+        echo -e " ${WHITE}OpenVPN      : ${GREEN}$OPENVPN_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # SLOWDNS
+    #=====================================================
+
+    if [[ "$SLOWDNS_INSTALADO" == "SI" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
+
+        echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
+        echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # BHTTP
+    # SIEMPRE DEBAJO DE SLOWDNS
+    #=====================================================
+
+    if [[ "$BHTTP_INSTALADO" == "SI" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ BHTTP (8088) ══════════${RESET}"
+
+        echo -e " ${WHITE}Servidor    : ${GREEN}${HOST}:8088${RESET}"
+        echo -e " ${WHITE}Backend SSH : ${GREEN}127.0.0.1:22${RESET}"
+        echo -e " ${WHITE}Estado      : ${GREEN}● ONLINE${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # HYSTERIA
+    #=====================================================
+
+    if [[ "$HYSTERIA_INSTALADO" == "SI" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
+
+        echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${HYSTERIA_PORT:-N/D}${RESET}"
+        echo -e " ${WHITE}OBFS         : ${GREEN}${HYSTERIA_OBFS:-N/D}${RESET}"
+        echo -e " ${WHITE}Credenciales : ${GREEN}${USER}:${PASS}${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # ZIVPN
+    #=====================================================
+
+    if [[ "$ZIVPN_INSTALADO" == "SI" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
+
+        echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT:-N/D}${RESET}"
+        echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
+        echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # HTTP CUSTOM
+    #=====================================================
+
+    if [[ -n "$HTTP_PORTS" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
+
+        IFS=',' read -ra HTTP_ARRAY <<< "$HTTP_PORTS"
+
+        for PORT in "${HTTP_ARRAY[@]}"; do
+
+            echo -e \
+                " ${GREEN}${HOST}:${PORT}@${USER}:${PASS}${RESET}"
+
+        done
+
+    fi
+
+
+    #=====================================================
+    # UDP CUSTOM
+    #=====================================================
+
+    if [[ -n "$UDPCUSTOM_PORTS" ]]; then
+
+        echo
+
+        echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
+
+        echo -e \
+            " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
+
+    fi
+
+
+    echo
+
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${YELLOW}          Presione ENTER para continuar...${RESET}"
+
+    read
+
+    if [[ -f "$BASE/usuarios/menu.sh" ]]; then
+
+        exec bash "$BASE/usuarios/menu.sh"
+
+    else
+
+        break
+
+    fi
+}
+
+#=========================================================
 # INICIO
 #=========================================================
 
@@ -566,10 +1034,6 @@ while true; do
     titulo
 
     obtener_ip
-
-    #=====================================================
-    # INSTALAR SISTEMAS
-    #=====================================================
 
     instalar_componentes
 
@@ -718,7 +1182,7 @@ while true; do
     chmod 600 "$LIMITS_FILE"
 
     #=====================================================
-    # TEXTO DEL LÍMITE
+    # TEXTO LÍMITE
     #=====================================================
 
     if (( LIMITE == 0 )); then
@@ -809,225 +1273,16 @@ while true; do
 
     HOST="${SERVER_DOMAIN:-$IP}"
 
-    echo
-
     #=====================================================
-    # PUERTOS SSH
+    # DETECTAR PROTOCOLOS
     #=====================================================
 
-    SSH_PORTS=$(
-        ss -ltnp 2>/dev/null |
-        awk '/sshd/ {
-            split($4,a,":");
-            print a[length(a)]
-        }' |
-        sort -nu |
-        paste -sd "," -
-    )
-
-    [[ -z "$SSH_PORTS" ]] && SSH_PORTS="22"
+    detectar_protocolos
 
     #=====================================================
-    # DROPBEAR
+    # MOSTRAR RESULTADO
     #=====================================================
 
-    DROPBEAR_PORTS=$(
-        ss -ltnp 2>/dev/null |
-        awk '/dropbear/ {
-            split($4,a,":");
-            print a[length(a)]
-        }' |
-        sort -nu |
-        paste -sd "," -
-    )
-
-    #=====================================================
-    # HAPROXY
-    #=====================================================
-
-    HAPROXY_PORTS=$(
-        ss -ltnp 2>/dev/null |
-        awk '/haproxy/ {
-            split($4,a,":");
-            print a[length(a)]
-        }' |
-        sort -nu |
-        paste -sd "," -
-    )
-
-    #=====================================================
-    # BADVPN
-    #=====================================================
-
-    BADVPN_PORTS=$(
-        ss -ltnp 2>/dev/null |
-        awk '/badvpn/ {
-            split($4,a,":");
-            print a[length(a)]
-        }' |
-        sort -nu |
-        paste -sd "," -
-    )
-
-    #=====================================================
-    # WEBSOCKET
-    #=====================================================
-
-    WS_PORT="80"
-    WSS_PORT="443"
-    WS_CDN_PORT="8080"
-
-    #=====================================================
-    # SLOWDNS
-    #=====================================================
-
-    if [[ -f /etc/slowdns/domain.conf ]]; then
-        SLOWDNS_NS=$(cat /etc/slowdns/domain.conf)
-    else
-        SLOWDNS_NS="N/D"
-    fi
-
-    if [[ -f /etc/slowdns/server.pub ]]; then
-        SLOWDNS_KEY=$(cat /etc/slowdns/server.pub)
-    else
-        SLOWDNS_KEY="N/D"
-    fi
-
-    #=====================================================
-    # HYSTERIA
-    #=====================================================
-
-    HYSTERIA_PORT=$(
-        grep -oP '"listen":\s*":\K[0-9]+' \
-        /etc/hysteria/config.json 2>/dev/null
-    )
-
-    [[ -z "$HYSTERIA_PORT" ]] &&
-        HYSTERIA_PORT="No instalado"
-
-    HYSTERIA_OBFS=$(
-        grep -oP '"obfs":\s*"\K[^"]+' \
-        /etc/hysteria/config.json 2>/dev/null
-    )
-
-    [[ -z "$HYSTERIA_OBFS" ]] &&
-        HYSTERIA_OBFS="No configurado"
-
-    #=====================================================
-    # ZIVPN PUERTO
-    #=====================================================
-
-    if [[ -f /etc/zivpn/config.json ]] &&
-       command -v jq >/dev/null 2>&1; then
-
-        ZIVPN_PORT=$(
-            jq -r '.listen // empty' \
-            /etc/zivpn/config.json 2>/dev/null |
-            tr -d ':'
-        )
-
-    else
-
-        ZIVPN_PORT=""
-
-    fi
-
-    [[ -z "$ZIVPN_PORT" ]] &&
-        ZIVPN_PORT="No instalado"
-
-    #=====================================================
-    # PANEL
-    #=====================================================
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}          ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
-
-    echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
-    echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
-    echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
-    echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
-
-    echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
-    echo -e " ${WHITE}SSH          : ${GREEN}$SSH_PORTS${RESET}"
-    echo -e " ${WHITE}Dropbear     : ${GREEN}${DROPBEAR_PORTS:-No instalado}${RESET}"
-    echo -e " ${WHITE}SSL Tunnel   : ${GREEN}${HAPROXY_PORTS:-No instalado}${RESET}"
-    echo -e " ${WHITE}OpenVPN      : ${GREEN}1194,2200,443${RESET}"
-    echo -e " ${WHITE}BadVPN       : ${GREEN}${BADVPN_PORTS:-No instalado}${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
-
-    echo -e " ${GREEN}${HOST}:443@${USER}:${PASS}${RESET}"
-    echo -e " ${GREEN}${HOST}:80@${USER}:${PASS}${RESET}"
-    echo -e " ${GREEN}${HOST}:8080@${USER}:${PASS}${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
-
-    echo -e " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
-
-    echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${HYSTERIA_PORT}${RESET}"
-    echo -e " ${WHITE}OBFS         : ${GREEN}${HYSTERIA_OBFS}${RESET}"
-    echo -e " ${WHITE}Credenciales : ${GREEN}${USER}:${PASS}${RESET}"
-
-    echo
-
-    echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
-
-    echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT}${RESET}"
-    echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
-    echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
-
-    #=====================================================
-    # SLOWDNS
-    #=====================================================
-
-    if [[ -f /etc/slowdns/domain.conf &&
-          -f /etc/slowdns/server.pub ]]; then
-
-        echo
-
-        echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
-
-        echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
-        echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
-
-    fi
-
-    echo
-
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-    echo -e "${YELLOW}          Presione ENTER para continuar...${RESET}"
-
-    read
-
-    if [[ -f "$BASE/usuarios/menu.sh" ]]; then
-
-        exec bash "$BASE/usuarios/menu.sh"
-
-    else
-
-        break
-
-    fi
+    mostrar_cuenta
 
 done
