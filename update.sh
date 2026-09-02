@@ -46,7 +46,8 @@ chmod +x "$BASE"/telegram/bot.py 2>/dev/null || true
 # El bot es el único conjunto de archivos Python propios; mantenerlos en telegram.
 find "$BASE/telegram" -maxdepth 1 -type f -name '*.py' -exec chmod 700 {} \; 2>/dev/null || true
 systemctl daemon-reload 2>/dev/null || true
-if systemctl list-unit-files 2>/dev/null | grep -q '^kevintech-telegram.service'; then systemctl restart kevintech-telegram.service >/dev/null 2>&1 || true; fi
+# Cuando el actualizador es ejecutado por Telegram, el propio bot reinicia el servicio
+# después de enviar la notificación de actualización. Así nunca se pierde el mensaje.
 rm -rf "$TMP"
 echo; echo -e "${GREEN}\e[1m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; echo -e "${GREEN}\e[1m              ✅ ACTUALIZACIÓN COMPLETADA${RESET}"; echo -e "${GREEN}\e[1m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; echo; echo -e " ${GRAY}Versión instalada:${RESET} ${WHITE}${NUEVA_VERSION}${RESET}"; echo -e " ${GRAY}Backup:${RESET} ${WHITE}${BACKUP_FILE}${RESET}"; echo
 exit 0

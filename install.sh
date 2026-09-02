@@ -862,10 +862,8 @@ mkdir -p \
 # pasos manuales separados.
 if [[ -d "$TMP/telegram" ]]; then
     mkdir -p "$BASE/telegram"
-    for f in bot.py version.txt; do
-        [[ -f "$TMP/telegram/$f" ]] && cp -f "$TMP/telegram/$f" "$BASE/telegram/$f"
-    done
-    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh" "$BASE/telegram/install.sh" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
+    cp -a "$TMP/telegram"/. "$BASE/telegram"/
+    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
 fi
 
 #=========================================================
@@ -1479,7 +1477,7 @@ if [[ "$ACTIVATE_STATUS" -ne 0 ]]; then
 
     echo
     echo -e \
-        "${YELLOW}La licencia no fue marcada como utilizada.${RESET}"
+        "${YELLOW}La instalación no pudo confirmar la activación de licencia.${RESET}"
 
     exit 1
 
@@ -1536,7 +1534,7 @@ if [[ -n "$ACTIVATION_ID" ]]; then
 
 fi
 
-ok "La Key fue marcada como utilizada."
+ok "Instalación realizada correctamente."
 
 #=========================================================
 # ESTADO LOCAL
