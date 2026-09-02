@@ -1,1 +1,913 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>KevinTech Premium</title>
+
+    <!-- Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Monetag -->
+    <script
+        src="//libtl.com/sdk.js"
+        data-zone="11217882"
+        data-sdk="show_11217882">
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --cyan: #00e5ff;
+            --blue: #0077ff;
+            --purple: #8b5cf6;
+            --green: #00ff9d;
+            --red: #ff3158;
+            --bg: #03050a;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            overflow: hidden;
+            background: var(--bg);
+            color: white;
+            font-family:
+                Inter,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+        }
+
+        /* =========================================
+           BACKGROUND
+        ========================================= */
+
+        .background {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+
+            background:
+                radial-gradient(
+                    circle at 50% 20%,
+                    rgba(0,229,255,.12),
+                    transparent 30%
+                ),
+                radial-gradient(
+                    circle at 10% 90%,
+                    rgba(139,92,246,.13),
+                    transparent 30%
+                ),
+                #03050a;
+        }
+
+        .grid {
+            position: absolute;
+            inset: -50%;
+
+            background-image:
+                linear-gradient(
+                    rgba(0,229,255,.035) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(0,229,255,.035) 1px,
+                    transparent 1px
+                );
+
+            background-size: 45px 45px;
+
+            transform:
+                perspective(500px)
+                rotateX(60deg)
+                translateY(150px);
+
+            animation: gridMove 12s linear infinite;
+        }
+
+        @keyframes gridMove {
+            from {
+                transform:
+                    perspective(500px)
+                    rotateX(60deg)
+                    translateY(0);
+            }
+
+            to {
+                transform:
+                    perspective(500px)
+                    rotateX(60deg)
+                    translateY(90px);
+            }
+        }
+
+        /* =========================================
+           PARTICLES
+        ========================================= */
+
+        .particles span {
+            position: absolute;
+
+            width: 3px;
+            height: 3px;
+
+            background: var(--cyan);
+
+            border-radius: 50%;
+
+            box-shadow:
+                0 0 10px var(--cyan);
+
+            animation: particle 5s linear infinite;
+        }
+
+        .particles span:nth-child(1) {
+            left: 10%;
+            top: 20%;
+            animation-delay: 0s;
+        }
+
+        .particles span:nth-child(2) {
+            left: 25%;
+            top: 70%;
+            animation-delay: 1s;
+        }
+
+        .particles span:nth-child(3) {
+            left: 70%;
+            top: 15%;
+            animation-delay: 2s;
+        }
+
+        .particles span:nth-child(4) {
+            left: 85%;
+            top: 65%;
+            animation-delay: 3s;
+        }
+
+        .particles span:nth-child(5) {
+            left: 50%;
+            top: 85%;
+            animation-delay: 4s;
+        }
+
+        .particles span:nth-child(6) {
+            left: 92%;
+            top: 35%;
+            animation-delay: 1.5s;
+        }
+
+        @keyframes particle {
+            0% {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+
+            30% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(-100px);
+            }
+        }
+
+        /* =========================================
+           MAIN
+        ========================================= */
+
+        .app {
+            position: relative;
+            z-index: 5;
+
+            width: 100%;
+            height: 100%;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 20px;
+        }
+
+        .panel {
+            width: 100%;
+            max-width: 390px;
+
+            text-align: center;
+        }
+
+        /* =========================================
+           LOGO
+        ========================================= */
+
+        .logo-area {
+            position: relative;
+
+            width: 150px;
+            height: 150px;
+
+            margin: 0 auto 25px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ring {
+            position: absolute;
+
+            border: 1px solid rgba(0,229,255,.45);
+
+            border-radius: 50%;
+
+            animation: rotate 8s linear infinite;
+        }
+
+        .ring.one {
+            width: 150px;
+            height: 150px;
+        }
+
+        .ring.two {
+            width: 125px;
+            height: 125px;
+
+            border-color: rgba(139,92,246,.5);
+
+            animation-direction: reverse;
+            animation-duration: 6s;
+        }
+
+        .ring.three {
+            width: 105px;
+            height: 105px;
+
+            border-color: rgba(0,229,255,.25);
+
+            animation-duration: 4s;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .logo {
+            position: relative;
+
+            width: 82px;
+            height: 82px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 25px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #00e5ff,
+                    #0077ff 55%,
+                    #8b5cf6
+                );
+
+            box-shadow:
+                0 0 25px rgba(0,229,255,.45),
+                0 0 70px rgba(0,119,255,.2);
+
+            font-size: 25px;
+            font-weight: 950;
+            letter-spacing: -2px;
+
+            animation: logoPulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes logoPulse {
+            0%,100% {
+                box-shadow:
+                    0 0 25px rgba(0,229,255,.45),
+                    0 0 70px rgba(0,119,255,.2);
+            }
+
+            50% {
+                box-shadow:
+                    0 0 45px rgba(0,229,255,.7),
+                    0 0 100px rgba(0,119,255,.35);
+            }
+        }
+
+        /* =========================================
+           TITLES
+        ========================================= */
+
+        .mini-title {
+            font-size: 10px;
+            font-weight: 800;
+
+            letter-spacing: 4px;
+
+            color: var(--cyan);
+
+            text-transform: uppercase;
+
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 32px;
+            line-height: 1;
+
+            font-weight: 900;
+
+            letter-spacing: -1px;
+
+            margin-bottom: 13px;
+        }
+
+        h1 span {
+            background:
+                linear-gradient(
+                    90deg,
+                    #fff,
+                    var(--cyan),
+                    #fff
+                );
+
+            background-size: 200%;
+
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+
+            animation: shine 3s linear infinite;
+        }
+
+        @keyframes shine {
+            to {
+                background-position: 200%;
+            }
+        }
+
+        .description {
+            max-width: 310px;
+
+            margin: 0 auto;
+
+            color: rgba(255,255,255,.55);
+
+            font-size: 13px;
+
+            line-height: 1.6;
+        }
+
+        /* =========================================
+           STATUS
+        ========================================= */
+
+        .status {
+            display: inline-flex;
+
+            align-items: center;
+            gap: 7px;
+
+            margin-top: 18px;
+            margin-bottom: 18px;
+
+            padding: 7px 12px;
+
+            border-radius: 50px;
+
+            background: rgba(0,255,157,.06);
+
+            border: 1px solid rgba(0,255,157,.15);
+
+            color: rgba(255,255,255,.65);
+
+            font-size: 10px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+
+            border-radius: 50%;
+
+            background: var(--green);
+
+            box-shadow:
+                0 0 10px var(--green);
+
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: .3;
+            }
+        }
+
+        /* =========================================
+           BUTTON
+        ========================================= */
+
+        .button-wrap {
+            position: relative;
+
+            margin-top: 5px;
+        }
+
+        .glow {
+            position: absolute;
+
+            inset: -3px;
+
+            border-radius: 18px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    var(--cyan),
+                    var(--blue),
+                    var(--purple),
+                    var(--cyan)
+                );
+
+            background-size: 300%;
+
+            filter: blur(12px);
+
+            opacity: .35;
+
+            animation: buttonGlow 4s linear infinite;
+        }
+
+        @keyframes buttonGlow {
+            to {
+                background-position: 300%;
+            }
+        }
+
+        #playBtn {
+            position: relative;
+
+            width: 100%;
+
+            padding: 17px 20px;
+
+            border: 1px solid rgba(255,255,255,.18);
+
+            border-radius: 17px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(0,229,255,.18),
+                    rgba(0,119,255,.18)
+                );
+
+            color: white;
+
+            font-size: 14px;
+            font-weight: 850;
+
+            cursor: pointer;
+
+            backdrop-filter: blur(10px);
+
+            transition:
+                transform .2s,
+                background .2s;
+        }
+
+        #playBtn:active {
+            transform: scale(.96);
+        }
+
+        #playBtn:hover {
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(0,229,255,.28),
+                    rgba(0,119,255,.28)
+                );
+        }
+
+        #playBtn:disabled {
+            opacity: .65;
+            cursor: wait;
+        }
+
+        /* =========================================
+           LOADER
+        ========================================= */
+
+        .loader {
+            display: none;
+
+            width: 17px;
+            height: 17px;
+
+            margin-right: 8px;
+
+            vertical-align: middle;
+
+            border: 2px solid rgba(255,255,255,.25);
+            border-top-color: var(--cyan);
+
+            border-radius: 50%;
+
+            animation: spin .7s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* =========================================
+           FOOTER
+        ========================================= */
+
+        .footer {
+            margin-top: 22px;
+
+            color: rgba(255,255,255,.32);
+
+            font-size: 10px;
+        }
+
+        .footer a {
+            color: rgba(0,229,255,.65);
+
+            text-decoration: none;
+
+            font-weight: 700;
+        }
+
+        .footer p {
+            margin: 6px;
+        }
+
+        /* =========================================
+           ERROR
+        ========================================= */
+
+        #error-msg {
+            display: none;
+        }
+
+        .error-icon {
+            width: 75px;
+            height: 75px;
+
+            margin: 0 auto 20px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 24px;
+
+            background: rgba(255,49,88,.1);
+
+            border: 1px solid rgba(255,49,88,.25);
+
+            font-size: 30px;
+
+            box-shadow:
+                0 0 35px rgba(255,49,88,.12);
+        }
+
+        .continue {
+            width: 100%;
+
+            margin-top: 22px;
+
+            padding: 15px;
+
+            border: 0;
+
+            border-radius: 16px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #00c987,
+                    #00a974
+                );
+
+            color: white;
+
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <!-- BACKGROUND -->
+
+    <div class="background">
+
+        <div class="grid"></div>
+
+        <div class="particles">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+    </div>
+
+
+    <!-- APP -->
+
+    <main class="app">
+
+        <section class="panel">
+
+            <!-- LOGO -->
+
+            <div class="logo-area">
+
+                <div class="ring one"></div>
+                <div class="ring two"></div>
+                <div class="ring three"></div>
+
+                <div class="logo">
+                    KT
+                </div>
+
+            </div>
+
+
+            <!-- LOADING / MAIN -->
+
+            <div id="loading">
+
+                <div class="mini-title">
+                    KevinTech System
+                </div>
+
+                <h1>
+                    <span>Acceso Premium</span>
+                </h1>
+
+                <p class="description">
+                    Estás a un paso de continuar.
+                    Mira un pequeño anuncio para mantener
+                    este servicio disponible gratuitamente.
+                </p>
+
+
+                <div class="status">
+                    <span class="status-dot"></span>
+                    Sistema disponible
+                </div>
+
+
+                <div class="button-wrap">
+
+                    <div class="glow"></div>
+
+                    <button id="playBtn">
+
+                        <span
+                            id="loader"
+                            class="loader">
+                        </span>
+
+                        <span id="btnText">
+                            ▶ &nbsp; VER ANUNCIO
+                        </span>
+
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- ERROR -->
+
+            <div id="error-msg">
+
+                <div class="error-icon">
+                    ⚠️
+                </div>
+
+                <div class="mini-title">
+                    KevinTech System
+                </div>
+
+                <h1>
+                    Anuncio no disponible
+                </h1>
+
+                <p class="description">
+                    En este momento no hay publicidad disponible
+                    para tu región.
+                </p>
+
+                <button
+                    class="continue"
+                    onclick="sendSuccessAndClose()">
+
+                    ✓ CONTINUAR
+
+                </button>
+
+            </div>
+
+
+            <!-- FOOTER -->
+
+            <div class="footer">
+
+                <p>
+                    © KevinTech Multi Script
+                </p>
+
+                <p>
+                    <a
+                        href="https://youtube.com/@kevintechtutorials?si=a2gv6Oqhsne9Thgl"
+                        target="_blank">
+                        YouTube
+                    </a>
+
+                    &nbsp;•&nbsp;
+
+                    <a
+                        href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l"
+                        target="_blank">
+                        WhatsApp
+                    </a>
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+<script>
+
+    /* =========================================
+       TELEGRAM
+    ========================================= */
+
+    const tg = window.Telegram.WebApp;
+
+    tg.ready();
+    tg.expand();
+
+
+    /* =========================================
+       ELEMENTS
+    ========================================= */
+
+    const playBtn =
+        document.getElementById("playBtn");
+
+    const btnText =
+        document.getElementById("btnText");
+
+    const loader =
+        document.getElementById("loader");
+
+    const loading =
+        document.getElementById("loading");
+
+    const errorMsg =
+        document.getElementById("error-msg");
+
+
+    /* =========================================
+       SUCCESS
+    ========================================= */
+
+    function sendSuccessAndClose() {
+
+        const url =
+            "https://t.me/sshprivanoxbot?start=adcompleted";
+
+        try {
+
+            tg.openTelegramLink(url);
+
+            setTimeout(() => {
+                tg.close();
+            }, 400);
+
+        } catch (e) {
+
+            window.location.href = url;
+
+        }
+    }
+
+
+    /* =========================================
+       ERROR
+    ========================================= */
+
+    function showError() {
+
+        loading.style.display = "none";
+
+        errorMsg.style.display = "block";
+
+    }
+
+
+    /* =========================================
+       AD
+    ========================================= */
+
+    playBtn.addEventListener(
+        "click",
+        async () => {
+
+            playBtn.disabled = true;
+
+            loader.style.display =
+                "inline-block";
+
+            btnText.textContent =
+                "CARGANDO ANUNCIO...";
+
+
+            if (
+                typeof show_11217882 !==
+                "function"
+            ) {
+
+                showError();
+
+                return;
+            }
+
+
+            try {
+
+                await show_11217882();
+
+
+                loader.style.display =
+                    "none";
+
+                btnText.textContent =
+                    "✓ COMPLETADO";
+
+
+                setTimeout(
+                    sendSuccessAndClose,
+                    600
+                );
+
+
+            } catch (error) {
+
+                loader.style.display =
+                    "none";
+
+                showError();
+
+            }
+
+        }
+    );
+
+</script>
+
+</body>
+</html>
