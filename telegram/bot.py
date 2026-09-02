@@ -146,7 +146,7 @@ CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'te
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
 SVCS={k:v[2] for k,v in PROTO.items()}
-TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'},{'text':'🔄 Actualizar','callback_data':'tool:update'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def module(name):
  for p in [BASE/'protocolos'/name,BASE/'herramientas'/name,BASE/'usuarios'/name]:
@@ -240,19 +240,6 @@ def v2ray_account_message(c,d):
  link='vmess://'+base64.b64encode(raw.encode()).decode()
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
 
-def get_slowdns_key():
- candidates=[Path('/etc/slowdns/server.pub'),Path('/etc/slowdns/public.key'),Path('/etc/slowdns/pubkey')]
- for p in candidates:
-  if p.exists():
-   v=p.read_text(errors='ignore').strip()
-   if v:return v
- try:
-  for p in Path('/etc/slowdns').glob('*.pub'):
-   v=p.read_text(errors='ignore').strip()
-   if v:return v
- except Exception:pass
- return 'No configurado'
-
 def account_message(c,d,renew=False):
  u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
@@ -264,6 +251,17 @@ def account_message(c,d,renew=False):
  title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
  lim=d.get('limit','Ilimitado');limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
  slow_ns=f'ns-{domain}' if domain else 'Requiere dominio real'
+ slow_candidates=[Path('/etc/slowdns/server.pub'),Path('/etc/slowdns/pubkey'),Path('/etc/slowdns/server.key.pub')]
+ slow_key=''
+ for kp in slow_candidates:
+  if kp.exists():
+   try:
+    val=kp.read_text(errors='ignore').strip()
+    if val: slow_key=val;break
+   except: pass
+ if not slow_key:
+  out=subprocess.getoutput("grep -RhsE '^[[:space:]]*(Public|PUBLIC|KEY|PUBKEY)[[:space:]]*[:=]' /etc/slowdns 2>/dev/null | head -1")
+  slow_key=out.split('=',1)[-1].strip().strip('"') if out else 'No configurado'
  return f'''<b>{title}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -322,10 +320,9 @@ def account_message(c,d,renew=False):
 ━━━━━━━━━━━━━━━━━━━━
 🌐 <b>BHTTP</b>
 ━━━━━━━━━━━━━━━━━━━━
-• Servidor: <code>{e(host)}</code>
+• Servidor: <code>{e(host)}:8088</code>
 • Puerto: <code>8088</code>
-• SSH: <code>22</code>
-• Conexión: <code>{e(host)}:8088@{e(u)}:{e(pw or '********')}</code>
+• Backend SSH: <code>22</code>
 
 ━━━━━━━━━━━━━━━━━━━━
 💎 <b>KEVINTECH MULTI SCRIPT</b>
@@ -375,6 +372,13 @@ def process_text(c,t,chat_type=None):
  if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':'🇪🇸 Español','callback_data':'lang:es'},{'text':'🇺🇸 English','callback_data':'lang:en'}],[{'text':'🇧🇷 Português','callback_data':'lang:pt'}]])
  if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
+ if cmd in ('/respaldo_ahora','/backup_now') and is_owner(uid):
+  fn=backup_now();return send_document(c,fn,'💾 Respaldo manual del sistema.')
+ if cmd in ('/respaldo_diario','/backup_daily') and is_owner(uid):return configure_backup(c,'daily')
+ if cmd in ('/respaldo_7dias','/backup_7d') and is_owner(uid):return configure_backup(c,'7d')
+ if cmd in ('/respaldo_15dias','/backup_15d') and is_owner(uid):return configure_backup(c,'15d')
+ if cmd in ('/respaldo_30dias','/backup_30d') and is_owner(uid):return configure_backup(c,'30d')
+ if cmd in ('/respaldo_unavez','/backup_once') and is_owner(uid):return configure_backup(c,'once')
  if cmd in ('/ajustes','/settings') and is_owner(uid):return cb(c,0,c,0,'settings')
  if cmd in ('/cuotas','/quota') and is_owner(uid):return cb(c,0,c,0,'quotas')
  if cmd in ('/seguridad','/security') and is_owner(uid):return cb(c,0,c,0,'security')
@@ -382,6 +386,7 @@ def process_text(c,t,chat_type=None):
  if cmd in ('/ban','/baneos') and is_owner(uid):return cb(c,0,c,0,'bans')
  if cmd in ('/monetizacion','/monetization') and is_owner(uid):return cb(c,0,c,0,'monetization')
  if cmd in ('/herramientas','/tools') and is_owner(uid):return cb(c,0,c,0,'tools')
+ if cmd in ('/actualizar','/update') and is_owner(uid):return cb(c,0,c,0,'update_system')
  if t.startswith('/referidos'):return send(c,referral_info(c))
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
@@ -535,7 +540,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
  if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if x=='backup_menu':return edit(c,m,'💾 <b>RESPALDAR</b>\n\nElige cómo deseas recibir el documento JSON:',[[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'💾 Respaldar ahora','callback_data':'backup_now'}],[{'text':'🔙 Respaldos','callback_data':'backup_restore'}]])
+ if x=='backup_menu':return edit(c,m,'💾 <b>RESPALDAR</b>\n\nSelecciona cómo deseas recibir el documento JSON:',[[{'text':'📤 Enviar ahora','callback_data':'backup_now'}],[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Respaldos','callback_data':'backup_restore'}]])
  if x.startswith('backup:'):return configure_backup(c,x.split(':',1)[1])
  if x=='backup_now':
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
@@ -558,6 +563,11 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='security:auto':
   d['security']['auto_ban_ssh']=not d['security'].get('auto_ban_ssh',False);save_db(d)
   return edit(c,m,'🛡️ <b>SEGURIDAD ACTUALIZADA</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d['security']['auto_ban_ssh'] else 'DESACTIVADO 🔴')+'</b>',SECURITY_MENU)
+ if x=='update_system':
+  if not is_owner(u):return ans(i,'Solo el super admin')
+  p=BASE/'update.sh'
+  if not p.exists():return send(c,'🔴 No se encontró el actualizador del sistema.')
+  return bg(c,'Actualización del sistema',f'bash {q(p)} --telegram',600,settings_keyboard())
  if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
  if x.startswith('tool:'):
   if not is_owner(u):return ans(i,'Solo el super admin')
@@ -583,7 +593,7 @@ def quota_text(d):
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
 
- d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
 
 def backup_now():
  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/'kevintech_backup.json';fn.write_text(json.dumps(db(),indent=2,ensure_ascii=False));os.chmod(fn,0o600);return fn
@@ -605,7 +615,7 @@ def backup_scheduler():
   except Exception as er:log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
-SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'update_system'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
