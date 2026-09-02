@@ -9,7 +9,7 @@ DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; API=''; OWNER=0; BOT_USERNAME=''
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
- 'monetization':{'monetag':'','miniapp':''}, 'referrals':{}
+ 'monetization':{'monetag':'','miniapp':''}, 'referrals':{}, 'referral_meta':{}
 }
 
 def log(s):
@@ -24,6 +24,7 @@ def load_db():
  for k,v in DEFAULT.items():
   if k not in d:d[k]=json.loads(json.dumps(v))
  if not isinstance(d.get('referrals'),dict):d['referrals']={}
+ if not isinstance(d.get('referral_meta'),dict):d['referral_meta']={}
  for k in ('admins','bans','users'):
   if not isinstance(d.get(k),dict):d[k]={}
  if not isinstance(d.get('quotas'),dict):d['quotas']=DEFAULT['quotas'].copy()
@@ -93,10 +94,16 @@ def is_admin(uid):
 def allowed(uid):
  d=db();return is_admin(uid) or d.get('access')=='public'
 def banned(uid):return str(uid) in db()['bans']
-def registered(uid,name=None):
+def registered(uid,name=None,username=None):
  d=db(); k=str(uid)
- if k not in d['users']:d['users'][k]={'id':uid,'name':name or str(uid),'created':time.strftime('%F'),'accounts':[]};save_db(d)
- elif name and d['users'][k].get('name')!=name:d['users'][k]['name']=name;save_db(d)
+ if k not in d['users']:
+  d['users'][k]={'id':uid,'name':name or str(uid),'username':username or '','created':time.strftime('%F'),'accounts':[],'referral_rewarded':False}
+  save_db(d)
+ else:
+  changed=False
+  if name and d['users'][k].get('name')!=name:d['users'][k]['name']=name;changed=True
+  if username is not None and d['users'][k].get('username','')!=username:d['users'][k]['username']=username;changed=True
+  if changed:save_db(d)
 
 LANGS={
  'es':{'name':'🇪🇸 Español','title':'🎨 <b>KEVINTECH MULTI SCRIPT</b>','panel':'⚙️ <b>Panel de administración</b>','users':'👤 Usuarios','settings':'⚙️ Ajustes','create':'➕ Crear cuenta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Cuenta','delete':'🗑️ Eliminar cuenta','ref':'🔗 Referidos','back':'🔙 Regresar','language':'🌐 Idioma','private':'PRIVADO','public':'PÚBLICO','account_prompt':'👤 <b>CUENTA</b>\n\nEscribe tu usuario para consultar la información:','delete_prompt':'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:','create_prompt':'➕ <b>CREAR CUENTA</b>\n\nUsuario:','renew_prompt':'♻️ <b>RENOVAR</b>\n\nUsuario:'},
@@ -175,7 +182,7 @@ def account_info(uid,username):
 def userexists(u):return bool(re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I)) and sh(f'id {q(u)} >/dev/null 2>&1',3)[0]==0
 
 def account_message(c,d,renew=False):
- u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip();cfg=BASE/'config.conf';domain=''
+ u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"chage -l {q(u)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'") or subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip();cfg=BASE/'config.conf';domain=''
  if cfg.exists():
   for l in cfg.read_text(errors='ignore').splitlines():
    if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"').strip("'")
@@ -184,13 +191,48 @@ def account_message(c,d,renew=False):
  lim=d.get('limit','Ilimitado')
  return f'''<b>{title}</b>\n\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>DATOS DEL USUARIO</b>\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: <code>{e(u)}</code>\n• Contraseña: <code>{e(pw or '********')}</code>\n• Expira: <code>{e(exp)}</code>\n• Duración: <code>{days} días</code>\n• Dispositivos/IP: <code>{e(lim)}</code>\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 <b>SERVIDOR</b>\n━━━━━━━━━━━━━━━━━━━━\n• Dominio: <code>{e(domain or 'No configurado')}</code>\n• IP: <code>{e(ip)}</code>\n\nHTTP/SSH:\n<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>\n\nUDP Custom:\n<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>\n\nℹ️ Si no hay dominio configurado, se utiliza la IP.'''
 
+def send_document(c,path,caption='',k=None):
+ try:
+  boundary='----KevinTechBoundary'+str(int(time.time()*1000))
+  body=[]
+  def field(name,value):
+   body.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+  field('chat_id',str(c));field('caption',caption);field('parse_mode','HTML')
+  if k: field('reply_markup',json.dumps({'inline_keyboard':localize_keyboard(c,k)},ensure_ascii=False))
+  data=path.read_bytes();fn=path.name
+  body.append(f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{fn}"\r\nContent-Type: application/json\r\n\r\n'.encode()+data+b'\r\n')
+  body.append(f'--{boundary}--\r\n'.encode())
+  req=urllib.request.Request(API+'/sendDocument',data=b''.join(body),headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
+  with urllib.request.urlopen(req,timeout=40) as r:return json.loads(r.read().decode())
+ except Exception as er:
+  log(f'SEND_DOCUMENT {c} {er!r}');return send(c,'🔴 No se pudo enviar el documento.',k)
+
+def ssh_online():
+ # Cuenta conexiones SSH TCP establecidas, no terminales del servidor.
+ rows=[]
+ out=subprocess.getoutput("ss -tnp state established '( sport = :22 or sport = :90 or sport = :143 or sport = :109 )' 2>/dev/null")
+ for line in out.splitlines()[1:]:
+  if 'users:((' not in line:continue
+  m=re.search(r'users:\(\(\"[^"]+\",pid=(\d+)',line)
+  if not m:continue
+  pid=m.group(1);usr=subprocess.getoutput(f'ps -o user= -p {q(pid)} 2>/dev/null').strip()
+  if usr and usr not in ('root','sshd','dropbear') and usr not in rows:rows.append(usr)
+ return '🟢 <b>CUENTAS SSH ONLINE</b>\n\n'+('\n'.join('• <code>'+e(x)+'</code>' for x in rows) if rows else 'No hay cuentas SSH conectadas.')+f'\n\nTotal: <b>{len(rows)}</b>'
+
 def process_text(c,t):
  d=db();uid=c
  if banned(uid):return send(c,'🚫 Tu acceso está bloqueado.')
  registered(uid)
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
- if not st:return send(c,tr(uid,'title')+'\n\n'+tr(uid,'panel'),home(uid)) if t.split()[0] in ('/start','/star','/menu') else None
+ if not st:
+  cmd=t.split()[0].lower() if t.split() else ''
+  if cmd in ('/start','/star','/menu'):return send(c,tr(uid,'title')+'\n\n'+tr(uid,'panel'),home(uid))
+  if cmd=='/referidos':
+   link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}'
+   n=sum(1 for v in d.get('referrals',{}).values() if str(v)==str(uid));used=int(d.get('referral_meta',{}).get(str(uid),{}).get('renewals',0));available=max(0,min(3-used,n//3))
+   return send(c,f'🔗 <b>REFERIDOS</b>\n\n🔗 <code>{e(link)}</code>\n👥 Referidos válidos: <b>{n}</b>\n♻️ Renovaciones disponibles: <b>{available}</b>')
+  return None
  f,step,dat=st['f'],st['s'],st['d']
  if step=='u' and f in ('create','renew','delete','account'):
   u=t.strip()
@@ -199,16 +241,20 @@ def process_text(c,t):
   if f=='create' and userexists(u):return send(c,'❌ Usuario ya existe.')
   dat['user']=u
   if f=='account':STATE.pop(c,None);return send(c,account_info(c,u),users_menu(c))
-  if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Eliminar la cuenta <code>{e(u)}</code>?',[[{'text':'✅ ELIMINAR','callback_data':'userop:delete'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
-  if f=='create':st['s']='p';return send(c,'🔑 Contraseña:')
-  st['s']='days';return send(c,'📅 Días a renovar:')
- if f=='create' and step=='p':dat['pass']=t;st['s']='days';return send(c,'📅 Días de duración:')
- if f in ('create','renew') and step=='days':
-  if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
-  maxdays,maxdev=quota(c)
-  if not is_owner(c) and int(t)>maxdays:return send(c,f'❌ Máximo permitido: <b>{maxdays} días</b>.')
-  dat['days']=int(t);dat['limit']=maxdev;st['s']='confirm'
-  return send(c,f'📝 <b>CONFIRMAR</b>\n\n👤 <code>{e(dat["user"])}</code>\n🔑 <code>{e(dat.get("pass","********"))}</code>\n📅 <code>{dat["days"]} días</code>\n👥 <code>{dat["limit"]}</code>',[[{'text':'✅ CONFIRMAR','callback_data':'do:'+f},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if f=='delete':return send(c,f'⚠️ ¿Eliminar la cuenta <code>{e(u)}</code>?',[[{'text':'✅ ELIMINAR','callback_data':'userop:delete'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if f=='create':
+   st['s']='p';return send(c,'🔑 Contraseña:')
+  # Renovación por referidos: 3 referidos = 7 días, máximo 3 renovaciones.
+  count=sum(1 for v in db().get('referrals',{}).values() if str(v)==str(c))
+  used=int(db().get('referral_meta',{}).get(str(c),{}).get('renewals',0))
+  if count < (used+1)*3 or used >= 3:
+   left=max(0,(used+1)*3-count)
+   if used >= 3:return send(c,'❌ Ya utilizaste las 3 renovaciones disponibles por referidos.')
+   return send(c,f'🔗 Necesitas <b>{left} referidos más</b> para renovar por 7 días.')
+  dat['days']=7;dat['limit']=quota(c)[1];st['s']='ready';return send(c,'♻️ <b>Renovación lista</b>\n\nSe aplicarán <b>7 días</b> y se utilizarán <b>3 referidos</b>.',[[{'text':'✅ RENOVAR 7 DÍAS','callback_data':'do:renew'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+ if f=='create' and step=='p':
+  dat['pass']=t;dat['days'],dat['limit']=quota(c);st['s']='ready'
+  return send(c,f'⚡ <b>CREANDO CUENTA</b>\n\n📅 Cuota: <b>{dat["days"]} días</b>\n👥 Dispositivos/IP: <b>{dat["limit"]}</b>')
 
 def cb(c,m,u,i,x):
  if banned(u) and not x.startswith('lang:'):return ans(i,'🚫 Baneado')
@@ -233,7 +279,7 @@ def cb(c,m,u,i,x):
  if x=='account':STATE[c]={'f':'account','s':'u','d':{}};return send(c,tr(u,'account_prompt'))
  if x=='delete':STATE[c]={'f':'delete','s':'u','d':{}};return send(c,tr(u,'delete_prompt'))
  if x=='list':return edit(c,m,userlist(),users_menu(c))
- if x=='online':return edit(c,m,'🟢 <b>USUARIOS ONLINE</b>\n\n<pre>'+e(subprocess.getoutput('who') or 'Sin sesiones')+'</pre>',users_menu(c))
+ if x=='online':return edit(c,m,ssh_online(),users_menu(c))
  if x=='cancel':STATE.pop(c,None);return send(c,'❌ Cancelado.',users_menu(c))
  if x.startswith('do:'):
   st=STATE.pop(c,None)
@@ -243,10 +289,31 @@ def cb(c,m,u,i,x):
    rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
    if rc==0:
     (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
-    d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0);save_db(d);send(c,account_message(c,dat),users_menu(c));return
+    d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0)
+    # Recompensa única: se acredita cuando el referido crea su primera cuenta.
+    referrer=d.get('referrals',{}).get(str(c))
+    if referrer and not d['users'][str(c)].get('referral_rewarded',False):
+     d['users'][str(c)]['referral_rewarded']=True
+     meta=d.setdefault('referral_meta',{}).setdefault(str(referrer),{'renewals':0})
+     meta.setdefault('renewals',0)
+     save_db(d)
+     inv_username=d.get('users',{}).get(str(c),{}).get('username','')
+     mention=(' @'+inv_username) if inv_username else ''
+     try:send(int(referrer),f'🎉 ¡Felicidades!\nEl usuario{mention} ha creado su primera cuenta.\n¡Has ganado 1 de referido!\nUsa /referidos o el menú para canjearlo.')
+     except Exception as er:log(f'REF_NOTIFY {referrer} {er!r}')
+    else:save_db(d)
+    send(c,account_message(c,dat),users_menu(c));return
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>',users_menu(c))
   if x=='do:renew':
-   rc,o=sh(f'chage -E {q(exp)} {q(u0)}',10);return send(c,account_message(c,dat,True),users_menu(c)) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>',users_menu(c))
+   # Revalidar los referidos al confirmar para evitar saltarse el límite.
+   d=db();count=sum(1 for v in d.get('referrals',{}).values() if str(v)==str(c));meta=d.setdefault('referral_meta',{}).setdefault(str(c),{'renewals':0});used=int(meta.get('renewals',0))
+   if used>=3 or count<(used+1)*3:return send(c,'❌ No tienes suficientes referidos para esta renovación.',users_menu(c))
+   exp=subprocess.getoutput(f"date -d '+7 days' +%F")
+   rc,o=sh(f'chage -E {q(exp)} {q(u0)}',10)
+   if rc==0:
+    meta['renewals']=used+1;save_db(d)
+    return send(c,account_message(c,{'user':u0,'pass':dat.get('pass','********'),'days':7,'limit':dat.get('limit','Ilimitado')},True),users_menu(c))
+   return send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>',users_menu(c))
  if x=='userop:delete':
   st=STATE.pop(c,None)
   if not st:return send(c,'❌ Operación expirada.',users_menu(c))
@@ -274,7 +341,9 @@ def cb(c,m,u,i,x):
  if x=='referrals':
   link=f'https://t.me/{BOT_USERNAME}?start=ref_{u}' if BOT_USERNAME else f'/start ref_{u}'
   n=sum(1 for v in d.get('referrals',{}).values() if str(v)==str(u))
-  return edit(c,m,f'🔗 <b>REFERIDOS</b>\n\nComparte tu enlace y recibe referidos.\n\n🔗 <code>{e(link)}</code>\n👥 Referidos: <b>{n}</b>',users_menu(u))
+  used=int(d.get('referral_meta',{}).get(str(u),{}).get('renewals',0))
+  available=max(0,min(3-used,n//3))
+  return edit(c,m,f'🔗 <b>REFERIDOS</b>\n\nComparte tu enlace y recibe referidos.\n\n🔗 <code>{e(link)}</code>\n👥 Referidos válidos: <b>{n}</b>\n♻️ Renovaciones disponibles: <b>{available}</b>\n\nCada renovación usa 3 referidos y entrega 7 días. Máximo: 3 renovaciones.',users_menu(u))
  if x=='admins':return admin_menu(c,m)
  if x=='admin_list':
   lines=[f'👤 <code>{e(k)}</code> — {e(v.get("name",""))} — {e(v.get("until","unlimited"))}' for k,v in d['admins'].items()]
@@ -290,7 +359,7 @@ def cb(c,m,u,i,x):
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
  if x=='backup':
-  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/f'backup_{time.strftime("%Y-%m-%d_%H-%M-%S")}.json';fn.write_text(json.dumps(d,indent=2,ensure_ascii=False));return send(c,'💾 <b>Respaldo creado correctamente.</b>\n\nEl archivo se guardó de forma segura en el servidor.',SETTINGS)
+  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/'kevintech_backup.json';fn.write_text(json.dumps(d,indent=2,ensure_ascii=False));return send_document(c,fn,'💾 Respaldo JSON de KevinTech',SETTINGS)
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía un archivo JSON como documento y después el VPS se reiniciará automáticamente.',SETTINGS)
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura los identificadores/enlaces de Monetag u otra Mini App.',MONETIZATION)
  if x=='monetag':STATE[c]={'f':'monetag','s':'value','d':{}};return send(c,'💰 Envía el código, enlace o identificador de Monetag:')
@@ -422,7 +491,7 @@ def main():
      if 'callback_query' in u:
       z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''))
      elif 'message' in u:
-      m=u['message'];c=m['chat']['id'];registered(c,m.get('from',{}).get('first_name',''))
+      m=u['message'];c=m['chat']['id'];registered(c,m.get('from',{}).get('first_name',''),m.get('from',{}).get('username',''))
       if m.get('document'):restore_document(c,m)
       elif m.get('text'):
        txt=m['text'].strip(); register_referral(c,txt)
