@@ -1,50 +1,54 @@
 #!/usr/bin/env python3
-# KevinTech Telegram Bot - panel privado/publico + super admin
-import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,urllib.error,shlex,tempfile
+# KevinTech Telegram Bot - panel de usuarios + super admin
+import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime
 from pathlib import Path
+
 BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
-SET=TD/'settings.json'; ADMINS=TD/'admins.json'; BANS=TD/'bans.json'; QUOTAS=TD/'quotas.json'; MON=TD/'monetization.json'
-API=''; OWNER=0; ADM=set(); STATE={}
-DEFAULT_SETTINGS={'access':'private','domain':'','public_max_days':30,'public_max_devices':1,'admin_max_days':365,'admin_max_devices':10}
-DEFAULT_MON={'monetag':{'enabled':False,'url':''},'miniapp':{'enabled':False,'url':''}}
+DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; API=''; OWNER=0
+
+DEFAULT={
+ 'access':'private','admins':{},'bans':{},'users':{},
+ 'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
+ 'monetization':{'monetag':'','miniapp':''}
+}
 
 def log(s):
  LOG.parent.mkdir(parents=True,exist_ok=True); LOG.open('a').write(time.strftime('[%F %T] ')+str(s)+'\n')
-def load_json(p,default):
+
+def load_db():
+ DB.parent.mkdir(parents=True,exist_ok=True)
+ if not DB.exists(): DB.write_text(json.dumps(DEFAULT,indent=2,ensure_ascii=False)); return json.loads(json.dumps(DEFAULT))
  try:
-  x=json.loads(p.read_text(errors='ignore')); return x if isinstance(x,type(default)) else default
- except:return default
-def save_json(p,x):
- p.parent.mkdir(parents=True,exist_ok=True); tmp=p.with_suffix(p.suffix+'.tmp'); tmp.write_text(json.dumps(x,ensure_ascii=False,indent=2)); os.replace(tmp,p); p.chmod(0o600)
-def settings():
- x=load_json(SET,DEFAULT_SETTINGS.copy()); changed=False
- for k,v in DEFAULT_SETTINGS.items():
-  if k not in x:x[k]=v;changed=True
- if changed:save_json(SET,x)
- return x
+  d=json.loads(DB.read_text(errors='ignore'))
+ except Exception: d=json.loads(json.dumps(DEFAULT))
+ for k,v in DEFAULT.items():
+  if k not in d:d[k]=v
+ for k in ('admins','bans','users'):
+  if not isinstance(d.get(k),dict):d[k]={}
+ if not isinstance(d.get('quotas'),dict):d['quotas']=DEFAULT['quotas'].copy()
+ for k,v in DEFAULT['quotas'].items(): d['quotas'].setdefault(k,v)
+ d.setdefault('monetization',DEFAULT['monetization'].copy())
+ return d
+
+def save_db(d):
+ DB.write_text(json.dumps(d,indent=2,ensure_ascii=False)); os.chmod(DB,0o600)
+
 def env():
+ global API,OWNER
  d={}
- if not ENV.exists():raise SystemExit('No existe .env')
  for l in ENV.read_text(errors='ignore').splitlines():
   if '=' in l and not l.lstrip().startswith('#'):
    k,v=l.split('=',1);d[k]=v.strip().strip('"').strip("'")
- global API,OWNER,ADM
  t=d.get('BOT_TOKEN',''); a=d.get('ADMIN_ID','')
- if not re.fullmatch(r'\d+:[A-Za-z0-9_-]+',t) or not a.isdigit():raise SystemExit('Credenciales invalidas en .env')
- OWNER=int(a); ADM={OWNER}|{int(x) for x in d.get('ADMIN_IDS','').split(',') if x.strip().isdigit()}
- for x in load_json(ADMINS,{}).values():
-  if isinstance(x,dict) and str(x.get('id','')).isdigit() and x.get('active',True):
-   exp=x.get('expires')
-   if exp and exp!='unlimited' and time.strftime('%Y-%m-%d')>exp:continue
-   ADM.add(int(x['id']))
- API='https://api.telegram.org/bot'+t
+ if not re.fullmatch(r'\d+:[A-Za-z0-9_-]+',t) or not a.isdigit(): raise SystemExit('Credenciales inválidas en .env')
+ OWNER=int(a); API='https://api.telegram.org/bot'+t
 
 def api(m,data=None,timeout=40):
  r=urllib.request.Request(API+'/'+m,data=urllib.parse.urlencode(data or {}).encode())
  with urllib.request.urlopen(r,timeout=timeout) as x:z=json.loads(x.read().decode())
  if not z.get('ok'):raise RuntimeError(z)
  return z
-def api_json(m,data):return api(m,data)
+
 def e(x):return str(x).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
 def send(c,t,k=None):
  d={'chat_id':c,'text':t,'parse_mode':'HTML','disable_web_page_preview':'true'}
@@ -62,288 +66,317 @@ def sh(cmd,timeout=8,input=None):
  except subprocess.TimeoutExpired:return 124,'Timeout'
  except Exception as x:return 1,str(x)
 def q(x):return shlex.quote(str(x))
-def bg(c,title,cmd,timeout=300,k=None):
- send(c,f'⚡ <b>{e(title)}</b>\n\n🟡 Iniciado.\n')
+def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
+ send(c,f'⚡ <b>{e(title)}</b>\n\n🟡 Operación iniciada...')
  def w():
   rc,out=sh(cmd,timeout)
   if len(out)>4500:out=out[-4500:]
   send(c,('🟢' if rc==0 else '🔴')+f' <b>{e(title)}</b>\n\n<pre>{e(out or "Terminado sin salida")}</pre>',k)
+  if rc==0 and restart_after: time.sleep(2); sh('reboot',10)
  threading.Thread(target=w,daemon=True).start()
-def multipart_send_document(c,path,caption=''):
- token=API.split('/bot',1)[1]; url=API+'/sendDocument'; boundary='----KevinTechBoundary'+str(int(time.time()*1000));
- data=[]
- data.append((f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{c}\r\n').encode())
- if caption:data.append((f'--{boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n').encode())
- name=Path(path).name; body=Path(path).read_bytes()
- data.append((f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{name}"\r\nContent-Type: application/json\r\n\r\n').encode()+body+b'\r\n')
- data.append((f'--{boundary}--\r\n').encode()); req=urllib.request.Request(url,data=b''.join(data),headers={'Content-Type':f'multipart/form-data; boundary={boundary}'})
- with urllib.request.urlopen(req,timeout=60) as r:return json.loads(r.read().decode())
-def download_document(file_id):
- z=api('getFile',{'file_id':file_id}); fp=z['result']['file_path']; token=API.split('/bot',1)[1]; url='https://api.telegram.org/file/bot'+token+'/'+fp
- dest=TD/'restore_tmp.json'; urllib.request.urlretrieve(url,dest); return dest
 
-def admin_records():return load_json(ADMINS,{})
+def db():return load_db()
 def is_owner(uid):return uid==OWNER
 def is_admin(uid):
  if uid==OWNER:return True
- return uid in ADM
-def is_banned(uid):return str(uid) in load_json(BANS,{})
-def public_enabled():return settings().get('access')=='public'
-def can_use(uid):return not is_banned(uid) and (is_admin(uid) or public_enabled())
-def display_name(uid):
- r=admin_records().get(str(uid),{});return r.get('name') or str(uid)
-def public_limit(uid):
- s=settings();return (s['admin_max_days'],s['admin_max_devices']) if is_admin(uid) else (s['public_max_days'],s['public_max_devices'])
+ d=db(); a=d['admins'].get(str(uid));
+ if not a:return False
+ if a.get('until') and a['until']!='unlimited':
+  try:
+   if datetime.datetime.now().date()>datetime.date.fromisoformat(a['until']):
+    d['admins'].pop(str(uid),None);save_db(d);return False
+  except:pass
+ return True
+def allowed(uid):
+ d=db();return is_admin(uid) or d.get('access')=='public'
+def banned(uid):return str(uid) in db()['bans']
+def registered(uid,name=None):
+ d=db(); k=str(uid)
+ if k not in d['users']:d['users'][k]={'id':uid,'name':name or str(uid),'created':time.strftime('%F'),'accounts':[]};save_db(d)
+ elif name and d['users'][k].get('name')!=name:d['users'][k]['name']=name;save_db(d)
 
-def set_server_domain(value):
- value=value.strip()
- if not value or value.upper() in ('IP','AUTO'):
-  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or [''])[0]).strip()
-  host=ip
-  value=''
- else:
-  host=value
- cfg=BASE/'config.conf'
- if cfg.exists():
-  lines=cfg.read_text(errors='ignore').splitlines(); found=False; out=[]
-  for line in lines:
-   if line.startswith('SERVER_DOMAIN='):
-    out.append('SERVER_DOMAIN='+json.dumps('' if value.upper() in ('','IP','AUTO') else value)); found=True
-   elif line.startswith('SERVER_HOST='):
-    out.append('SERVER_HOST='+json.dumps(host));
-   else: out.append(line)
-  if not found:out.append('SERVER_DOMAIN='+json.dumps('' if value.upper() in ('','IP','AUTO') else value))
-  if not any(x.startswith('SERVER_HOST=') for x in lines):out.append('SERVER_HOST='+json.dumps(host))
-  cfg.write_text('\n'.join(out)+'\n')
+def home(uid):
+ rows=[[{'text':'👤 Usuarios','callback_data':'users'},{'text':'🌐 Protocolos','callback_data':'protocols'}],[{'text':'ℹ️ Información','callback_data':'info'}]]
+ if is_owner(uid):rows.append([{'text':'⚙️ Ajustes','callback_data':'settings'}])
+ return rows
 
-def domain_ip():
- ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip(); dom=settings().get('domain','')
- if not dom and (BASE/'config.conf').exists():
-  for l in (BASE/'config.conf').read_text(errors='ignore').splitlines():
-   if l.startswith('SERVER_DOMAIN='):dom=l.split('=',1)[1].strip().strip('"').strip("'")
- return dom,ip
-
-def home_for(uid):
- if is_admin(uid):
-  return [[{'text':'👤 Usuarios','callback_data':'users'},{'text':'🌐 Protocolos','callback_data':'protocols'}],[{'text':'📊 Estado','callback_data':'status'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Servicios','callback_data':'services'},{'text':'⚙️ Ajustes','callback_data':'settings'}]]
- return [[{'text':'➕ Crear cuenta','callback_data':'create'},{'text':'🟢 Usuarios online','callback_data':'online'}],[{'text':'ℹ️ Servidor','callback_data':'info'}]]
-USERS=[[{'text':'➕ Crear','callback_data':'create'},{'text':'♻️ Renovar','callback_data':'renew'}],[{'text':'📋 Lista','callback_data':'list'},{'text':'🟢 Online','callback_data':'online'}],[{'text':'🗑️ Eliminar','callback_data':'delete'},{'text':'🔑 Contraseña','callback_data':'passwd'}],[{'text':'🔒 Bloquear','callback_data':'block'},{'text':'🔓 Desbloquear','callback_data':'unblock'}],[{'text':'💾 Backup','callback_data':'backup'},{'text':'🔙 Inicio','callback_data':'home'}]]
-TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'},{'text':'🔄 Actualizar','callback_data':'tool:update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+USERS=[[{'text':'➕ Crear cuenta','callback_data':'create'},{'text':'♻️ Renovar','callback_data':'renew'}],[{'text':'📋 Lista','callback_data':'list'},{'text':'🟢 Online','callback_data':'online'}],[{'text':'👤 Cuenta','callback_data':'account'},{'text':'🗑️ Eliminar cuenta','callback_data':'delete'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
-SVCS={k:v[2] for k,v in PROTO.items()}; SVK=[[{'text':v[0],'callback_data':'svc:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
+SVCS={k:v[2] for k,v in PROTO.items()}
+TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'},{'text':'🔄 Actualizar','callback_data':'tool:update'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+
 def module(name):
  for p in [BASE/'protocolos'/name,BASE/'herramientas'/name,BASE/'usuarios'/name]:
   if p.exists():return p
  return None
 def installed(k):
- paths={'openssh':['/usr/sbin/sshd'],'dropbear':['/usr/sbin/dropbear'],'openvpn':['/usr/sbin/openvpn','/etc/openvpn'],'v2ray':['/usr/local/bin/xray','/etc/xray'],'checkuser':['/etc/systemd/system/checkuser.service'],'slowdns':['/etc/slowdns'],'badvpn':['/usr/local/bin/badvpn-udpgw'],'ssl':['/usr/sbin/haproxy'],'udpcustom':['/usr/local/bin/udp-custom'],'zivpn':['/etc/zivpn']}
+ s=SVCS[k];paths={'openssh':['/usr/sbin/sshd'],'dropbear':['/usr/sbin/dropbear'],'openvpn':['/usr/sbin/openvpn'],'v2ray':['/usr/local/bin/xray','/usr/bin/xray','/etc/xray'],'checkuser':['/etc/systemd/system/checkuser.service'],'slowdns':['/etc/slowdns','/usr/local/bin/dnstt-server'],'badvpn':['/usr/local/bin/badvpn-udpgw'],'ssl':['/usr/sbin/haproxy'],'udpcustom':['/usr/local/bin/udp-custom'],'zivpn':['/etc/zivpn']}
  if any(Path(x).exists() for x in paths.get(k,[])):return True
- return sh(f'systemctl cat {q(SVCS[k])} >/dev/null 2>&1',3)[0]==0
+ return sh(f'systemctl cat {q(s)} >/dev/null 2>&1',3)[0]==0
+
 def info():
- dom,ip=domain_ip(); mem=subprocess.getoutput("free -m|awk '/^Mem:/{printf \"%d/%dMB (%d%%)\",$3,$2,$3*100/$2}");disk=subprocess.getoutput("df -h /|awk 'NR==2{print $3\"/\"$2\" (\"$5\")\"}'");load=subprocess.getoutput("awk '{print $1\", \"$2\", \"$3}' /proc/loadavg"); ps='\n'.join(('🟢' if installed(k) else '⚪')+f' {v[0]} — {v[3]}' for k,v in PROTO.items())
- return f'ℹ️ <b>KEVINTECH MULTI SCRIPT</b>\n\n🖥 <b>Servidor</b>\n• IP: <code>{e(ip)}</code>\n• Dominio: <code>{e(dom or "No configurado")}</code>\n• Host activo: <code>{e(dom or ip)}</code>\n• OS: <code>{e(subprocess.getoutput("lsb_release -ds 2>/dev/null") or "Ubuntu")}</code>\n• Kernel: <code>{e(subprocess.getoutput("uname -r"))}</code>\n• Uptime: <code>{e(subprocess.getoutput("uptime -p"))}</code>\n\n⚙️ <b>Recursos</b>\n• RAM: <code>{e(mem)}</code>\n• Disco: <code>{e(disk)}</code>\n• Load: <code>{e(load)}</code>\n• CPU: <code>{e(subprocess.getoutput("nproc"))} núcleos</code>\n\n🌐 <b>PROTOCOLOS</b>\n{ps}'
-def userexists(u):return bool(re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I)) and sh(f'id {q(u)} >/dev/null 2>&1',3)[0]==0
+ d=db();ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['N/D'])[0]);cfg=BASE/'config.conf';domain='No configurado'
+ if cfg.exists():
+  for l in cfg.read_text(errors='ignore').splitlines():
+   if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"') or 'No configurado'
+ return f'''🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel de administración</b>\n\n🖥 <b>Servidor</b>\n• IP: <code>{e(ip)}</code>\n• Dominio: <code>{e(domain)}</code>\n• Host: <code>{e(subprocess.getoutput("hostname"))}</code>\n• Uptime: <code>{e(subprocess.getoutput("uptime -p"))}</code>\n\n👥 Personas registradas: <b>{len(d["users"])}</b>'''
+
 def userlist():
- _,o=sh("awk -F: '$3>=1000&&$1!=\"nobody\"{print $1}' /etc/passwd",4);a=o.splitlines();return '📋 <b>USUARIOS</b>\n\n'+('\n'.join(f'• <code>{e(x)}</code>' for x in a) if a else 'No hay usuarios.')+f'\n\nTotal: <b>{len(a)}</b>'
-def online():return '🟢 <b>USUARIOS ONLINE</b>\n\n<pre>'+e(subprocess.getoutput('who') or 'Sin sesiones')+'</pre>'
-def account(c,d,renew=False):
- u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");dom,ip=domain_ip();host=dom or ip
- def ports(proc):
-  out=subprocess.getoutput(f'ss -ltnp 2>/dev/null | grep -i {q(proc)} || true'); vals=[]
-  for ln in out.splitlines():
-   m=re.search(r':(\d+)\s',ln)
-   if m and m.group(1) not in vals:vals.append(m.group(1))
-  return ','.join(vals) if vals else 'No instalado'
- ssh=ports('sshd');drop=ports('dropbear');hap=ports('haproxy');bad=ports('badvpn');lim=e(d.get('limit','Ilimitado'))
- send(c,f'''<b>{'♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'}</b>\n\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>DATOS</b>\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: <code>{e(u)}</code>\n• Contraseña: <code>{e(pw or '********')}</code>\n• Expira: <code>{e(exp)}</code>\n• Duración: <code>{days} días</code>\n• Límite IP: <code>{lim}</code>\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 <b>SERVIDOR</b>\n━━━━━━━━━━━━━━━━━━━━\n• Dominio: <code>{e(dom or 'No configurado')}</code>\n• IP: <code>{e(ip)}</code>\n• Host recomendado: <code>{e(host)}</code>\n• SSH: <code>{e(ssh)}</code>\n• Dropbear: <code>{e(drop)}</code>\n• SSL Tunnel: <code>{e(hap)}</code>\n• OpenVPN: <code>1194,2200,443</code>\n• BadVPN: <code>{e(bad)}</code>\n\n━━━━━━━━━━━━━━━━━━━━\n📡 <b>CONEXIONES</b>\n━━━━━━━━━━━━━━━━━━━━\n<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>\n<code>{e(ip)}:443@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>\n<code>{e(ip)}:80@{e(u)}:{e(pw or '********')}</code>\n\n🚀 UDP CUSTOM\n<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>\n<code>{e(ip)}:1-65535@{e(u)}:{e(pw or '********')}</code>''',USERS if is_admin(c) else [[{'text':'➕ Crear otra','callback_data':'create'},{'text':'🟢 Online','callback_data':'online'}]])
+ a=[]
+ for u in subprocess.getoutput("awk -F: '$3>=1000&&$1!=\"nobody\"{print $1}' /etc/passwd").splitlines():a.append(u)
+ return '📋 <b>USUARIOS SSH</b>\n\n'+('\n'.join('• <code>'+e(x)+'</code>' for x in a) if a else 'No hay usuarios.')+f'\n\nTotal: <b>{len(a)}</b>'
+
+def quota(uid):
+ d=db();return d['quotas']['admin_days' if is_admin(uid) else 'public_days'],d['quotas']['admin_devices' if is_admin(uid) else 'public_devices']
+
+def account_info(uid,username):
+ if not userexists(username):return '❌ Esa cuenta no existe.'
+ exp=subprocess.getoutput(f"chage -l {q(username)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'") or 'No disponible'
+ lim='Ilimitado';p=BASE/'limits'/username
+ if p.exists():lim=p.read_text(errors='ignore').strip() or 'Ilimitado'
+ d=db();owner='—'
+ for cid,x in d['users'].items():
+  if username in x.get('accounts',[]):owner=x.get('name',cid);break
+ return f'''👤 <b>INFORMACIÓN DE CUENTA</b>\n\n• Usuario: <code>{e(username)}</code>\n• Propietario: <code>{e(owner)}</code>\n• Expira: <code>{e(exp)}</code>\n• Límite de dispositivos/IP: <code>{e(lim)}</code>'''
+
+def userexists(u):return bool(re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I)) and sh(f'id {q(u)} >/dev/null 2>&1',3)[0]==0
+
+def account_message(c,d,renew=False):
+ u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip();cfg=BASE/'config.conf';domain=''
+ if cfg.exists():
+  for l in cfg.read_text(errors='ignore').splitlines():
+   if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"').strip("'")
+ host=domain or ip
+ title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
+ lim=d.get('limit','Ilimitado')
+ return f'''<b>{title}</b>\n\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>DATOS DEL USUARIO</b>\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: <code>{e(u)}</code>\n• Contraseña: <code>{e(pw or '********')}</code>\n• Expira: <code>{e(exp)}</code>\n• Duración: <code>{days} días</code>\n• Dispositivos/IP: <code>{e(lim)}</code>\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 <b>SERVIDOR</b>\n━━━━━━━━━━━━━━━━━━━━\n• Dominio: <code>{e(domain or 'No configurado')}</code>\n• IP: <code>{e(ip)}</code>\n\nHTTP/SSH:\n<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>\n\nUDP Custom:\n<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>\n\nℹ️ Si no hay dominio configurado, se utiliza la IP.'''
+
 def process_text(c,t):
- if is_banned(c):return send(c,'⛔ Tu ID está bloqueado.')
- if not can_use(c):return send(c,'⛔ Acceso privado. Solo administradores.')
+ d=db();uid=c
+ if banned(uid):return send(c,'🚫 Tu acceso está bloqueado.')
+ registered(uid)
+ if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
- if not st:return
- f=st['f'];d=st['d'];step=st['s']
- if f in ('delete','block','unblock','passwd'):
-  if step=='u':
-   u=t.strip()
-   if not userexists(u):return send(c,'❌ Usuario no encontrado. Escribe otro:')
-   d['user']=u
-   if f=='passwd':st['s']='p';return send(c,f'🔑 Nueva contraseña para <code>{e(u)}</code>:')
-   st['s']='confirm';return send(c,f'⚠️ ¿Confirmar operación sobre <code>{e(u)}</code>?',[[{'text':'✅ CONFIRMAR','callback_data':'userop:'+f},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
-  if f=='passwd' and step=='p':
-   if len(t)<4:return send(c,'❌ Contraseña demasiado corta.')
-   d['pass']=t;st['s']='confirm';return send(c,f'🔑 Confirmar cambio para <code>{e(d["user"])}</code>?',[[{'text':'✅ CAMBIAR','callback_data':'userop:passwd'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
- if f in ('create','renew'):
-  if step=='u':
-   t=t.strip()
-   if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',t,re.I):return send(c,'❌ Usuario inválido. Usa 3-32 caracteres.')
-   if not userexists(t) and f=='renew':return send(c,'❌ Usuario no encontrado.')
-   if f=='create' and userexists(t):return send(c,'❌ Usuario ya existe.')
-   d['user']=t;st['s']='p' if f=='create' else 'days';return send(c,'🔑 Contraseña:') if f=='create' else send(c,'📅 Días a renovar:')
-  if f=='create' and step=='p':d['pass']=t;st['s']='days';return send(c,'📅 Días de duración:')
-  if step=='days':
-   if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
-   maxd,maxdev=public_limit(c)
-   if int(t)>maxd:return send(c,f'❌ Máximo permitido: <b>{maxd} días</b>.')
-   d['days']=t;st['s']='limit' if f=='create' else 'confirm';return send(c,f'📱 Dispositivos/IP (máx. {maxdev}, 0=ilimitado):') if f=='create' else send(c,f'♻️ Confirmar renovación de <code>{e(d["user"])}</code> por <code>{t} días</code>?',[[{'text':'✅ RENOVAR','callback_data':'do:renew'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
-  if f=='create' and step=='limit':
-   maxd,maxdev=public_limit(c)
-   if not t.isdigit() or int(t)<0:return send(c,'❌ Límite inválido.')
-   if int(t)>maxdev:return send(c,f'❌ Máximo permitido: <b>{maxdev}</b> dispositivos.')
-   d['limit']='Ilimitado' if t=='0' else t;st['s']='confirm';return send(c,f'📝 <b>CONFIRMAR</b>\n\n👤 <code>{e(d["user"])}</code>\n🔑 <code>{e(d["pass"])}</code>\n📅 <code>{d["days"]} días</code>\n📱 <code>{e(d["limit"])}</code>',[[{'text':'✅ CREAR','callback_data':'do:create'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
-def settings_menu():
- s=settings();acc='🟢 PÚBLICO' if s['access']=='public' else '🔴 PRIVADO';return f'⚙️ <b>AJUSTES • SUPER ADMIN</b>\n\n🔐 Acceso: <b>{acc}</b>\n🌐 Dominio: <code>{e(s.get("domain") or "IP automática")}</code>\n\n📅 Cuota pública: <b>{s["public_max_days"]} días</b> / <b>{s["public_max_devices"]} dispositivos</b>\n📅 Cuota admin: <b>{s["admin_max_days"]} días</b> / <b>{s["admin_max_devices"]} dispositivos</b>',[[{'text':'🔐 Acceso','callback_data':'set:access'},{'text':'👑 Admin','callback_data':'set:admins'}],[{'text':'🌐 Dominio','callback_data':'set:domain'},{'text':'🚫 Ban','callback_data':'set:ban'}],[{'text':'♻️ Restauración','callback_data':'set:restore'},{'text':'💰 Monetización','callback_data':'set:money'}],[{'text':'🔄 Reiniciar VPS','callback_data':'set:reboot'}],[{'text':'📅 Cuotas','callback_data':'set:quota'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
-def admins_menu():
- r=admin_records(); lines=[]
- for k,v in r.items():
-  if int(k)==OWNER:continue
-  exp='Ilimitado' if v.get('expires') in ('unlimited',None,'') else v.get('expires'); lines.append(f'• <code>{e(k)}</code> — {e(v.get("name","Admin"))} — {e(exp)}')
- txt='👑 <b>ADMINISTRADORES</b>\n\n'+'\n'.join(lines) if lines else '👑 <b>ADMINISTRADORES</b>\n\nNo hay administradores adicionales.'
- return txt,[[{'text':'📋 Lista','callback_data':'admin:list'},{'text':'➕ Agregar','callback_data':'admin:add'}],[{'text':'🗑️ Quitar','callback_data':'admin:remove'},{'text':'✏️ Renombrar','callback_data':'admin:rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-def money_menu():
- m=load_json(MON,DEFAULT_MON.copy());a=m['monetag'];b=m['miniapp'];txt=f'💰 <b>MONETIZACIÓN</b>\n\nMonetag: <b>{"🟢 ACTIVO" if a.get('enabled') else "🔴 INACTIVO"}</b>\nURL: <code>{e(a.get('url') or "No configurada")}</code>\n\nMini App: <b>{"🟢 ACTIVO" if b.get('enabled') else "🔴 INACTIVO"}</b>\nURL: <code>{e(b.get('url') or "No configurada")}</code>'; rows=[[{'text':'Monetag','callback_data':'money:monetag'},{'text':'Mini App','callback_data':'money:miniapp'}]]; opens=[]; a.get('url') and opens.append({'text':'🌐 Abrir Monetag','url':a['url']}); b.get('url') and opens.append({'text':'📱 Abrir Mini App','url':b['url']});
- if opens:rows.append(opens)
- rows.append([{'text':'🔙 Ajustes','callback_data':'settings'}]);return txt,rows
+ if not st:return send(c,'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ Panel de administración',home(uid)) if t in ('/start','/menu') else None
+ f,step,dat=st['f'],st['s'],st['d']
+ if step=='u' and f in ('create','renew','delete','account'):
+  u=t.strip()
+  if f in ('delete','account') and not userexists(u):return send(c,'❌ Usuario no encontrado. Escribe otro:')
+  if f=='renew' and not userexists(u):return send(c,'❌ Usuario no encontrado.')
+  if f=='create' and userexists(u):return send(c,'❌ Usuario ya existe.')
+  dat['user']=u
+  if f=='account':STATE.pop(c,None);return send(c,account_info(c,u),USERS)
+  if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Eliminar la cuenta <code>{e(u)}</code>?',[[{'text':'✅ ELIMINAR','callback_data':'userop:delete'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if f=='create':st['s']='p';return send(c,'🔑 Contraseña:')
+  st['s']='days';return send(c,'📅 Días a renovar:')
+ if f=='create' and step=='p':dat['pass']=t;st['s']='days';return send(c,'📅 Días de duración:')
+ if f in ('create','renew') and step=='days':
+  if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
+  maxdays,maxdev=quota(c)
+  if not is_owner(c) and int(t)>maxdays:return send(c,f'❌ Máximo permitido: <b>{maxdays} días</b>.')
+  dat['days']=int(t);dat['limit']=maxdev;st['s']='confirm'
+  return send(c,f'📝 <b>CONFIRMAR</b>\n\n👤 <code>{e(dat["user"])}</code>\n🔑 <code>{e(dat.get("pass","********"))}</code>\n📅 <code>{dat["days"]} días</code>\n👥 <code>{dat["limit"]}</code>',[[{'text':'✅ CONFIRMAR','callback_data':'do:'+f},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+
 def cb(c,m,u,i,x):
- if is_banned(u):return ans(i,'⛔ Bloqueado')
- if not can_use(u):return ans(i,'⛔ Acceso privado')
+ if banned(u):return ans(i,'🚫 Baneado')
+ registered(u)
+ if not allowed(u):return ans(i,'🔒 Acceso privado')
  ans(i,'⚡')
- if x=='home':return edit(c,m,'🏠 <b>KEVINTECH MULTI SCRIPT</b>',home_for(u))
- if x=='users' and is_admin(u):return edit(c,m,'👤 <b>GESTIÓN DE USUARIOS</b>',USERS)
- if x=='protocols' and is_admin(u):return edit(c,m,'🌐 <b>PROTOCOLOS</b>\n\nEstado + puertos + instalar/desinstalar:',PK)
- if x=='tools' and is_admin(u):return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
- if x in ('info','status'):return edit(c,m,info(),home_for(u))
- if x=='services' and is_admin(u):return edit(c,m,'🔄 <b>SERVICIOS</b>',SVK)
- if x=='create':STATE[c]={'f':'create','s':'u','d':{}};return send(c,'➕ <b>CREAR CUENTA</b>\n\nUsuario:')
- if x=='renew' and is_admin(u):STATE[c]={'f':'renew','s':'u','d':{}};return send(c,'♻️ <b>RENOVAR</b>\n\nUsuario:')
- if x=='list' and is_admin(u):return edit(c,m,userlist(),USERS)
- if x=='online':return edit(c,m,online(),USERS if is_admin(u) else home_for(u))
- if x in ('backup','backup:json') and is_admin(u):
-  p=TD/'settings-backup.json';save_json(p,{'settings':settings(),'admins':admin_records(),'bans':load_json(BANS,{}),'quotas':{'public_max_days':settings()['public_max_days'],'public_max_devices':settings()['public_max_devices'],'admin_max_days':settings()['admin_max_days'],'admin_max_devices':settings()['admin_max_devices']},'monetization':load_json(MON,DEFAULT_MON.copy())});return multipart_send_document(c,p,'💾 Respaldo JSON de ajustes')
- if x=='cancel':STATE.pop(c,None);return send(c,'❌ Cancelado.',USERS if is_admin(u) else home_for(u))
+ d=db()
+ if x=='home':return edit(c,m,'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel de administración</b>',home(u))
+ if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
+ if x=='protocols':return edit(c,m,'🌐 <b>PROTOCOLOS</b>\n\nInstalar, desinstalar y reiniciar protocolos.',PK)
+ if x=='info':return edit(c,m,info(),home(u))
+ if x=='settings':
+  if not is_owner(u):return ans(i,'Solo el super admin')
+  return edit(c,m,'⚙️ <b>AJUSTES DEL SUPER ADMIN</b>\n\nAdministra acceso, administradores, dominio, baneos, respaldos, monetización, cuotas, herramientas y servicios.',settings_keyboard())
+ if x=='create':
+  if not allowed(u):return send(c,'🔒 Acceso privado.')
+  STATE[c]={'f':'create','s':'u','d':{}};return send(c,'➕ <b>CREAR CUENTA</b>\n\nUsuario:')
+ if x=='renew':STATE[c]={'f':'renew','s':'u','d':{}};return send(c,'♻️ <b>RENOVAR</b>\n\nUsuario:')
+ if x=='account':STATE[c]={'f':'account','s':'u','d':{}};return send(c,'👤 <b>CUENTA</b>\n\nEscribe tu usuario para consultar la información:')
+ if x=='delete':STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
+ if x=='list':return edit(c,m,userlist(),USERS)
+ if x=='online':return edit(c,m,'🟢 <b>USUARIOS ONLINE</b>\n\n<pre>'+e(subprocess.getoutput('who') or 'Sin sesiones')+'</pre>',USERS)
+ if x=='cancel':STATE.pop(c,None);return send(c,'❌ Cancelado.',USERS)
  if x.startswith('do:'):
   st=STATE.pop(c,None)
-  if not st:return send(c,'❌ Operación expirada.')
-  d=st['d'];uu=d['user'];days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' +%F")
+  if not st:return send(c,'❌ Operación expirada.',USERS)
+  dat=st['d'];u0=dat['user'];days=int(dat['days']);exp=subprocess.getoutput(f"date -d '+{days} days' +%F")
   if x=='do:create':
-   rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(uu)} && printf "%s\\n" {q(uu+":"+d["pass"])} | chpasswd',12)
-   if rc==0:(BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/uu).write_text('0' if d.get('limit')=='Ilimitado' else d.get('limit','0'));return account(c,d)
-   return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>')
-  rc,o=sh(f'chage -E {q(exp)} {q(uu)}',10);return account(c,d,True) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>')
- if x in ('delete','block','unblock','passwd') and is_admin(u):STATE[c]={'f':x,'s':'u','d':{}};return send(c,'👤 <b>USUARIO</b>\n\nEscribe el usuario:')
- if x.startswith('userop:') and is_admin(u):
-  op=x.split(':',1)[1];st=STATE.pop(c,None)
-  if not st:return send(c,'❌ Operación expirada.')
-  uu=st['d']['user']
-  if op=='delete':rc,o=sh(f'pkill -u {q(uu)} 2>/dev/null || true; userdel -r -f {q(uu)}',15)
-  elif op=='block':rc,o=sh(f'passwd -l {q(uu)}; pkill -u {q(uu)} 2>/dev/null || true',15)
-  elif op=='unblock':rc,o=sh(f'passwd -u {q(uu)}',15)
-  else:rc,o=sh(f'printf "%s\\n" {q(uu+":"+st["d"]["pass"])} | chpasswd',15)
-  return send(c,('🟢' if rc==0 else '🔴')+f' <b>Operación completada</b>\n\n<pre>{e(o or "OK")}</pre>',USERS)
- if x.startswith('proto:') and is_admin(u):
-  k=x.split(':')[1];v=PROTO[k];ins=installed(k);buttons=[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k}]] if ins else [];buttons += [[{'text':'🗑️ Desinstalar','callback_data':'un:'+k}]] if ins else [[{'text':'🚀 Instalar','callback_data':'in:'+k}]];buttons += [[{'text':'🔙 Protocolos','callback_data':'protocols'}]];return edit(c,m,f'🌐 <b>{e(v[0])}</b>\n\nEstado: {"🟢 INSTALADO" if ins else "⚪ NO INSTALADO"}\nPuertos: <code>{e(v[3])}</code>\nServicio: <code>{e(v[2])}</code>',buttons)
+   rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
+   if rc==0:
+    (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
+    d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0);save_db(d);send(c,account_message(c,dat),USERS);return
+   return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>',USERS)
+  if x=='do:renew':
+   rc,o=sh(f'chage -E {q(exp)} {q(u0)}',10);return send(c,account_message(c,dat,True),USERS) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>',USERS)
+ if x=='userop:delete':
+  st=STATE.pop(c,None)
+  if not st:return send(c,'❌ Operación expirada.',USERS)
+  u0=st['d']['user'];rc,o=sh(f'pkill -u {q(u0)} 2>/dev/null || true; userdel -r -f {q(u0)}',15)
+  if rc==0:
+   d=db()
+   for z in d['users'].values():z['accounts']=[a for a in z.get('accounts',[]) if a!=u0]
+   save_db(d)
+  return send(c,('🟢' if rc==0 else '🔴')+f' <b>Cuenta {"eliminada" if rc==0 else "no eliminada"}</b>\n\n👤 <code>{e(u0)}</code>',USERS)
+ if x.startswith('proto:'):
+  k=x.split(':',1)[1];v=PROTO[k];ins=installed(k);buttons=[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k}]] if ins else []
+  buttons += [[{'text':'🗑️ Desinstalar','callback_data':'un:'+k}]] if ins else [[{'text':'🚀 Instalar','callback_data':'in:'+k}]]
+  buttons += [[{'text':'🔙 Protocolos','callback_data':'protocols'}]]
+  return edit(c,m,f'🌐 <b>{e(v[0])}</b>\n\nEstado: {"🟢 INSTALADO" if ins else "⚪ NO INSTALADO"}\nPuertos: <code>{e(v[3])}</code>\nServicio: <code>{e(v[2])}</code>',buttons)
  if x.startswith('in:') or x.startswith('un:'):
-  if not is_admin(u):return ans(i,'Solo admin')
   k=x.split(':')[1];v=PROTO[k];p=module(v[1]);
-  if not p:return send(c,'🔴 Script no encontrado.')
+  if not p:return send(c,'🔴 Script no encontrado.',PK)
   return bg(c,('Instalando ' if x.startswith('in:') else 'Desinstalando ')+v[0],f'bash {q(p)} <<EOF\n{v[4] if x.startswith("in:") else v[5]}\nEOF',360,PK)
- if x.startswith('svc_restart:') and is_admin(u):return bg(c,'Reiniciando '+PROTO[x.split(':')[1]][0],f'systemctl restart {q(PROTO[x.split(":")[1]][2])}',30,SVK)
- if x.startswith('svc:') and is_admin(u):
-  k=x.split(':')[1];s=SVCS[k];rc,_=sh(f'systemctl is-active --quiet {q(s)}',3);_,ports=sh(f"ss -lntup 2>/dev/null | grep -Ei {q(s)} || true",4);return edit(c,m,f'🔄 <b>{e(PROTO[k][0])}</b>\n\nEstado: {"🟢 ACTIVO" if rc==0 else "🔴 INACTIVO"}\nPuertos: <code>{e(ports or "—")}</code>',[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k},{'text':'📊 Actualizar','callback_data':'svc:'+k}],[{'text':'🔙 Servicios','callback_data':'services'}]])
- if x.startswith('tool:') and is_admin(u):
+ if x.startswith('svc_restart:'):
+  k=x.split(':')[1];return bg(c,'Reiniciando '+PROTO[k][0],f'systemctl restart {q(PROTO[k][2])}',30,SETTINGS)
+ if x.startswith('tool:'):
+  if not is_owner(u):return ans(i,'Solo el super admin')
   k=x.split(':')[1];mp={'optimizar':'optimizar.sh','ads':'blockads.sh','torrent':'blocktorrent.sh','speed':'speedtest.sh','scanner':'scanner.sh','update':'update.sh'}
-  if k=='files':return edit(c,m,'📁 <b>ARCHIVOS</b>\n\n<pre>'+e(subprocess.getoutput('find /etc/kevintech -maxdepth 2 -type f | sort | head -120'))+'</pre>',TOOLS)
-  p=module(mp.get(k,''));return bg(c,k.title(),f'bash {q(p)}',180,TOOLS) if p else send(c,'🔴 Módulo no encontrado.')
- if x=='settings' and is_owner(u):
-  t,k=settings_menu();return edit(c,m,t,k)
- if x=='set:access' and is_owner(u):
-  s=settings();s['access']='public' if s['access']=='private' else 'private';save_json(SET,s);t,k=settings_menu();return edit(c,m,t,k)
- if x=='set:admins' and is_owner(u):t,k=admins_menu();return edit(c,m,t,k)
- if x=='admin:list' and is_owner(u):t,k=admins_menu();return edit(c,m,t,k)
- if x in ('admin:add','admin:remove','admin:rename') and is_owner(u):
-  STATE[c]={'f':x,'s':'data','d':{}};return send(c,'👑 <b>ADMIN</b>\n\n'+('Escribe: ID | Nombre | DD/MM/AAAA o ilimitado' if x=='admin:add' else 'Escribe el ID' if x=='admin:remove' else 'Escribe: ID | Nuevo nombre'))
- if x=='set:domain' and is_owner(u):STATE[c]={'f':'domain','s':'data','d':{}};return send(c,'🌐 Escribe el dominio.\n\nUsa <code>IP</code> o déjalo vacío para usar automáticamente la IP del VPS:')
- if x=='set:ban' and is_owner(u):STATE[c]={'f':'ban','s':'data','d':{}};return send(c,'🚫 Escribe el Telegram ID que deseas bloquear:')
- if x=='set:restore' and is_owner(u):return edit(c,m,'♻️ <b>RESTAURACIÓN</b>\n\nRespalda o restaura la configuración mediante archivo JSON.',[[{'text':'💾 Respaldar JSON','callback_data':'backup:json'},{'text':'📥 Restaurar JSON','callback_data':'restore:json'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if x=='restore:json' and is_owner(u):STATE[c]={'f':'restore','s':'file','d':{}};return send(c,'♻️ Envíame ahora el archivo <b>JSON</b> de respaldo.')
- if x=='set:money' and is_owner(u):
-  t,k=money_menu();return edit(c,m,t,k)
- if x.startswith('money:') and is_owner(u):
-  k=x.split(':')[1];STATE[c]={'f':'money','s':'data','d':{'platform':k}};return send(c,f'💰 <b>{k.title()}</b>\n\nEscribe la URL de tu Mini App/plataforma. Se guardará para usarla desde el bot:')
- if x=='set:quota' and is_owner(u):STATE[c]={'f':'quota','s':'data','d':{}};return send(c,'📅 Cuotas actuales:\n\nEscribe: <code>public_days | public_devices | admin_days | admin_devices</code>')
- if x=='set:reboot' and is_owner(u):return send(c,'⚠️ ¿Reiniciar la VPS ahora?',[[{'text':'✅ REINICIAR','callback_data':'reboot:yes'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
- if x=='reboot:yes' and is_owner(u):return bg(c,'Reiniciando VPS','sleep 2; reboot',20)
- if x.startswith('money:') and is_owner(u):return
+  if k=='files':return edit(c,m,'📁 <b>ARCHIVOS</b>\n\n<pre>'+e(subprocess.getoutput("find /etc/kevintech -maxdepth 2 -type f | sort | head -120"))+'</pre>',TOOLS)
+  p=module(mp.get(k,''));return bg(c,k.title(),f'bash {q(p)}',180,TOOLS) if p else send(c,'🔴 Módulo no encontrado.',TOOLS)
+ if x=='admins':return admin_menu(c,m)
+ if x=='admin_list':
+  lines=[f'👤 <code>{e(k)}</code> — {e(v.get("name",""))} — {e(v.get("until","unlimited"))}' for k,v in d['admins'].items()]
+  return edit(c,m,'👥 <b>LISTA DE ADMINS</b>\n\n'+('\n'.join(lines) if lines else 'No hay admins adicionales.'),ADMIN_MENU)
+ if x=='admin_add':STATE[c]={'f':'admin_add','s':'id','d':{}};return send(c,'➕ ID del administrador:')
+ if x=='admin_remove':STATE[c]={'f':'admin_remove','s':'id','d':{}};return send(c,'🗑️ ID del administrador:')
+ if x=='admin_rename':STATE[c]={'f':'admin_rename','s':'id','d':{}};return send(c,'✏️ ID del administrador:')
+ if x=='access_toggle':
+  d['access']='public' if d['access']=='private' else 'private';save_db(d);return edit(c,m,f'🔐 <b>ACCESO CAMBIADO</b>\n\nAhora el bot está: <b>{"PÚBLICO 🟢" if d["access"]=="public" else "PRIVADO 🔴"}</b>',settings_keyboard())
+ if x=='bans':return edit(c,m,'🚫 <b>BANEAR USUARIO</b>',BAN_MENU)
+ if x=='ban_add':STATE[c]={'f':'ban_add','s':'id','d':{}};return send(c,'🚫 ID de Telegram a banear:')
+ if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
+ if x=='ban_list':
+  lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
+ if x=='backup':
+  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/f'backup_{time.strftime("%Y-%m-%d_%H-%M-%S")}.json';fn.write_text(json.dumps(d,indent=2,ensure_ascii=False));return send(c,f'💾 Respaldo creado: <code>{fn.name}</code>',SETTINGS)
+ if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía un archivo JSON como documento y después el VPS se reiniciará automáticamente.',SETTINGS)
+ if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura los identificadores/enlaces de Monetag u otra Mini App.',MONETIZATION)
+ if x=='monetag':STATE[c]={'f':'monetag','s':'value','d':{}};return send(c,'💰 Envía el código, enlace o identificador de Monetag:')
+ if x=='miniapp':STATE[c]={'f':'miniapp','s':'value','d':{}};return send(c,'📱 Envía el enlace o identificador de tu Mini App:')
+ if x=='restart_vps':return send(c,'♻️ ¿Reiniciar el VPS ahora?',[[{'text':'✅ REINICIAR VPS','callback_data':'do_reboot'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
+ if x=='do_reboot':return bg(c,'Reinicio del VPS','sleep 2; reboot',15,SETTINGS)
+ if x=='people':return edit(c,m,f'👥 <b>PERSONAS REGISTRADAS: {len(d["users"])}</b>',SETTINGS)
+ if x=='message_users':STATE[c]={'f':'message_users','s':'text','d':{}};return send(c,'📢 Escribe el mensaje que quieres enviar a todos los usuarios registrados:')
+ if x=='quotas':return edit(c,m,quota_text(d),QUOTA)
+ if x=='quota_public':STATE[c]={'f':'quota_public','s':'days','d':{}};return send(c,'📅 Días para usuarios públicos:')
+ if x=='quota_admin':STATE[c]={'f':'quota_admin','s':'days','d':{}};return send(c,'📅 Días para administradores:')
+ if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
+ if x=='services':return edit(c,m,'🔄 <b>SERVICIOS</b>',SERVICE_MENU)
+ if x.startswith('svc:'):
+  k=x.split(':')[1];s=SVCS[k];rc,_=sh(f'systemctl is-active --quiet {q(s)}',3);return edit(c,m,f'🔄 <b>{e(PROTO[k][0])}</b>\n\nEstado: {"🟢 ACTIVO" if rc==0 else "🔴 INACTIVO"}\nServicio: <code>{e(s)}</code>',[[{'text':'🔄 Reiniciar','callback_data':'svc_restart:'+k}],[{'text':'🔙 Servicios','callback_data':'services'}]])
 
-def handle_state(c,t):
- st=STATE.get(c)
- if not st:return False
- f=st['f']
- if f in ('domain','ban','quota','money','admin:add','admin:remove','admin:rename') and not is_owner(c):STATE.pop(c,None);return True
- if f=='domain':
-  t=t.strip();s=settings();s['domain']='' if t.upper() in ('','IP','AUTO') else t;save_json(SET,s);set_server_domain(s['domain']);STATE.pop(c,None);tt,kk=settings_menu();return send(c,'🟢 Dominio actualizado.\n\n'+tt,kk)
- if f=='ban':
-  if not t.strip().isdigit():return send(c,'❌ ID inválido.')
-  b=load_json(BANS,{});b[t.strip()]={'at':time.strftime('%F'),'by':c};save_json(BANS,b);STATE.pop(c,None);return send(c,f'🟢 ID <code>{e(t.strip())}</code> bloqueado.',[[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if f=='quota':
-  a=[x.strip() for x in t.split('|')]
-  if len(a)!=4 or not all(x.isdigit() for x in a):return send(c,'❌ Formato inválido.')
-  s=settings();s.update(public_max_days=int(a[0]),public_max_devices=int(a[1]),admin_max_days=int(a[2]),admin_max_devices=int(a[3]));save_json(SET,s);STATE.pop(c,None);return send(c,'🟢 Cuotas actualizadas.',[[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if f=='money':
-  url=t.strip()
-  if not re.match(r'^https?://',url):return send(c,'❌ URL inválida. Debe comenzar con http:// o https://')
-  m=load_json(MON,DEFAULT_MON.copy());k=st['d']['platform'];m[k]={'enabled':True,'url':url};save_json(MON,m);STATE.pop(c,None);return send(c,'🟢 Monetización guardada.',[[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if f=='admin:add':
-  a=[x.strip() for x in t.split('|')]
-  if len(a)!=3 or not a[0].isdigit() or not a[1]:return send(c,'❌ Formato: ID | Nombre | DD/MM/AAAA o ilimitado')
-  exp=a[2].lower()
-  if exp!='ilimitado':
-   try:import datetime as dt; exp=dt.datetime.strptime(a[2],'%d/%m/%Y').strftime('%Y-%m-%d')
-   except:return send(c,'❌ Fecha inválida. Usa DD/MM/AAAA o ilimitado.')
-  r=admin_records();r[a[0]]={'id':int(a[0]),'name':a[1],'expires':exp,'active':True};save_json(ADMINS,r);env();STATE.pop(c,None);return send(c,'🟢 Administrador agregado.',[[{'text':'👑 Admin','callback_data':'set:admins'}]])
- if f=='admin:remove':
-  x=t.strip()
-  if not x.isdigit():return send(c,'❌ ID inválido.')
-  r=admin_records();r.pop(x,None);save_json(ADMINS,r);env();STATE.pop(c,None);return send(c,'🟢 Administrador eliminado.',[[{'text':'👑 Admin','callback_data':'set:admins'}]])
- if f=='admin:rename':
-  a=[x.strip() for x in t.split('|')]
-  if len(a)!=2 or not a[0].isdigit() or not a[1]:return send(c,'❌ Formato: ID | Nuevo nombre')
-  r=admin_records();
-  if a[0] not in r:return send(c,'❌ Administrador no encontrado.')
-  r[a[0]]['name']=a[1];save_json(ADMINS,r);STATE.pop(c,None);return send(c,'🟢 Administrador renombrado.',[[{'text':'👑 Admin','callback_data':'set:admins'}]])
- if f=='restore':return True
- return False
+def admin_menu(c,m):return edit(c,m,'👥 <b>ADMINISTRADORES</b>',ADMIN_MENU)
+def quota_text(d):
+ qx=d['quotas'];return f'''📅 <b>CUOTAS ACTUALES</b>\n\nPúblico: <b>{qx["public_days"]} días</b> / <b>{qx["public_devices"]} dispositivos</b>\nAdmin: <b>{qx["admin_days"]} días</b> / <b>{qx["admin_devices"]} dispositivos</b>\n\nEl super admin no tiene límite.'''
 
-def process_message(m):
- c=m['chat']['id'];u=m['from']['id'];t=m.get('text','')
- if is_banned(u):return send(c,'⛔ Tu ID está bloqueado.')
- if not can_use(u):return send(c,'⛔ Acceso privado. Solo administradores.')
- if handle_state(c,t):return
- if t in ('/start','/menu'):return send(c,'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n'+('⚙️ Panel de administración' if is_admin(u) else '🌐 Acceso público'),home_for(u))
- process_text(c,t)
-def process_document(m):
- c=m['chat']['id'];u=m['from']['id'];st=STATE.get(c)
- if not st or st.get('f')!='restore' or not is_owner(u):return
- doc=m.get('document',{});name=doc.get('file_name','')
+SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'♻️ Restauración','callback_data':'restore'}],[{'text':'💾 Respaldar JSON','callback_data':'backup'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛠 Herramientas','callback_data':'tools'},{'text':'🔄 Servicios','callback_data':'services'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Mini App','callback_data':'miniapp'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+SERVICE_MENU=[[{'text':v[0],'callback_data':'svc:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+
+# Replace settings access label dynamically before rendering.
+def settings_keyboard():
+ d=db();rows=[r[:] for r in SETTINGS];rows[0]=[{'text':('🔐 Acceso: PÚBLICO 🟢' if d['access']=='public' else '🔐 Acceso: PRIVADO 🔴'),'callback_data':'access_toggle'}];return rows
+SETTINGS=settings_keyboard()
+
+# State handler for admin/configuration text input.
+def admin_text(c,t):
+ st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
+ if f=='admin_add':
+  if step=='id' and t.isdigit():dat['id']=int(t);st['s']='name';return send(c,'👤 Nombre del administrador:')
+  if step=='name':dat['name']=t[:80];st['s']='until';return send(c,'📅 Fecha de vencimiento (YYYY-MM-DD) o escribe <code>ilimitado</code>:')
+  if step=='until':
+   until='unlimited' if t.lower()=='ilimitado' else t
+   if until!='unlimited':
+    try:datetime.date.fromisoformat(until)
+    except:return send(c,'❌ Fecha inválida. Usa YYYY-MM-DD o ilimitado.')
+   d['admins'][str(dat['id'])]={'name':dat['name'],'until':until};save_db(d);STATE.pop(c,None);send(dat['id'],f'👨‍💼 Fuiste agregado como administrador por <b>{e(dat["name"])}</b>.\nVencimiento: <code>{e(until)}</code>');return send(c,'🟢 Administrador agregado y notificado.',ADMIN_MENU)
+ if f=='admin_remove' and step=='id':
+  if not t.isdigit():return send(c,'❌ ID inválido.')
+  aid=t;ex=d['admins'].pop(aid,None);save_db(d);STATE.pop(c,None)
+  if ex:send(int(aid),'⚠️ Tu acceso de administrador fue retirado.');return send(c,'🟢 Administrador eliminado y notificado.',ADMIN_MENU)
+  return send(c,'❌ Ese ID no es administrador.',ADMIN_MENU)
+ if f=='admin_rename':
+  if step=='id' and t.isdigit():
+   if t not in d['admins']:STATE.pop(c,None);return send(c,'❌ ID no encontrado.',ADMIN_MENU)
+   dat['id']=t;st['s']='name';return send(c,'✏️ Nuevo nombre:')
+  if step=='name':d['admins'][dat['id']]['name']=t[:80];save_db(d);STATE.pop(c,None);return send(c,'🟢 Administrador renombrado.',ADMIN_MENU)
+ if f in ('ban_add','ban_remove') and step=='id':
+  if not t.isdigit():return send(c,'❌ ID inválido.')
+  if f=='ban_add':
+   if int(t)==OWNER:return send(c,'❌ No puedes banear al super admin.')
+   d['bans'][t]={'name':d['users'].get(t,{}).get('name',''),'date':time.strftime('%F')};save_db(d);STATE.pop(c,None)
+   try:send(int(t),'🚫 Has sido baneado del bot por el super admin.')
+   except:pass
+   return send(c,'🟢 Usuario baneado y notificado.',BAN_MENU)
+  existed=d['bans'].pop(t,None);save_db(d);STATE.pop(c,None)
+  if existed:
+   try:send(int(t),'🟢 Has sido desbaneado del bot.')
+   except:pass
+   return send(c,'🟢 Usuario desbaneado y notificado.',BAN_MENU)
+  return send(c,'❌ Ese ID no está baneado.',BAN_MENU)
+ if f=='message_users' and step=='text':
+  STATE.pop(c,None);ok=0
+  for sid in d['users']:
+   try:send(int(sid),'📢 <b>Mensaje del administrador</b>\n\n'+e(t));ok+=1
+   except:pass
+  return send(c,f'🟢 Mensaje enviado a <b>{ok}</b> personas.',SETTINGS)
+ if f in ('monetag','miniapp') and step=='value':
+  d['monetization']['monetag' if f=='monetag' else 'miniapp']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración guardada.',MONETIZATION)
+ if f=='domain' and step=='value':
+  val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
+  for i,l in enumerate(lines):
+   if l.startswith('SERVER_DOMAIN='):lines[i]=f'SERVER_DOMAIN="{val}"';found=True
+  if not found:lines.append(f'SERVER_DOMAIN="{val}"')
+  cfg.write_text('\n'.join(lines)+'\n');STATE.pop(c,None);return send(c,'🟢 Dominio actualizado. Los protocolos que soportan IP y dominio usarán ambos.',SETTINGS)
+ if f in ('quota_public','quota_admin'):
+  key='public' if f=='quota_public' else 'admin'
+  if step=='days':
+   if not t.isdigit() or int(t)<1:return send(c,'❌ Días inválidos.')
+   dat['days']=int(t);st['s']='devices';return send(c,'📱 Número máximo de dispositivos/IP:')
+  if step=='devices':
+   if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
+   d['quotas'][key+'_days']=dat['days'];d['quotas'][key+'_devices']=int(t);save_db(d);STATE.pop(c,None);return send(c,'🟢 Cuota actualizada.',QUOTA)
+
+# Wrap original text processing with admin input routing.
+_original_process=process_text
+def process_text(c,t):
+ registered(c)
+ if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','miniapp','domain','quota_public','quota_admin'):
+  return admin_text(c,t)
+ return _original_process(c,t)
+
+# Document restore handler is included in update loop.
+def restore_document(c,msg):
+ if not is_owner(c):return
+ doc=msg.get('document',{});name=doc.get('file_name','')
  if not name.lower().endswith('.json'):return send(c,'❌ Solo se acepta un archivo JSON.')
  try:
-  p=download_document(doc['file_id']);x=json.loads(p.read_text());
-  if not all(k in x for k in ('settings','admins','bans','monetization')):raise ValueError('Estructura inválida')
-  save_json(SET,x['settings']);save_json(ADMINS,x['admins']);save_json(BANS,x['bans']);save_json(MON,x['monetization']);STATE.pop(c,None);env();return send(c,'🟢 Respaldo JSON restaurado correctamente.',[[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- except Exception as er:log('RESTORE '+repr(er));return send(c,'🔴 No se pudo restaurar el JSON.')
+  z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path'];token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('"');url=f'https://api.telegram.org/file/bot{token}/{fp}';raw=urllib.request.urlopen(url,timeout=30).read();new=json.loads(raw.decode());
+  if not isinstance(new,dict) or 'quotas' not in new or 'users' not in new:raise ValueError('JSON incompatible')
+  BACK.mkdir(parents=True,exist_ok=True);(BACK/f'restore_before_{time.strftime("%F_%H-%M-%S")}.json').write_text(DB.read_text() if DB.exists() else '{}');save_db(new);send(c,'🟢 <b>Restauración completada.</b>\n\n♻️ El VPS se reiniciará para aplicar la restauración.');time.sleep(2);sh('reboot',10)
+ except Exception as er:log('RESTORE '+repr(er));send(c,'🔴 No se pudo restaurar el JSON.')
+
 def main():
- env();settings();LOG.parent.mkdir(parents=True,exist_ok=True);LOG.touch();LOG.chmod(0o600);api('deleteWebhook',{'drop_pending_updates':'false'});off=int(OFF.read_text()) if OFF.exists() and OFF.read_text().strip().isdigit() else 0;log('BOT ONLINE')
+ env();load_db();LOG.parent.mkdir(parents=True,exist_ok=True);LOG.touch();LOG.chmod(0o600);api('deleteWebhook',{'drop_pending_updates':'false'});off=int(OFF.read_text()) if OFF.exists() and OFF.read_text().strip().isdigit() else 0;log('BOT ONLINE')
  while True:
   try:
    r=api('getUpdates',{'offset':off,'timeout':30,'allowed_updates':json.dumps(['message','callback_query'])})
-   for z in r.get('result',[]):
-    off=z['update_id']+1;OFF.write_text(str(off))
+   for u in r.get('result',[]):
+    off=u['update_id']+1;OFF.write_text(str(off))
     try:
-     if 'callback_query' in z:
-      qz=z['callback_query'];mm=qz['message'];cb(mm['chat']['id'],mm['message_id'],qz['from']['id'],qz['id'],qz.get('data',''))
-     elif 'message' in z:
-      if 'document' in z['message']:process_document(z['message'])
-      else:process_message(z['message'])
+     if 'callback_query' in u:
+      z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''))
+     elif 'message' in u:
+      m=u['message'];c=m['chat']['id'];registered(c,m.get('from',{}).get('first_name',''))
+      if m.get('document'):restore_document(c,m)
+      elif m.get('text'):process_text(c,m['text'])
     except Exception as er:log('UPDATE '+repr(er))
   except Exception as er:log('POLL '+repr(er));time.sleep(2)
 if __name__=='__main__':main()
