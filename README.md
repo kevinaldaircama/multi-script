@@ -147,3 +147,41 @@ Para generar una Key de instalación, hazlo directamente desde el bot oficial de
 <p align="center">          
 Hecho con ❤️ por <b>KevinTech Tutorials</b>          
 </p>     
+
+
+## 🆕 Cambios de esta versión
+
+### 🌎 Idiomas
+El bot incorpora 8 idiomas:
+- 🇪🇸 Español
+- 🇺🇸 English
+- 🇧🇷 Português
+- 🇫🇷 Français
+- 🇩🇪 Deutsch
+- 🇮🇹 Italiano
+- 🇷🇺 Русский
+- 🇹🇷 Türkçe
+
+Al cambiar el idioma se traducen también los nombres de los botones y menús principales.
+
+### 🔄 Actualización del sistema
+El botón de actualización ahora informa claramente cuando el proceso termina:
+**🟢 ¡ACTUALIZACIÓN COMPLETADA!**
+**🎉 El sistema fue actualizado correctamente y los cambios quedaron aplicados.**
+
+### 💰 Monetización / Monetag
+El flujo de configuración solicita:
+1. SDK.
+2. Rewarded Interstitial.
+3. URL del bot.
+4. Archivo personalizado **`monetization.html`** enviado directamente al bot.
+5. URL pública donde estará alojado el HTML.
+
+El archivo recibido debe llamarse exactamente `monetization.html`. El bot valida que sea HTML, guarda esa plantilla y coloca dentro los datos configurados. El archivo generado que se entrega al administrador también se llama **`monetization.html`**.
+
+Durante la configuración existe un botón **❌ Cancelar** para salir del proceso.
+
+### 🔗 Referidos
+Con al menos 3 referidos válidos, el usuario puede realizar hasta **3 renovaciones dentro de una ventana de 24 horas**. Al cumplirse las 24 horas, el contador de renovaciones vuelve a **0/3** y puede utilizar nuevamente sus 3 renovaciones.
+
+Si el referido tiene `@username`, la notificación muestra ese usuario. Si no tiene username, se muestra su nombre de Telegram.
