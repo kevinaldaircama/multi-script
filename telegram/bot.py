@@ -218,12 +218,17 @@ def version_key(v):
  except:return (0,)
 def update_available():
  cur=current_version();new=new_version();return cur,new,(new!='No disponible' and cur!='No disponible' and version_key(new)>version_key(cur))
-def run_update(c=None,auto=False):
+def run_update(c=None,auto=False,key=None):
  updater=BASE/'update.sh'
  if not updater.exists():
   if c:send(c,'❌ No se encontró el actualizador del sistema.')
   return
- cmd=f'bash {q(updater)} --telegram'
+ if c and not key:
+  # The updater needs a license key. Ask once instead of leaving a Telegram
+  # background job waiting forever on a terminal read().
+  STATE[c]={'f':'system_update_key','s':'key','d':{}}
+  return send(c,'🔐 <b>ACTUALIZACIÓN DEL SISTEMA</b>\n\nEscribe tu <b>Key de actualización</b> para continuar.\n\n⚠️ La clave se usará únicamente para validar y registrar esta actualización.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ cmd=f'bash {q(updater)} --telegram --key {q(key)}' if key else f'bash {q(updater)} --telegram'
  if c:
   bg(c,'Actualización del sistema',cmd,900,settings_keyboard(),restart_after=True)
  else:
@@ -315,14 +320,17 @@ def userlist():
 def quota(uid):
  d=db();return d['quotas']['admin_days' if is_admin(uid) else 'public_days'],d['quotas']['admin_devices' if is_admin(uid) else 'public_devices']
 def userexists(u):
-    # A valid account may be either a Linux SSH user or a V2Ray/VMess account.
-    if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I):
+    # Accounts shown in the bot may be SSH users or V2Ray/VMess users.
+    # Do not impose a stricter username regex than Linux/Xray itself; this
+    # prevents "Lista" from showing an account that "Eliminar" rejects.
+    u=str(u).strip()
+    if not u or any(ch.isspace() for ch in u) or len(u)>64:
         return False
-    if sh(f'id {q(u)} >/dev/null 2>&1',3)[0] == 0:
+    if sh(f'getent passwd {q(u)} >/dev/null 2>&1',3)[0] == 0:
         return True
     try:
         d=db()
-        return any(u in z.get('v2ray_accounts',[]) for z in d.get('users',{}).values())
+        return any(any(str(a).lower()==u.lower() for a in z.get('v2ray_accounts',[])) for z in d.get('users',{}).values())
     except Exception:
         return False
 
@@ -389,7 +397,7 @@ def create_v2ray(username,days):
 def delete_v2ray(username):
  try:
   cfg=Path('/usr/local/etc/xray/config.json');data=json.loads(cfg.read_text());clients=data.get('inbounds',[{}])[0].get('settings',{}).get('clients',[])
-  new=[x for x in clients if x.get('email')!=username]
+  new=[x for x in clients if str(x.get('email','')).lower()!=str(username).lower()]
   if len(new)==len(clients):return 1,'Usuario V2Ray no encontrado.'
   data['inbounds'][0]['settings']['clients']=new;cfg.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(cfg,0o600);return sh('systemctl restart xray',20)
  except Exception as ex:return 1,str(ex)
@@ -618,7 +626,7 @@ def process_text(c,t,chat_type=None):
  # Las configuraciones de Monetag/Adsgram deben procesarse antes que cualquier comando.
  # Esto permite pegar scripts largos o bloques que comienzan con '/'.
  st0=STATE.get(c)
- if st0 and st0.get('f') in ('monetag','adsgram','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin'):
+ if st0 and st0.get('f') in ('monetag','adsgram','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
   return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
  if cmd in ('/crear','/crearcuenta','/create'):
@@ -792,14 +800,16 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='userop:delete':
   st=STATE.pop(c,None)
   if not st:return send(c,'❌ Operación expirada.')
-  u0=st['d']['user'];d=db();isv=any(u0 in z.get('v2ray_accounts',[]) for z in d['users'].values())
+  u0=st['d']['user'];d=db();isv=any(any(str(a).lower()==u0.lower() for a in z.get('v2ray_accounts',[])) for z in d['users'].values())
   if isv:
    rc,o=delete_v2ray(u0)
   else:
    rc,o=sh(f'pkill -u {q(u0)} 2>/dev/null || true; userdel -r -f {q(u0)}',15)
   if rc==0:
    for z in d['users'].values():
-    z['accounts']=[a for a in z.get('accounts',[]) if a!=u0];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if a!=u0];z.get('v2ray_expirations',{}).pop(u0,None)
+    z['accounts']=[a for a in z.get('accounts',[]) if str(a).lower()!=u0.lower()];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if str(a).lower()!=u0.lower()];
+    for ak in list(z.get('v2ray_expirations',{})):
+     if str(ak).lower()==u0.lower():z['v2ray_expirations'].pop(ak,None)
    save_db(d)
   return send(c,('🟢' if rc==0 else '🔴')+f' <b>Cuenta {"eliminada" if rc==0 else "no eliminada"}</b>\n\n👤 <code>{e(u0)}</code>')
  if x=='system_update':
@@ -951,6 +961,11 @@ def generate_monetag_html(uid,dat):
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
+ if f=='system_update_key' and step=='key':
+  key=t.strip()
+  if not key:return send(c,'❌ La Key no puede estar vacía.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  STATE.pop(c,None)
+  return run_update(c,False,key)
  if f=='admin_add':
   if step=='id' and t.isdigit():dat['id']=int(t);st['s']='name';return send(c,'👤 Nombre del administrador:')
   if step=='name':dat['name']=t[:80];st['s']='until';return send(c,'📅 Fecha de vencimiento (YYYY-MM-DD) o escribe <code>ilimitado</code>:')
@@ -1005,8 +1020,14 @@ def admin_text(c,t):
   if len(val)>20000:return send(c,'❌ El código es demasiado largo. Envía el bloque Rewarded Interstitial completo.')
   dat['reward']=val;st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='boturl':
-  dat['url']=t.strip();st['s']='hosturl'
-  return send(c,'📄 <b>Paso 4</b>\n\nIngresa ahora la URL pública donde estará alojado <code>monetization.html</code>.\n\n💡 El bot generará y te enviará automáticamente el archivo <b>monetization.html</b> con la configuración que acabas de ingresar.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  dat['url']=t.strip()
+  # Generate and send the HTML immediately. Only after the admin receives it
+  # do we ask for the public URL where the same file will be hosted.
+  fn=generate_monetag_html(c,dat)
+  send(c,'📄 <b>monetization.html listo</b>\n\nTe envío ahora el archivo generado con los datos configurados. Después de recibirlo, te pediré la URL pública donde lo vas a alojar.')
+  send_document(c,fn,'📄 monetization.html — archivo generado automáticamente.')
+  st['s']='hosturl'
+  return send(c,'🌐 <b>Paso 4</b>\n\nAhora envía la <b>URL pública final</b> donde vas a alojar <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='hosturl':
   dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
   fn=generate_monetag_html(c,dat)
@@ -1020,7 +1041,7 @@ def admin_text(c,t):
    if l.startswith('SERVER_DOMAIN='):lines[i]=f'SERVER_DOMAIN="{val}"';found=True
   if not found:lines.append(f'SERVER_DOMAIN="{val}"')
   cfg.write_text('\n'.join(lines)+'\n');STATE.pop(c,None);return send(c,'🟢 Dominio actualizado.',settings_keyboard())
- if f in ('quota_public','quota_admin'):
+ if f in ('quota_public','quota_admin','system_update_key'):
   key='public' if f=='quota_public' else 'admin'
   if step=='days':
    if not t.isdigit() or int(t)<1:return send(c,'❌ Días inválidos.')
