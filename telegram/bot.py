@@ -6,6 +6,9 @@ from pathlib import Path
 BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
 DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
+
+DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
+
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
@@ -96,8 +99,7 @@ def send(c,t,k=None):
  if k:d['reply_markup']=json.dumps({'inline_keyboard':k},ensure_ascii=False)
  return api('sendMessage',d)
 def send_document(c,path,caption=''):
- ext=Path(path).suffix.lower();ctype='text/html' if ext in ('.html','.htm') else ('application/json' if ext=='.json' else 'application/octet-stream')
- return api_multipart('sendDocument',{'chat_id':str(c),'caption':caption,'parse_mode':'HTML'}, {'document':(Path(path).name,Path(path).read_bytes(),ctype)})
+ return api_multipart('sendDocument',{'chat_id':str(c),'caption':caption,'parse_mode':'HTML'}, {'document':(Path(path).name,Path(path).read_bytes(),'application/json')})
 def edit(c,m,t,k=None):
  try:return api('editMessageText',{'chat_id':c,'message_id':m,'text':t,'parse_mode':'HTML','disable_web_page_preview':'true','reply_markup':json.dumps({'inline_keyboard':k},ensure_ascii=False) if k is not None else json.dumps({'inline_keyboard':[]})})
  except:return send(c,t,k)
@@ -131,9 +133,10 @@ def run_update(c=None,auto=False):
  if not updater.exists():
   if c:send(c,'❌ No se encontró el actualizador del sistema.')
   return
- cmd=f'bash {q(updater)} --bot' if (auto or c is not None) else f'bash {q(updater)}'
+ cmd=f'bash {q(updater)} --telegram'
  if c:bg(c,'Actualización del sistema',cmd,900,settings_keyboard())
  else:sh(cmd,900)
+
 def auto_update_monitor():
  while True:
   try:
@@ -384,7 +387,7 @@ def handle_start(c,raw):
   if item.get('action')=='create':return start_create(c,item.get('extra',{}).get('kind','normal'),True)
   if item.get('action')=='renew':
    username=item.get('extra',{}).get('username')
-   if username:STATE[c]={'f':'renew','s':'u','d':{'user':username}};return cb(c,0,c,0,'do:renew')
+   if username:return renew_now(c,username,quota(c)[0] if not is_owner(c) else None)
    return start_renew(c,bypass_ads=True)
  if not me.get('language_selected'):
   STATE[c]={'f':'language','s':'pick','d':{}}
@@ -427,10 +430,32 @@ def start_create(c,kind,bypass_ads=False):
  STATE[c]={'f':'create','s':'u','d':{'kind':kind}}
  return send(c,'🚀 <b>CREAR CUENTA V2RAY</b>\n\nUsuario:' if kind=='v2ray' else '👤 <b>CREAR CUENTA</b>\n\nUsuario:')
 
+def renew_now(c,username,days=None):
+ try:
+  if not userexists(username):
+   return send(c,'❌ Esa cuenta ya no existe o ya fue eliminada.')
+  if days is None:
+   days=quota(c)[0]
+  exp=subprocess.getoutput(f"date -d '+{int(days)} days' +%F")
+  rc,o=sh(f'chage -E {q(exp)} {q(username)}',10)
+  if rc!=0:
+   return send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>')
+  dat={'user':username,'days':int(days),'limit':quota(c)[1]}
+  return send(c,account_message(c,dat,True))
+ except Exception as ex:
+  log('RENEW NOW '+repr(ex));return send(c,'🔴 No se pudo renovar la cuenta.')
+
 def start_renew(c,username=None,bypass_ads=False):
- if not bypass_ads and username and ad_gate(c,'renew',{'username':username}):return
- if not bypass_ads and not username and ad_gate(c,'renew'):return
- STATE[c]={'f':'renew','s':'u','d':({'user':username} if username else {})};return send(c,'♻️ <b>RENOVAR CUENTA</b>\n\nEscribe el usuario que deseas renovar:')
+ if username:
+  if not bypass_ads and ad_gate(c,'renew',{'username':username}):return
+  days=quota(c)[0] if not is_owner(c) else None
+  if is_owner(c):
+   STATE[c]={'f':'renew','s':'days','d':{'user':username}}
+   return send(c,'📅 <b>Días para renovar:</b>')
+  return renew_now(c,username,days)
+ if not bypass_ads and ad_gate(c,'renew'):return
+ STATE[c]={'f':'renew','s':'u','d':{}}
+ return send(c,'♻️ <b>RENOVAR CUENTA</b>\n\nEscribe el usuario que deseas renovar:')
 
 def near_expiry_notifications():
  while True:
@@ -451,7 +476,7 @@ def near_expiry_notifications():
       z['expiry_notice'][username]=key;changed=True
       owner=int(sid);mention='@'+z.get('username') if z.get('username') else str(owner)
       text=f'⏳ <b>CUENTA PRÓXIMA A VENCER</b>\n\n👤 Cuenta: <code>{e(username)}</code>\n📅 Vencimiento: <b>{e(ex.strftime("%d/%m/%Y"))}</b>\n⏱️ Tiempo restante: <b>{"hoy" if left==0 else "1 día"}</b>\n\nPuedes renovarla desde el botón inferior.'
-      k=[[{'text':'♻️ Renovar cuenta','callback_data':'renew:'+username}]]
+      k=[[{'text':'▶️ Ver anuncio y renovar','callback_data':'renew:'+username}]]
       try:send(owner,text,k)
       except:pass
       if owner!=OWNER:
@@ -661,6 +686,8 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
  if x=='monetag':return monetag_menu(c,m)
  if x=='monetag_config':STATE[c]={'f':'monetag','s':'sdk','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nPega aquí tu SDK. Ejemplo:\n<code>&lt;script src='//libtl.com/sdk.js' data-zone='11217882' data-sdk='show_11217882'&gt;&lt;/script&gt;</code>")
+ if x=='monetag_delete':
+  d['monetization']['monetag']='';save_db(d);return monetag_menu(c,m)
  if x=='monetag_toggle':
   v=d.get('monetization',{}).get('monetag','')
   if not v:return monetag_menu(c,m)
@@ -688,7 +715,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
  if x.startswith('tool:'):
   if not is_owner(u):return ans(i,'Solo el super admin')
-  k=x.split(':')[1];mp={'optimizar':'optimizar.sh','ads':'blockads.sh','torrent':'blocktorrent.sh','speed':'speedtest.sh','scanner':'scanner.sh','update':'update.sh'}
+  k=x.split(':')[1];mp={'optimizar':'optimizar.sh','ads':'blockads.sh','torrent':'blocktorrent.sh','speed':'speedtest.sh','scanner':'scanner.sh',}
   if k=='files':return edit(c,m,'📁 <b>ARCHIVOS</b>\n\n<pre>'+e(subprocess.getoutput("find /etc/kevintech -maxdepth 2 -type f | sort | head -120"))+'</pre>',TOOLS)
   p=module(mp.get(k,''));return bg(c,k.title(),f'bash {q(p)}',180,TOOLS) if p else send(c,'🔴 Módulo no encontrado.')
  if x.startswith('svc_restart:'):
@@ -732,7 +759,7 @@ def backup_scheduler():
   except Exception as er:log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
-SETTINGS=[[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
@@ -740,7 +767,9 @@ SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'
 MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Adsgram','callback_data':'adsgram'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def settings_keyboard():
- d=db();rows=[r[:] for r in SETTINGS];rows[0]=[{'text':('🔐 Acceso: PÚBLICO 🟢' if d['access']=='public' else '🔐 Acceso: PRIVADO 🔴'),'callback_data':'access_toggle'}];return rows
+ d=db()
+ access='🔐 Acceso: PÚBLICO 🟢' if d.get('access')=='public' else '🔐 Acceso: PRIVADO 🔴'
+ return [[{'text':access,'callback_data':'access_toggle'}], *SETTINGS[1:]]
 
 def monetag_menu(c,m=0):
  d=db();v=d.get('monetization',{}).get('monetag','');configured=bool(v);enabled=True
@@ -749,9 +778,9 @@ def monetag_menu(c,m=0):
   except:pass
  text='💰 <b>MONETAG</b>\n\nEstado: <b>'+('🟢 ENCENDIDO' if enabled else '⛔ APAGADO')+'</b>' if configured else '💰 <b>MONETAG</b>\n\nEstado: <b>🔴 NO CONFIGURADO</b>'
  if configured:
-  try:text+='\n\n🤖 Bot: <code>'+e(json.loads(v).get('url',''))+'</code>\n🌍 HTML: <code>'+e(json.loads(v).get('host_url',''))+'</code>'
+  try:text+='\n\n🌐 URL: <code>'+e(json.loads(v).get('url',''))+'</code>'
   except:pass
-  k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'monetag_toggle'}],[{'text':'⚙️ Reconfigurar','callback_data':'monetag_config'}]]
+  k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'monetag_toggle'}],[{'text':'⚙️ Reconfigurar','callback_data':'monetag_config'},{'text':'🗑️ Eliminar','callback_data':'monetag_delete'}]]
  else:k=[[{'text':'⚙️ Configurar','callback_data':'monetag_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
 def adsgram_menu(c,m=0):
@@ -759,19 +788,18 @@ def adsgram_menu(c,m=0):
  k=[[{'text':'⏻ Apagar','callback_data':'adsgram_toggle'},{'text':'⚙️ Reconfigurar','callback_data':'adsgram_config'}]] if configured else [[{'text':'⚙️ Configurar','callback_data':'adsgram_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
 def generate_monetag_html(uid,dat):
+ template=TD/'monetization.html'
+ if not template.exists():
+  template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
+ html=template.read_text(encoding='utf-8')
  bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
  sdk=dat.get('sdk','').strip();reward=dat.get('reward','').strip();adsgram_code=''
  try:
   az=json.loads(db().get('monetization',{}).get('adsgram',''))
-  adsgram_code=az.get('code','') if isinstance(az,dict) else ''
+  adsgram_code=az.get('code','') if isinstance(az,dict) else str(az)
  except:pass
- m=re.search(r'data-sdk=["\']([^"\']+)',sdk,re.I);ad_fn=m.group(1) if m else ''
- template=TD/'monetization.html'
- if not template.exists(): raise FileNotFoundError('Falta telegram/monetization.html')
- html=template.read_text(encoding='utf-8')
- html=html.replace('__SDK__',sdk).replace('__ADSGRAM__',adsgram_code).replace('__BOT_URL__',json.dumps(bot_url)).replace('__AD_FN__',json.dumps(ad_fn))
- html=html.replace('</script></body></html>',reward+'</script></body></html>')
- fn=BACK/'kevintech_ads.html';fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
+ fn=BACK/'monetag_webapp.html';html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps(sdk)).replace('__REWARD_CODE_JSON__',json.dumps(reward)).replace('__ADSGRAM_CODE_JSON__',json.dumps(adsgram_code))
+ fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -823,10 +851,7 @@ def admin_text(c,t):
  if f=='monetag' and step=='sdk':dat['sdk']=t.strip();st['s']='reward';return send(c,'✅ Script guardado.\n\n<b>Paso 2:</b> Ahora copia el código de activación del formato <b>Rewarded Interstitial</b> (el bloque que contiene <code>show_XXXXXXX().then(...)</code>).\n\nPor favor, pégalo aquí y envíamelo.')
  if f=='monetag' and step=='reward':dat['reward']=t.strip();st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>')
  if f=='monetag' and step=='boturl':dat['url']=t.strip();st['s']='hosturl';return send(c,'🌍 <b>Paso 4</b>\n\nIngresa la URL donde está alojado el archivo HTML.')
- if f=='monetag' and step=='hosturl':
-  val=t.strip()
-  if not re.match(r'^https?://\S+$',val,re.I):return send(c,'❌ URL inválida. Debe comenzar con <code>https://</code> o <code>http://</code>.')
-  dat['host_url']=val;dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n🌍 <b>URL del HTML:</b> <code>'+e(val)+'</code>');return send_document(c,fn,'📄 HTML editable — súbelo a la URL configurada.')
+ if f=='monetag' and step=='hosturl':dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado.')
  if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
