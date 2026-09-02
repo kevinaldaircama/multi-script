@@ -54,6 +54,28 @@ LICENSE_TYPE="normal"
 LICENSE_DELETE_AT=""
 
 #=========================================================
+# ARGUMENTOS TELEGRAM
+#=========================================================
+
+TELEGRAM_MODE="false"
+for arg in "$@"; do
+    case "$arg" in
+        --telegram) TELEGRAM_MODE="true" ;;
+        --key=*) INSTALL_KEY="${arg#--key=}" ;;
+    esac
+done
+
+if [[ "$TELEGRAM_MODE" == "true" && -z "$INSTALL_KEY" ]]; then
+    # Accept the key as the next argument too: --key VALUE
+    for ((i=1; i<=$#; i++)); do
+        if [[ "${!i}" == "--key" ]]; then
+            j=$((i+1)); INSTALL_KEY="${!j:-}"
+        fi
+    done
+fi
+
+
+#=========================================================
 # VARIABLES DEL SERVIDOR
 #=========================================================
 
@@ -294,6 +316,13 @@ echo -e " ${YELLOW}🔐 Esta actualización requiere una Key válida.${RESET}"
 echo -e " ${GRAY}La Key será validada mediante la API pública.${RESET}"
 echo
 
+if [[ "$TELEGRAM_MODE" == "true" && -n "$INSTALL_KEY" ]]; then
+    # Key was supplied securely by the Telegram bot. Validate it once.
+    while true; do
+        :
+        break
+    done
+else
 while true; do
 
     read -r -p " 🔑 Introduce tu Key de Instalación: " INSTALL_KEY
@@ -537,6 +566,7 @@ while true; do
     break
 
 done
+fi
 
 #=========================================================
 # INFORMACIÓN SERVIDOR
@@ -999,6 +1029,10 @@ sleep 2
 #=========================================================
 # REGRESAR AL MENÚ
 #=========================================================
+
+if [[ "$TELEGRAM_MODE" == "true" ]]; then
+    exit 0
+fi
 
 if [[ -f "$BASE/menu.sh" ]]; then
 
