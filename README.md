@@ -191,3 +191,10 @@ Si el referido tiene `@username`, la notificación muestra ese usuario. Si no ti
 - 🛠️ Corregida la consulta/eliminación de cuentas V2Ray que aparecían en la lista pero eran rechazadas como "Cuenta no encontrada".
 - 💰 Monetag ya no solicita subir `monetization.html`: el bot lo genera automáticamente y lo envía después de completar la configuración.
 - 🔄 La actualización informa explícitamente que terminó y muestra la versión instalada antes de reiniciar el servicio.
+
+
+## v13.5 — Monetag Mini App
+
+- El botón **Ver anuncio y continuar** abre `monetization.html` como **Telegram Mini App** mediante `web_app`.
+- El token de publicidad viaja con la Mini App y se conserva al volver al bot, evitando el mensaje de enlace expirado por pérdida del token.
+- `monetization.html` se envía una sola vez durante la configuración. Después de guardar la URL pública, el bot no vuelve a enviar el archivo.
