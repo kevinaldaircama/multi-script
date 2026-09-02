@@ -53,7 +53,6 @@ INSTALL_PROTOCOLS="ON"
 
 SERVER_DOMAIN=""
 SERVER_IP=""
-SERVER_HOST=""
 DOMAIN_IP=""
 DOMAIN_IP_MATCH="NO"
 DNS_PROVIDER="Desconocido"
@@ -551,78 +550,64 @@ done
 
 #=========================================================
 # PASO 4
-# DOMINIO / IP
+# DOMINIO
 #=========================================================
 
-seccion "🌐 PASO 4  •  CONFIGURACIÓN DE DOMINIO / IP"
+seccion "🌐 PASO 4  •  CONFIGURACIÓN DE DOMINIO"
 
 loading "Detectando IP pública"
 
-SERVER_IP="$(
-    curl "${CURL_COMMON[@]}" \
-        -4 \
-        https://api.ipify.org \
-        2>/dev/null
-)" || true
-
-if [[ -z "$SERVER_IP" ]]; then
-    SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-fi
-
+SERVER_IP="$(curl "${CURL_COMMON[@]}" -4 https://api.ipify.org 2>/dev/null)" || true
+[[ -z "$SERVER_IP" ]] && SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 [[ -z "$SERVER_IP" ]] && SERVER_IP="Desconocida"
 
-echo
-echo -e " ${GRAY}IP pública detectada:${RESET} ${CYAN}$SERVER_IP${RESET}"
-echo -e " ${GRAY}Puedes escribir un dominio o presionar ENTER para usar la IP.${RESET}"
-echo
-
-read -r -p \
-    "$(echo -e "${CYAN}🌐 Dominio del VPS [ENTER = IP]:${RESET} ")" \
-    SERVER_DOMAIN
-
-SERVER_DOMAIN="$(
-    printf '%s' "$SERVER_DOMAIN" |
-    tr -d '[:space:]'
-)"
+read -r -p "$(echo -e "${CYAN}🌐 Dominio del VPS (ENTER = usar IP ${SERVER_IP}):${RESET} ")" SERVER_DOMAIN
+SERVER_DOMAIN="$(printf '%s' "$SERVER_DOMAIN" | tr -d '[:space:]')"
 
 if [[ -z "$SERVER_DOMAIN" ]]; then
-    SERVER_HOST="$SERVER_IP"
-    DOMAIN_IP=""
-    DOMAIN_IP_MATCH="NO"
-    DNS_PROVIDER="Ninguno (IP)"
-    ok "Se utilizará la IP del VPS: $SERVER_IP"
+    SERVER_DOMAIN="$SERVER_IP"
+    DOMAIN_MODE="IP"
+    ok "Sin dominio. Se utilizará la IP del VPS: $SERVER_IP"
+elif [[ "$SERVER_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] && [[ "$SERVER_DOMAIN" == *.* ]]; then
+    DOMAIN_MODE="DOMAIN"
+    ok "Dominio configurado: $SERVER_DOMAIN"
 else
-    if [[ ! "$SERVER_DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] ||
-       [[ "$SERVER_DOMAIN" != *.* ]]; then
-        error_msg "Dominio inválido."
-        exit 1
-    fi
-
-    SERVER_HOST="$SERVER_DOMAIN"
-    DOMAIN_IP_MATCH="NO"
-    DNS_PROVIDER="Desconocido"
-
-    loading "Comprobando DNS"
-
-    DOMAIN_IP="$(
-        dig +short A "$SERVER_DOMAIN" |
-        grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' |
-        head -n1
-    )"
-
-    if [[ -n "$DOMAIN_IP" && "$DOMAIN_IP" == "$SERVER_IP" ]]; then
-        DOMAIN_IP_MATCH="YES"
-        ok "El dominio apunta correctamente al VPS."
-    else
-        warn "El dominio todavía no apunta a este VPS."
-        [[ -n "$DOMAIN_IP" ]] && {
-            echo -e " ${GRAY}IP encontrada:${RESET} ${YELLOW}$DOMAIN_IP${RESET}"
-            echo -e " ${GRAY}IP VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
-        }
-    fi
+    warn "Dominio inválido. Se utilizará la IP del VPS: $SERVER_IP"
+    SERVER_DOMAIN="$SERVER_IP"
+    DOMAIN_MODE="IP"
 fi
 
-if [[ -n "$SERVER_DOMAIN" ]]; then
+DOMAIN_IP_MATCH="NO"
+DNS_PROVIDER="Desconocido"
+
+loading "Comprobando DNS"
+
+DOMAIN_IP=""
+if [[ "${DOMAIN_MODE:-DOMAIN}" == "DOMAIN" ]]; then
+    DOMAIN_IP="$(dig +short A "$SERVER_DOMAIN" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)"
+fi
+
+if [[ -n "$DOMAIN_IP" &&
+      "$DOMAIN_IP" == "$SERVER_IP" ]]; then
+
+    DOMAIN_IP_MATCH="YES"
+
+    ok "El dominio apunta correctamente al VPS."
+
+else
+
+    warn "El dominio todavía no apunta a este VPS."
+
+    [[ -n "$DOMAIN_IP" ]] && {
+
+        echo -e \
+            " ${GRAY}IP encontrada:${RESET} ${YELLOW}$DOMAIN_IP${RESET}"
+
+        echo -e \
+            " ${GRAY}IP VPS:${RESET} ${CYAN}$SERVER_IP${RESET}"
+    }
+
+fi
 
 NS="$(
     dig +short NS "$SERVER_DOMAIN" |
@@ -662,8 +647,6 @@ fi
 echo
 echo -e \
     " ${GRAY}Proveedor DNS:${RESET} ${SKY}$DNS_PROVIDER${RESET}"
-
-fi
 
 #=========================================================
 # PASO 5
@@ -875,6 +858,61 @@ mkdir -p \
     "$BASE/logs" \
     "$BASE/herramientas"
 
+# Componentes del bot: se instalan desde install.sh y no requieren
+# pasos manuales separados.
+if [[ -d "$TMP/telegram" ]]; then
+    mkdir -p "$BASE/telegram/logs" "$BASE/telegram/backups"
+    [[ -f "$TMP/telegram/bot.py" ]] && cp -f "$TMP/telegram/bot.py" "$BASE/telegram/bot.py"
+    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
+fi
+
+#=========================================================
+# CONFIGURACIÓN DEL BOT TELEGRAM
+#=========================================================
+
+if [[ -f "$BASE/telegram/.env" ]]; then
+    chmod 600 "$BASE/telegram/.env"
+    info "Configuración Telegram existente conservada."
+else
+    seccion "🤖 CONFIGURACIÓN DEL BOT TELEGRAM"
+    read -r -p "🤖 Token del bot: " BOT_TOKEN
+    read -r -p "👑 Telegram ID del super admin: " BOT_OWNER
+    [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || error_exit "Token de Telegram inválido."
+    [[ "$BOT_OWNER" =~ ^[0-9]+$ ]] || error_exit "ID del super admin inválido."
+    umask 077
+    printf 'BOT_TOKEN=%q\nADMIN_ID=%q\nADMIN_IDS=\n' "$BOT_TOKEN" "$BOT_OWNER" > "$BASE/telegram/.env"
+    chmod 600 "$BASE/telegram/.env"
+fi
+
+cat > /etc/systemd/system/kevintech-telegram.service <<EOF
+[Unit]
+Description=KevinTech Multi Script Telegram Bot
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$BASE/telegram
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 $BASE/telegram/bot.py
+Restart=always
+RestartSec=2
+TimeoutStartSec=20
+TimeoutStopSec=10
+StandardOutput=append:$BASE/telegram/logs/bot.log
+StandardError=append:$BASE/telegram/logs/bot.log
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 600 "$BASE/telegram/.env"
+python3 -m py_compile "$BASE/telegram/bot.py" || error_exit "El bot Telegram contiene errores de sintaxis."
+systemctl daemon-reload
+systemctl enable kevintech-telegram >/dev/null
+systemctl restart kevintech-telegram
+ok "Bot Telegram instalado y configurado."
+
 #=========================================================
 # PERMISOS CORRECTOS
 #=========================================================
@@ -904,7 +942,7 @@ cat > "$BASE/config.conf" <<EOF
 
 SERVER_DOMAIN="$SERVER_DOMAIN"
 SERVER_IP="$SERVER_IP"
-SERVER_HOST="$SERVER_HOST"
+DOMAIN_MODE="${DOMAIN_MODE:-DOMAIN}"
 
 DNS_PROVIDER="$DNS_PROVIDER"
 DOMAIN_IP_MATCH="$DOMAIN_IP_MATCH"
