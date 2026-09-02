@@ -48,7 +48,9 @@ LIME="\e[38;5;154m"
 
 INSTALL_KEY=""
 AUTO_MODE=false
+BOT_MODE=false
 [[ "${1:-}" == "--auto" ]] && AUTO_MODE=true
+[[ "${1:-}" == "--bot" ]] && BOT_MODE=true
 
 LICENSE_OWNER=""
 LICENSE_RESELLER=""
@@ -283,6 +285,8 @@ fi
 ok "Servidor de licencias disponible."
 
 echo
+
+if [[ "$BOT_MODE" != true ]]; then
 
 #=========================================================
 # LICENCIA
@@ -712,6 +716,9 @@ fi
 
 echo
 
+
+fi
+
 #=========================================================
 # INSTALAR
 #=========================================================
@@ -774,6 +781,8 @@ if [[ -f "$BASE/license.conf" ]]; then
 fi
 
 ok "Permisos actualizados."
+
+if [[ "$BOT_MODE" != true ]]; then
 
 #=========================================================
 # ACTIVACIÓN
@@ -958,6 +967,9 @@ fi
 
 echo
 ok "La API marcó la Key como utilizada."
+
+
+fi
 
 #=========================================================
 # LIMPIAR MEMORIA
