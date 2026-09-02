@@ -8,7 +8,7 @@ DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; API=''; OWNER=0; BOT_USERNAME=''
 
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
- 'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2,'v2ray_days':7,'v2ray_devices':1},
+ 'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
  'monetization':{'monetag':'','miniapp':''},
  'backup_schedule':{'mode':'once','next_at':0},
@@ -28,6 +28,8 @@ def load_db():
   if not isinstance(d.get(k),dict):d[k]={}
  if not isinstance(d.get('quotas'),dict):d['quotas']=json.loads(json.dumps(DEFAULT['quotas']))
  for k,v in DEFAULT['quotas'].items():d['quotas'].setdefault(k,v)
+ # Compatibilidad: V2Ray usa siempre la misma cuota pública y ya no tiene cuota propia.
+ d['quotas'].pop('v2ray_days',None); d['quotas'].pop('v2ray_devices',None)
  if not isinstance(d.get('security'),dict):d['security']=json.loads(json.dumps(DEFAULT['security']))
  for k,v in DEFAULT['security'].items():d['security'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
  if not isinstance(d.get('monetization'),dict):d['monetization']=json.loads(json.dumps(DEFAULT['monetization']))
@@ -73,9 +75,9 @@ def lang(uid):
  d=db();return d.get('users',{}).get(str(uid),{}).get('language','es')
 
 I18N={
- 'home':{'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>','en':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Main panel</b>','pt':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Painel principal</b>'},
+ 'home':{'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>\n\nAdministra tus cuentas de forma rápida y sencilla desde Telegram.\n\n🔐 Acceso · 👤 Cuentas · 🟢 Conexiones · 🔗 Referidos','en':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Main panel</b>\n\nManage your accounts quickly and easily from Telegram.\n\n🔐 Access · 👤 Accounts · 🟢 Connections · 🔗 Referrals','pt':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Painel principal</b>\n\nGerencie suas contas de forma rápida e simples pelo Telegram.\n\n🔐 Acesso · 👤 Contas · 🟢 Conexões · 🔗 Indicações'},
  'users':{'es':'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas.','en':'👤 <b>USERS</b>\n\nManage your accounts.','pt':'👤 <b>USUÁRIOS</b>\n\nGerencie suas contas.'},
- 'info':{'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot permite crear y administrar tus cuentas de acceso al servidor, consultar tus cuentas, ver conexiones y gestionar referidos.','en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you create and manage your server access accounts, view your accounts, check connections and manage referrals.','pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite criar e gerenciar suas contas de acesso ao servidor, consultar suas contas, ver conexões e gerenciar indicações.'},
+ 'info':{'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot te permite gestionar tus accesos desde Telegram: crear cuentas normales o V2Ray, consultar tus cuentas, revisar conexiones, renovar, eliminar y usar el sistema de referidos. Las cuotas definidas por el super admin se aplican automáticamente a los usuarios públicos.','en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you create and manage your server access accounts, view your accounts, check connections and manage referrals.','pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite criar e gerenciar suas contas de acesso ao servidor, consultar suas contas, ver conexões e gerenciar indicações.'},
  'choose_lang':{'es':'🌎 <b>Selecciona tu idioma</b>\n\nElige el idioma que quieres usar.','en':'🌎 <b>Select your language</b>\n\nChoose the language you want to use.','pt':'🌎 <b>Selecione seu idioma</b>\n\nEscolha o idioma que deseja usar.'},
  'settings':{'es':'⚙️ <b>AJUSTES DEL SUPER ADMIN</b>\n\nControl central del panel.','en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.','pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.'},
  'language_saved':{'es':'🟢 Idioma guardado.','en':'🟢 Language saved.','pt':'🟢 Idioma salvo.'},
@@ -136,7 +138,7 @@ def registered(uid,name=None,username=None):
   if changed:save_db(d)
 
 def home(uid):
- rows=[[{'text':'👤 Usuarios','callback_data':'users'},{'text':'🔗 Referidos','callback_data':'referrals'}],[{'text':'ℹ️ Información','callback_data':'info'}]]
+ rows=[[{'text':'👤 Usuarios','callback_data':'users'},{'text':'🔗 Referidos','callback_data':'referrals'}],[{'text':'🌐 Idioma','callback_data':'language'},{'text':'ℹ️ Información','callback_data':'info'}]]
  if is_owner(uid):rows.append([{'text':'⚙️ Ajustes','callback_data':'settings'}])
  return rows
 USERS=[[{'text':'➕ Crear cuenta','callback_data':'create'},{'text':'♻️ Renovar','callback_data':'renew'}],[{'text':'📋 Lista','callback_data':'list'},{'text':'🟢 Online','callback_data':'online'}],[{'text':'👤 Cuenta','callback_data':'account'},{'text':'🗑️ Eliminar cuenta','callback_data':'delete'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
@@ -275,25 +277,36 @@ def process_text(c,t):
  f,step,dat=st['f'],st['s'],st['d']
  if step=='u' and f in ('create','renew','delete','account'):
   u=t.strip()
-  if f in ('delete','account') and not userexists(u):return send(c,'❌ Usuario no encontrado. Escribe otro:')
-  if f=='renew' and not userexists(u):return send(c,'❌ Usuario no encontrado.')
-  if f=='create' and userexists(u):return send(c,'❌ Usuario ya existe.')
+  if f in ('delete','account') and not userexists(u):return send(c,'❌ Cuenta no encontrada. Escribe un usuario válido:')
+  if f=='renew' and not userexists(u):return send(c,'❌ Cuenta no encontrada. Escribe un usuario válido:')
+  if f=='create' and userexists(u):return send(c,'❌ Ese usuario ya existe. Elige otro nombre:')
   dat['user']=u
   if f=='account':STATE.pop(c,None);return send(c,account_info(c,u))
-  if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Eliminar la cuenta <code>{e(u)}</code>?',[[{'text':'✅ ELIMINAR','callback_data':'userop:delete'},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Seguro que deseas eliminar <code>{e(u)}</code>?',[[{'text':'🗑️ Eliminar','callback_data':'userop:delete'},{'text':'Cancelar','callback_data':'cancel'}]])
   if f=='create':
-   if dat.get('kind')=='v2ray':st['s']='days';maxdays,_=quota(c,'v2ray');return send(c,f'📅 Duración (máximo <b>{maxdays} días</b>):')
+   # Usuarios: días/dispositivos salen de la cuota. El super admin puede definirlos.
+   if dat.get('kind')=='v2ray':
+    if is_owner(c):st['s']='days';return send(c,'📅 Duración de la cuenta (días):')
+    maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
    st['s']='p';return send(c,'🔑 Contraseña:')
-  # Regular renew is still controlled by configured quota.
-  st['s']='days';return send(c,'📅 Días a renovar:')
- if f=='create' and step=='p':dat['pass']=t;st['s']='days';return send(c,'📅 Días de duración:')
+  # Renovación: usuarios usan automáticamente su cuota; super admin puede definirla.
+  if is_owner(c):st['s']='days';return send(c,'📅 Días para renovar:')
+  maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:renew')
+ if f=='create' and step=='p':
+  dat['pass']=t
+  if is_owner(c):st['s']='days';return send(c,'📅 Duración de la cuenta (días):')
+  maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
  if f in ('create','renew') and step=='days':
-  if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
-  maxdays,maxdev=quota(c,dat.get('kind','normal'))
-  if not is_owner(c) and int(t)>maxdays:return send(c,f'❌ Máximo permitido: <b>{maxdays} días</b>.')
-  dat['days']=int(t);dat['limit']=maxdev;st['s']='confirm'
-  # No account preview block; only a simple confirmation.
-  return send(c,'✅ Datos listos. Pulsa confirmar para continuar.',[[{'text':'✅ CONFIRMAR','callback_data':'do:'+f},{'text':'❌ CANCELAR','callback_data':'cancel'}]])
+  if not t.isdigit() or int(t)<1:return send(c,'❌ Debes indicar un número de días válido.')
+  maxdays,maxdev=quota(c)
+  if not is_owner(c) and int(t)>maxdays:return send(c,f'❌ Tu cuota permite como máximo <b>{maxdays} días</b>.')
+  dat['days']=int(t)
+  if is_owner(c):
+   st['s']='devices';return send(c,'📱 Límite de dispositivos/IP:')
+  dat['limit']=maxdev;return cb(c,0,c,0,'do:'+f)
+ if f in ('create','renew') and step=='devices':
+  if not t.isdigit() or int(t)<1:return send(c,'❌ Debes indicar un número válido.')
+  dat['limit']=int(t);return cb(c,0,c,0,'do:'+f)
 
 def cb(c,m,u,i,x):
  if banned(u):return ans(i,'🚫 Baneado')
@@ -301,7 +314,8 @@ def cb(c,m,u,i,x):
  if x.startswith('lang:'):
   language=x.split(':',1)[1];d['users'][str(u)]['language']=language;d['users'][str(u)]['language_selected']=True;save_db(d);STATE.pop(u,None);return edit(c,m,tr(u,'home'),home(u))
  if x=='home':return edit(c,m,tr(u,'home'),home(u))
- if x=='info':return edit(c,m,tr(u,'info'))
+ if x=='info':return edit(c,m,tr(u,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+ if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),[[{'text':'🇪🇸 Español','callback_data':'lang:es'},{'text':'🇺🇸 English','callback_data':'lang:en'}],[{'text':'🇧🇷 Português','callback_data':'lang:pt'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
  if x=='referrals':return edit(c,m,referral_info(u),[[{'text':'♻️ Renovar 24h (3 referidos)','callback_data':'ref_renew'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='create':
@@ -405,8 +419,10 @@ def cb(c,m,u,i,x):
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
- if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'♻️ Restaurar desde documento','callback_data':'restore'}]]+BACKUP_MENU)
+ if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar ahora','callback_data':'backup_now'},{'text':'♻️ Restaurar','callback_data':'restore'}]]+BACKUP_MENU)
  if x.startswith('backup:'):return configure_backup(c,x.split(':',1)[1])
+ if x=='backup_now':
+  fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura Monetag u otra Mini App.',MONETIZATION)
  if x=='monetag':STATE[c]={'f':'monetag','s':'value','d':{}};return send(c,'💰 Envía el código, enlace o identificador de Monetag:')
@@ -417,7 +433,6 @@ def cb(c,m,u,i,x):
  if x=='quotas':return edit(c,m,quota_text(d),QUOTA)
  if x=='quota_public':STATE[c]={'f':'quota_public','s':'days','d':{}};return send(c,'📅 Días para usuarios públicos:')
  if x=='quota_admin':STATE[c]={'f':'quota_admin','s':'days','d':{}};return send(c,'📅 Días para administradores:')
- if x=='quota_v2ray':STATE[c]={'f':'quota_v2ray','s':'days','d':{}};return send(c,'🚀 Días para cuentas V2Ray:')
  if x=='security':
   if not is_owner(u):return ans(i,'Solo el super admin')
   stxt='🛡️ <b>SEGURIDAD</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d.get('security',{}).get('auto_ban_ssh') else 'DESACTIVADO 🔴')+'</b>\n\nSi una cuenta supera su límite de conexiones, recibe una advertencia. Al llegar a 3 infracciones, la cuenta se elimina y el usuario recibe aviso.'
@@ -446,10 +461,11 @@ def cb(c,m,u,i,x):
 
 def admin_menu(c,m):return edit(c,m,'👥 <b>ADMINISTRADORES</b>',ADMIN_MENU)
 def quota_text(d):
- qx=d['quotas'];return f'''📅 <b>CUOTAS ACTUALES</b>\n\nPúblico: <b>{qx["public_days"]} días</b> / <b>{qx["public_devices"]} dispositivos</b>\nAdmin: <b>{qx["admin_days"]} días</b> / <b>{qx["admin_devices"]} dispositivos</b>\nV2Ray: <b>{qx["v2ray_days"]} días</b> / <b>{qx["v2ray_devices"]} dispositivos</b>\n\nEl super admin no tiene límite.'''
+ qx=d['quotas'];return f'''📅 <b>CUOTAS</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El super admin puede definir días y dispositivos al crear o renovar.'''
+
 def backup_text(d):
- s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS AUTOMÁTICOS</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nEl respaldo se enviará como <b>documento JSON</b> al super admin.'''
-def configure_backup(c,mode):
+ s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
+
  d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),BACKUP_MENU)
 
 def backup_now():
@@ -475,7 +491,7 @@ def backup_scheduler():
 SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🚀 V2Ray','callback_data':'quota_v2ray'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BACKUP_MENU=[[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Mini App','callback_data':'miniapp'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
@@ -538,11 +554,11 @@ def admin_text(c,t):
    if l.startswith('SERVER_DOMAIN='):lines[i]=f'SERVER_DOMAIN="{val}"';found=True
   if not found:lines.append(f'SERVER_DOMAIN="{val}"')
   cfg.write_text('\n'.join(lines)+'\n');STATE.pop(c,None);return send(c,'🟢 Dominio actualizado.',settings_keyboard())
- if f in ('quota_public','quota_admin','quota_v2ray'):
-  key='public' if f=='quota_public' else ('admin' if f=='quota_admin' else 'v2ray')
+ if f in ('quota_public','quota_admin'):
+  key='public' if f=='quota_public' else 'admin'
   if step=='days':
    if not t.isdigit() or int(t)<1:return send(c,'❌ Días inválidos.')
-   dat['days']=int(t);st['s']='devices';return send(c,'📱 Número máximo de dispositivos/IP:')
+   dat['days']=int(t);st['s']='devices';return send(c,'📱 Máximo de dispositivos/IP:')
   if step=='devices':
    if not t.isdigit() or int(t)<1:return send(c,'❌ Número inválido.')
    d['quotas'][key+'_days']=dat['days'];d['quotas'][key+'_devices']=int(t);save_db(d);STATE.pop(c,None);return send(c,'🟢 Cuota actualizada.',QUOTA)
@@ -550,7 +566,7 @@ def admin_text(c,t):
 _original_process=process_text
 def process_text(c,t):
  registered(c)
- if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','miniapp','domain','quota_public','quota_admin','quota_v2ray'):
+ if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','miniapp','domain','quota_public','quota_admin'):
   return admin_text(c,t)
  st=STATE.get(c)
  if st and st.get('f')=='ref_renew' and st.get('s')=='u':
