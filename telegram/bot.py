@@ -549,7 +549,7 @@ def ad_gate(c,action,extra=None):
  if not host:return False
  token=secrets.token_urlsafe(18);d=db();d.setdefault('ad_tokens',{})[token]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+900};save_db(d)
  sep='&' if '?' in host else '?';url=host+sep+urllib.parse.urlencode({'token':token,'uid':c})
- return send(c,'💰 <b>UN PASO ANTES DE CONTINUAR</b>\n\nPara mantener el servicio gratuito, mira el anuncio y completa la publicidad.\n\nAl terminar volverás automáticamente al bot.',[[{'text':'▶️ Ver anuncio y continuar','url':url}]]) or True
+ return send(c,'💰 <b>UN PASO ANTES DE CONTINUAR</b>\n\nPara mantener el servicio gratuito, mira el anuncio y completa la publicidad.\n\nAl terminar volverás automáticamente al bot.',[[{'text':'▶️ Ver anuncio y continuar','web_app':{'url':url}}]]) or True
 
 def consume_ad_token(c,token):
  d=db();item=d.get('ad_tokens',{}).get(token)
@@ -1031,8 +1031,7 @@ def admin_text(c,t):
  if f=='monetag' and step=='hosturl':
   dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
   fn=generate_monetag_html(c,dat)
-  send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 El archivo <b>monetization.html</b> fue generado automáticamente con tus datos y será enviado ahora.')
-  return send_document(c,fn,'📄 monetization.html — configuración aplicada.')
+  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 <code>monetization.html</code> ya fue enviado anteriormente.\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n✅ No se enviará el archivo otra vez.')
  if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
