@@ -240,6 +240,19 @@ def v2ray_account_message(c,d):
  link='vmess://'+base64.b64encode(raw.encode()).decode()
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
 
+def get_slowdns_key():
+ candidates=[Path('/etc/slowdns/server.pub'),Path('/etc/slowdns/public.key'),Path('/etc/slowdns/pubkey')]
+ for p in candidates:
+  if p.exists():
+   v=p.read_text(errors='ignore').strip()
+   if v:return v
+ try:
+  for p in Path('/etc/slowdns').glob('*.pub'):
+   v=p.read_text(errors='ignore').strip()
+   if v:return v
+ except Exception:pass
+ return 'No configurado'
+
 def account_message(c,d,renew=False):
  u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
@@ -251,7 +264,6 @@ def account_message(c,d,renew=False):
  title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
  lim=d.get('limit','Ilimitado');limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
  slow_ns=f'ns-{domain}' if domain else 'Requiere dominio real'
- slow_key=(Path('/etc/slowdns/server.pub').read_text(errors='ignore').strip() if Path('/etc/slowdns/server.pub').exists() else 'No configurado')
  return f'''<b>{title}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -306,6 +318,14 @@ def account_message(c,d,renew=False):
 • NS: <code>{e(slow_ns)}</code>
 • KEY: <code>{e(slow_key)}</code>
 • Puerto: <code>5300</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🌐 <b>BHTTP</b>
+━━━━━━━━━━━━━━━━━━━━
+• Servidor: <code>{e(host)}</code>
+• Puerto: <code>8088</code>
+• SSH: <code>22</code>
+• Conexión: <code>{e(host)}:8088@{e(u)}:{e(pw or '********')}</code>
 
 ━━━━━━━━━━━━━━━━━━━━
 💎 <b>KEVINTECH MULTI SCRIPT</b>
@@ -514,7 +534,8 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
- if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar ahora','callback_data':'backup_now'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ if x=='backup_menu':return edit(c,m,'💾 <b>RESPALDAR</b>\n\nElige cómo deseas recibir el documento JSON:',[[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'💾 Respaldar ahora','callback_data':'backup_now'}],[{'text':'🔙 Respaldos','callback_data':'backup_restore'}]])
  if x.startswith('backup:'):return configure_backup(c,x.split(':',1)[1])
  if x=='backup_now':
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
