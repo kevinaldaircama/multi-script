@@ -250,9 +250,14 @@ def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
   rc,out=sh(cmd,timeout)
   if len(out)>4500:out=out[-4500:]
   if rc==0:
-   send(c,f'🟢 <b>{e(title)}</b>\n\n✅ <b>¡ACTUALIZACIÓN COMPLETADA!</b>\n\n🎉 El sistema fue actualizado correctamente y los cambios quedaron aplicados.\n\n<pre>{e(out or "Proceso finalizado.")}</pre>',k) if title=='Actualización del sistema' else send(c,f'🟢 <b>{e(title)}</b>\n\n✅ Operación realizada correctamente.\n\n<pre>{e(out or "Proceso finalizado.")}</pre>',k)
+   if title=='Actualización del sistema':
+    final_ver=current_version()
+    msg=f'🟢 <b>ACTUALIZACIÓN COMPLETADA</b>\n\n✅ <b>¡El sistema fue actualizado correctamente!</b>\n\n📦 Versión instalada: <code>{e(final_ver)}</code>\n🎉 Todos los archivos fueron aplicados correctamente.\n\n🔄 El bot continuará funcionando con la nueva versión.'
+    send(c,msg,k)
+   else:
+    send(c,f'🟢 <b>{e(title)}</b>\n\n✅ Operación realizada correctamente.\n\n<pre>{e(out or "Proceso finalizado.")}</pre>',k)
    if restart_after:
-    time.sleep(2)
+    time.sleep(4)
     sh('systemctl restart kevintech-telegram.service',20)
   else:
    send(c,f'🔴 <b>{e(title)}</b>\n\n❌ La operación no pudo completarse.\n\n<pre>{e(out or "Sin detalles del error.")}</pre>',k)
@@ -309,7 +314,18 @@ def userlist():
  return '📋 <b>USUARIOS SSH</b>\n\n'+('\n'.join('• <code>'+e(x)+'</code>' for x in a) if a else 'No hay usuarios.')+f'\n\nTotal: <b>{len(a)}</b>'
 def quota(uid):
  d=db();return d['quotas']['admin_days' if is_admin(uid) else 'public_days'],d['quotas']['admin_devices' if is_admin(uid) else 'public_devices']
-def userexists(u):return bool(re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I)) and sh(f'id {q(u)} >/dev/null 2>&1',3)[0]==0
+def userexists(u):
+    # A valid account may be either a Linux SSH user or a V2Ray/VMess account.
+    if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',u,re.I):
+        return False
+    if sh(f'id {q(u)} >/dev/null 2>&1',3)[0] == 0:
+        return True
+    try:
+        d=db()
+        return any(u in z.get('v2ray_accounts',[]) for z in d.get('users',{}).values())
+    except Exception:
+        return False
+
 
 def account_info(uid,username):
  d=db();owner='—';owner_user=''
@@ -988,9 +1004,14 @@ def admin_text(c,t):
   val=t.strip()
   if len(val)>20000:return send(c,'❌ El código es demasiado largo. Envía el bloque Rewarded Interstitial completo.')
   dat['reward']=val;st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
- if f=='monetag' and step=='boturl':dat['url']=t.strip();st['s']='template';return send(c,'📄 <b>Paso 4</b>\n\nAhora envía el archivo <b>monetization.html</b> como documento.\n\n⚠️ El nombre debe ser exactamente <code>monetization.html</code>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
- if f=='monetag' and step=='template':return send(c,'❌ Debes enviar el archivo <code>monetization.html</code> como documento.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
- if f=='monetag' and step=='hosturl':dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado.')
+ if f=='monetag' and step=='boturl':
+  dat['url']=t.strip();st['s']='hosturl'
+  return send(c,'📄 <b>Paso 4</b>\n\nIngresa ahora la URL pública donde estará alojado <code>monetization.html</code>.\n\n💡 El bot generará y te enviará automáticamente el archivo <b>monetization.html</b> con la configuración que acabas de ingresar.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if f=='monetag' and step=='hosturl':
+  dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
+  fn=generate_monetag_html(c,dat)
+  send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 El archivo <b>monetization.html</b> fue generado automáticamente con tus datos y será enviado ahora.')
+  return send_document(c,fn,'📄 monetization.html — configuración aplicada.')
  if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
@@ -1013,20 +1034,6 @@ def restore_document(c,msg):
  if not is_owner(c):return
  doc=msg.get('document',{});name=doc.get('file_name','')
  st=STATE.get(c)
- if st and st.get('f')=='monetag' and st.get('s')=='template':
-  if name != 'monetization.html':return send(c,'❌ Archivo rechazado. Debes enviar exactamente <code>monetization.html</code>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
-  try:
-   z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path']
-   token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('"')
-   url=f'https://api.telegram.org/file/bot{token}/{fp}'
-   raw=urllib.request.urlopen(url,timeout=30).read()
-   if len(raw)>500000:raise ValueError('Archivo demasiado grande')
-   html=raw.decode('utf-8')
-   if '<html' not in html.lower() and '<!doctype' not in html.lower():raise ValueError('No parece un HTML válido')
-   TD.mkdir(parents=True,exist_ok=True);(TD/'monetization.html').write_text(html,encoding='utf-8');os.chmod(TD/'monetization.html',0o600)
-   st['d']['template_name']='monetization.html';st['s']='hosturl'
-   return send(c,'🟢 <b>Paso 4 completado.</b>\n\n<b>Paso 5:</b> Ingresa la URL donde estará alojado el archivo HTML.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
-  except Exception as er:log('MONETIZATION TEMPLATE '+repr(er));return send(c,'🔴 No se pudo recibir <code>monetization.html</code>. Verifica que sea un HTML válido.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if not name.lower().endswith('.json'):return send(c,'❌ Solo se acepta un archivo JSON.')
  try:
   z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path'];token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('"');url=f'https://api.telegram.org/file/bot{token}/{fp}';raw=urllib.request.urlopen(url,timeout=30).read();new=json.loads(raw.decode())
