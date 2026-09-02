@@ -195,13 +195,18 @@ load_domain() {
     # shellcheck disable=SC1090
     source "$CONFIG" 2>/dev/null
 
-    DOMAIN="${SERVER_DOMAIN:-${SERVER_IP:-}}"
+    DOMAIN="${SERVER_DOMAIN:-}"
 
     if [[ -z "$DOMAIN" &&
           -f /etc/xray/domain ]]; then
 
         DOMAIN=$(cat /etc/xray/domain 2>/dev/null)
 
+    fi
+
+    if [[ -z "$DOMAIN" ]]; then
+        DOMAIN="${SERVER_IP:-$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}') }"
+        DOMAIN="$(echo "$DOMAIN" | xargs)"
     fi
 }
 
@@ -713,9 +718,7 @@ create_vmess_user() {
     load_domain
 
     if [[ -z "$DOMAIN" ]]; then
-
-        error_msg "No existe dominio ni IP en config.conf."
-
+        error_msg "No se pudo detectar IP ni dominio del servidor."
         return 1
     fi
 
@@ -1048,31 +1051,30 @@ generate_vmess_link() {
 
     local USER="$1"
     local UUID="$2"
-    local HOST="${3:-$DOMAIN}"
-    local SNI="${DOMAIN:-$HOST}"
 
     load_domain
-    HOST="${3:-$DOMAIN}"
-    SNI="${DOMAIN:-$HOST}"
 
-    [[ -z "$HOST" ]] && return 1
+    [[ -z "$DOMAIN" ]] && DOMAIN="${SERVER_IP:-$(hostname -I | awk '{print $1}') }"
+    DOMAIN="$(echo "$DOMAIN" | xargs)"
+    if [[ -z "$DOMAIN" ]]; then DOMAIN="${SERVER_IP:-$(hostname -I | awk '{print $1}') }"; fi
+    DOMAIN="$(echo "$DOMAIN" | xargs)"
+    [[ -z "$DOMAIN" ]] && return 1
 
     cat <<EOF | base64_encode
 {
   "v":"2",
   "ps":"$USER",
-  "add":"$HOST",
+  "add":"$DOMAIN",
   "port":"443",
   "id":"$UUID",
   "aid":"0",
   "scy":"auto",
   "net":"ws",
   "type":"none",
-  "host":"$SNI",
+  "host":"$DOMAIN",
   "path":"$VMESS_PATH",
   "tls":"tls",
-  "sni":"$SNI",
-  "allowInsecure":true,
+  "sni":"$DOMAIN",
   "alpn":""
 }
 EOF
@@ -1118,11 +1120,9 @@ show_vmess_account() {
         return
     fi
 
-    local LINK LINK_IP SERVER_IP
-    SERVER_IP="${SERVER_IP:-}"
-    if [[ -z "$SERVER_IP" ]]; then SERVER_IP="$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || true)"; fi
-    LINK="vmess://$(generate_vmess_link "$USERNAME" "$UUID" "${DOMAIN:-$SERVER_IP}")"
-    LINK_IP="vmess://$(generate_vmess_link "$USERNAME" "$UUID" "$SERVER_IP")"
+    local LINK
+
+    LINK="vmess://$(generate_vmess_link "$USERNAME" "$UUID")"
 
     clear
 
@@ -1206,11 +1206,9 @@ show_vmess_user() {
 
     load_domain
 
-    local LINK LINK_IP SERVER_IP
-    SERVER_IP="${SERVER_IP:-}"
-    if [[ -z "$SERVER_IP" ]]; then SERVER_IP="$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || true)"; fi
-    LINK="vmess://$(generate_vmess_link "$USER" "$UUID" "${DOMAIN:-$SERVER_IP}")"
-    LINK_IP="vmess://$(generate_vmess_link "$USER" "$UUID" "$SERVER_IP")"
+    local LINK
+
+    LINK="vmess://$(generate_vmess_link "$USER" "$UUID")"
 
     clear
 
@@ -1237,9 +1235,6 @@ show_vmess_user() {
     echo
 
     echo -e "${GREEN}$LINK${RESET}"
-    echo
-    echo -e "${YELLOW}🔗 VMESS LINK IP${RESET}"
-    echo -e "${GREEN}$LINK_IP${RESET}"
 
     echo
 
@@ -1279,15 +1274,13 @@ export_vmess_link() {
         return
     fi
 
-    local LINK LINK_IP SERVER_IP
-    SERVER_IP="${SERVER_IP:-}"
-    if [[ -z "$SERVER_IP" ]]; then SERVER_IP="$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || true)"; fi
-    LINK="vmess://$(generate_vmess_link "$USERNAME" "$UUID" "${DOMAIN:-$SERVER_IP}")"
-    LINK_IP="vmess://$(generate_vmess_link "$USERNAME" "$UUID" "$SERVER_IP")"
+    local LINK
+
+    LINK="vmess://$(generate_vmess_link "$USERNAME" "$UUID")"
 
     local FILE="/tmp/vmess-${USERNAME}.txt"
 
-    printf '%s\n%s\n' "$LINK" "$LINK_IP" > "$FILE"
+    printf '%s\n' "$LINK" > "$FILE"
 
     chmod 600 "$FILE"
 

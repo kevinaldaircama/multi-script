@@ -277,16 +277,9 @@ generate_certificate() {
 
     rm -f "$TMP_KEY" "$TMP_CERT"
 
-    local CERT_CN="${SERVER_DOMAIN:-${SERVER_IP:-ssl-tunnel}}"
-    local CERT_IP="${SERVER_IP:-}"
-    local OPENSSL_EXT="subjectAltName=DNS:${CERT_CN}"
-
-    if [[ "$CERT_CN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        OPENSSL_EXT="subjectAltName=IP:${CERT_CN}"
-    elif [[ "$CERT_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        OPENSSL_EXT="subjectAltName=DNS:${CERT_CN},IP:${CERT_IP}"
-    fi
-
+    local CERT_HOST="${SERVER_DOMAIN:-${SERVER_IP:-$(hostname -I | awk '{print $1}')}}"
+    local SAN="DNS:${CERT_HOST}"
+    if [[ "$CERT_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then SAN="IP:${CERT_HOST}"; fi
     if ! openssl req \
         -x509 \
         -nodes \
@@ -294,8 +287,8 @@ generate_certificate() {
         -days 3650 \
         -keyout "$TMP_KEY" \
         -out "$TMP_CERT" \
-        -subj "/CN=${CERT_CN}" \
-        -addext "$OPENSSL_EXT" \
+        -subj "/CN=${CERT_HOST:-ssl-tunnel}" \
+        -addext "subjectAltName=${SAN}" \
         >/dev/null 2>&1; then
 
         error_msg "No se pudo generar el certificado."

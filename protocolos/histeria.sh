@@ -38,7 +38,7 @@ config_set() {
 }              
               
 config_get() {              
-    grep "^$1=" "$CONFIG" | cut -d= -f2- | sed 's/^"//; s/"$//'              
+    grep "^$1=" "$CONFIG" | cut -d= -f2-              
 }              
               
 # --- Crear comando permanente 'menuhy' ---              
@@ -95,15 +95,12 @@ show_config() {
         printf "${COLOR[5]}║${NC} %-18s ${COLOR[3]}No configurado${NC}\n" "OBFS :"              
     fi              
               
-    DOMAIN=$(config_get SERVER_DOMAIN)              
-[[ -z "$DOMAIN" ]] && DOMAIN=$(config_get SERVER_IP)              
-if [[ -z "$DOMAIN" ]]; then              
-    echo              
-    echo -e "${COLOR[3]}No hay un dominio configurado.${NC}"              
-    echo -e "${COLOR[1]}Configura primero el dominio del servidor.${NC}"              
-    echo              
-    read -p "Presione Enter para continuar..."              
-    return              
+    DOMAIN=$(config_get SERVER_DOMAIN)
+if [[ -z "$DOMAIN" ]]; then
+    DOMAIN=$(config_get SERVER_IP)
+fi
+if [[ -z "$DOMAIN" ]]; then
+    DOMAIN=$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
 fi              
               
 printf "${COLOR[5]}║${NC} %-18s ${COLOR[7]}%s${NC}\n" "SNI :" "$DOMAIN"              
@@ -185,16 +182,9 @@ done
 install_hys() {              
               
 clear              
-DOMAIN=$(config_get SERVER_DOMAIN)              
-              
-if [[ -z "$DOMAIN" ]]; then              
-    echo              
-    echo -e "${COLOR[3]}No hay un dominio configurado.${NC}"              
-    echo -e "${COLOR[1]}Configura primero el dominio del servidor.${NC}"              
-    echo              
-    read -p "Presione Enter para continuar..."              
-    return              
-fi              
+DOMAIN=$(config_get SERVER_DOMAIN)
+if [[ -z "$DOMAIN" ]]; then DOMAIN=$(config_get SERVER_IP); fi
+if [[ -z "$DOMAIN" ]]; then DOMAIN=$(curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}'); fi              
               
 echo -e "${COLOR[5]}╔════════════════════════════════════════════════════╗${NC}"              
 echo -e "${COLOR[5]}║${NC}${COLOR[6]}         INSTALADOR HYSTERIA V1 PRO          ${NC}${COLOR[5]}║${NC}"              
@@ -240,7 +230,8 @@ openssl req -new -x509 \
 -nodes \
 -key "$CONFIG_DIR/private.key" \
 -out "$CONFIG_DIR/cert.crt" \
--subj "/CN=$DOMAIN" >/dev/null 2>&1
+-subj "/CN=$DOMAIN" \
+-addext "subjectAltName=$(if [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo IP:$DOMAIN; else echo DNS:$DOMAIN; fi)" >/dev/null 2>&1
 
 cat > /usr/local/bin/hysteria-auth.sh <<'EOF'
 #!/bin/bash

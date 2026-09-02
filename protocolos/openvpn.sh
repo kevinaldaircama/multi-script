@@ -71,8 +71,6 @@ if [[ -f "$CONFIG" ]]; then
 fi
 
 SERVER_DOMAIN="${SERVER_DOMAIN:-}"
-SERVER_IP="${SERVER_IP:-}"
-SERVER_HOST="${SERVER_DOMAIN:-$SERVER_IP}"
 
 # ==============================================================
 # FUNCIONES
@@ -795,15 +793,27 @@ install_openvpn() {
     check_tun || return 1
 
     # ----------------------------------------------------------
-    # HOST (DOMINIO O IP)
+    # DOMINIO
     # ----------------------------------------------------------
 
-    SERVER_IP="${SERVER_IP:-$(get_server_ip)}"
-    SERVER_HOST="${SERVER_DOMAIN:-$SERVER_IP}"
+    if [[ -z "$SERVER_DOMAIN" ]]; then
 
-    if [[ -z "$SERVER_HOST" ]]; then
-        error_msg "No se pudo determinar el dominio ni la IP del VPS."
-        return 1
+        echo -e "${WHITE}No existe un dominio configurado.${RESET}"
+        echo
+
+        read -r -p \
+            "$(echo -e "${CYAN}🌐 Dominio para OpenVPN: ${RESET}")" \
+            SERVER_DOMAIN
+
+        SERVER_DOMAIN="$(
+            printf '%s' "$SERVER_DOMAIN" |
+            tr -d '[:space:]'
+        )"
+
+        if [[ -z "$SERVER_DOMAIN" ]]; then
+            error_msg "El dominio no puede estar vacío."
+            return 1
+        fi
     fi
 
     # ----------------------------------------------------------
@@ -822,7 +832,7 @@ install_openvpn() {
     fi
 
     echo
-    echo -e "${WHITE}Host    : ${CYAN}$SERVER_HOST${RESET}"
+    echo -e "${WHITE}Dominio : ${CYAN}$SERVER_DOMAIN${RESET}"
     echo -e "${WHITE}Puerto  : ${CYAN}$PORT${RESET}"
     echo -e "${WHITE}Proto   : ${CYAN}$PROTOCOL${RESET}"
     echo
@@ -891,7 +901,7 @@ install_openvpn() {
         "$SERVER_IP" \
         "$DEV" || return 1
 
-    create_client_common "$SERVER_HOST" || return 1
+    create_client_common "$SERVER_DOMAIN" || return 1
 
     # ----------------------------------------------------------
     # SERVICIO
@@ -955,7 +965,7 @@ install_openvpn() {
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${GREEN}║${RESET}             ${BOLD}✔ OPENVPN INSTALADO${RESET}                      ${GREEN}║${RESET}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${GREEN}║${RESET}  Host    : ${CYAN}$SERVER_HOST${RESET}"
+    echo -e "${GREEN}║${RESET}  Dominio : ${CYAN}$SERVER_DOMAIN${RESET}"
     echo -e "${GREEN}║${RESET}  Puerto  : ${CYAN}$PORT${RESET}"
     echo -e "${GREEN}║${RESET}  Protocolo: ${CYAN}$PROTOCOL${RESET}"
     echo -e "${GREEN}║${RESET}  Red VPN : ${CYAN}$VPN_NETWORK/24${RESET}"
