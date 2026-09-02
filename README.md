@@ -185,3 +185,9 @@ Durante la configuración existe un botón **❌ Cancelar** para salir del proce
 Con al menos 3 referidos válidos, el usuario puede realizar hasta **3 renovaciones dentro de una ventana de 24 horas**. Al cumplirse las 24 horas, el contador de renovaciones vuelve a **0/3** y puede utilizar nuevamente sus 3 renovaciones.
 
 Si el referido tiene `@username`, la notificación muestra ese usuario. Si no tiene username, se muestra su nombre de Telegram.
+
+## 🆕 v13.3
+
+- 🛠️ Corregida la consulta/eliminación de cuentas V2Ray que aparecían en la lista pero eran rechazadas como "Cuenta no encontrada".
+- 💰 Monetag ya no solicita subir `monetization.html`: el bot lo genera automáticamente y lo envía después de completar la configuración.
+- 🔄 La actualización informa explícitamente que terminó y muestra la versión instalada antes de reiniciar el servicio.
