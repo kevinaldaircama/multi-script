@@ -4,7 +4,7 @@ import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,da
 from pathlib import Path
 
 BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
-DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; API=''; OWNER=0; BOT_USERNAME=''
+DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
@@ -128,7 +128,7 @@ def banned(uid):return str(uid) in db()['bans']
 def registered(uid,name=None,username=None):
  d=db();k=str(uid)
  if k not in d['users']:
-  d['users'][k]={'id':uid,'name':name or str(uid),'username':username or '','created':time.strftime('%F'),'accounts':[],'v2ray_accounts':[],'language':'es','language_selected':False,'referrer':None,'referrals':[],'referral_renews':0}
+  d['users'][k]={'id':uid,'name':name or str(uid),'username':username or '','created':time.strftime('%F'),'started':False,'accounts':[],'v2ray_accounts':[],'language':'es','language_selected':False,'referrer':None,'referrals':[],'referral_renews':0}
   save_db(d)
  else:
   changed=False
@@ -241,12 +241,77 @@ def v2ray_account_message(c,d):
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
 
 def account_message(c,d,renew=False):
- u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'");ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 ifconfig.me 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip();cfg=BASE/'config.conf';domain=''
+ u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
+ ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
+ cfg=BASE/'config.conf';domain=''
  if cfg.exists():
   for l in cfg.read_text(errors='ignore').splitlines():
    if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"').strip("'")
- host=domain or ip;title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE';lim=d.get('limit','Ilimitado')
- return f'''<b>{title}</b>\n\n━━━━━━━━━━━━━━━━━━━━\n👤 <b>DATOS DEL USUARIO</b>\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: <code>{e(u)}</code>\n• Contraseña: <code>{e(pw or '********')}</code>\n• Expira: <code>{e(exp)}</code>\n• Duración: <code>{days} días</code>\n• Dispositivos/IP: <code>{e(lim)}</code>\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 <b>SERVIDOR</b>\n━━━━━━━━━━━━━━━━━━━━\n• Dominio: <code>{e(domain or 'No configurado')}</code>\n• IP: <code>{e(ip)}</code>\n\nHTTP/SSH:\n<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>\n<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>'''
+ host=domain or ip
+ title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
+ lim=d.get('limit','Ilimitado');limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
+ slow_ns=f'ns-{domain}' if domain else 'Requiere dominio real'
+ slow_key=(Path('/etc/slowdns/server.pub').read_text(errors='ignore').strip() if Path('/etc/slowdns/server.pub').exists() else 'No configurado')
+ return f'''<b>{title}</b>
+
+━━━━━━━━━━━━━━━━━━━━
+👤 <b>DATOS DEL USUARIO</b>
+━━━━━━━━━━━━━━━━━━━━
+• Usuario: <code>{e(u)}</code>
+• 🔑 Contraseña: <code>{e(pw or '********')}</code>
+• Expira: <code>{e(exp)}</code>
+• Duración: <code>{days} días</code>
+• Límite IP: <code>{e(limtxt)}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🌐 <b>INFORMACIÓN DEL SERVIDOR</b>
+━━━━━━━━━━━━━━━━━━━━
+• Host/IP: <code>{e(host)}</code>
+• IP: <code>{e(ip)}</code>
+• SSH: <code>22</code>
+• Dropbear: <code>143,90,109</code>
+• SSL Tunnel: <code>8080,443,80</code>
+• OpenVPN: <code>1194,2200,443</code>
+• BadVPN: <code>7300,7200</code>
+
+━━━━━━━━━━━━━━━━━━━━
+📡 <b>HTTP CUSTOM</b>
+━━━━━━━━━━━━━━━━━━━━
+<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>
+<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>
+<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>UDP CUSTOM</b>
+━━━━━━━━━━━━━━━━━━━━
+<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🟣 <b>HYSTERIA V1</b>
+━━━━━━━━━━━━━━━━━━━━
+• Servidor: <code>{e(host)}:No instalado</code>
+• OBFS: <code>No configurado</code>
+• Credenciales: <code>{e(u)}:{e(pw or '********')}</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🚀 <b>ZIVPN UDP</b>
+━━━━━━━━━━━━━━━━━━━━
+• Servidor: <code>{e(host)}:21992</code>
+• Contraseña: <code>{e(pw or '********')}</code>
+• Puerto UDP: <code>20000-29999</code>
+
+━━━━━━━━━━━━━━━━━━━━
+🐌 <b>SLOWDNS (5300)</b>
+━━━━━━━━━━━━━━━━━━━━
+• NS: <code>{e(slow_ns)}</code>
+• KEY: <code>{e(slow_key)}</code>
+• Puerto: <code>5300</code>
+
+━━━━━━━━━━━━━━━━━━━━
+💎 <b>KEVINTECH MULTI SCRIPT</b>
+━━━━━━━━━━━━━━━━━━━━'''
+
+def private_chat(c):return CHAT_TYPES.get(c)=='private'
 
 def parse_referral(t):
  m=re.search(r'(?:/start|/star)(?:\s+|\?start=)ref_(\d+)',t,re.I)
@@ -258,6 +323,8 @@ def handle_start(c,raw):
  if banned(c):return send(c,'🚫 Tu acceso está bloqueado.')
  ref=parse_referral(raw)
  d=db();me=d['users'][str(c)]
+ me['started']=True
+ save_db(d)
  if ref and ref!=c and str(ref) in d['users'] and not me.get('referrer'):
   me['referrer']=ref;save_db(d)
  if not me.get('language_selected'):
@@ -265,11 +332,36 @@ def handle_start(c,raw):
   return send(c,I18N['choose_lang']['es']+'\n\n🇪🇸 / 🇺🇸 / 🇧🇷',[[{'text':'🇪🇸 Español','callback_data':'lang:es'},{'text':'🇺🇸 English','callback_data':'lang:en'}],[{'text':'🇧🇷 Português','callback_data':'lang:pt'}]])
  return send(c,tr(c,'home'),home(c))
 
-def process_text(c,t):
+def process_text(c,t,chat_type=None):
+ CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  d=db();uid=c
  if banned(uid):return send(c,'🚫 Tu acceso está bloqueado.')
  registered(uid)
  if t.startswith('/start') or t.startswith('/star'):return handle_start(c,t)
+ cmd=t.split()[0].lower() if t.split() else ''
+ if cmd in ('/crear','/crearcuenta','/create'):
+  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot y usa /crear.')
+  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
+  return send(c,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
+ if cmd in ('/renovar','/renew'):
+  STATE[c]={'f':'renew','s':'u','d':{}};return send(c,'♻️ <b>RENOVAR CUENTA</b>\n\nEscribe el usuario que deseas renovar:')
+ if cmd in ('/lista','/cuentas','/list'):return cb(c,0,c,0,'list')
+ if cmd in ('/online','/conectados'):return cb(c,0,c,0,'online')
+ if cmd in ('/cuenta','/info_cuenta'):
+  STATE[c]={'f':'account','s':'u','d':{}};return send(c,'👤 <b>CONSULTAR CUENTA</b>\n\nEscribe el usuario:')
+ if cmd in ('/eliminar','/borrar'):
+  STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
+ if cmd in ('/referidos','/referrals'):return send(c,referral_info(c),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+ if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':'🇪🇸 Español','callback_data':'lang:es'},{'text':'🇺🇸 English','callback_data':'lang:en'}],[{'text':'🇧🇷 Português','callback_data':'lang:pt'}]])
+ if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+ if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
+ if cmd in ('/ajustes','/settings') and is_owner(uid):return cb(c,0,c,0,'settings')
+ if cmd in ('/cuotas','/quota') and is_owner(uid):return cb(c,0,c,0,'quotas')
+ if cmd in ('/seguridad','/security') and is_owner(uid):return cb(c,0,c,0,'security')
+ if cmd in ('/admins','/administradores') and is_owner(uid):return cb(c,0,c,0,'admins')
+ if cmd in ('/ban','/baneos') and is_owner(uid):return cb(c,0,c,0,'bans')
+ if cmd in ('/monetizacion','/monetization') and is_owner(uid):return cb(c,0,c,0,'monetization')
+ if cmd in ('/herramientas','/tools') and is_owner(uid):return cb(c,0,c,0,'tools')
  if t.startswith('/referidos'):return send(c,referral_info(c))
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
@@ -308,7 +400,8 @@ def process_text(c,t):
   if not t.isdigit() or int(t)<1:return send(c,'❌ Debes indicar un número válido.')
   dat['limit']=int(t);return cb(c,0,c,0,'do:'+f)
 
-def cb(c,m,u,i,x):
+def cb(c,m,u,i,x,chat_type=None):
+ CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  if banned(u):return ans(i,'🚫 Baneado')
  registered(u);ans(i,'⚡');d=db()
  if x.startswith('lang:'):
@@ -319,9 +412,11 @@ def cb(c,m,u,i,x):
  if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
  if x=='referrals':return edit(c,m,referral_info(u),[[{'text':'♻️ Renovar 24h (3 referidos)','callback_data':'ref_renew'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='create':
+  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Usa /crear en el chat privado del bot.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
   return edit(c,m,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
  if x in ('create:normal','create:v2ray'):
+  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
   kind='v2ray' if x.endswith('v2ray') else 'normal'
   STATE[c]={'f':'create','s':'u','d':{'kind':kind}}
@@ -376,7 +471,7 @@ def cb(c,m,u,i,x):
      inviter=d['users'][str(ref)];
      if c not in inviter.setdefault('referrals',[]):
       inviter['referrals'].append(c);save_db(d)
-      uname=d['users'][str(c)].get('name') or str(c);mention=f'@{uname}' if not str(uname).isdigit() else f'<code>{c}</code>'
+      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else f'<code>{c}</code>'
       try:send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except Exception as er:log('REF NOTIFY '+repr(er))
     else:save_db(d)
@@ -419,7 +514,7 @@ def cb(c,m,u,i,x):
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
- if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar ahora','callback_data':'backup_now'},{'text':'♻️ Restaurar','callback_data':'restore'}]]+BACKUP_MENU)
+ if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar ahora','callback_data':'backup_now'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
  if x.startswith('backup:'):return configure_backup(c,x.split(':',1)[1])
  if x=='backup_now':
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
@@ -428,7 +523,9 @@ def cb(c,m,u,i,x):
  if x=='monetag':STATE[c]={'f':'monetag','s':'value','d':{}};return send(c,'💰 Envía el código, enlace o identificador de Monetag:')
  if x=='miniapp':STATE[c]={'f':'miniapp','s':'value','d':{}};return send(c,'📱 Envía el enlace o identificador de tu Mini App:')
  if x=='restart_vps':return send(c,'♻️ ¿Reiniciar el VPS ahora?',[[{'text':'✅ REINICIAR VPS','callback_data':'do_reboot'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
- if x=='people':return edit(c,m,f'👥 <b>PERSONAS REGISTRADAS: {len(d["users"])}</b>',settings_keyboard())
+ if x=='people':
+  total=sum(1 for z in d['users'].values() if z.get('started'))
+  return edit(c,m,f'👥 <b>PERSONAS REGISTRADAS</b>\n\nUsuarios que han iniciado el bot con /start: <b>{total}</b>',settings_keyboard())
  if x=='message_users':STATE[c]={'f':'message_users','s':'text','d':{}};return send(c,'📢 Escribe el mensaje que quieres enviar a todos los usuarios registrados:')
  if x=='quotas':return edit(c,m,quota_text(d),QUOTA)
  if x=='quota_public':STATE[c]={'f':'quota_public','s':'days','d':{}};return send(c,'📅 Días para usuarios públicos:')
@@ -441,7 +538,6 @@ def cb(c,m,u,i,x):
   d['security']['auto_ban_ssh']=not d['security'].get('auto_ban_ssh',False);save_db(d)
   return edit(c,m,'🛡️ <b>SEGURIDAD ACTUALIZADA</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d['security']['auto_ban_ssh'] else 'DESACTIVADO 🔴')+'</b>',SECURITY_MENU)
  if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
- if x=='services':return ans(i,'Servicios eliminado')
  if x.startswith('tool:'):
   if not is_owner(u):return ans(i,'Solo el super admin')
   k=x.split(':')[1];mp={'optimizar':'optimizar.sh','ads':'blockads.sh','torrent':'blocktorrent.sh','speed':'speedtest.sh','scanner':'scanner.sh','update':'update.sh'}
@@ -466,7 +562,7 @@ def quota_text(d):
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
 
- d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),BACKUP_MENU)
+ d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
 
 def backup_now():
  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/'kevintech_backup.json';fn.write_text(json.dumps(db(),indent=2,ensure_ascii=False));os.chmod(fn,0o600);return fn
@@ -492,7 +588,6 @@ SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'t
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-BACKUP_MENU=[[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Mini App','callback_data':'miniapp'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
@@ -564,7 +659,8 @@ def admin_text(c,t):
    d['quotas'][key+'_days']=dat['days'];d['quotas'][key+'_devices']=int(t);save_db(d);STATE.pop(c,None);return send(c,'🟢 Cuota actualizada.',QUOTA)
 
 _original_process=process_text
-def process_text(c,t):
+def process_text(c,t,chat_type=None):
+ CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  registered(c)
  if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','miniapp','domain','quota_public','quota_admin'):
   return admin_text(c,t)
@@ -672,11 +768,11 @@ def main():
     off=u['update_id']+1;OFF.write_text(str(off))
     try:
      if 'callback_query' in u:
-      z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''))
+      z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''),m['chat'].get('type','private'))
      elif 'message' in u:
-      m=u['message'];c=m['chat']['id'];registered(c,m.get('from',{}).get('first_name',''),m.get('from',{}).get('username',''))
+      m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private')
       if m.get('document'):restore_document(c,m)
-      elif m.get('text'):process_text(c,m['text'])
+      elif m.get('text'):process_text(c,m['text'],CHAT_TYPES[c])
     except Exception as er:log('UPDATE '+repr(er))
   except Exception as er:log('POLL '+repr(er));time.sleep(2)
 if __name__=='__main__':main()
