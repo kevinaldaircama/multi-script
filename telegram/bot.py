@@ -134,8 +134,13 @@ def run_update(c=None,auto=False):
   if c:send(c,'❌ No se encontró el actualizador del sistema.')
   return
  cmd=f'bash {q(updater)} --telegram'
- if c:bg(c,'Actualización del sistema',cmd,900,settings_keyboard())
- else:sh(cmd,900)
+ if c:
+  bg(c,'Actualización del sistema',cmd,900,settings_keyboard(),restart_after=True)
+ else:
+  rc,_=sh(cmd,900)
+  if rc==0:
+   time.sleep(2)
+   sh('systemctl restart kevintech-telegram.service',20)
 
 def auto_update_monitor():
  while True:
@@ -154,8 +159,13 @@ def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
  def w():
   rc,out=sh(cmd,timeout)
   if len(out)>4500:out=out[-4500:]
-  send(c,('🟢' if rc==0 else '🔴')+f' <b>{e(title)}</b>\n\n<pre>{e(out or "Terminado sin salida")}</pre>',k)
-  if rc==0 and restart_after:time.sleep(2);sh('reboot',10)
+  if rc==0:
+   send(c,f'🟢 <b>{e(title)}</b>\n\n✅ Operación realizada correctamente.\n\n<pre>{e(out or "Proceso finalizado.")}</pre>',k)
+   if restart_after:
+    time.sleep(2)
+    sh('systemctl restart kevintech-telegram.service',20)
+  else:
+   send(c,f'🔴 <b>{e(title)}</b>\n\n❌ La operación no pudo completarse.\n\n<pre>{e(out or "Sin detalles del error.")}</pre>',k)
  threading.Thread(target=w,daemon=True).start()
 
 def db():return load_db()
@@ -492,6 +502,11 @@ def process_text(c,t,chat_type=None):
  if banned(uid):return send(c,'🚫 Tu acceso está bloqueado.')
  registered(uid)
  if t.startswith('/start') or t.startswith('/star'):return handle_start(c,t)
+ # Las configuraciones de Monetag/Adsgram deben procesarse antes que cualquier comando.
+ # Esto permite pegar scripts largos o bloques que comienzan con '/'.
+ st0=STATE.get(c)
+ if st0 and st0.get('f') in ('monetag','adsgram','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin'):
+  return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
  if cmd in ('/crear','/crearcuenta','/create'):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot y usa /crear.')
@@ -848,8 +863,14 @@ def admin_text(c,t):
    try:send(int(sid),'📢 <b>Mensaje del administrador</b>\n\n'+e(t));ok+=1
    except Exception as er:fail+=1;log('MSG '+sid+' '+repr(er))
   return send(c,f'🟢 Enviados: <b>{ok}</b>\n🔴 No entregados: <b>{fail}</b>.',settings_keyboard())
- if f=='monetag' and step=='sdk':dat['sdk']=t.strip();st['s']='reward';return send(c,'✅ Script guardado.\n\n<b>Paso 2:</b> Ahora copia el código de activación del formato <b>Rewarded Interstitial</b> (el bloque que contiene <code>show_XXXXXXX().then(...)</code>).\n\nPor favor, pégalo aquí y envíamelo.')
- if f=='monetag' and step=='reward':dat['reward']=t.strip();st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>')
+ if f=='monetag' and step=='sdk':
+  val=t.strip()
+  if len(val)>20000:return send(c,'❌ El SDK es demasiado largo. Envía únicamente el bloque del SDK de Monetag.')
+  dat['sdk']=val;st['s']='reward';return send(c,'✅ <b>Paso 1 completado.</b>\n\n<b>Paso 2:</b> Pega ahora el código de <b>Rewarded Interstitial</b> que te entrega Monetag.')
+ if f=='monetag' and step=='reward':
+  val=t.strip()
+  if len(val)>20000:return send(c,'❌ El código es demasiado largo. Envía el bloque Rewarded Interstitial completo.')
+  dat['reward']=val;st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>')
  if f=='monetag' and step=='boturl':dat['url']=t.strip();st['s']='hosturl';return send(c,'🌍 <b>Paso 4</b>\n\nIngresa la URL donde está alojado el archivo HTML.')
  if f=='monetag' and step=='hosturl':dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado.')
  if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')

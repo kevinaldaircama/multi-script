@@ -1,47 +1,119 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-C='\033[1;36m'; G='\033[1;92m'; Y='\033[1;93m'; R='\033[1;91m'; M='\033[1;95m'; W='\033[1;97m'; Z='\033[0m'
-D='/etc/kevintech/telegram'; SRC="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-[[ $EUID -eq 0 ]] || { echo -e "${R}✘ Ejecuta como root.${Z}"; exit 1; }
-mkdir -p "$D/logs" "$D/handlers"; chmod 700 "$D" "$D/logs"
-echo -e "${C}╔════════════════════════════════════════════════════════════╗${Z}"
-echo -e "${C}║${M}       🚀 KEVINTECH TELEGRAM BOT • V4 PREMIUM         ${C}║${Z}"
-echo -e "${C}║${W}          INSTALADOR SEGURO • AUTO RECOVERY           ${C}║${Z}"
-echo -e "${C}╚════════════════════════════════════════════════════════════╝${Z}"
-command -v python3 >/dev/null 2>&1 || { echo -e "${Y}➜ Instalando Python 3...${Z}"; apt-get update -qq; apt-get install -y python3; }
-backup="$D/.backup-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$backup"
-for f in bot.py setup.sh install.sh service.sh health.sh update.sh README.md .gitignore; do [[ -f "$D/$f" ]] && cp -a "$D/$f" "$backup/$f" || true; done
-if [[ "$SRC" != "$D" ]]; then
-  for f in bot.py setup.sh install.sh service.sh health.sh update.sh README.md .gitignore; do [[ -f "$SRC/$f" ]] && install -m 700 "$SRC/$f" "$D/$f" || true; done
-  [[ -d "$SRC/handlers" ]] && cp -a "$SRC/handlers/." "$D/handlers/" 2>/dev/null || true
-else
-  echo -e "${G}✔ Origen = destino; no se copian archivos sobre sí mismos.${Z}"
-fi
-if [[ ! -f "$D/.env" ]]; then bash "$D/setup.sh"; else chmod 600 "$D/.env"; echo -e "${G}✔ .env existente conservado.${Z}"; fi
-python3 -m py_compile "$D/bot.py"
-cat > /etc/systemd/system/kevintech-telegram.service <<EOF
+#!/bin/bash
+# KevinTech Telegram Bot - instalación / actualización del bot
+set -euo pipefail
+BASE="/etc/kevintech"
+TD="$BASE/telegram"
+ENV="$TD/.env"
+SERVICE="kevintech-telegram.service"
+PY="$TD/bot.py"
+
+C="\e[1;96m"; G="\e[1;92m"; R="\e[1;91m"; Y="\e[1;93m"; W="\e[1;97m"; X="\e[0m"
+
+pause(){ echo; read -rp "Presiona ENTER para continuar..."; }
+
+install_bot(){
+  clear
+  echo -e "${C}╔══════════════════════════════════════════════════════════════╗${X}"
+  echo -e "${C}║${X} ${W}\e[1m                 BOT TELEGRAM KEVINTECH${X}                 ${C}║${X}"
+  echo -e "${C}╚══════════════════════════════════════════════════════════════╝${X}"
+  echo
+  mkdir -p "$TD/logs" "$TD/backups" "$TD/handlers"
+  command -v python3 >/dev/null 2>&1 || { apt-get update -y >/dev/null 2>&1; apt-get install -y python3 >/dev/null 2>&1; }
+  if [[ ! -f "$PY" ]]; then echo -e "${R}❌ No se encontró $PY${X}"; pause; return; fi
+
+  if [[ ! -f "$ENV" ]]; then
+    echo -e "${Y}Configuración inicial del bot${X}"; echo
+    read -rp "Token del bot: " BOT_TOKEN
+    read -rp "ID del super admin: " ADMIN_ID
+    if [[ ! "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ || ! "$ADMIN_ID" =~ ^[0-9]+$ ]]; then
+      echo -e "${R}❌ Token o ID inválido.${X}"; pause; return
+    fi
+    cat > "$ENV" <<EOT
+BOT_TOKEN="$BOT_TOKEN"
+ADMIN_ID="$ADMIN_ID"
+EOT
+    chmod 600 "$ENV"
+  fi
+
+  cat > "/etc/systemd/system/$SERVICE" <<EOT
 [Unit]
-Description=KevinTech Multi Script Telegram Bot V4 Premium
+Description=KevinTech Telegram Bot
 After=network-online.target
 Wants=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=10
+
 [Service]
 Type=simple
-User=root
-WorkingDirectory=$D
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 $D/bot.py
+WorkingDirectory=$TD
+ExecStart=/usr/bin/python3 $PY
 Restart=always
-RestartSec=2
-TimeoutStartSec=20
-TimeoutStopSec=10
-StandardOutput=append:$D/logs/bot.log
-StandardError=append:$D/logs/bot.log
+RestartSec=3
+User=root
+Environment=PYTHONUNBUFFERED=1
+
 [Install]
 WantedBy=multi-user.target
-EOF
-chmod 600 "$D/.env"; systemctl daemon-reload; systemctl enable kevintech-telegram >/dev/null; systemctl restart kevintech-telegram; sleep 1
-if systemctl is-active --quiet kevintech-telegram; then echo -e "${G}╔════════════════════════════════════════════════════════════╗${Z}"; echo -e "${G}║              ✅ INSTALACIÓN COMPLETADA                   ║${Z}"; echo -e "${G}║              🟢 BOT ACTIVO Y PROTEGIDO                   ║${Z}"; echo -e "${G}╚════════════════════════════════════════════════════════════╝${Z}"; else echo -e "${R}✘ El servicio no inició.${Z}"; journalctl -u kevintech-telegram -n 40 --no-pager; exit 1; fi
-echo -e "${C}📜 Logs:${Z} journalctl -u kevintech-telegram -f"
-echo -e "${C}❤️ Health:${Z} bash $D/health.sh"
+EOT
+
+  chmod 700 "$PY"; chmod 600 "$ENV"
+  systemctl daemon-reload
+  systemctl enable "$SERVICE" >/dev/null 2>&1
+  systemctl restart "$SERVICE"
+  echo
+  echo -e "${G}╔══════════════════════════════════════════════════════════════╗${X}"
+  echo -e "${G}║${X} ${W}\e[1m             ✅ INSTALACIÓN REALIZADA${X}                  ${G}║${X}"
+  echo -e "${G}╚══════════════════════════════════════════════════════════════╝${X}"
+  echo
+  echo -e "${G}✔ Bot Telegram instalado/actualizado correctamente.${X}"
+  echo -e "${G}✔ Servicio: $SERVICE${X}"
+  echo
+  pause
+}
+
+change_data(){
+  clear
+  echo -e "${C}╔══════════════════════════════════════════════════════════════╗${X}"
+  echo -e "${C}║${X} ${W}\e[1m                 DATOS DEL BOT TELEGRAM${X}                 ${C}║${X}"
+  echo -e "${C}╚══════════════════════════════════════════════════════════════╝${X}"
+  echo
+  echo "1) Cambiar ID del super admin"
+  echo "2) Cambiar token del bot"
+  echo "0) Volver"
+  echo
+  read -rp "Seleccione una opción: " op
+  [[ -f "$ENV" ]] || { echo -e "${R}❌ Primero instala el bot.${X}"; pause; return; }
+  case "$op" in
+    1) read -rp "Nuevo ID del super admin: " id; [[ "$id" =~ ^[0-9]+$ ]] || { echo -e "${R}❌ ID inválido.${X}"; pause; return; }; sed -i "s/^ADMIN_ID=.*/ADMIN_ID=\"$id\"/" "$ENV"; echo -e "${G}✅ ID actualizado.${X}";;
+    2) read -rp "Nuevo token del bot: " tok; [[ "$tok" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || { echo -e "${R}❌ Token inválido.${X}"; pause; return; }; sed -i "s/^BOT_TOKEN=.*/BOT_TOKEN=\"$tok\"/" "$ENV"; echo -e "${G}✅ Token actualizado.${X}";;
+    0) return;;
+    *) echo -e "${R}❌ Opción inválida.${X}";;
+  esac
+  chmod 600 "$ENV"; systemctl restart "$SERVICE" 2>/dev/null || true; pause
+}
+
+remove_bot(){
+  clear
+  read -rp "¿Eliminar el bot y su servicio? [Y/N]: " a
+  [[ "${a,,}" == "y" ]] || return
+  systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/$SERVICE"
+  systemctl daemon-reload
+  rm -rf "$TD"
+  mkdir -p "$TD"
+  echo -e "${G}✅ Bot Telegram desinstalado correctamente.${X}"
+  pause
+}
+
+while true; do
+ clear
+ echo -e "${C}╔══════════════════════════════════════════════════════════════╗${X}"
+ echo -e "${C}║${X} ${W}\e[1m                    BOT TELEGRAM${X}                         ${C}║${X}"
+ echo -e "${C}╚══════════════════════════════════════════════════════════════╝${X}"
+ echo
+ echo -e "${Y}[1]${W} Instalar / Actualizar bot"
+ echo -e "${Y}[2]${W} Cambiar datos"
+ echo -e "${Y}[3]${W} Desinstalar bot"
+ echo -e "${Y}[0]${W} Volver"
+ echo
+ read -rp "➜ Seleccione una opción: " op
+ case "$op" in 1) install_bot;; 2) change_data;; 3) remove_bot;; 0) exit 0;; *) echo -e "${R}❌ Opción inválida.${X}"; sleep 1;; esac
+done
