@@ -861,57 +861,12 @@ mkdir -p \
 # Componentes del bot: se instalan desde install.sh y no requieren
 # pasos manuales separados.
 if [[ -d "$TMP/telegram" ]]; then
-    mkdir -p "$BASE/telegram/logs" "$BASE/telegram/backups"
-    [[ -f "$TMP/telegram/bot.py" ]] && cp -f "$TMP/telegram/bot.py" "$BASE/telegram/bot.py"
-    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
+    mkdir -p "$BASE/telegram"
+    for f in bot.py version.txt; do
+        [[ -f "$TMP/telegram/$f" ]] && cp -f "$TMP/telegram/$f" "$BASE/telegram/$f"
+    done
+    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh" "$BASE/telegram/install.sh" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
 fi
-
-#=========================================================
-# CONFIGURACIÓN DEL BOT TELEGRAM
-#=========================================================
-
-if [[ -f "$BASE/telegram/.env" ]]; then
-    chmod 600 "$BASE/telegram/.env"
-    info "Configuración Telegram existente conservada."
-else
-    seccion "🤖 CONFIGURACIÓN DEL BOT TELEGRAM"
-    read -r -p "🤖 Token del bot: " BOT_TOKEN
-    read -r -p "👑 Telegram ID del super admin: " BOT_OWNER
-    [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] || error_exit "Token de Telegram inválido."
-    [[ "$BOT_OWNER" =~ ^[0-9]+$ ]] || error_exit "ID del super admin inválido."
-    umask 077
-    printf 'BOT_TOKEN=%q\nADMIN_ID=%q\nADMIN_IDS=\n' "$BOT_TOKEN" "$BOT_OWNER" > "$BASE/telegram/.env"
-    chmod 600 "$BASE/telegram/.env"
-fi
-
-cat > /etc/systemd/system/kevintech-telegram.service <<EOF
-[Unit]
-Description=KevinTech Multi Script Telegram Bot
-After=network-online.target
-Wants=network-online.target
-StartLimitIntervalSec=60
-StartLimitBurst=10
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$BASE/telegram
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 $BASE/telegram/bot.py
-Restart=always
-RestartSec=2
-TimeoutStartSec=20
-TimeoutStopSec=10
-StandardOutput=append:$BASE/telegram/logs/bot.log
-StandardError=append:$BASE/telegram/logs/bot.log
-[Install]
-WantedBy=multi-user.target
-EOF
-chmod 600 "$BASE/telegram/.env"
-python3 -m py_compile "$BASE/telegram/bot.py" || error_exit "El bot Telegram contiene errores de sintaxis."
-systemctl daemon-reload
-systemctl enable kevintech-telegram >/dev/null
-systemctl restart kevintech-telegram
-ok "Bot Telegram instalado y configurado."
 
 #=========================================================
 # PERMISOS CORRECTOS

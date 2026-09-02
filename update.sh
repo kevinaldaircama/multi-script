@@ -47,6 +47,8 @@ LIME="\e[38;5;154m"
 #=========================================================
 
 INSTALL_KEY=""
+AUTO_MODE=false
+[[ "${1:-}" == "--auto" ]] && AUTO_MODE=true
 
 LICENSE_OWNER=""
 LICENSE_RESELLER=""
@@ -131,40 +133,6 @@ if [[ "$EUID" -ne 0 ]]; then
 
     fi
 
-fi
-
-#=========================================================
-# ACTUALIZACIÓN AUTOMÁTICA DESDE TELEGRAM
-#=========================================================
-
-if [[ "${1:-}" == "--telegram" ]]; then
-    AUTO_TMP="/tmp/kevintech_telegram_update"
-    PERSIST="/tmp/kevintech_telegram_persist"
-    rm -rf "$AUTO_TMP" "$PERSIST"
-    mkdir -p "$PERSIST"
-    for item in config.conf license.conf limits telegram/.env telegram/data.json telegram/offset telegram/backups; do
-        if [[ -e "$BASE/$item" ]]; then
-            mkdir -p "$PERSIST/$(dirname "$item")"
-            cp -a "$BASE/$item" "$PERSIST/$item"
-        fi
-    done
-    git clone --depth 1 "$REPO" "$AUTO_TMP" >/dev/null 2>&1 || { rm -rf "$AUTO_TMP" "$PERSIST"; echo "ERROR: No se pudo descargar la actualización."; exit 1; }
-    cp -a "$AUTO_TMP"/. "$BASE"/ || { rm -rf "$AUTO_TMP" "$PERSIST"; echo "ERROR: No se pudieron instalar los archivos."; exit 1; }
-    for item in config.conf license.conf limits telegram/.env telegram/data.json telegram/offset telegram/backups; do
-        if [[ -e "$PERSIST/$item" ]]; then
-            mkdir -p "$BASE/$(dirname "$item")"
-            cp -a "$PERSIST/$item" "$BASE/$item"
-        fi
-    done
-    [[ -f "$BASE/version.txt" ]] || echo "unknown" > "$BASE/version.txt"
-    rm -rf "$AUTO_TMP" "$PERSIST"
-    python3 -m py_compile "$BASE/telegram/bot.py" || { echo "ERROR: El bot actualizado tiene errores."; exit 1; }
-    rm -f "$BASE/telegram/README.md" "$BASE/telegram/health.sh" "$BASE/telegram/service.sh" "$BASE/telegram/setup.sh" "$BASE/telegram/update.sh"
-    systemctl daemon-reload
-    systemctl restart kevintech-telegram
-    echo "OK: Sistema actualizado correctamente."
-    echo "VERSION: $(head -n1 "$BASE/version.txt" 2>/dev/null || echo unknown)"
-    exit 0
 fi
 
 #=========================================================
@@ -328,9 +296,20 @@ echo -e " ${YELLOW}🔐 Esta actualización requiere una Key válida.${RESET}"
 echo -e " ${GRAY}La Key será validada mediante la API pública.${RESET}"
 echo
 
+if [[ "$AUTO_MODE" == true && -f "$BASE/license.conf" ]]; then
+    INSTALL_KEY="$(awk -F'"' '/^LICENSE_KEY=/{print $2}' "$BASE/license.conf" 2>/dev/null || true)"
+fi
+
+if [[ "$AUTO_MODE" == true && -z "$INSTALL_KEY" ]]; then
+    error "No existe una Key guardada para la actualización automática."
+    exit 1
+fi
+
 while true; do
 
-    read -r -p " 🔑 Introduce tu Key de Instalación: " INSTALL_KEY
+    if [[ "$AUTO_MODE" == false ]]; then
+        read -r -p " 🔑 Introduce tu Key de Instalación: " INSTALL_KEY
+    fi
 
     INSTALL_KEY="$(
         printf '%s' "$INSTALL_KEY" |
@@ -734,20 +713,6 @@ fi
 echo
 
 #=========================================================
-# PRESERVAR DATOS PERSISTENTES
-#=========================================================
-
-PERSIST_DIR="${TMP}_persistent"
-rm -rf "$PERSIST_DIR"
-mkdir -p "$PERSIST_DIR"
-for item in config.conf license.conf limits telegram/.env telegram/data.json telegram/offset telegram/backups; do
-    if [[ -e "$BASE/$item" ]]; then
-        mkdir -p "$PERSIST_DIR/$(dirname "$item")"
-        cp -a "$BASE/$item" "$PERSIST_DIR/$item"
-    fi
-done
-
-#=========================================================
 # INSTALAR
 #=========================================================
 
@@ -773,15 +738,6 @@ if ! cp -a "$TMP"/. "$BASE"/; then
 fi
 
 ok "Archivos actualizados correctamente."
-
-# Restaurar únicamente datos persistentes; nunca reemplazar el código actualizado.
-for item in config.conf license.conf limits telegram/.env telegram/data.json telegram/offset telegram/backups; do
-    if [[ -e "$PERSIST_DIR/$item" ]]; then
-        mkdir -p "$BASE/$(dirname "$item")"
-        cp -a "$PERSIST_DIR/$item" "$BASE/$item"
-    fi
-done
-rm -rf "$PERSIST_DIR"
 
 #=========================================================
 # VERSIÓN
@@ -1056,6 +1012,10 @@ sleep 2
 #=========================================================
 # REGRESAR AL MENÚ
 #=========================================================
+
+if [[ "$AUTO_MODE" == true ]]; then
+    exit 0
+fi
 
 if [[ -f "$BASE/menu.sh" ]]; then
 
