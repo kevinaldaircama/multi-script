@@ -10,7 +10,8 @@ DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
- 'monetization':{'monetag':'','miniapp':''},
+ 'monetization':{'monetag':'','adsgram':''},
+ 'auto_update':{'enabled':False,'last_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
 }
 
@@ -24,6 +25,9 @@ def load_db():
  except Exception:d=json.loads(json.dumps(DEFAULT))
  for k,v in DEFAULT.items():
   if k not in d:d[k]=json.loads(json.dumps(v))
+ if 'miniapp' in d.get('monetization',{}):d['monetization']['adsgram']=d['monetization'].pop('miniapp')
+ if not isinstance(d.get('auto_update'),dict):d['auto_update']=json.loads(json.dumps(DEFAULT['auto_update']))
+ for k,v in DEFAULT['auto_update'].items():d['auto_update'].setdefault(k,v)
  for k in ('admins','bans','users'):
   if not isinstance(d.get(k),dict):d[k]={}
  if not isinstance(d.get('quotas'),dict):d['quotas']=json.loads(json.dumps(DEFAULT['quotas']))
@@ -102,6 +106,42 @@ def sh(cmd,timeout=8,input=None):
  except subprocess.TimeoutExpired:return 124,'Timeout'
  except Exception as x:return 1,str(x)
 def q(x):return shlex.quote(str(x))
+VERSION_LOCAL=TD/'version.txt'
+VERSION_URL='https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/version.txt'
+def current_version():
+ try:
+  p=VERSION_LOCAL if VERSION_LOCAL.exists() else BASE/'version.txt';return p.read_text(errors='ignore').splitlines()[0].strip() or 'No disponible'
+ except:return 'No disponible'
+def new_version():
+ try:
+  req=urllib.request.Request(VERSION_URL,headers={'User-Agent':'KevinTech-Updater'})
+  with urllib.request.urlopen(req,timeout=8) as r:return r.read().decode().splitlines()[0].strip() or 'No disponible'
+ except:return 'No disponible'
+def version_key(v):
+ try:return tuple(int(x) for x in re.findall(r'\d+',v))
+ except:return (0,)
+def update_available():
+ cur=current_version();new=new_version();return cur,new,(new!='No disponible' and cur!='No disponible' and version_key(new)>version_key(cur))
+def run_update(c=None,auto=False):
+ updater=BASE/'update.sh'
+ if not updater.exists():
+  if c:send(c,'❌ No se encontró el actualizador del sistema.')
+  return
+ cmd=f'bash {q(updater)} --auto' if auto else f'bash {q(updater)}'
+ if c:bg(c,'Actualización del sistema',cmd,900,settings_keyboard())
+ else:sh(cmd,900)
+def auto_update_monitor():
+ while True:
+  try:
+   d=db()
+   if d.get('auto_update',{}).get('enabled'):
+    cur,new,available=update_available()
+    if available:
+     log(f'AUTO UPDATE {cur} -> {new}');run_update(auto=True)
+    d=db();d['auto_update']['last_version']=new;d['auto_update']['checked_at']=time.time();save_db(d)
+  except Exception as ex:log('AUTO UPDATE '+repr(ex))
+  time.sleep(21600)
+
 def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
  send(c,f'⚡ <b>{e(title)}</b>\n\n🟡 Operación iniciada...')
  def w():
@@ -146,7 +186,7 @@ CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'te
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
 SVCS={k:v[2] for k,v in PROTO.items()}
-TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'},{'text':'🔄 Actualizar','callback_data':'tool:update'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def module(name):
  for p in [BASE/'protocolos'/name,BASE/'herramientas'/name,BASE/'usuarios'/name]:
@@ -251,17 +291,7 @@ def account_message(c,d,renew=False):
  title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
  lim=d.get('limit','Ilimitado');limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
  slow_ns=f'ns-{domain}' if domain else 'Requiere dominio real'
- slow_candidates=[Path('/etc/slowdns/server.pub'),Path('/etc/slowdns/pubkey'),Path('/etc/slowdns/server.key.pub')]
- slow_key=''
- for kp in slow_candidates:
-  if kp.exists():
-   try:
-    val=kp.read_text(errors='ignore').strip()
-    if val: slow_key=val;break
-   except: pass
- if not slow_key:
-  out=subprocess.getoutput("grep -RhsE '^[[:space:]]*(Public|PUBLIC|KEY|PUBKEY)[[:space:]]*[:=]' /etc/slowdns 2>/dev/null | head -1")
-  slow_key=out.split('=',1)[-1].strip().strip('"') if out else 'No configurado'
+ slow_key=(Path('/etc/slowdns/server.pub').read_text(errors='ignore').strip() if Path('/etc/slowdns/server.pub').exists() else 'No configurado')
  return f'''<b>{title}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -321,7 +351,6 @@ def account_message(c,d,renew=False):
 🌐 <b>BHTTP</b>
 ━━━━━━━━━━━━━━━━━━━━
 • Servidor: <code>{e(host)}:8088</code>
-• Puerto: <code>8088</code>
 • Backend SSH: <code>22</code>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -372,13 +401,6 @@ def process_text(c,t,chat_type=None):
  if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':'🇪🇸 Español','callback_data':'lang:es'},{'text':'🇺🇸 English','callback_data':'lang:en'}],[{'text':'🇧🇷 Português','callback_data':'lang:pt'}]])
  if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
- if cmd in ('/respaldo_ahora','/backup_now') and is_owner(uid):
-  fn=backup_now();return send_document(c,fn,'💾 Respaldo manual del sistema.')
- if cmd in ('/respaldo_diario','/backup_daily') and is_owner(uid):return configure_backup(c,'daily')
- if cmd in ('/respaldo_7dias','/backup_7d') and is_owner(uid):return configure_backup(c,'7d')
- if cmd in ('/respaldo_15dias','/backup_15d') and is_owner(uid):return configure_backup(c,'15d')
- if cmd in ('/respaldo_30dias','/backup_30d') and is_owner(uid):return configure_backup(c,'30d')
- if cmd in ('/respaldo_unavez','/backup_once') and is_owner(uid):return configure_backup(c,'once')
  if cmd in ('/ajustes','/settings') and is_owner(uid):return cb(c,0,c,0,'settings')
  if cmd in ('/cuotas','/quota') and is_owner(uid):return cb(c,0,c,0,'quotas')
  if cmd in ('/seguridad','/security') and is_owner(uid):return cb(c,0,c,0,'security')
@@ -386,7 +408,6 @@ def process_text(c,t,chat_type=None):
  if cmd in ('/ban','/baneos') and is_owner(uid):return cb(c,0,c,0,'bans')
  if cmd in ('/monetizacion','/monetization') and is_owner(uid):return cb(c,0,c,0,'monetization')
  if cmd in ('/herramientas','/tools') and is_owner(uid):return cb(c,0,c,0,'tools')
- if cmd in ('/actualizar','/update') and is_owner(uid):return cb(c,0,c,0,'update_system')
  if t.startswith('/referidos'):return send(c,referral_info(c))
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
@@ -522,6 +543,12 @@ def cb(c,m,u,i,x,chat_type=None):
     z['accounts']=[a for a in z.get('accounts',[]) if a!=u0];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if a!=u0];z.get('v2ray_expirations',{}).pop(u0,None)
    save_db(d)
   return send(c,('🟢' if rc==0 else '🔴')+f' <b>Cuenta {"eliminada" if rc==0 else "no eliminada"}</b>\n\n👤 <code>{e(u0)}</code>')
+ if x=='system_update':
+  cur,new,available=update_available();enabled=bool(d.get('auto_update',{}).get('enabled'));status='🟢 Nueva versión disponible' if available else '✅ Sin actualizaciones'
+  text=f'🔄 <b>ACTUALIZACIÓN DEL SISTEMA</b>\n\n📌 Versión instalada: <b>{e(cur)}</b>\n🆕 Nueva versión: <b>{e(new)}</b>\n📡 Estado: <b>{status}</b>\n🤖 Actualización automática: <b>'+('ACTIVADA' if enabled else 'DESACTIVADA')+'</b>'
+  return edit(c,m,text,[[{'text':'⬇️ Actualizar ahora','callback_data':'system_update_now'}],[{'text':('⛔ Desactivar automática' if enabled else '🤖 Activar automática'),'callback_data':'auto_update_toggle'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ if x=='auto_update_toggle':d['auto_update']['enabled']=not bool(d.get('auto_update',{}).get('enabled'));d['auto_update']['checked_at']=0;save_db(d);return cb(c,m,u,i,'system_update')
+ if x=='system_update_now':return run_update(c,True)
  if x=='settings':
   if not is_owner(u):return ans(i,'Solo el super admin')
   return edit(c,m,tr(u,'settings'),settings_keyboard())
@@ -539,15 +566,24 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
  if x=='ban_list':
   lines=[f'• <code>{e(k)}</code> — {e(v.get("name", ""))}' for k,v in d['bans'].items()];return edit(c,m,'🚫 <b>LISTA DE BANS</b>\n\n'+('\n'.join(lines) if lines else 'Vacía.'),BAN_MENU)
- if x in ('backup','backup_restore'):return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if x=='backup_menu':return edit(c,m,'💾 <b>RESPALDAR</b>\n\nSelecciona cómo deseas recibir el documento JSON:',[[{'text':'📤 Enviar ahora','callback_data':'backup_now'}],[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'},{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'},{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Respaldos','callback_data':'backup_restore'}]])
+ if x=='backup_restore':return edit(c,m,backup_text(d),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ if x=='backup_menu':return edit(c,m,'💾 <b>RESPALDAR</b>\n\nSelecciona cuándo quieres recibir el documento JSON.',[[{'text':'📤 Enviar ahora','callback_data':'backup_now'}],[{'text':'📅 Enviar diario','callback_data':'backup:daily'}],[{'text':'7️⃣ Cada 7 días','callback_data':'backup:7d'}],[{'text':'1️⃣5️⃣ Cada 15 días','callback_data':'backup:15d'}],[{'text':'3️⃣0️⃣ Cada 30 días','callback_data':'backup:30d'}],[{'text':'☝️ Solo una vez','callback_data':'backup:once'}],[{'text':'🔙 Respaldos','callback_data':'backup_restore'}]])
  if x.startswith('backup:'):return configure_backup(c,x.split(':',1)[1])
  if x=='backup_now':
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
- if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura Monetag u otra Mini App.',MONETIZATION)
- if x=='monetag':STATE[c]={'f':'monetag','s':'value','d':{}};return send(c,'💰 Envía el código, enlace o identificador de Monetag:')
- if x=='miniapp':STATE[c]={'f':'miniapp','s':'value','d':{}};return send(c,'📱 Envía el enlace o identificador de tu Mini App:')
+ if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
+ if x=='monetag':return monetag_menu(c,m)
+ if x=='monetag_config':STATE[c]={'f':'monetag','s':'sdk','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nPega aquí tu SDK. Ejemplo:\n<code>&lt;script src='//libtl.com/sdk.js' data-zone='11217882' data-sdk='show_11217882'&gt;&lt;/script&gt;</code>")
+ if x=='monetag_toggle':
+  v=d.get('monetization',{}).get('monetag','')
+  if not v:return monetag_menu(c,m)
+  try:z=json.loads(v)
+  except:z={'sdk':v,'reward':'','url':f'https://t.me/{BOT_USERNAME}?start=adcompleted'}
+  z['enabled']=not bool(z.get('enabled',True));d['monetization']['monetag']=json.dumps(z,ensure_ascii=False);save_db(d);return monetag_menu(c,m)
+ if x=='adsgram':return adsgram_menu(c,m)
+ if x=='adsgram_config':STATE[c]={'f':'adsgram','s':'value','d':{}};return send(c,'📱 <b>ADSGRAM</b>\n\nEnvía el código de configuración de Adsgram.')
+ if x=='adsgram_toggle':d['monetization']['adsgram']='' if d.get('monetization',{}).get('adsgram') else 'enabled';save_db(d);return adsgram_menu(c,m)
  if x=='restart_vps':return send(c,'♻️ ¿Reiniciar el VPS ahora?',[[{'text':'✅ REINICIAR VPS','callback_data':'do_reboot'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
  if x=='people':
   total=sum(1 for z in d['users'].values() if z.get('started'))
@@ -563,11 +599,6 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='security:auto':
   d['security']['auto_ban_ssh']=not d['security'].get('auto_ban_ssh',False);save_db(d)
   return edit(c,m,'🛡️ <b>SEGURIDAD ACTUALIZADA</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d['security']['auto_ban_ssh'] else 'DESACTIVADO 🔴')+'</b>',SECURITY_MENU)
- if x=='update_system':
-  if not is_owner(u):return ans(i,'Solo el super admin')
-  p=BASE/'update.sh'
-  if not p.exists():return send(c,'🔴 No se encontró el actualizador del sistema.')
-  return bg(c,'Actualización del sistema',f'bash {q(p)} --telegram',600,settings_keyboard())
  if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
  if x.startswith('tool:'):
   if not is_owner(u):return ans(i,'Solo el super admin')
@@ -593,7 +624,7 @@ def quota_text(d):
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
 
- d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldar','callback_data':'backup_menu'},{'text':'♻️ Restaurar','callback_data':'restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
 
 def backup_now():
  BACK.mkdir(parents=True,exist_ok=True);fn=BACK/'kevintech_backup.json';fn.write_text(json.dumps(db(),indent=2,ensure_ascii=False));os.chmod(fn,0o600);return fn
@@ -615,15 +646,51 @@ def backup_scheduler():
   except Exception as er:log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
-SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'update_system'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Mini App','callback_data':'miniapp'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'},{'text':'📱 Adsgram','callback_data':'adsgram'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def settings_keyboard():
  d=db();rows=[r[:] for r in SETTINGS];rows[0]=[{'text':('🔐 Acceso: PÚBLICO 🟢' if d['access']=='public' else '🔐 Acceso: PRIVADO 🔴'),'callback_data':'access_toggle'}];return rows
+
+def monetag_menu(c,m=0):
+ d=db();v=d.get('monetization',{}).get('monetag','');configured=bool(v);enabled=True
+ if configured:
+  try:enabled=bool(json.loads(v).get('enabled',True))
+  except:pass
+ text='💰 <b>MONETAG</b>\n\nEstado: <b>'+('🟢 ENCENDIDO' if enabled else '⛔ APAGADO')+'</b>' if configured else '💰 <b>MONETAG</b>\n\nEstado: <b>🔴 NO CONFIGURADO</b>'
+ if configured:
+  try:text+='\n\n🌐 URL: <code>'+e(json.loads(v).get('url',''))+'</code>'
+  except:pass
+  k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'monetag_toggle'}],[{'text':'⚙️ Reconfigurar','callback_data':'monetag_config'}]]
+ else:k=[[{'text':'⚙️ Configurar','callback_data':'monetag_config'}]]
+ k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
+def adsgram_menu(c,m=0):
+ configured=bool(db().get('monetization',{}).get('adsgram',''));text='📱 <b>ADSGRAM</b>\n\nEstado: <b>'+('🟢 CONFIGURADO' if configured else '🔴 NO CONFIGURADO')+'</b>'
+ k=[[{'text':'⏻ Apagar','callback_data':'adsgram_toggle'},{'text':'⚙️ Reconfigurar','callback_data':'adsgram_config'}]] if configured else [[{'text':'⚙️ Configurar','callback_data':'adsgram_config'}]]
+ k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
+def generate_monetag_html(uid,dat):
+ bot_url=dat.get('url') or (f'https://t.me/{BOT_USERNAME}?start=adcompleted' if BOT_USERNAME else '')
+ sdk=dat.get('sdk','');reward=dat.get('reward','');m=re.search(r'data-sdk=[\"\']([^\"\']+)',sdk,re.I);ad_fn=m.group(1) if m else ((re.search(r'\b(show_\d+)\b',reward) or re.search(r'\b(show_\d+)\b',sdk)).group(1) if (re.search(r'\b(show_\d+)\b',reward) or re.search(r'\b(show_\d+)\b',sdk)) else '')
+ html='''<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KEVINTECH MULTI SCRIPT</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+'''+sdk+'''
+<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#03050a;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center}.panel{width:min(390px,90%);text-align:center}.logo{width:82px;height:82px;margin:auto auto 24px;border-radius:25px;background:linear-gradient(135deg,#00e5ff,#0077ff,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:900}button{width:100%;padding:17px;border:0;border-radius:16px;background:linear-gradient(135deg,#00e5ff,#0077ff);color:white;font-weight:800}p{color:#aaa;line-height:1.6}</style>
+</head>
+<body><main class="panel"><div class="logo">KT</div><h1>Acceso Premium</h1><p>Mira un anuncio para continuar.</p><button id="play">▶ VER ANUNCIO</button><p>© KEVINTECH MULTI SCRIPT</p></main>
+<script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();document.getElementById('play').onclick=async()=>{try{if(!'''+json.dumps(ad_fn)+''')throw new Error('SDK');await window['''+json.dumps(ad_fn)+''']();window.location.href='''+json.dumps(bot_url)+''';}catch(e){alert('Anuncio no disponible');}};
+/* Rewarded Interstitial configurado por el super admin */
+'''+reward+'''
+</script></body></html>'''
+ fn=BACK/'monetag_webapp.html';fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -672,8 +739,10 @@ def admin_text(c,t):
    try:send(int(sid),'📢 <b>Mensaje del administrador</b>\n\n'+e(t));ok+=1
    except Exception as er:fail+=1;log('MSG '+sid+' '+repr(er))
   return send(c,f'🟢 Enviados: <b>{ok}</b>\n🔴 No entregados: <b>{fail}</b>.',settings_keyboard())
- if f in ('monetag','miniapp') and step=='value':
-  d['monetization']['monetag' if f=='monetag' else 'miniapp']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración guardada.',MONETIZATION)
+ if f=='monetag' and step=='sdk':dat['sdk']=t.strip();st['s']='reward';return send(c,'✅ Script guardado.\n\n<b>Paso 2:</b> Ahora copia el código de activación del formato <b>Rewarded Interstitial</b> (el bloque que contiene <code>show_XXXXXXX().then(...)</code>).\n\nPor favor, pégalo aquí y envíamelo.')
+ if f=='monetag' and step=='reward':dat['reward']=t.strip();st['s']='url';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>')
+ if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
+ if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
   val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
   for i,l in enumerate(lines):
@@ -693,7 +762,7 @@ _original_process=process_text
 def process_text(c,t,chat_type=None):
  CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  registered(c)
- if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','miniapp','domain','quota_public','quota_admin'):
+ if is_owner(c) and c in STATE and STATE[c]['f'] in ('admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','monetag','adsgram','domain','quota_public','quota_admin'):
   return admin_text(c,t)
  st=STATE.get(c)
  if st and st.get('f')=='ref_renew' and st.get('s')=='u':
@@ -790,7 +859,7 @@ def main():
  except:BOT_USERNAME=''
  threading.Thread(target=backup_scheduler,daemon=True).start()
  threading.Thread(target=security_monitor,daemon=True).start()
- threading.Thread(target=v2ray_expiration_monitor,daemon=True).start()
+ threading.Thread(target=v2ray_expiration_monitor,daemon=True).start();threading.Thread(target=auto_update_monitor,daemon=True).start()
  off=int(OFF.read_text()) if OFF.exists() and OFF.read_text().strip().isdigit() else 0;log('BOT ONLINE')
  while True:
   try:
