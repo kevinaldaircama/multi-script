@@ -406,12 +406,13 @@ def referral_info(uid):
  window=float(u.get('referral_window_start',0) or 0);used=int(u.get('referral_renews_used',0) or 0)
  if not window or time.time()-window>=86400:
   used=0
-  if window:
-   u['referral_window_start']=time.time();u['referral_renews_used']=0;save_db(d)
- remaining=max(0,3-used)
- link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}'
- reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
- return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 Referidos válidos: <b>{len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar las renovaciones.\n♻️ Puedes renovar hasta <b>3 veces cada 24 horas</b>.\n⏱️ {reset}'''
+  if window:u['referral_window_start']=time.time();u['referral_renews_used']=0;save_db(d)
+ names=[]
+ for rid in refs:
+  rz=d['users'].get(str(rid),{});uname=str(rz.get('username','')).strip();name=str(rz.get('name','')).strip() or 'Usuario';label='@'+uname if uname else name;names.append('• '+e(label))
+ remaining=max(0,3-used);link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}';reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
+ redeem='\n\n🎁 <b>Tienes un canje disponible.</b> Cada canje agrega <b>7 días</b> a una cuenta después de ver el anuncio.\n' if len(refs)>=3 and used<3 else ''
+ return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 Referidos válidos: <b>{len(refs)}</b>\n🎁 Canjes usados en 24h: <b>{used}/3</b>\n⭐ Canjes disponibles: <b>{remaining}</b>\n\n📋 <b>Tus referidos:</b>\n{chr(10).join(names) if names else 'Aún no tienes referidos.'}{redeem}\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar los canjes.\n🎁 Cada canje agrega <b>7 días</b>.\n⏱️ {reset}'''
 
 def online_ssh():
  out=subprocess.getoutput("ss -tnp state established 2>/dev/null | grep -E ':22[[:space:]]|sshd' || true")
@@ -681,6 +682,8 @@ def process_text(c,t,chat_type=None):
  # Las configuraciones de Monetag/Adsgram deben procesarse antes que cualquier comando.
  # Esto permite pegar scripts largos o bloques que comienzan con '/'.
  st0=STATE.get(c)
+ if st0 and st0.get('f')=='ref_renew':
+  return admin_text(c,t)
  if st0 and st0.get('f') in ('monetag','adsgram','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
   return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
@@ -696,7 +699,10 @@ def process_text(c,t,chat_type=None):
   STATE[c]={'f':'account','s':'u','d':{}};return send(c,'👤 <b>CONSULTAR CUENTA</b>\n\nEscribe el usuario:')
  if cmd in ('/eliminar','/borrar'):
   STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
- if cmd in ('/referidos','/referrals'):return send(c,referral_info(c),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+ if cmd in ('/referidos','/referrals'):
+  z=db().get('users',{}).get(str(c),{});rows=[]
+  if len(z.get('referrals',[]))>=3 and int(z.get('referral_renews_used',0) or 0)<3:rows.append([{'text':'🎁 Canjear 7 días','callback_data':'ref_redeem'}])
+  rows.append([{'text':'🔙 Inicio','callback_data':'home'}]);return send(c,referral_info(c),rows)
  if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
  if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
@@ -715,18 +721,7 @@ def process_text(c,t,chat_type=None):
  if f=='ref_renew' and step=='u':
   username=t.strip()
   if not userexists(username):return send(c,'❌ Cuenta no encontrada. Escribe un usuario SSH válido:',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
-  dat['user']=username
-  d=db();z=d['users'][str(c)]
-  window=float(z.get('referral_window_start',0) or 0)
-  used=int(z.get('referral_renews_used',0) or 0)
-  if not window or time.time()-window>=86400:window=time.time();used=0
-  if used>=3:return send(c,'❌ Ya utilizaste las 3 renovaciones de este período.')
-  days=quota(c)[0]
-  exp=subprocess.getoutput(f"date -d '+{int(days)} days' +%F")
-  rc,o=sh(f'chage -E {q(exp)} {q(username)}',10)
-  if rc!=0:return send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>')
-  z['referral_window_start']=window;z['referral_renews_used']=used+1;save_db(d);STATE.pop(c,None)
-  return send(c,account_message(c,{'user':username,'days':int(days),'limit':quota(c)[1]},True),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+  dat['user']=username;st['s']='confirm';return send(c,'🔎 <b>VERIFICAR CUENTA</b>\n\n'+account_info(c,username)+'\n\n⚠️ Si confirmas, se agregarán <b>7 días</b> automáticamente a esta cuenta.',[[{'text':'✅ Sí, es correcta','callback_data':'ref_confirm'},{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if step=='u' and f in ('create','renew','delete','account'):
   u=t.strip()
   if f in ('delete','account') and not userexists(u):return send(c,'❌ Cuenta no encontrada. Escribe un usuario válido:')
@@ -771,7 +766,7 @@ def cb(c,m,u,i,x,chat_type=None):
    pending=x.split(':',1)[1];pd=db().get('ad_pending',{}).get(pending)
    if not pd or int(pd.get('uid',0))!=c or float(pd.get('expires',0))<time.time():raise ValueError('solicitud expirada')
    action=pd.get('action','');extra=pd.get('extra',{}) or {}
-   if action not in ('create','renew'):raise ValueError('acción inválida')
+   if action not in ('create','renew','ref_redeem'):raise ValueError('acción inválida')
    d=db();d.get('ad_pending',{}).pop(pending,None);save_db(d)
    url=create_ad_token(c,action,extra)
    if not url:return ans(i,'Publicidad no configurada')
@@ -783,7 +778,10 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='info':return edit(c,m,tr(u,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
- if x=='referrals':return edit(c,m,referral_info(u),[[{'text':'♻️ Renovar 24h (3 referidos)','callback_data':'ref_renew'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
+ if x=='referrals':
+  z=d['users'].get(str(u),{});rows=[]
+  if len(z.get('referrals',[]))>=3 and int(z.get('referral_renews_used',0) or 0)<3:rows.append([{'text':'🎁 Canjear 7 días','callback_data':'ref_redeem'}])
+  rows.append([{'text':'🔙 Inicio','callback_data':'home'}]);return edit(c,m,referral_info(u),rows)
  if x=='create':
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Usa /crear en el chat privado del bot.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
@@ -834,7 +832,7 @@ def cb(c,m,u,i,x,chat_type=None):
      if ref and str(ref) in d['users'] and c not in d['users'][str(ref)].setdefault('referrals',[]):
       d['users'][str(ref)]['referrals'].append(c);save_db(d)
       try:
-       mention=("@"+urow.get("username")) if urow.get("username") else urow.get("name",str(c))
+       mention=("@"+urow.get("username")) if urow.get("username") else (urow.get("name") or 'Usuario')
        send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl usuario {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except:pass
      save_db(d)
@@ -849,7 +847,7 @@ def cb(c,m,u,i,x,chat_type=None):
      inviter=d['users'][str(ref)];
      if c not in inviter.setdefault('referrals',[]):
       inviter['referrals'].append(c);save_db(d)
-      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else f'<code>{c}</code>'
+      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else (d['users'][str(c)].get('name') or 'Usuario')
       try:send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except Exception as er:log('REF NOTIFY '+repr(er))
     else:save_db(d)
@@ -857,15 +855,42 @@ def cb(c,m,u,i,x,chat_type=None):
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>')
   if x=='do:renew':
    rc,o=sh(f'chage -E {q(exp)} {q(u0)}',10);return send(c,account_message(c,dat,True)) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>')
- if x=='ref_renew':
-  d=db();z=d['users'][str(u)]
-  window=float(z.get('referral_window_start',0) or 0)
-  used=int(z.get('referral_renews_used',0) or 0)
-  if not window or time.time()-window>=86400:
-   window=time.time();used=0;z['referral_window_start']=window;z['referral_renews_used']=0;save_db(d)
+ if x in ('ref_redeem','ref_renew'):
+  d=db();z=d['users'][str(u)];window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
+  if not window or time.time()-window>=86400:window=time.time();used=0;z['referral_window_start']=window;z['referral_renews_used']=0;save_db(d)
   if len(z.get('referrals',[]))<3:return send(c,f'❌ Necesitas 3 referidos. Te faltan <b>{3-len(z.get("referrals",[]))}</b>.')
-  if used>=3:return send(c,'❌ Ya utilizaste las 3 renovaciones de este período. Podrás usar otras 3 después de 24 horas.')
-  STATE[c]={'f':'ref_renew','s':'u','d':{}};return send(c,f'♻️ <b>RENOVACIÓN POR REFERIDOS</b>\n\nRenovaciones usadas: <b>{used}/3</b>\nEscribe el usuario SSH que quieres renovar durante <b>24 horas</b>.\n\n',[ [{'text':'❌ Cancelar','callback_data':'cancel'}] ])
+  if used>=3:return send(c,'❌ Ya utilizaste los 3 canjes de este período. Podrás usar otros 3 después de 24 horas.')
+  if ad_gate(c,'ref_redeem',{'days':7}):return True
+  STATE[c]={'f':'ref_renew','s':'u','d':{}}
+  return send(c,'🎁 <b>CANJE DE REFERIDO</b>\n\nEstimado usuario, por favor escribe tu <b>usuario SSH</b> para canjear.\n\nDespués te mostraré su información y podrás confirmar antes de agregar los <b>7 días</b>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if x=='ref_confirm':
+  st=STATE.get(c)
+  if not st or st.get('f')!='ref_renew' or st.get('s')!='confirm':return send(c,'❌ La solicitud de canje expiró. Vuelve a pulsar Canjear.')
+  username=st.get('d',{}).get('user','').strip();z=d['users'][str(u)]
+  if not userexists(username):STATE.pop(c,None);return send(c,'❌ Esa cuenta ya no existe.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
+  window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
+  if not window or time.time()-window>=86400:window=time.time();used=0
+  if len(z.get('referrals',[]))<3 or used>=3:STATE.pop(c,None);return send(c,'❌ Ya no tienes un canje disponible.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
+  days=7;isv2=False;v2owner=None
+  for sid,ownerrow in d['users'].items():
+   if username in ownerrow.get('v2ray_accounts',[]):v2owner=sid;isv2=True;break
+  if isv2:
+   oldexp=d['users'][v2owner].get('v2ray_expirations',{}).get(username)
+   try:base=datetime.datetime.strptime(oldexp,'%d/%m/%Y').date() if oldexp else datetime.date.today()
+   except:base=datetime.date.today()
+   if base<datetime.date.today():base=datetime.date.today()
+   newexp=base+datetime.timedelta(days=days);d['users'][v2owner].setdefault('v2ray_expirations',{})[username]=newexp.strftime('%d/%m/%Y')
+  else:
+   current=subprocess.getoutput(f"chage -l {q(username)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'").strip()
+   try:base=datetime.datetime.strptime(current,'%b %d, %Y').date()
+   except:
+    try:base=datetime.datetime.strptime(current,'%Y-%m-%d').date()
+    except:base=datetime.date.today()
+   if base<datetime.date.today():base=datetime.date.today()
+   newexp=base+datetime.timedelta(days=days);rc,o=sh(f'chage -E {q(newexp.strftime("%Y-%m-%d"))} {q(username)}',10)
+   if rc!=0:return send(c,'🔴 <b>No se pudo agregar los 7 días.</b>\n<pre>'+e(o)+'</pre>')
+  z['referral_window_start']=window;z['referral_renews_used']=used+1;save_db(d);STATE.pop(c,None)
+  return send(c,'🎉 <b>CANJE COMPLETADO</b>\n\n👤 Cuenta: <code>'+e(username)+'</code>\n🎁 Se agregaron <b>7 días</b> correctamente.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='userop:delete':
   st=STATE.pop(c,None)
   if not st:return send(c,'❌ Operación expirada.')
@@ -912,7 +937,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
  if x=='monetag':return monetag_menu(c,m)
- if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11217882</code>\n\nNo necesitas enviar SDK ni código de configuración.",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG — CONFIGURACIÓN</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11712691</code>\n\n❌ No envíes el SDK ni ningún código adicional.",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag_delete':
   d['monetization']['monetag']='';save_db(d);return monetag_menu(c,m)
  if x=='monetag_toggle':
@@ -1022,43 +1047,23 @@ def _script_markup(code):
 
 def generate_monetag_html(uid,dat):
  template=TD/'monetization.html'
- if not template.exists():
-  template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
+ if not template.exists():template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
  html=template.read_text(encoding='utf-8')
  bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
- zone_id=str(dat.get('zone_id','')).strip()
- if not re.fullmatch(r'\d{4,20}',zone_id):
-  raise ValueError('ID de zona Monetag inválido')
- sdk=f"<script src=\"https://libtl.com/sdk.js\" data-zone=\"{zone_id}\" data-sdk=\"show_{zone_id}\"></script>"
- reward='';adsgram_code=''
- try:
-  az=json.loads(db().get('monetization',{}).get('adsgram',''))
-  adsgram_code=az.get('code','') if isinstance(az,dict) else str(az)
- except:pass
- # Put the configured Monetag/Adsgram snippets directly into the HTML so the
- # provider scripts load as normal page scripts instead of being injected after load.
- scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
- # Remove every hard-coded Monetag SDK block first. The generated page gets
- # exactly one SDK block below, built from the admin's zone ID.
- html=re.sub(r'<script[^>]*src=[\"\'](?:https?:)?//libtl\.com/sdk\.js[^>]*></script>\s*', '', html, flags=re.I)
- html=re.sub(r'<script[^>]*data-zone=[\"\'][^>]+data-sdk=[\"\'][^>]+></script>\s*', '', html, flags=re.I)
- # Safety net: replace the old built-in zone wherever it appears in the template,
- # including JavaScript references such as show_11217882.
- html=html.replace('11217882',zone_id).replace('show_11217882',f'show_{zone_id}')
- # Replace any old hard-coded Telegram bot deep link in the template.
- html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted', bot_url.rstrip('/')+'?start=adcompleted', html)
- # Place the configured Monetag/Rewarded/Adsgram snippets directly in the head,
- # immediately after Telegram WebApp, preserving the provider code exactly as entered.
- scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
- if scripts:
-  marker='</head>'
-  html=html.replace(marker, scripts+'\n'+marker, 1)
- # These placeholders are retained for compatibility with older templates.
+ zone=str(dat.get('zone_id','')).strip()
+ if not zone or not zone.isdigit():raise ValueError('ID de zona Monetag inválido')
+ monetag_script=f'<script src="https://libtl.com/sdk.js" data-zone="{zone}" data-sdk="show_{zone}"></script>'
+ html=re.sub(r'<script[^>]*src=["\'](?:https?:)?//libtl\.com/sdk\.js[^>]*></script>\s*','',html,flags=re.I)
+ html=re.sub(r'<script[^>]*data-zone=["\'][^>]+data-sdk=["\'][^>]+></script>\s*','',html,flags=re.I)
+ html=re.sub(r'\bshow_\d+\b','show_ZONE_PLACEHOLDER',html)
+ html=re.sub(r'data-zone=["\']\d+["\']','data-zone="ZONE_PLACEHOLDER"',html,flags=re.I)
+ if bot_url:html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted',html)
+ marker='</head>'
+ if marker in html:html=html.replace(marker,monetag_script+'\n'+marker,1)
  html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps('')).replace('__REWARD_CODE_JSON__',json.dumps('')).replace('__ADSGRAM_CODE_JSON__',json.dumps(''))
- # Replace the old dynamic injection call with a reliable wait for the statically loaded SDK.
- html=html.replace("inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();", "let fn=null;for(let n=0;n<100&&!fn;n++){fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)await new Promise(r=>setTimeout(r,100));}if(!fn)throw new Error('SDK no disponible');await window[fn]();")
- fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted', bot_url.rstrip('/')+'?start=adcompleted')
- fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
+ html=html.replace('show_ZONE_PLACEHOLDER','show_'+zone)
+ html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
+ fn=BACK/'monetization.html';html=html.replace('11217882',zone);fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -1117,26 +1122,25 @@ def admin_text(c,t):
   return send(c,f'🟢 Enviados: <b>{ok}</b>\n🔴 No entregados: <b>{fail}</b>.',settings_keyboard())
  if f=='monetag' and step=='zone':
   val=t.strip()
-  if not re.fullmatch(r'\d{4,20}',val):
-   return send(c,'❌ <b>ID de zona inválido.</b>\n\nEscribe únicamente el número de tu zona de Monetag. Ejemplo: <code>11217882</code>.')
-  dat['zone_id']=val
-  dat.pop('sdk',None);dat.pop('reward',None)
-  st['s']='boturl'
+  if not val.isdigit() or not (4<=len(val)<=20):return send(c,'❌ ID de zona inválido. Escribe únicamente el número de tu zona Monetag. Ejemplo: <code>11712691</code>.')
+  dat={'zone_id':val,'url':'','host_url':'','enabled':True};st['s']='boturl'
   return send(c,'✅ <b>ID de zona guardado.</b>\n\n🌐 <b>Paso 2:</b> Ingresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='boturl':
-  dat['url']=t.strip()
-  # Generate and send the HTML immediately. Only after the admin receives it
-  # do we ask for the public URL where the same file will be hosted.
-  fn=generate_monetag_html(c,dat)
-  send(c,'📄 <b>monetization.html listo</b>\n\nTe envío ahora el archivo generado con los datos configurados. Después de recibirlo, te pediré la URL pública donde lo vas a alojar.')
+  boturl=t.strip()
+  if not re.match(r'^https?://t\.me/[A-Za-z0-9_]+$',boturl,re.I):return send(c,'❌ URL de bot inválida. Usa el formato <code>https://t.me/tu_bot</code>.')
+  dat['url']=boturl;fn=generate_monetag_html(c,dat)
+  send(c,'📄 <b>monetization.html listo</b>\n\nTe envío el archivo generado con tu ID de zona. Después de recibirlo, te pediré la URL pública donde lo vas a alojar.')
   send_document(c,fn,'📄 monetization.html — archivo generado automáticamente.')
   st['s']='hosturl'
-  return send(c,'🌐 <b>Paso 4</b>\n\nAhora envía la <b>URL pública final</b> donde vas a alojar <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  return send(c,'🌐 <b>Paso 3:</b> Ahora envía la <b>URL pública final</b> donde vas a alojar <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='hosturl':
-  dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
-  schedule_config_cleanup(c)
-  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 <code>monetization.html</code> ya fue enviado anteriormente.\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n✅ No se enviará el archivo otra vez.\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
- if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
+  host=t.strip()
+  if not re.match(r'^https?://',host,re.I):return send(c,'❌ URL inválida. Debe comenzar con <code>https://</code> o <code>http://</code>.')
+  dat['host_url']=host;dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);schedule_config_cleanup(c)
+  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n🆔 Zona: <code>'+e(dat['zone_id'])+'</code>\n🌐 URL guardada: <code>'+e(host)+'</code>\n\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
+ if f=='monetag' and step in ('sdk','reward','url'):
+  STATE[c]={'f':'monetag','s':'zone','d':{}}
+  return send(c,'💰 <b>MONETAG</b>\n\nEsta versión solo utiliza el <b>ID de zona</b>. Escribe únicamente el número de tu zona. Ejemplo: <code>11712691</code>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
   val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
@@ -1274,6 +1278,9 @@ def process_ad_completion(c, token):
   d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120};save_db(d)
   if item.get('action')=='create':
    return bool(start_create(c,item.get('extra',{}).get('kind','normal'),True))
+  if item.get('action')=='ref_redeem':
+   STATE[c]={'f':'ref_renew','s':'u','d':{}}
+   return bool(send(c,'🎁 <b>CANJE DE REFERIDO</b>\n\nEstimado usuario, por favor escribe tu <b>usuario SSH</b> para canjear.\n\nDespués te mostraré su información y podrás confirmar antes de agregar los <b>7 días</b>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]]))
   if item.get('action')=='renew':
    username=item.get('extra',{}).get('username')
    if username:return bool(renew_now(c,username,quota(c)[0] if not is_owner(c) else None))
@@ -1307,9 +1314,9 @@ def main():
     off=u['update_id']+1;OFF.write_text(str(off))
     try:
      if 'callback_query' in u:
-      z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''),m['chat'].get('type','private'))
+      z=u['callback_query'];m=z['message'];fu=z.get('from',{});name=' '.join(x for x in (fu.get('first_name',''),fu.get('last_name','')) if x).strip();registered(fu.get('id',m['chat']['id']),name,fu.get('username',''));cb(m['chat']['id'],m['message_id'],fu.get('id',m['chat']['id']),z['id'],z.get('data',''),m['chat'].get('type','private'))
      elif 'message' in u:
-      m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private')
+      m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private');fu=m.get('from',m.get('chat',{}));name=' '.join(x for x in (fu.get('first_name',''),fu.get('last_name','')) if x).strip();registered(c,name,fu.get('username',''))
       if m.get('web_app_data'):handle_webapp_data(c,m)
       elif m.get('document'):restore_document(c,m)
       elif m.get('text'):process_text(c,m['text'],CHAT_TYPES[c])
