@@ -171,10 +171,10 @@ El botón de actualización ahora informa claramente cuando el proceso termina:
 
 ### 💰 Monetización / Monetag
 El flujo de configuración solicita:
-1. SDK.
+1. ID de zona de Monetag (solo el número).
 2. Rewarded Interstitial.
-3. URL del bot.
-4. Archivo personalizado **`monetization.html`** enviado directamente al bot.
+3. URL pública de monetization.html.
+
 5. URL pública donde estará alojado el HTML.
 
 El archivo recibido debe llamarse exactamente `monetization.html`. El bot valida que sea HTML, guarda esa plantilla y coloca dentro los datos configurados. El archivo generado que se entrega al administrador también se llama **`monetization.html`**.
