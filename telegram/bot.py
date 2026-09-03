@@ -416,12 +416,7 @@ def referral_info(uid):
  remaining=max(0,3-used)
  link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}'
  reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
- names=[]
- for rid in refs:
-  rz=d['users'].get(str(rid),{})
-  names.append('• <b>'+e(referral_display(rz,rid))+'</b>')
- names_text='\n'.join(names) if names else 'Aún no tienes referidos válidos.'
- return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 Referidos válidos: <b>{len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n<b>👥 TUS REFERIDOS</b>\n{names_text}\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
+ return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 <b>Referidos: {len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
 
 def online_ssh():
  out=subprocess.getoutput("ss -tnp state established 2>/dev/null | grep -E ':22[[:space:]]|sshd' || true")
@@ -874,7 +869,7 @@ def cb(c,m,u,i,x,chat_type=None):
      inviter=d['users'][str(ref)];
      if c not in inviter.setdefault('referrals',[]):
       inviter['referrals'].append(c);save_db(d)
-      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else f'<code>{c}</code>'
+      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else d['users'][str(c)].get('name','Usuario')
       try:send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except Exception as er:log('REF NOTIFY '+repr(er))
     else:save_db(d)

@@ -815,10 +815,19 @@
        SUCCESS
     ========================================= */
 
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const adToken = params.get('token') || hashParams.get('token') || '';
+
     function sendSuccessAndClose() {
 
+        if (!adToken) {
+            showError();
+            return;
+        }
+
         const url =
-            "https://t.me/sshprivanoxbot?start=adcompleted";
+            "https://t.me/sshprivanoxbot?start=adcompleted_" + encodeURIComponent(adToken);
 
         try {
 
@@ -866,10 +875,13 @@
                 "CARGANDO ANUNCIO...";
 
 
-            if (
-                typeof show_11217882 !==
-                "function"
-            ) {
+            const sdkTag = document.querySelector('script[src*="libtl.com/sdk.js"]');
+            const sdkName = sdkTag ? (sdkTag.getAttribute('data-sdk') || '') : '';
+            const showAd = sdkName && typeof window[sdkName] === 'function'
+                ? window[sdkName]
+                : null;
+
+            if (!showAd) {
 
                 showError();
 
@@ -879,7 +891,7 @@
 
             try {
 
-                await show_11217882();
+                await showAd();
 
 
                 loader.style.display =
