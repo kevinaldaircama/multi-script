@@ -17,6 +17,8 @@ DEFAULT={
  'auto_update':{'enabled':False,'last_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
+ 'chat_messages':{},
+ 'ad_pending':{},
 }
 
 def log(s):
@@ -45,7 +47,11 @@ def load_db():
  if not isinstance(d.get('backup_schedule'),dict):d['backup_schedule']=json.loads(json.dumps(DEFAULT['backup_schedule']))
  d['backup_schedule'].setdefault('mode','once');d['backup_schedule'].setdefault('next_at',0)
  if not isinstance(d.get('ad_tokens'),dict):d['ad_tokens']={}
- now=time.time();d['ad_tokens']={k:v for k,v in d['ad_tokens'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
+ if not isinstance(d.get('chat_messages'),dict):d['chat_messages']={}
+ if not isinstance(d.get('ad_pending'),dict):d['ad_pending']={}
+ now=time.time();
+ d['ad_pending']={k:v for k,v in d['ad_pending'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
+ d['ad_tokens']={k:v for k,v in d['ad_tokens'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
  return d
 
 def save_db(d):
@@ -184,12 +190,53 @@ def localized_keyboard(uid,k):
   out.append(rr)
  return out
 
+def _track_message(c, result, kind='message'):
+ try:
+  mid=int(result.get('result',{}).get('message_id'))
+  d=db(); arr=d.setdefault('chat_messages',{}).setdefault(str(c),[])
+  arr.append({'id':mid,'ts':time.time(),'kind':kind})
+  # Keep a bounded history in case the bot is very busy.
+  d['chat_messages'][str(c)]=arr[-200:]
+  save_db(d)
+ except Exception as ex: log('TRACK MESSAGE '+repr(ex))
+ return result
+
+def delete_message(c,mid):
+ try: api('deleteMessage',{'chat_id':c,'message_id':mid}); return True
+ except Exception as ex: log('DELETE MESSAGE '+repr(ex)); return False
+
+def clear_chat_messages(c, keep_latest=False, older_than=None):
+ d=db();arr=d.get('chat_messages',{}).get(str(c),[])
+ if not arr:return
+ now=time.time();keep_id=None
+ if keep_latest and arr: keep_id=arr[-1].get('id')
+ remaining=[]
+ for item in arr:
+  mid=item.get('id');ts=float(item.get('ts',0) or 0)
+  if not mid: continue
+  should_delete=(mid!=keep_id) and (older_than is None or now-ts>=older_than)
+  if should_delete:
+   delete_message(c,mid)
+  else:
+   remaining.append(item)
+ d.setdefault('chat_messages',{})[str(c)]=remaining
+ save_db(d)
+
+def schedule_config_cleanup(c):
+ def w():
+  time.sleep(600)
+  try:
+   # Monetag setup messages/documents are transient and are removed after 10 minutes.
+   clear_chat_messages(c, keep_latest=False, older_than=0)
+  except Exception as ex: log('CONFIG CLEANUP '+repr(ex))
+ threading.Thread(target=w,daemon=True).start()
+
 def send(c,t,k=None):
  d={'chat_id':c,'text':t,'parse_mode':'HTML','disable_web_page_preview':'true'}
  if k:d['reply_markup']=json.dumps({'inline_keyboard':localized_keyboard(c,k)},ensure_ascii=False)
- return api('sendMessage',d)
+ return _track_message(c,api('sendMessage',d))
 def send_document(c,path,caption=''):
- return api_multipart('sendDocument',{'chat_id':str(c),'caption':caption,'parse_mode':'HTML'}, {'document':(Path(path).name,Path(path).read_bytes(),'text/html')})
+ return _track_message(c,api_multipart('sendDocument',{'chat_id':str(c),'caption':caption,'parse_mode':'HTML'}, {'document':(Path(path).name,Path(path).read_bytes(),'text/html')}),'document')
 def edit(c,m,t,k=None):
  try:return api('editMessageText',{'chat_id':c,'message_id':m,'text':t,'parse_mode':'HTML','disable_web_page_preview':'true','reply_markup':json.dumps({'inline_keyboard':localized_keyboard(c,k)},ensure_ascii=False) if k is not None else json.dumps({'inline_keyboard':[]})})
  except:return send(c,t,k)
@@ -265,7 +312,10 @@ def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
     time.sleep(4)
     sh('systemctl restart kevintech-telegram.service',20)
   else:
-   send(c,f'🔴 <b>{e(title)}</b>\n\n❌ La operación no pudo completarse.\n\n<pre>{e(out or "Sin detalles del error.")}</pre>',k)
+   if title=='Actualización del sistema' and ('KEY_STATUS=USED' in out or 'La Key ya fue utilizada' in out):
+    send(c,'🟠 <b>KEY YA UTILIZADA</b>\n\n❌ La Key de actualización que ingresaste ya fue utilizada anteriormente.\n\n🔑 Usa una Key nueva para realizar otra actualización.',k)
+   else:
+    send(c,f'🔴 <b>{e(title)}</b>\n\n❌ La operación no pudo completarse.\n\n<pre>{e(out or "Sin detalles del error.")}</pre>',k)
  threading.Thread(target=w,daemon=True).start()
 
 def db():return load_db()
@@ -545,11 +595,22 @@ def ad_gate(c,action,extra=None):
  if is_admin(c):return False
  ads=ad_configurations()
  if not ads:return False
+ # Do not create a long-lived token when the user only opens the ad message.
+ # The token is generated at the moment the Mini App button is pressed.
+ pending=secrets.token_urlsafe(9)
+ d=db();d.setdefault('ad_pending',{})[pending]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+3600};save_db(d)
+ return send(c,'💰 <b>UN PASO ANTES DE CONTINUAR</b>\n\nPara mantener el servicio gratuito, mira el anuncio y completa la publicidad.\n\nPulsa el botón para abrir la Mini App y generar un enlace nuevo.',[[{'text':'▶️ Ver anuncio y continuar','callback_data':'adopen:'+pending}]]) or True
+
+def create_ad_token(c,action,extra=None):
+ ads=ad_configurations()
+ if not ads:return None
  host=ads[0][1].get('host_url','').strip()
- if not host:return False
- token=secrets.token_urlsafe(18);d=db();d.setdefault('ad_tokens',{})[token]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+900};save_db(d)
- sep='&' if '?' in host else '?';url=host+sep+urllib.parse.urlencode({'token':token,'uid':c})
- return send(c,'💰 <b>UN PASO ANTES DE CONTINUAR</b>\n\nPara mantener el servicio gratuito, mira el anuncio y completa la publicidad.\n\nAl terminar volverás automáticamente al bot.',[[{'text':'▶️ Ver anuncio y continuar','web_app':{'url':url}}]]) or True
+ if not host:return None
+ token=secrets.token_urlsafe(24);d=db();d.setdefault('ad_tokens',{})[token]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+900};save_db(d)
+ sep='&' if '?' in host else '?'
+ # Put token in both query and fragment. The query is used by the page and the
+ # fragment is a fallback if a hosting redirect strips the query string.
+ return host+sep+urllib.parse.urlencode({'token':token,'uid':c})+'#token='+urllib.parse.quote(token)
 
 def consume_ad_token(c,token):
  d=db();item=d.get('ad_tokens',{}).get(token)
@@ -711,6 +772,18 @@ def cb(c,m,u,i,x,chat_type=None):
  registered(u);ans(i,'⚡');d=db()
  if x.startswith('lang:'):
   language=x.split(':',1)[1];d['users'][str(u)]['language']=language;d['users'][str(u)]['language_selected']=True;save_db(d);STATE.pop(u,None);return edit(c,m,tr(u,'home'),home(u))
+ if x.startswith('adopen:'):
+  try:
+   pending=x.split(':',1)[1];pd=db().get('ad_pending',{}).get(pending)
+   if not pd or int(pd.get('uid',0))!=c or float(pd.get('expires',0))<time.time():raise ValueError('solicitud expirada')
+   action=pd.get('action','');extra=pd.get('extra',{}) or {}
+   if action not in ('create','renew'):raise ValueError('acción inválida')
+   d=db();d.get('ad_pending',{}).pop(pending,None);save_db(d)
+   url=create_ad_token(c,action,extra)
+   if not url:return ans(i,'Publicidad no configurada')
+   return edit(c,m,'💰 <b>ANUNCIO LISTO</b>\n\nPulsa el botón para abrir la Mini App y ver el anuncio.\n\n🔐 El enlace acaba de generarse y es válido por 15 minutos.',[[{'text':'▶️ Ver anuncio y continuar','web_app':{'url':url}}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  except Exception as ex:
+   log('AD OPEN '+repr(ex));return ans(i,'No se pudo preparar el anuncio')
  if x=='cancel':STATE.pop(c,None);return edit(c,m,tr(u,'home'),home(u))
  if x=='home':return edit(c,m,tr(u,'home'),home(u))
  if x=='info':return edit(c,m,tr(u,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
@@ -766,7 +839,9 @@ def cb(c,m,u,i,x,chat_type=None):
      ref=urow.get('referrer')
      if ref and str(ref) in d['users'] and c not in d['users'][str(ref)].setdefault('referrals',[]):
       d['users'][str(ref)]['referrals'].append(c);save_db(d)
-      try:send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl usuario @{e(urow.get("name",str(c)))} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
+      try:
+       mention=("@"+urow.get("username")) if urow.get("username") else urow.get("name",str(c))
+       send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl usuario {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except:pass
      save_db(d)
      return send(c,v2ray_account_message(c,dat))
@@ -945,6 +1020,12 @@ def adsgram_menu(c,m=0):
  configured=bool(db().get('monetization',{}).get('adsgram',''));text='📱 <b>ADSGRAM</b>\n\nEstado: <b>'+('🟢 CONFIGURADO' if configured else '🔴 NO CONFIGURADO')+'</b>'
  k=[[{'text':'⏻ Apagar','callback_data':'adsgram_toggle'},{'text':'⚙️ Reconfigurar','callback_data':'adsgram_config'}]] if configured else [[{'text':'⚙️ Configurar','callback_data':'adsgram_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
+def _script_markup(code):
+ if not code:return ''
+ code=str(code).strip()
+ if '<script' in code.lower():return code
+ return '<script>\n'+code+'\n</script>'
+
 def generate_monetag_html(uid,dat):
  template=TD/'monetization.html'
  if not template.exists():
@@ -956,11 +1037,23 @@ def generate_monetag_html(uid,dat):
   az=json.loads(db().get('monetization',{}).get('adsgram',''))
   adsgram_code=az.get('code','') if isinstance(az,dict) else str(az)
  except:pass
- fn=BACK/'monetization.html';html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps(sdk)).replace('__REWARD_CODE_JSON__',json.dumps(reward)).replace('__ADSGRAM_CODE_JSON__',json.dumps(adsgram_code))
+ # Put the configured Monetag/Adsgram snippets directly into the HTML so the
+ # provider scripts load as normal page scripts instead of being injected after load.
+ scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
+ if scripts:
+  html=html.replace('</body>',scripts+'\n</body>')
+ # These placeholders are retained for compatibility with older templates.
+ html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps('')).replace('__REWARD_CODE_JSON__',json.dumps('')).replace('__ADSGRAM_CODE_JSON__',json.dumps(''))
+ # Replace the old dynamic injection call with a reliable wait for the statically loaded SDK.
+ html=html.replace("inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();", "let fn=null;for(let n=0;n<100&&!fn;n++){fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)await new Promise(r=>setTimeout(r,100));}if(!fn)throw new Error('SDK no disponible');await window[fn]();")
+ fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted','https://t.me/sshprivanoxbot?start=adcompleted')
  fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
+ if f=='monetag':
+  # Remove the previous setup prompt/document before moving to the next step.
+  clear_chat_messages(c, keep_latest=False, older_than=0)
  if f=='system_update_key' and step=='key':
   key=t.strip()
   if not key:return send(c,'❌ La Key no puede estar vacía.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
@@ -1030,8 +1123,8 @@ def admin_text(c,t):
   return send(c,'🌐 <b>Paso 4</b>\n\nAhora envía la <b>URL pública final</b> donde vas a alojar <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='hosturl':
   dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
-  fn=generate_monetag_html(c,dat)
-  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 <code>monetization.html</code> ya fue enviado anteriormente.\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n✅ No se enviará el archivo otra vez.')
+  schedule_config_cleanup(c)
+  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📄 <code>monetization.html</code> ya fue enviado anteriormente.\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n✅ No se enviará el archivo otra vez.\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
  if f=='monetag' and step=='url':dat['url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);fn=generate_monetag_html(c,dat);send(c,'🟢 <b>Monetag configurado correctamente.</b>');return send_document(c,fn,'📄 HTML personalizado de Monetag.')
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
@@ -1127,12 +1220,33 @@ def security_monitor():
   except Exception as ex:log('SECURITY '+repr(ex))
   time.sleep(30)
 
+def message_cleanup_scheduler():
+ while True:
+  try:
+   d=db();now=time.time()
+   for chat,arr in list(d.get('chat_messages',{}).items()):
+    if len(arr)<=1:continue
+    # After 24h remove old bot messages but always preserve the latest bot message.
+    latest_id=arr[-1].get('id')
+    kept=[]
+    for item in arr:
+     mid=item.get('id');ts=float(item.get('ts',0) or 0)
+     if mid==latest_id or now-ts<86400:
+      kept.append(item)
+     else:
+      delete_message(int(chat),int(mid))
+    d['chat_messages'][chat]=kept
+   save_db(d)
+  except Exception as ex:log('MESSAGE CLEANUP '+repr(ex))
+  time.sleep(1800)
+
 def main():
  global BOT_USERNAME
  env();load_db();LOG.parent.mkdir(parents=True,exist_ok=True);LOG.touch();LOG.chmod(0o600);api('deleteWebhook',{'drop_pending_updates':'false'})
  try:BOT_USERNAME=api('getMe')['result'].get('username','')
  except:BOT_USERNAME=''
  threading.Thread(target=backup_scheduler,daemon=True).start()
+ threading.Thread(target=message_cleanup_scheduler,daemon=True).start()
  threading.Thread(target=security_monitor,daemon=True).start()
  threading.Thread(target=v2ray_expiration_monitor,daemon=True).start();threading.Thread(target=near_expiry_notifications,daemon=True).start();threading.Thread(target=auto_update_monitor,daemon=True).start()
  off=int(OFF.read_text()) if OFF.exists() and OFF.read_text().strip().isdigit() else 0;log('BOT ONLINE')
