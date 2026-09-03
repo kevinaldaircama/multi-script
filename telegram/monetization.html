@@ -9,6 +9,13 @@
     <!-- Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
+    <!-- Monetag -->
+    <script
+        src="//libtl.com/sdk.js"
+        data-zone="11217882"
+        data-sdk="show_11217882">
+    </script>
+
     <style>
         * {
             box-sizing: border-box;
@@ -860,7 +867,7 @@
 
 
             if (
-                typeof show_ZONE_PLACEHOLDER !==
+                typeof show_11217882 !==
                 "function"
             ) {
 
@@ -872,7 +879,7 @@
 
             try {
 
-                await show_ZONE_PLACEHOLDER();
+                await show_11217882();
 
 
                 loader.style.display =

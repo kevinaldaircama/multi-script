@@ -7,7 +7,7 @@ BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'b
 DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
 
-DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const payload=JSON.stringify({type:'adcompleted',token:token});try{if(tg&&typeof tg.sendData==='function'&&token){tg.sendData(payload);setTimeout(()=>tg.close(),250);return}}catch(e){}const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
+DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="https://libtl.com/sdk.js" data-zone="11217882" data-sdk="show_11217882"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const payload=JSON.stringify({type:'adcompleted',token:token});try{if(tg&&typeof tg.sendData==='function'&&token){tg.sendData(payload);setTimeout(()=>tg.close(),250);return}}catch(e){}const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
 
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
@@ -159,9 +159,9 @@ LANG_NAMES={
  'de':'🇩🇪 Deutsch','it':'🇮🇹 Italiano','ru':'🇷🇺 Русский','tr':'🇹🇷 Türkçe',
 }
 BUTTONS={
- 'es':{'users':'👤 Usuarios','referrals':'🔗 Referidos','language':'🌐 Idioma','info':'ℹ️ Información','settings':'⚙️ Ajustes','home':'🔙 Inicio','create':'➕ Crear cuenta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Cuenta','delete':'🗑️ Eliminar cuenta','cancel':'❌ Cancelar','monetization':'💰 Monetización','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Eliminar','monetag_toggle_on':'🟢 Encender','monetag_toggle_off':'⛔ Apagar','system_update':'🔄 Actualizar sistema','system_update_now':'⬇️ Actualizar ahora','auto_update_toggle_on':'🤖 Activar automática','auto_update_toggle_off':'⛔ Desactivar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Agregar admin','admin_remove':'🗑️ Quitar admin','admin_rename':'✏️ Renombrar admin','backup_restore':'💾 Respaldos y restauración','backup_menu':'💾 Respaldos y restauración','backup_now':'📤 Enviar ahora','restore':'♻️ Restaurar','quotas':'📅 Cuotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Seguridad','tools':'🛠 Herramientas','people':'👥 Personas registradas','message_users':'📢 Mensaje a usuarios','bans':'🚫 Banear usuario','domain':'🌐 Dominio','access_toggle':'🔐 Acceso','ref_renew':'♻️ Renovar 24h (3 referidos)','create:normal':'👤 Cuenta normal','create:v2ray':'🚀 Cuenta V2Ray','backup:daily':'📅 Enviar diario','backup:7d':'7️⃣ Cada 7 días','backup:15d':'1️⃣5️⃣ Cada 15 días','backup:30d':'3️⃣0️⃣ Cada 30 días','backup:once':'☝️ Solo una vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Archivos','security:auto':'🛡️ Auto banea SSH','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banear usuarios','ban_remove':'🔓 Desbanear','ban_list':'📋 Lista de ban'},
- 'en':{'users':'👤 Users','referrals':'🔗 Referrals','language':'🌐 Language','info':'ℹ️ Information','settings':'⚙️ Settings','home':'🔙 Home','create':'➕ Create account','renew':'♻️ Renew','list':'📋 List','online':'🟢 Online','account':'👤 Account','delete':'🗑️ Delete account','cancel':'❌ Cancel','monetization':'💰 Monetization','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configure','monetag_delete':'🗑️ Delete','monetag_toggle_on':'🟢 Enable','monetag_toggle_off':'⛔ Disable','system_update':'🔄 Update system','system_update_now':'⬇️ Update now','auto_update_toggle_on':'🤖 Enable automatic','auto_update_toggle_off':'⛔ Disable automatic','admin_list':'📋 Admin list','admin_add':'➕ Add admin','admin_remove':'🗑️ Remove admin','admin_rename':'✏️ Rename admin','backup_restore':'💾 Backup & restore','backup_menu':'💾 Backup & restore','backup_now':'📤 Send now','restore':'♻️ Restore','quotas':'📅 Quotas','restart_vps':'♻️ Restart VPS','security':'🛡️ Security','tools':'🛠 Tools','people':'👥 Registered users','message_users':'📢 Message users','bans':'🚫 Ban user','domain':'🌐 Domain','access_toggle':'🔐 Access','ref_renew':'♻️ Renew 24h (3 referrals)','create:normal':'👤 Normal account','create:v2ray':'🚀 V2Ray account','backup:daily':'📅 Send daily','backup:7d':'7️⃣ Every 7 days','backup:15d':'1️⃣5️⃣ Every 15 days','backup:30d':'3️⃣0️⃣ Every 30 days','backup:once':'☝️ Once','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimize','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Files','security:auto':'🛡️ Auto-ban SSH','quota_public':'👥 Public','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Ban users','ban_remove':'🔓 Unban','ban_list':'📋 Ban list'},
- 'pt':{'users':'👤 Usuários','referrals':'🔗 Indicações','language':'🌐 Idioma','info':'ℹ️ Informações','settings':'⚙️ Configurações','home':'🔙 Início','create':'➕ Criar conta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Conta','delete':'🗑️ Excluir conta','cancel':'❌ Cancelar','monetization':'💰 Monetização','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Excluir','monetag_toggle_on':'🟢 Ativar','monetag_toggle_off':'⛔ Desativar','system_update':'🔄 Atualizar sistema','system_update_now':'⬇️ Atualizar agora','auto_update_toggle_on':'🤖 Ativar automática','auto_update_toggle_off':'⛔ Desativar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Adicionar admin','admin_remove':'🗑️ Remover admin','admin_rename':'✏️ Renomear admin','backup_restore':'💾 Backup e restauração','backup_menu':'💾 Backup e restauração','backup_now':'📤 Enviar agora','restore':'♻️ Restaurar','quotas':'📅 Cotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Segurança','tools':'🛠 Ferramentas','people':'👥 Usuários registrados','message_users':'📢 Mensagem aos usuários','bans':'🚫 Banir usuário','domain':'🌐 Domínio','access_toggle':'🔐 Acesso','ref_renew':'♻️ Renovar 24h (3 indicações)','create:normal':'👤 Conta normal','create:v2ray':'🚀 Conta V2Ray','backup:daily':'📅 Enviar diariamente','backup:7d':'7️⃣ A cada 7 dias','backup:15d':'1️⃣5️⃣ A cada 15 dias','backup:30d':'3️⃣0️⃣ A cada 30 dias','backup:once':'☝️ Uma vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Otimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Arquivos','security:auto':'🛡️ Bloqueio SSH automático','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banir usuários','ban_remove':'🔓 Desbanir','ban_list':'📋 Lista de banidos'}
+ 'es':{'users':'👤 Usuarios','referrals':'🔗 Referidos','language':'🌐 Idioma','info':'ℹ️ Información','settings':'⚙️ Ajustes','home':'🔙 Inicio','create':'➕ Crear cuenta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Cuenta','delete':'🗑️ Eliminar cuenta','cancel':'❌ Cancelar','monetization':'💰 Monetización','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Eliminar','monetag_toggle_on':'🟢 Encender','monetag_toggle_off':'⛔ Apagar','system_update':'🔄 Actualizar sistema','system_update_now':'⬇️ Actualizar ahora','auto_update_toggle_on':'🤖 Activar automática','auto_update_toggle_off':'⛔ Desactivar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Agregar admin','admin_remove':'🗑️ Quitar admin','admin_rename':'✏️ Renombrar admin','backup_restore':'💾 Respaldos y restauración','backup_menu':'💾 Respaldos y restauración','backup_now':'📤 Enviar ahora','restore':'♻️ Restaurar','quotas':'📅 Cuotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Seguridad','tools':'🛠 Herramientas','people':'👥 Personas registradas','message_users':'📢 Mensaje a usuarios','bans':'🚫 Banear usuario','domain':'🌐 Dominio','access_toggle':'🔐 Acceso','ref_renew':'🎁 Cangear 7 días (3 referidos)','create:normal':'👤 Cuenta normal','create:v2ray':'🚀 Cuenta V2Ray','backup:daily':'📅 Enviar diario','backup:7d':'7️⃣ Cada 7 días','backup:15d':'1️⃣5️⃣ Cada 15 días','backup:30d':'3️⃣0️⃣ Cada 30 días','backup:once':'☝️ Solo una vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Archivos','security:auto':'🛡️ Auto banea SSH','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banear usuarios','ban_remove':'🔓 Desbanear','ban_list':'📋 Lista de ban'},
+ 'en':{'users':'👤 Users','referrals':'🔗 Referrals','language':'🌐 Language','info':'ℹ️ Information','settings':'⚙️ Settings','home':'🔙 Home','create':'➕ Create account','renew':'♻️ Renew','list':'📋 List','online':'🟢 Online','account':'👤 Account','delete':'🗑️ Delete account','cancel':'❌ Cancel','monetization':'💰 Monetization','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configure','monetag_delete':'🗑️ Delete','monetag_toggle_on':'🟢 Enable','monetag_toggle_off':'⛔ Disable','system_update':'🔄 Update system','system_update_now':'⬇️ Update now','auto_update_toggle_on':'🤖 Enable automatic','auto_update_toggle_off':'⛔ Disable automatic','admin_list':'📋 Admin list','admin_add':'➕ Add admin','admin_remove':'🗑️ Remove admin','admin_rename':'✏️ Rename admin','backup_restore':'💾 Backup & restore','backup_menu':'💾 Backup & restore','backup_now':'📤 Send now','restore':'♻️ Restore','quotas':'📅 Quotas','restart_vps':'♻️ Restart VPS','security':'🛡️ Security','tools':'🛠 Tools','people':'👥 Registered users','message_users':'📢 Message users','bans':'🚫 Ban user','domain':'🌐 Domain','access_toggle':'🔐 Access','ref_renew':'🎁 Redeem 7 days (3 referrals)','create:normal':'👤 Normal account','create:v2ray':'🚀 V2Ray account','backup:daily':'📅 Send daily','backup:7d':'7️⃣ Every 7 days','backup:15d':'1️⃣5️⃣ Every 15 days','backup:30d':'3️⃣0️⃣ Every 30 days','backup:once':'☝️ Once','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimize','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Files','security:auto':'🛡️ Auto-ban SSH','quota_public':'👥 Public','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Ban users','ban_remove':'🔓 Unban','ban_list':'📋 Ban list'},
+ 'pt':{'users':'👤 Usuários','referrals':'🔗 Indicações','language':'🌐 Idioma','info':'ℹ️ Informações','settings':'⚙️ Configurações','home':'🔙 Início','create':'➕ Criar conta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Conta','delete':'🗑️ Excluir conta','cancel':'❌ Cancelar','monetization':'💰 Monetização','monetag':'💰 Monetag','adsgram':'📱 Adsgram','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Excluir','monetag_toggle_on':'🟢 Ativar','monetag_toggle_off':'⛔ Desativar','system_update':'🔄 Atualizar sistema','system_update_now':'⬇️ Atualizar agora','auto_update_toggle_on':'🤖 Ativar automática','auto_update_toggle_off':'⛔ Desativar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Adicionar admin','admin_remove':'🗑️ Remover admin','admin_rename':'✏️ Renomear admin','backup_restore':'💾 Backup e restauração','backup_menu':'💾 Backup e restauração','backup_now':'📤 Enviar agora','restore':'♻️ Restaurar','quotas':'📅 Cotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Segurança','tools':'🛠 Ferramentas','people':'👥 Usuários registrados','message_users':'📢 Mensagem aos usuários','bans':'🚫 Banir usuário','domain':'🌐 Domínio','access_toggle':'🔐 Acesso','ref_renew':'🎁 Resgatar 7 dias (3 indicações)','create:normal':'👤 Conta normal','create:v2ray':'🚀 Conta V2Ray','backup:daily':'📅 Enviar diariamente','backup:7d':'7️⃣ A cada 7 dias','backup:15d':'1️⃣5️⃣ A cada 15 dias','backup:30d':'3️⃣0️⃣ A cada 30 dias','backup:once':'☝️ Uma vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Otimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Arquivos','security:auto':'🛡️ Bloqueio SSH automático','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banir usuários','ban_remove':'🔓 Desbanir','ban_list':'📋 Lista de banidos'}
 }
 # Fill the remaining languages from English, replacing the most visible labels.
 for _lg,_name in [('fr','Français'),('de','Deutsch'),('it','Italiano'),('ru','Русский'),('tr','Türkçe')]:
@@ -401,18 +401,27 @@ def account_info(uid,username):
  if p.exists():lim=p.read_text(errors='ignore').strip() or 'Ilimitado'
  return f'''👤 <b>INFORMACIÓN DE CUENTA</b>\n\n• Usuario: <code>{e(username)}</code>\n• Propietario: <code>{e(('@'+owner_user) if owner_user else owner)}</code>\n• Expira: <code>{e(exp)}</code>\n• Límite de dispositivos/IP: <code>{e(lim)}</code>'''
 
+def referral_display(z,uid):
+ username=str(z.get('username','')).strip()
+ if username:return '@'+username
+ return str(z.get('name','')).strip() or str(uid)
+
 def referral_info(uid):
  d=db();u=d['users'].get(str(uid),{});refs=u.get('referrals',[])
  window=float(u.get('referral_window_start',0) or 0);used=int(u.get('referral_renews_used',0) or 0)
  if not window or time.time()-window>=86400:
   used=0
-  if window:u['referral_window_start']=time.time();u['referral_renews_used']=0;save_db(d)
+  if window:
+   u['referral_window_start']=time.time();u['referral_renews_used']=0;save_db(d)
+ remaining=max(0,3-used)
+ link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}'
+ reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
  names=[]
  for rid in refs:
-  rz=d['users'].get(str(rid),{});uname=str(rz.get('username','')).strip();name=str(rz.get('name','')).strip() or 'Usuario';label='@'+uname if uname else name;names.append('• '+e(label))
- remaining=max(0,3-used);link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}';reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
- redeem='\n\n🎁 <b>Tienes un canje disponible.</b> Cada canje agrega <b>7 días</b> a una cuenta después de ver el anuncio.\n' if len(refs)>=3 and used<3 else ''
- return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 Referidos válidos: <b>{len(refs)}</b>\n🎁 Canjes usados en 24h: <b>{used}/3</b>\n⭐ Canjes disponibles: <b>{remaining}</b>\n\n📋 <b>Tus referidos:</b>\n{chr(10).join(names) if names else 'Aún no tienes referidos.'}{redeem}\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar los canjes.\n🎁 Cada canje agrega <b>7 días</b>.\n⏱️ {reset}'''
+  rz=d['users'].get(str(rid),{})
+  names.append('• <b>'+e(referral_display(rz,rid))+'</b>')
+ names_text='\n'.join(names) if names else 'Aún no tienes referidos válidos.'
+ return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 Referidos válidos: <b>{len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n<b>👥 TUS REFERIDOS</b>\n{names_text}\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
 
 def online_ssh():
  out=subprocess.getoutput("ss -tnp state established 2>/dev/null | grep -E ':22[[:space:]]|sshd' || true")
@@ -682,8 +691,6 @@ def process_text(c,t,chat_type=None):
  # Las configuraciones de Monetag/Adsgram deben procesarse antes que cualquier comando.
  # Esto permite pegar scripts largos o bloques que comienzan con '/'.
  st0=STATE.get(c)
- if st0 and st0.get('f')=='ref_renew':
-  return admin_text(c,t)
  if st0 and st0.get('f') in ('monetag','adsgram','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
   return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
@@ -700,9 +707,9 @@ def process_text(c,t,chat_type=None):
  if cmd in ('/eliminar','/borrar'):
   STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
  if cmd in ('/referidos','/referrals'):
-  z=db().get('users',{}).get(str(c),{});rows=[]
-  if len(z.get('referrals',[]))>=3 and int(z.get('referral_renews_used',0) or 0)<3:rows.append([{'text':'🎁 Canjear 7 días','callback_data':'ref_redeem'}])
-  rows.append([{'text':'🔙 Inicio','callback_data':'home'}]);return send(c,referral_info(c),rows)
+  rows=[[{'text':'🎁 Cangear 7 días','callback_data':'ref_renew'}]] if len(d['users'].get(str(c),{}).get('referrals',[]))>=3 else []
+  rows.append([{'text':'🔙 Inicio','callback_data':'home'}])
+  return send(c,referral_info(c),rows)
  if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
  if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
@@ -720,8 +727,15 @@ def process_text(c,t,chat_type=None):
  f,step,dat=st['f'],st['s'],st['d']
  if f=='ref_renew' and step=='u':
   username=t.strip()
-  if not userexists(username):return send(c,'❌ Cuenta no encontrada. Escribe un usuario SSH válido:',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
-  dat['user']=username;st['s']='confirm';return send(c,'🔎 <b>VERIFICAR CUENTA</b>\n\n'+account_info(c,username)+'\n\n⚠️ Si confirmas, se agregarán <b>7 días</b> automáticamente a esta cuenta.',[[{'text':'✅ Sí, es correcta','callback_data':'ref_confirm'},{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  if not userexists(username):return send(c,'❌ Cuenta no encontrada.\n\nEstimado usuario, por favor escriba un usuario SSH válido para cangear.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  # Only allow the owner to redeem days on their own account.
+  d=db();owner_row=d['users'].get(str(c),{})
+  if username not in owner_row.get('accounts',[]):return send(c,'❌ Esa cuenta no pertenece a tu usuario de Telegram. Escribe una cuenta que sea tuya:',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  dat['user']=username;st['s']='confirm'
+  info=account_info(c,username)
+  return send(c,'🎁 <b>DATOS PARA CANJEAR</b>\n\n'+info+'\n\n¿La información es correcta?\n\nAl confirmar se agregarán <b>7 días</b> a esta cuenta.',[[{'text':'✅ Sí, es correcto','callback_data':'ref_confirm'}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if f=='ref_renew' and step=='confirm':
+  return send(c,'❌ Usa los botones para confirmar el canje.',[[{'text':'✅ Sí, es correcto','callback_data':'ref_confirm'}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if step=='u' and f in ('create','renew','delete','account'):
   u=t.strip()
   if f in ('delete','account') and not userexists(u):return send(c,'❌ Cuenta no encontrada. Escribe un usuario válido:')
@@ -766,22 +780,35 @@ def cb(c,m,u,i,x,chat_type=None):
    pending=x.split(':',1)[1];pd=db().get('ad_pending',{}).get(pending)
    if not pd or int(pd.get('uid',0))!=c or float(pd.get('expires',0))<time.time():raise ValueError('solicitud expirada')
    action=pd.get('action','');extra=pd.get('extra',{}) or {}
-   if action not in ('create','renew','ref_redeem'):raise ValueError('acción inválida')
+   if action not in ('create','renew'):raise ValueError('acción inválida')
    d=db();d.get('ad_pending',{}).pop(pending,None);save_db(d)
    url=create_ad_token(c,action,extra)
    if not url:return ans(i,'Publicidad no configurada')
    return edit(c,m,'💰 <b>ANUNCIO LISTO</b>\n\nPulsa el botón para abrir la Mini App y ver el anuncio.\n\n🔐 El enlace acaba de generarse y es válido por 15 minutos.',[[{'text':'▶️ Ver anuncio y continuar','web_app':{'url':url}}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
   except Exception as ex:
    log('AD OPEN '+repr(ex));return ans(i,'No se pudo preparar el anuncio')
+ if x=='ref_confirm':
+  st=STATE.get(u)
+  if not st or st.get('f')!='ref_renew' or st.get('s')!='confirm':return ans(i,'Solicitud de canje expirada')
+  username=st.get('d',{}).get('user','');d=db();z=d['users'].get(str(u),{})
+  if username not in z.get('accounts',[]):STATE.pop(u,None);return ans(i,'La cuenta ya no pertenece a tu usuario')
+  # Admins/superadmin bypass advertising completely. Public users must watch an
+  # enabled ad before the 7-day referral reward is applied.
+  if is_admin(u):
+   return apply_referral_reward(u,username)
+  if ad_gate(u,'ref_renew',{'username':username,'days':7}):
+   return True
+  return apply_referral_reward(u,username)
  if x=='cancel':STATE.pop(c,None);return edit(c,m,tr(u,'home'),home(u))
  if x=='home':return edit(c,m,tr(u,'home'),home(u))
  if x=='info':return edit(c,m,tr(u,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
  if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
  if x=='referrals':
-  z=d['users'].get(str(u),{});rows=[]
-  if len(z.get('referrals',[]))>=3 and int(z.get('referral_renews_used',0) or 0)<3:rows.append([{'text':'🎁 Canjear 7 días','callback_data':'ref_redeem'}])
-  rows.append([{'text':'🔙 Inicio','callback_data':'home'}]);return edit(c,m,referral_info(u),rows)
+  ref_count=len(d['users'].get(str(u),{}).get('referrals',[]))
+  rows=[[{'text':'🎁 Cangear 7 días','callback_data':'ref_renew'}]] if ref_count>=3 else []
+  rows.append([{'text':'🔙 Inicio','callback_data':'home'}])
+  return edit(c,m,referral_info(u),rows)
  if x=='create':
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Usa /crear en el chat privado del bot.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
@@ -832,7 +859,7 @@ def cb(c,m,u,i,x,chat_type=None):
      if ref and str(ref) in d['users'] and c not in d['users'][str(ref)].setdefault('referrals',[]):
       d['users'][str(ref)]['referrals'].append(c);save_db(d)
       try:
-       mention=("@"+urow.get("username")) if urow.get("username") else (urow.get("name") or 'Usuario')
+       mention=("@"+urow.get("username")) if urow.get("username") else urow.get("name",str(c))
        send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl usuario {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except:pass
      save_db(d)
@@ -847,7 +874,7 @@ def cb(c,m,u,i,x,chat_type=None):
      inviter=d['users'][str(ref)];
      if c not in inviter.setdefault('referrals',[]):
       inviter['referrals'].append(c);save_db(d)
-      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else (d['users'][str(c)].get('name') or 'Usuario')
+      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else f'<code>{c}</code>'
       try:send(int(ref),f'🎉 <b>¡Felicidades!</b>\nEl {e(mention)} ha creado su primera cuenta.\n¡Has ganado <b>1 referido</b>!\nUsa /referidos o el menú para canjearlo.')
       except Exception as er:log('REF NOTIFY '+repr(er))
     else:save_db(d)
@@ -855,42 +882,17 @@ def cb(c,m,u,i,x,chat_type=None):
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>')
   if x=='do:renew':
    rc,o=sh(f'chage -E {q(exp)} {q(u0)}',10);return send(c,account_message(c,dat,True)) if rc==0 else send(c,'🔴 <b>Error al renovar</b>\n<pre>'+e(o)+'</pre>')
- if x in ('ref_redeem','ref_renew'):
-  d=db();z=d['users'][str(u)];window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
-  if not window or time.time()-window>=86400:window=time.time();used=0;z['referral_window_start']=window;z['referral_renews_used']=0;save_db(d)
-  if len(z.get('referrals',[]))<3:return send(c,f'❌ Necesitas 3 referidos. Te faltan <b>{3-len(z.get("referrals",[]))}</b>.')
-  if used>=3:return send(c,'❌ Ya utilizaste los 3 canjes de este período. Podrás usar otros 3 después de 24 horas.')
-  if ad_gate(c,'ref_redeem',{'days':7}):return True
-  STATE[c]={'f':'ref_renew','s':'u','d':{}}
-  return send(c,'🎁 <b>CANJE DE REFERIDO</b>\n\nEstimado usuario, por favor escribe tu <b>usuario SSH</b> para canjear.\n\nDespués te mostraré su información y podrás confirmar antes de agregar los <b>7 días</b>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
- if x=='ref_confirm':
-  st=STATE.get(c)
-  if not st or st.get('f')!='ref_renew' or st.get('s')!='confirm':return send(c,'❌ La solicitud de canje expiró. Vuelve a pulsar Canjear.')
-  username=st.get('d',{}).get('user','').strip();z=d['users'][str(u)]
-  if not userexists(username):STATE.pop(c,None);return send(c,'❌ Esa cuenta ya no existe.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
-  window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
-  if not window or time.time()-window>=86400:window=time.time();used=0
-  if len(z.get('referrals',[]))<3 or used>=3:STATE.pop(c,None);return send(c,'❌ Ya no tienes un canje disponible.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
-  days=7;isv2=False;v2owner=None
-  for sid,ownerrow in d['users'].items():
-   if username in ownerrow.get('v2ray_accounts',[]):v2owner=sid;isv2=True;break
-  if isv2:
-   oldexp=d['users'][v2owner].get('v2ray_expirations',{}).get(username)
-   try:base=datetime.datetime.strptime(oldexp,'%d/%m/%Y').date() if oldexp else datetime.date.today()
-   except:base=datetime.date.today()
-   if base<datetime.date.today():base=datetime.date.today()
-   newexp=base+datetime.timedelta(days=days);d['users'][v2owner].setdefault('v2ray_expirations',{})[username]=newexp.strftime('%d/%m/%Y')
+ if x=='ref_renew':
+  d=db();z=d['users'][str(u)]
+  if len(z.get('referrals',[]))<3:return send(c,f'❌ Necesitas 3 referidos para cangear. Te faltan <b>{3-len(z.get("referrals",[]))}</b>.')
+  if is_admin(u):
+   pass
   else:
-   current=subprocess.getoutput(f"chage -l {q(username)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'").strip()
-   try:base=datetime.datetime.strptime(current,'%b %d, %Y').date()
-   except:
-    try:base=datetime.datetime.strptime(current,'%Y-%m-%d').date()
-    except:base=datetime.date.today()
-   if base<datetime.date.today():base=datetime.date.today()
-   newexp=base+datetime.timedelta(days=days);rc,o=sh(f'chage -E {q(newexp.strftime("%Y-%m-%d"))} {q(username)}',10)
-   if rc!=0:return send(c,'🔴 <b>No se pudo agregar los 7 días.</b>\n<pre>'+e(o)+'</pre>')
-  z['referral_window_start']=window;z['referral_renews_used']=used+1;save_db(d);STATE.pop(c,None)
-  return send(c,'🎉 <b>CANJE COMPLETADO</b>\n\n👤 Cuenta: <code>'+e(username)+'</code>\n🎁 Se agregaron <b>7 días</b> correctamente.',[[{'text':'🔙 Inicio','callback_data':'home'}]])
+   window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
+   if not window or time.time()-window>=86400:
+    window=time.time();used=0;z['referral_window_start']=window;z['referral_renews_used']=0;save_db(d)
+   if used>=3:return send(c,'❌ Ya utilizaste los 3 canjes de este período. Podrás usar otros después de 24 horas.')
+  STATE[u]={'f':'ref_renew','s':'u','d':{}};return send(c,'🎁 <b>CANJEAR 7 DÍAS</b>\n\nEstimado usuario, por favor escriba el <b>usuario de su cuenta</b> para cangear.\n\nDespués te mostraré la información para confirmar que sea correcta.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='userop:delete':
   st=STATE.pop(c,None)
   if not st:return send(c,'❌ Operación expirada.')
@@ -937,7 +939,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
  if x=='monetag':return monetag_menu(c,m)
- if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG — CONFIGURACIÓN</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11712691</code>\n\n❌ No envíes el SDK ni ningún código adicional.",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11217882</code>",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag_delete':
   d['monetization']['monetag']='';save_db(d);return monetag_menu(c,m)
  if x=='monetag_toggle':
@@ -1047,23 +1049,35 @@ def _script_markup(code):
 
 def generate_monetag_html(uid,dat):
  template=TD/'monetization.html'
- if not template.exists():template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
+ if not template.exists():
+  template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
  html=template.read_text(encoding='utf-8')
  bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
- zone=str(dat.get('zone_id','')).strip()
- if not zone or not zone.isdigit():raise ValueError('ID de zona Monetag inválido')
- monetag_script=f'<script src="https://libtl.com/sdk.js" data-zone="{zone}" data-sdk="show_{zone}"></script>'
- html=re.sub(r'<script[^>]*src=["\'](?:https?:)?//libtl\.com/sdk\.js[^>]*></script>\s*','',html,flags=re.I)
- html=re.sub(r'<script[^>]*data-zone=["\'][^>]+data-sdk=["\'][^>]+></script>\s*','',html,flags=re.I)
- html=re.sub(r'\bshow_\d+\b','show_ZONE_PLACEHOLDER',html)
- html=re.sub(r'data-zone=["\']\d+["\']','data-zone="ZONE_PLACEHOLDER"',html,flags=re.I)
- if bot_url:html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted',html)
- marker='</head>'
- if marker in html:html=html.replace(marker,monetag_script+'\n'+marker,1)
+ zone=str(dat.get('zone','')).strip()
+ if not zone:
+  # Compatibility with an older saved configuration: recover the zone from the
+  # old SDK instead of asking the administrator for SDK/config again.
+  old=str(dat.get('sdk','')).strip()
+  m=re.search(r'data-zone=[\"\'](\d+)[\"\']',old,re.I)
+  zone=m.group(1) if m else '11217882'
+ # IMPORTANT: keep the original HTML structure and the original script position.
+ # Only replace the zone identifier and its related show_<zone> references.
+ if zone:
+  html=re.sub(r'data-zone=[\"\']\d+[\"\']',f'data-zone=\"{zone}\"',html,flags=re.I)
+  html=re.sub(r'data-sdk=[\"\']show_\d+[\"\']',f'data-sdk=\"show_{zone}\"',html,flags=re.I)
+  html=re.sub(r'\bshow_\d+\b',f'show_{zone}',html)
+  # Also replace the old literal zone wherever it is referenced by the template.
+  html=html.replace('11217882',zone)
+ # Replace any hard-coded Telegram bot deep link in the template.
+ if bot_url:
+  html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted',html)
+ # The current template already loads Monetag in <head>. Do not inject or move it.
+ # The placeholders remain for compatibility, but no SDK/reward code is requested.
  html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps('')).replace('__REWARD_CODE_JSON__',json.dumps('')).replace('__ADSGRAM_CODE_JSON__',json.dumps(''))
- html=html.replace('show_ZONE_PLACEHOLDER','show_'+zone)
+ # Keep the page's existing ad call, but make its function name match the configured zone.
  html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
- fn=BACK/'monetization.html';html=html.replace('11217882',zone);fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
+ fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
+ fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -1122,25 +1136,19 @@ def admin_text(c,t):
   return send(c,f'🟢 Enviados: <b>{ok}</b>\n🔴 No entregados: <b>{fail}</b>.',settings_keyboard())
  if f=='monetag' and step=='zone':
   val=t.strip()
-  if not val.isdigit() or not (4<=len(val)<=20):return send(c,'❌ ID de zona inválido. Escribe únicamente el número de tu zona Monetag. Ejemplo: <code>11712691</code>.')
-  dat={'zone_id':val,'url':'','host_url':'','enabled':True};st['s']='boturl'
-  return send(c,'✅ <b>ID de zona guardado.</b>\n\n🌐 <b>Paso 2:</b> Ingresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  if not val.isdigit() or int(val)<1:return send(c,'❌ ID de zona inválido. Escribe únicamente números, por ejemplo <code>11217882</code>.')
+  dat['zone']=val;st['s']='boturl';return send(c,'✅ <b>ID de zona guardado.</b>\n\n🌐 <b>Paso 2:</b> Ingresa la URL de tu bot.\nEjemplo: <code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='boturl':
-  boturl=t.strip()
-  if not re.match(r'^https?://t\.me/[A-Za-z0-9_]+$',boturl,re.I):return send(c,'❌ URL de bot inválida. Usa el formato <code>https://t.me/tu_bot</code>.')
-  dat['url']=boturl;fn=generate_monetag_html(c,dat)
-  send(c,'📄 <b>monetization.html listo</b>\n\nTe envío el archivo generado con tu ID de zona. Después de recibirlo, te pediré la URL pública donde lo vas a alojar.')
+  dat['url']=t.strip()
+  fn=generate_monetag_html(c,dat)
+  send(c,'📄 <b>monetization.html listo</b>\n\nSe generó conservando la posición original del script de Monetag en el <code>&lt;head&gt;</code>. Solo se cambiaron los identificadores de zona relacionados con tu ID.')
   send_document(c,fn,'📄 monetization.html — archivo generado automáticamente.')
   st['s']='hosturl'
-  return send(c,'🌐 <b>Paso 3:</b> Ahora envía la <b>URL pública final</b> donde vas a alojar <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  return send(c,'🌐 <b>Paso 3:</b> Ahora envía la <b>URL pública final</b> donde alojarás <code>monetization.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/monetization.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='hosturl':
-  host=t.strip()
-  if not re.match(r'^https?://',host,re.I):return send(c,'❌ URL inválida. Debe comenzar con <code>https://</code> o <code>http://</code>.')
-  dat['host_url']=host;dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None);schedule_config_cleanup(c)
-  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n🆔 Zona: <code>'+e(dat['zone_id'])+'</code>\n🌐 URL guardada: <code>'+e(host)+'</code>\n\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
- if f=='monetag' and step in ('sdk','reward','url'):
-  STATE[c]={'f':'monetag','s':'zone','d':{}}
-  return send(c,'💰 <b>MONETAG</b>\n\nEsta versión solo utiliza el <b>ID de zona</b>. Escribe únicamente el número de tu zona. Ejemplo: <code>11712691</code>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
+  schedule_config_cleanup(c)
+  return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📌 ID de zona: <code>'+e(dat['zone'])+'</code>\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
  if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
  if f=='domain' and step=='value':
   val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
@@ -1263,6 +1271,24 @@ def message_cleanup_scheduler():
   except Exception as ex:log('MESSAGE CLEANUP '+repr(ex))
   time.sleep(1800)
 
+def apply_referral_reward(c,username):
+ try:
+  d=db();z=d['users'].get(str(c),{});refs=z.get('referrals',[])
+  if len(refs)<3:return send(c,f'❌ Necesitas 3 referidos para cangear. Te faltan <b>{3-len(refs)}</b>.')
+  if not is_admin(c):
+   window=float(z.get('referral_window_start',0) or 0);used=int(z.get('referral_renews_used',0) or 0)
+   if not window or time.time()-window>=86400:window=time.time();used=0
+   if used>=3:return send(c,'❌ Ya utilizaste los 3 canjes de este período.')
+  else:window=time.time();used=0
+  exp=subprocess.getoutput(f"date -d '+7 days' +%F")
+  rc,o=sh(f'chage -E {q(exp)} {q(username)}',10)
+  if rc!=0:return send(c,'🔴 <b>No se pudo aplicar el canje</b>\n<pre>'+e(o)+'</pre>')
+  if not is_admin(c):z['referral_window_start']=window;z['referral_renews_used']=used+1
+  save_db(d);STATE.pop(c,None)
+  return send(c,account_message(c,{'user':username,'days':7,'limit':quota(c)[1]},True),[[{'text':'🔙 Inicio','callback_data':'home'}]])
+ except Exception as ex:
+  log('REF REWARD '+repr(ex));return send(c,'🔴 No se pudo completar el canje.')
+
 def process_ad_completion(c, token):
  try:
   token=str(token or '').strip()
@@ -1278,13 +1304,13 @@ def process_ad_completion(c, token):
   d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120};save_db(d)
   if item.get('action')=='create':
    return bool(start_create(c,item.get('extra',{}).get('kind','normal'),True))
-  if item.get('action')=='ref_redeem':
-   STATE[c]={'f':'ref_renew','s':'u','d':{}}
-   return bool(send(c,'🎁 <b>CANJE DE REFERIDO</b>\n\nEstimado usuario, por favor escribe tu <b>usuario SSH</b> para canjear.\n\nDespués te mostraré su información y podrás confirmar antes de agregar los <b>7 días</b>.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]]))
   if item.get('action')=='renew':
    username=item.get('extra',{}).get('username')
    if username:return bool(renew_now(c,username,quota(c)[0] if not is_owner(c) else None))
    return bool(start_renew(c,bypass_ads=True))
+  if item.get('action')=='ref_renew':
+   username=item.get('extra',{}).get('username')
+   if username:return bool(apply_referral_reward(c,username))
  except Exception as ex:
   log('AD COMPLETE '+repr(ex));send(c,'❌ No se pudo completar la publicidad.');return False
 
@@ -1314,9 +1340,11 @@ def main():
     off=u['update_id']+1;OFF.write_text(str(off))
     try:
      if 'callback_query' in u:
-      z=u['callback_query'];m=z['message'];fu=z.get('from',{});name=' '.join(x for x in (fu.get('first_name',''),fu.get('last_name','')) if x).strip();registered(fu.get('id',m['chat']['id']),name,fu.get('username',''));cb(m['chat']['id'],m['message_id'],fu.get('id',m['chat']['id']),z['id'],z.get('data',''),m['chat'].get('type','private'))
+      z=u['callback_query'];m=z['message'];sender=z.get('from',{}) or {};registered(sender.get('id',m['chat']['id']), sender.get('first_name') or sender.get('last_name') or str(sender.get('id',m['chat']['id'])), sender.get('username'));cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''),m['chat'].get('type','private'))
      elif 'message' in u:
-      m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private');fu=m.get('from',m.get('chat',{}));name=' '.join(x for x in (fu.get('first_name',''),fu.get('last_name','')) if x).strip();registered(c,name,fu.get('username',''))
+      m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private')
+      sender=m.get('from',{}) or {}
+      registered(c, sender.get('first_name') or sender.get('last_name') or str(c), sender.get('username'))
       if m.get('web_app_data'):handle_webapp_data(c,m)
       elif m.get('document'):restore_document(c,m)
       elif m.get('text'):process_text(c,m['text'],CHAT_TYPES[c])
