@@ -912,7 +912,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
  if x=='monetag':return monetag_menu(c,m)
- if x=='monetag_config':STATE[c]={'f':'monetag','s':'sdk','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nPega aquí tu SDK. Ejemplo:\n<code>&lt;script src='//libtl.com/sdk.js' data-zone='11217882' data-sdk='show_11217882'&gt;&lt;/script&gt;</code>",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11217882</code>\n\nNo necesitas enviar SDK ni código de configuración.",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag_delete':
   d['monetization']['monetag']='';save_db(d);return monetag_menu(c,m)
  if x=='monetag_toggle':
@@ -1026,7 +1026,11 @@ def generate_monetag_html(uid,dat):
   template.write_text(DEFAULT_MONETIZATION_HTML,encoding='utf-8');os.chmod(template,0o600)
  html=template.read_text(encoding='utf-8')
  bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
- sdk=dat.get('sdk','').strip();reward=dat.get('reward','').strip();adsgram_code=''
+ zone_id=str(dat.get('zone_id','')).strip()
+ if not re.fullmatch(r'\d{4,20}',zone_id):
+  raise ValueError('ID de zona Monetag inválido')
+ sdk=f"<script src=\"https://libtl.com/sdk.js\" data-zone=\"{zone_id}\" data-sdk=\"show_{zone_id}\"></script>"
+ reward='';adsgram_code=''
  try:
   az=json.loads(db().get('monetization',{}).get('adsgram',''))
   adsgram_code=az.get('code','') if isinstance(az,dict) else str(az)
@@ -1034,10 +1038,13 @@ def generate_monetag_html(uid,dat):
  # Put the configured Monetag/Adsgram snippets directly into the HTML so the
  # provider scripts load as normal page scripts instead of being injected after load.
  scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
- # Remove any hard-coded Monetag SDK/reward scripts from the template so old zone IDs
- # and bot URLs can never survive a reconfiguration.
+ # Remove every hard-coded Monetag SDK block first. The generated page gets
+ # exactly one SDK block below, built from the admin's zone ID.
  html=re.sub(r'<script[^>]*src=[\"\'](?:https?:)?//libtl\.com/sdk\.js[^>]*></script>\s*', '', html, flags=re.I)
  html=re.sub(r'<script[^>]*data-zone=[\"\'][^>]+data-sdk=[\"\'][^>]+></script>\s*', '', html, flags=re.I)
+ # Safety net: replace the old built-in zone wherever it appears in the template,
+ # including JavaScript references such as show_11217882.
+ html=html.replace('11217882',zone_id).replace('show_11217882',f'show_{zone_id}')
  # Replace any old hard-coded Telegram bot deep link in the template.
  html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted', bot_url.rstrip('/')+'?start=adcompleted', html)
  # Place the configured Monetag/Rewarded/Adsgram snippets directly in the head,
@@ -1108,14 +1115,14 @@ def admin_text(c,t):
    try:send(int(sid),'📢 <b>Mensaje del administrador</b>\n\n'+e(t));ok+=1
    except Exception as er:fail+=1;log('MSG '+sid+' '+repr(er))
   return send(c,f'🟢 Enviados: <b>{ok}</b>\n🔴 No entregados: <b>{fail}</b>.',settings_keyboard())
- if f=='monetag' and step=='sdk':
+ if f=='monetag' and step=='zone':
   val=t.strip()
-  if len(val)>20000:return send(c,'❌ El SDK es demasiado largo. Envía únicamente el bloque del SDK de Monetag.')
-  dat['sdk']=val;st['s']='reward';return send(c,'✅ <b>Paso 1 completado.</b>\n\n<b>Paso 2:</b> Pega ahora el código de <b>Rewarded Interstitial</b> que te entrega Monetag.',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
- if f=='monetag' and step=='reward':
-  val=t.strip()
-  if len(val)>20000:return send(c,'❌ El código es demasiado largo. Envía el bloque Rewarded Interstitial completo.')
-  dat['reward']=val;st['s']='boturl';return send(c,'🌐 <b>Paso 3</b>\n\nIngresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+  if not re.fullmatch(r'\d{4,20}',val):
+   return send(c,'❌ <b>ID de zona inválido.</b>\n\nEscribe únicamente el número de tu zona de Monetag. Ejemplo: <code>11217882</code>.')
+  dat['zone_id']=val
+  dat.pop('sdk',None);dat.pop('reward',None)
+  st['s']='boturl'
+  return send(c,'✅ <b>ID de zona guardado.</b>\n\n🌐 <b>Paso 2:</b> Ingresa la URL de tu bot. Ejemplo:\n<code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if f=='monetag' and step=='boturl':
   dat['url']=t.strip()
   # Generate and send the HTML immediately. Only after the admin receives it
