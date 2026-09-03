@@ -198,3 +198,19 @@ Si el referido tiene `@username`, la notificación muestra ese usuario. Si no ti
 - El botón **Ver anuncio y continuar** abre `monetization.html` como **Telegram Mini App** mediante `web_app`.
 - El token de publicidad viaja con la Mini App y se conserva al volver al bot, evitando el mensaje de enlace expirado por pérdida del token.
 - `monetization.html` se envía una sola vez durante la configuración. Después de guardar la URL pública, el bot no vuelve a enviar el archivo.
+
+## Monetización / Mini App
+
+- La configuración de Monetag genera `telegram/monetization.html` automáticamente.
+- El archivo se envía una sola vez al super admin durante la configuración.
+- Después se solicita la URL pública donde quedó alojado el HTML.
+- Cada vez que un usuario pulse **Ver anuncio**, el bot genera un token nuevo y abre la URL mediante un botón `web_app` de Telegram. Esto evita reutilizar enlaces de publicidad antiguos.
+- El token dura 15 minutos y se consume una sola vez al completar el retorno al bot.
+- Los mensajes/documentos temporales del asistente de configuración se eliminan después de 10 minutos.
+- Los mensajes enviados por el bot se conservan como máximo 24 horas, manteniendo el último mensaje del bot en el chat.
+
+> Telegram no permite que un bot borre arbitrariamente los mensajes enviados por el usuario en un chat privado. La limpieza automática se aplica a los mensajes enviados por el bot.
+
+## Actualizaciones
+
+Si una Key de actualización ya fue utilizada, el bot muestra **KEY YA UTILIZADA** en lugar de dejar únicamente el mensaje de operación iniciada.

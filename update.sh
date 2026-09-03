@@ -476,6 +476,7 @@ while true; do
 
             key_used)
 
+                echo "KEY_STATUS=USED"
                 error "La Key ya fue utilizada."
 
                 ;;
@@ -908,6 +909,13 @@ ACTIVATE_ERROR="$(
     echo "$ACTIVATE_BODY" |
     jq -r '.error // empty'
 )"
+
+if [[ "$ACTIVATE_ERROR" == "key_used" ]]; then
+    echo "KEY_STATUS=USED"
+    error "La Key ya fue utilizada."
+    rm -rf "$TMP"
+    exit 2
+fi
 
 #=========================================================
 # VALIDACIÓN DE ACTIVACIÓN
