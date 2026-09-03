@@ -7,7 +7,7 @@ BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'b
 DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
 
-DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
+DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;const adsgramCode=__ADSGRAM_CODE_JSON__;function sendSuccessAndClose(){const payload=JSON.stringify({type:'adcompleted',token:token});try{if(tg&&typeof tg.sendData==='function'&&token){tg.sendData(payload);setTimeout(()=>tg.close(),250);return}}catch(e){}const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
 
 DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
@@ -563,13 +563,7 @@ def handle_start(c,raw):
   me['referrer']=ref;save_db(d)
  if raw.startswith('/start adcompleted') or raw.startswith('/star adcompleted'):
   tok=raw.split('adcompleted',1)[1].strip().lstrip('_ ')
-  item=consume_ad_token(c,tok)
-  if not item:return send(c,'❌ Este enlace de publicidad expiró o ya fue utilizado.')
-  if item.get('action')=='create':return start_create(c,item.get('extra',{}).get('kind','normal'),True)
-  if item.get('action')=='renew':
-   username=item.get('extra',{}).get('username')
-   if username:return renew_now(c,username,quota(c)[0] if not is_owner(c) else None)
-   return start_renew(c,bypass_ads=True)
+  return process_ad_completion(c,tok)
  if not me.get('language_selected'):
   STATE[c]={'f':'language','s':'pick','d':{}}
   return send(c,I18N['choose_lang']['es']+'\n\nSelecciona uno de los 8 idiomas disponibles:',[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
@@ -1040,13 +1034,23 @@ def generate_monetag_html(uid,dat):
  # Put the configured Monetag/Adsgram snippets directly into the HTML so the
  # provider scripts load as normal page scripts instead of being injected after load.
  scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
+ # Remove any hard-coded Monetag SDK/reward scripts from the template so old zone IDs
+ # and bot URLs can never survive a reconfiguration.
+ html=re.sub(r'<script[^>]*src=[\"\'](?:https?:)?//libtl\.com/sdk\.js[^>]*></script>\s*', '', html, flags=re.I)
+ html=re.sub(r'<script[^>]*data-zone=[\"\'][^>]+data-sdk=[\"\'][^>]+></script>\s*', '', html, flags=re.I)
+ # Replace any old hard-coded Telegram bot deep link in the template.
+ html=re.sub(r'https://t\.me/[A-Za-z0-9_]+\?start=adcompleted', bot_url.rstrip('/')+'?start=adcompleted', html)
+ # Place the configured Monetag/Rewarded/Adsgram snippets directly in the head,
+ # immediately after Telegram WebApp, preserving the provider code exactly as entered.
+ scripts='\n'.join(x for x in (_script_markup(sdk),_script_markup(reward),_script_markup(adsgram_code)) if x)
  if scripts:
-  html=html.replace('</body>',scripts+'\n</body>')
+  marker='</head>'
+  html=html.replace(marker, scripts+'\n'+marker, 1)
  # These placeholders are retained for compatibility with older templates.
  html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url)).replace('__SDK_CODE_JSON__',json.dumps('')).replace('__REWARD_CODE_JSON__',json.dumps('')).replace('__ADSGRAM_CODE_JSON__',json.dumps(''))
  # Replace the old dynamic injection call with a reliable wait for the statically loaded SDK.
  html=html.replace("inject(sdkCode);inject(rewardCode);inject(adsgramCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();", "let fn=null;for(let n=0;n<100&&!fn;n++){fn=Object.keys(window).find(k=>/^show_\\d+$/.test(k)&&typeof window[k]==='function');if(!fn)await new Promise(r=>setTimeout(r,100));}if(!fn)throw new Error('SDK no disponible');await window[fn]();")
- fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted','https://t.me/sshprivanoxbot?start=adcompleted')
+ fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted', bot_url.rstrip('/')+'?start=adcompleted')
  fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
@@ -1224,6 +1228,14 @@ def message_cleanup_scheduler():
  while True:
   try:
    d=db();now=time.time()
+   for token,item in list(d.get('ad_completed',{}).items()):
+    try:
+     if float(item.get('expires',0))<now:d['ad_completed'].pop(token,None)
+    except: d['ad_completed'].pop(token,None)
+   for token,item in list(d.get('ad_tokens',{}).items()):
+    try:
+     if float(item.get('expires',0))<now:d['ad_tokens'].pop(token,None)
+    except: d['ad_tokens'].pop(token,None)
    for chat,arr in list(d.get('chat_messages',{}).items()):
     if len(arr)<=1:continue
     # After 24h remove old bot messages but always preserve the latest bot message.
@@ -1239,6 +1251,37 @@ def message_cleanup_scheduler():
    save_db(d)
   except Exception as ex:log('MESSAGE CLEANUP '+repr(ex))
   time.sleep(1800)
+
+def process_ad_completion(c, token):
+ try:
+  token=str(token or '').strip()
+  item=consume_ad_token(c,token)
+  if not item:
+   # Telegram can deliver sendData twice in edge cases. Accept the same token briefly
+   # from the completion cache without executing the action twice.
+   d=db();done=d.setdefault('ad_completed',{}).get(token)
+   if done and int(done.get('uid',0))==c and float(done.get('expires',0))>=time.time():
+    return True
+   send(c,'❌ Este enlace de publicidad expiró o ya fue utilizado.')
+   return False
+  d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120};save_db(d)
+  if item.get('action')=='create':
+   return bool(start_create(c,item.get('extra',{}).get('kind','normal'),True))
+  if item.get('action')=='renew':
+   username=item.get('extra',{}).get('username')
+   if username:return bool(renew_now(c,username,quota(c)[0] if not is_owner(c) else None))
+   return bool(start_renew(c,bypass_ads=True))
+ except Exception as ex:
+  log('AD COMPLETE '+repr(ex));send(c,'❌ No se pudo completar la publicidad.');return False
+
+def handle_webapp_data(c,msg):
+ try:
+  raw=msg.get('web_app_data',{}).get('data','')
+  z=json.loads(raw)
+  if z.get('type')=='adcompleted': return process_ad_completion(c,z.get('token',''))
+ except Exception as ex:
+  log('WEB APP DATA '+repr(ex))
+ return False
 
 def main():
  global BOT_USERNAME
@@ -1260,7 +1303,8 @@ def main():
       z=u['callback_query'];m=z['message'];cb(m['chat']['id'],m['message_id'],z['from']['id'],z['id'],z.get('data',''),m['chat'].get('type','private'))
      elif 'message' in u:
       m=u['message'];c=m['chat']['id'];CHAT_TYPES[c]=m.get('chat',{}).get('type','private')
-      if m.get('document'):restore_document(c,m)
+      if m.get('web_app_data'):handle_webapp_data(c,m)
+      elif m.get('document'):restore_document(c,m)
       elif m.get('text'):process_text(c,m['text'],CHAT_TYPES[c])
     except Exception as er:log('UPDATE '+repr(er))
   except Exception as er:log('POLL '+repr(er));time.sleep(2)
