@@ -182,9 +182,9 @@ El archivo recibido debe llamarse exactamente `monetization.html`. El bot valida
 Durante la configuración existe un botón **❌ Cancelar** para salir del proceso.
 
 ### 🔗 Referidos
-Con al menos 3 referidos válidos, el usuario puede realizar hasta **3 renovaciones dentro de una ventana de 24 horas**. Al cumplirse las 24 horas, el contador de renovaciones vuelve a **0/3** y puede utilizar nuevamente sus 3 renovaciones.
+Con al menos 3 referidos válidos, el usuario puede usar el botón **Cangear 7 días**. Debe indicar una de sus cuentas, confirmar los datos y, si la publicidad está configurada, completar el anuncio antes de recibir los **7 días**. Los administradores y el super admin no ven anuncios.
 
-Si el referido tiene `@username`, la notificación muestra ese usuario. Si no tiene username, se muestra su nombre de Telegram.
+Si el referido tiene `@username`, se muestra ese usuario. Si no tiene username, se muestra su nombre de Telegram en lugar de su ID.
 
 ## 🆕 v13.3
 
