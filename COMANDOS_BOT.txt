@@ -43,5 +43,4 @@ IMPORTANTE
 - Los usuarios normales no pueden abrir funciones administrativas aunque intenten enviar el callback directamente.
 - Los comandos administrativos anteriores (/ajustes, /settings, /backup, /cuotas, /admins, /ban, /monetizacion, /herramientas, etc.) fueron eliminados.
 - La monetización queda únicamente con Monetag.
-- AdsGram fue eliminado del bot, HTML y configuración.
-- Se eliminó __pycache__ y el archivo .pyc incluido en el paquete.
+- El paquete no incluye __pycache__, archivos .pyc ni la carpeta handlers vacía.
