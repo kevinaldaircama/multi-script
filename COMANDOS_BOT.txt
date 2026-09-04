@@ -1,0 +1,47 @@
+COMANDOS DEL BOT — KEVINTECH
+
+USUARIOS
+/crear - Crear una cuenta
+/renovar - Renovar una cuenta
+/lista - Ver tus cuentas
+/cuentas - Ver tus cuentas
+/online - Ver cuentas SSH conectadas
+/conectados - Ver cuentas SSH conectadas
+/cuenta - Consultar información de una cuenta
+/info_cuenta - Consultar información de una cuenta
+/eliminar - Eliminar una cuenta
+/borrar - Eliminar una cuenta
+/referidos - Ver tus referidos y canjear días
+/referrals - Ver tus referidos
+/idioma - Cambiar idioma
+/language - Cambiar idioma
+/informacion - Ver información
+/info - Ver información
+
+SUPER ADMIN
+No se usan comandos administrativos.
+
+El super admin entra al menú del bot y usa:
+⚙️ Ajustes
+
+Desde Ajustes puede administrar:
+- Administradores
+- Banear/desbanear usuarios
+- Respaldos y restauración
+- Monetag
+- Personas registradas
+- Mensajes a usuarios
+- Cuotas
+- Seguridad
+- Herramientas
+- Protocolos
+- Actualización del sistema
+- Reinicio del VPS
+
+IMPORTANTE
+- Las funciones administrativas están protegidas exclusivamente para el SUPER ADMIN.
+- Los usuarios normales no pueden abrir funciones administrativas aunque intenten enviar el callback directamente.
+- Los comandos administrativos anteriores (/ajustes, /settings, /backup, /cuotas, /admins, /ban, /monetizacion, /herramientas, etc.) fueron eliminados.
+- La monetización queda únicamente con Monetag.
+- AdsGram fue eliminado del bot, HTML y configuración.
+- Se eliminó __pycache__ y el archivo .pyc incluido en el paquete.
