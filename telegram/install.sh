@@ -17,7 +17,7 @@ install_bot(){
   echo -e "${C}║${X} ${W}\e[1m                 BOT TELEGRAM KEVINTECH${X}                 ${C}║${X}"
   echo -e "${C}╚══════════════════════════════════════════════════════════════╝${X}"
   echo
-  mkdir -p "$TD/logs" "$TD/backups" "$TD/handlers"
+  mkdir -p "$TD/logs" "$TD/backups"
   command -v python3 >/dev/null 2>&1 || { apt-get update -y >/dev/null 2>&1; apt-get install -y python3 >/dev/null 2>&1; }
   if [[ ! -f "$PY" ]]; then echo -e "${R}❌ No se encontró $PY${X}"; pause; return; fi
 
@@ -48,6 +48,7 @@ ExecStart=/usr/bin/python3 $PY
 Restart=always
 RestartSec=3
 User=root
+ExecStartPre=/usr/bin/pkill -f "python3 $PY"
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
@@ -55,9 +56,13 @@ WantedBy=multi-user.target
 EOT
 
   chmod 700 "$PY"; chmod 600 "$ENV"
+  python3 -m py_compile "$PY" || { echo -e "${R}❌ Error de sintaxis en bot.py. No se reinició el servicio.${X}"; pause; return; }
+  # Evita conflictos de polling si quedó una instancia manual del mismo bot.
+  pkill -f "python3 $PY" >/dev/null 2>&1 || true
   systemctl daemon-reload
   systemctl enable "$SERVICE" >/dev/null 2>&1
   systemctl restart "$SERVICE"
+  sleep 2
   echo
   echo -e "${G}╔══════════════════════════════════════════════════════════════╗${X}"
   echo -e "${G}║${X} ${W}\e[1m             ✅ INSTALACIÓN REALIZADA${X}                  ${G}║${X}"
@@ -65,6 +70,13 @@ EOT
   echo
   echo -e "${G}✔ Bot Telegram instalado/actualizado correctamente.${X}"
   echo -e "${G}✔ Servicio: $SERVICE${X}"
+  if systemctl is-active --quiet "$SERVICE"; then
+    echo -e "${G}✔ Estado: ACTIVO${X}"
+  else
+    echo -e "${R}❌ Estado: DETENIDO${X}"
+    echo -e "${Y}Últimos errores:${X}"
+    journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null || true
+  fi
   echo
   pause
 }

@@ -1027,13 +1027,6 @@ def monetag_menu(c,m=0):
   k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'monetag_toggle'}],[{'text':'⚙️ Reconfigurar','callback_data':'monetag_config'},{'text':'🗑️ Eliminar','callback_data':'monetag_delete'}]]
  else:k=[[{'text':'⚙️ Configurar','callback_data':'monetag_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
- configured=bool(v);enabled=True;block_id=''
- if configured:
-  try:
-   z=json.loads(v);enabled=bool(z.get('enabled',True));block_id=str(z.get('block_id',''))
-  except:block_id=str(v)
- if configured and block_id:text+='\\n\\n🆔 Block ID: <code>'+e(block_id)+'</code>'
- k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
 
 def _script_markup(code):
  if not code:return ''
@@ -1072,18 +1065,6 @@ def generate_monetag_html(uid,dat):
  html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
  fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
  fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
-
-
- html=template.read_text(encoding='utf-8')
- block_id=str(dat.get('block_id','')).strip()
- bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
- if not bot_url:raise ValueError('URL del bot no configurada')
- html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url))
- html=re.sub(
-  r'(const\\s+blockId\\s*=\\s*params\\.get\\(["\\\']blockId["\\\']\\)\\s*\\|\\|\\s*)["\\\']\\d+["\\\']',
-  lambda m:m.group(1)+json.dumps(block_id),html
- )
- # Preserve the source HTML structure/content; only fill configuration data.
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -1328,11 +1309,36 @@ def handle_webapp_data(c,msg):
   log('WEB APP DATA '+repr(ex))
  return False
 
+USER_COMMANDS=[
+ {'command':'start','description':'Iniciar el bot'},
+ {'command':'crear','description':'Crear una cuenta'},
+ {'command':'renovar','description':'Renovar una cuenta'},
+ {'command':'lista','description':'Ver tus cuentas'},
+ {'command':'online','description':'Ver cuentas conectadas'},
+ {'command':'cuenta','description':'Consultar una cuenta'},
+ {'command':'eliminar','description':'Eliminar una cuenta'},
+ {'command':'referidos','description':'Ver referidos y canjear días'},
+ {'command':'idioma','description':'Cambiar idioma'},
+ {'command':'informacion','description':'Ver información'},
+]
+
+def set_user_commands():
+ try:
+  api('setMyCommands',{'commands':json.dumps(USER_COMMANDS,ensure_ascii=False)})
+  log('BOT COMMANDS UPDATED')
+ except Exception as ex:
+  log('COMMANDS '+repr(ex))
+
 def main():
  global BOT_USERNAME
- env();load_db();LOG.parent.mkdir(parents=True,exist_ok=True);LOG.touch();LOG.chmod(0o600);api('deleteWebhook',{'drop_pending_updates':'false'})
- try:BOT_USERNAME=api('getMe')['result'].get('username','')
- except:BOT_USERNAME=''
+ try:
+  env();load_db();LOG.parent.mkdir(parents=True,exist_ok=True);LOG.touch();LOG.chmod(0o600)
+  me=api('getMe')['result'];BOT_USERNAME=me.get('username','')
+  api('deleteWebhook',{'drop_pending_updates':'false'})
+  set_user_commands()
+ except Exception as ex:
+  log('FATAL STARTUP '+repr(ex))
+  raise
  threading.Thread(target=backup_scheduler,daemon=True).start()
  threading.Thread(target=message_cleanup_scheduler,daemon=True).start()
  threading.Thread(target=security_monitor,daemon=True).start()
