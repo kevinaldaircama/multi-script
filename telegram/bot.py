@@ -586,7 +586,8 @@ def ad_configurations():
   v=m.get('adsgram','')
   if v:
    z=json.loads(v)
-   if z.get('enabled',True) and z.get('host_url'):items.append(('Adsgram',z))
+   if z.get('enabled',True) and z.get('host_url') and z.get('block_id'):
+    items.append(('Adsgram',z))
  except:pass
  return items
 
@@ -603,13 +604,24 @@ def ad_gate(c,action,extra=None):
 def create_ad_token(c,action,extra=None):
  ads=ad_configurations()
  if not ads:return None
- host=ads[0][1].get('host_url','').strip()
+ selected=None
+ for name,z in ads:
+  if name.lower()=='adsgram':
+   selected=(name,z);break
+ if selected is None:selected=ads[0]
+ name,conf=selected
+ host=conf.get('host_url','').strip()
  if not host:return None
- token=secrets.token_urlsafe(24);d=db();d.setdefault('ad_tokens',{})[token]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+900};save_db(d)
+ token=secrets.token_urlsafe(24)
+ d=db();d.setdefault('ad_tokens',{})[token]={
+  'uid':c,'action':action,'extra':extra or {},'platform':name,
+  'expires':time.time()+900
+ };save_db(d)
+ params={'token':token,'uid':c}
+ if name.lower()=='adsgram':
+  params['blockId']=str(conf.get('block_id','')).strip()
  sep='&' if '?' in host else '?'
- # Put token in both query and fragment. The query is used by the page and the
- # fragment is a fallback if a hosting redirect strips the query string.
- return host+sep+urllib.parse.urlencode({'token':token,'uid':c})+'#token='+urllib.parse.quote(token)
+ return host+sep+urllib.parse.urlencode(params)+'#token='+urllib.parse.quote(token)
 
 def consume_ad_token(c,token):
  d=db();item=d.get('ad_tokens',{}).get(token)
@@ -775,7 +787,7 @@ def cb(c,m,u,i,x,chat_type=None):
    pending=x.split(':',1)[1];pd=db().get('ad_pending',{}).get(pending)
    if not pd or int(pd.get('uid',0))!=c or float(pd.get('expires',0))<time.time():raise ValueError('solicitud expirada')
    action=pd.get('action','');extra=pd.get('extra',{}) or {}
-   if action not in ('create','renew'):raise ValueError('acción inválida')
+   if action not in ('create','renew','ref_renew'):raise ValueError('acción inválida')
    d=db();d.get('ad_pending',{}).pop(pending,None);save_db(d)
    url=create_ad_token(c,action,extra)
    if not url:return ans(i,'Publicidad no configurada')
@@ -944,8 +956,13 @@ def cb(c,m,u,i,x,chat_type=None):
   except:z={'sdk':v,'reward':'','url':f'https://t.me/{BOT_USERNAME}?start=adcompleted'}
   z['enabled']=not bool(z.get('enabled',True));d['monetization']['monetag']=json.dumps(z,ensure_ascii=False);save_db(d);return monetag_menu(c,m)
  if x=='adsgram':return adsgram_menu(c,m)
- if x=='adsgram_config':STATE[c]={'f':'adsgram','s':'value','d':{}};return send(c,'📱 <b>ADSGRAM — PASO 1</b>\n\nPega aquí el código de configuración que te entrega Adsgram.')
- if x=='adsgram_toggle':d['monetization']['adsgram']='' if d.get('monetization',{}).get('adsgram') else 'enabled';save_db(d);return adsgram_menu(c,m)
+ if x=='adsgram_config':STATE[c]={'f':'adsgram','s':'blockid','d':{}};return send(c,'📱 <b>ADSGRAM — PASO 1</b>\n\nEscribe únicamente tu <b>Block ID</b> de AdsGram.\n\nEjemplo: <code>36350</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+ if x=='adsgram_toggle':
+   v=d.get('monetization',{}).get('adsgram','')
+   if not v:return adsgram_menu(c,m)
+   try:z=json.loads(v)
+   except:z={'block_id':v,'enabled':True}
+   z['enabled']=not bool(z.get('enabled',True));d['monetization']['adsgram']=json.dumps(z,ensure_ascii=False);save_db(d);return adsgram_menu(c,m)
  if x=='restart_vps':return send(c,'♻️ ¿Reiniciar el VPS ahora?',[[{'text':'✅ REINICIAR VPS','callback_data':'do_reboot'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
  if x=='people':
   total=sum(1 for z in d['users'].values() if z.get('started'))
@@ -1033,9 +1050,17 @@ def monetag_menu(c,m=0):
  else:k=[[{'text':'⚙️ Configurar','callback_data':'monetag_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
 def adsgram_menu(c,m=0):
- configured=bool(db().get('monetization',{}).get('adsgram',''));text='📱 <b>ADSGRAM</b>\n\nEstado: <b>'+('🟢 CONFIGURADO' if configured else '🔴 NO CONFIGURADO')+'</b>'
- k=[[{'text':'⏻ Apagar','callback_data':'adsgram_toggle'},{'text':'⚙️ Reconfigurar','callback_data':'adsgram_config'}]] if configured else [[{'text':'⚙️ Configurar','callback_data':'adsgram_config'}]]
+ v=db().get('monetization',{}).get('adsgram','')
+ configured=bool(v);enabled=True;block_id=''
+ if configured:
+  try:
+   z=json.loads(v);enabled=bool(z.get('enabled',True));block_id=str(z.get('block_id',''))
+  except:block_id=str(v)
+ text='📱 <b>ADSGRAM</b>\\n\\nEstado: <b>'+('🟢 ENCENDIDO' if configured and enabled else '⛔ APAGADO')+'</b>' if configured else '📱 <b>ADSGRAM</b>\\n\\nEstado: <b>🔴 NO CONFIGURADO</b>'
+ if configured and block_id:text+='\\n\\n🆔 Block ID: <code>'+e(block_id)+'</code>'
+ k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'adsgram_toggle'},{'text':'⚙️ Reconfigurar','callback_data':'adsgram_config'}]] if configured else [[{'text':'⚙️ Configurar','callback_data':'adsgram_config'}]]
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
+
 def _script_markup(code):
  if not code:return ''
  code=str(code).strip()
@@ -1073,6 +1098,23 @@ def generate_monetag_html(uid,dat):
  html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
  fn=BACK/'monetization.html';html=html.replace('https://t.me/sshprivanoxbot?start=adcompleted',bot_url.rstrip('/')+'?start=adcompleted')
  fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
+
+
+def generate_adsgram_html(uid,dat):
+ template=TD/'adsgram.html'
+ if not template.exists():raise FileNotFoundError('No existe adsgram.html')
+ html=template.read_text(encoding='utf-8')
+ block_id=str(dat.get('block_id','')).strip()
+ bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
+ if not block_id or not block_id.isdigit():raise ValueError('Block ID de AdsGram inválido')
+ if not bot_url:raise ValueError('URL del bot no configurada')
+ html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url))
+ html=re.sub(
+  r'(const\\s+blockId\\s*=\\s*params\\.get\\(["\\\']blockId["\\\']\\)\\s*\\|\\|\\s*)["\\\']\\d+["\\\']',
+  lambda m:m.group(1)+json.dumps(block_id),html
+ )
+ # Preserve the source HTML structure/content; only fill configuration data.
+ fn=BACK/'adsgram.html';fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -1144,7 +1186,32 @@ def admin_text(c,t):
   dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
   schedule_config_cleanup(c)
   return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📌 ID de zona: <code>'+e(dat['zone'])+'</code>\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
- if f=='adsgram' and step=='value':d['monetization']['adsgram']=t.strip();save_db(d);STATE.pop(c,None);return send(c,'🟢 Configuración de Adsgram guardada.',MONETIZATION)
+ if f=='adsgram' and step=='blockid':
+  val=t.strip()
+  if not val.isdigit() or int(val)<1:return send(c,'❌ <b>Block ID inválido.</b>\n\nEscribe únicamente números, por ejemplo <code>36350</code>.')
+  dat['block_id']=val;st['s']='boturl'
+  return send(c,'✅ <b>Block ID guardado.</b>\n\n🌐 <b>Paso 2:</b> Ingresa la URL de tu bot.\nEjemplo: <code>https://t.me/tu_bot</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+
+ if f=='adsgram' and step=='boturl':
+  val=t.strip()
+  if not re.match(r'^https?://t\.me/[A-Za-z0-9_]+/?$',val):return send(c,'❌ <b>URL del bot inválida.</b>\n\nUsa: <code>https://t.me/tu_bot</code>')
+  dat['url']=val.rstrip('/')
+  try:fn=generate_adsgram_html(c,dat)
+  except Exception as ex:
+   log('ADSGRAM HTML '+repr(ex));return send(c,'❌ No se pudo generar adsgram.html.')
+  send(c,'📄 <b>adsgram.html listo</b>\n\nSe generó con tu Block ID y la URL de tu bot.')
+  send_document(c,fn,'📄 adsgram.html — archivo generado automáticamente.')
+  st['s']='hosturl'
+  return send(c,'🌐 <b>Paso 3:</b> Ahora envía la <b>URL pública final</b> donde alojarás <code>adsgram.html</code>.\n\nEjemplo: <code>https://tu-dominio.com/adsgram.html</code>',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+
+ if f=='adsgram' and step=='hosturl':
+  val=t.strip().rstrip('/')
+  if not re.match(r'^https?://',val):return send(c,'❌ <b>URL inválida.</b>\n\nEnvía la URL pública completa de <code>adsgram.html</code>.')
+  dat['host_url']=val;dat['enabled']=True
+  d['monetization']['adsgram']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
+  schedule_config_cleanup(c)
+  return send(c,'🟢 <b>AdsGram configurado correctamente.</b>\n\n📌 Block ID: <code>'+e(dat['block_id'])+'</code>\n🤖 Bot: <code>'+e(dat['url'])+'</code>\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>',MONETIZATION)
+
  if f=='domain' and step=='value':
   val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
   for i,l in enumerate(lines):
