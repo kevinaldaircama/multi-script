@@ -13,6 +13,7 @@ DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
+ 'monetization':{'monetag':''},
  'auto_update':{'enabled':False,'last_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
@@ -42,6 +43,7 @@ def load_db():
  for k,v in DEFAULT['security'].items():d['security'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
  if not isinstance(d.get('monetization'),dict):d['monetization']=json.loads(json.dumps(DEFAULT['monetization']))
  for k,v in DEFAULT['monetization'].items():d['monetization'].setdefault(k,v)
+ d['monetization'].pop('miniapp',None)
  if not isinstance(d.get('backup_schedule'),dict):d['backup_schedule']=json.loads(json.dumps(DEFAULT['backup_schedule']))
  d['backup_schedule'].setdefault('mode','once');d['backup_schedule'].setdefault('next_at',0)
  if not isinstance(d.get('ad_tokens'),dict):d['ad_tokens']={}
@@ -157,9 +159,6 @@ LANG_NAMES={
  'de':'🇩🇪 Deutsch','it':'🇮🇹 Italiano','ru':'🇷🇺 Русский','tr':'🇹🇷 Türkçe',
 }
 BUTTONS={
- 'es':{'users':'👤 Usuarios','referrals':'🔗 Referidos','language':'🌐 Idioma','info':'ℹ️ Información','settings':'⚙️ Ajustes','home':'🔙 Inicio','create':'➕ Crear cuenta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Cuenta','delete':'🗑️ Eliminar cuenta','cancel':'❌ Cancelar','monetization':'💰 Monetización','monetag':'💰 Monetag','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Eliminar','monetag_toggle_on':'🟢 Encender','monetag_toggle_off':'⛔ Apagar','system_update':'🔄 Actualizar sistema','system_update_now':'⬇️ Actualizar ahora','auto_update_toggle_on':'🤖 Activar automática','auto_update_toggle_off':'⛔ Desactivar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Agregar admin','admin_remove':'🗑️ Quitar admin','admin_rename':'✏️ Renombrar admin','backup_restore':'💾 Respaldos y restauración','backup_menu':'💾 Respaldos y restauración','backup_now':'📤 Enviar ahora','restore':'♻️ Restaurar','quotas':'📅 Cuotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Seguridad','tools':'🛠 Herramientas','people':'👥 Personas registradas','message_users':'📢 Mensaje a usuarios','bans':'🚫 Banear usuario','domain':'🌐 Dominio','access_toggle':'🔐 Acceso','ref_renew':'🎁 Cangear 7 días (3 referidos)','create:normal':'👤 Cuenta normal','create:v2ray':'🚀 Cuenta V2Ray','backup:daily':'📅 Enviar diario','backup:7d':'7️⃣ Cada 7 días','backup:15d':'1️⃣5️⃣ Cada 15 días','backup:30d':'3️⃣0️⃣ Cada 30 días','backup:once':'☝️ Solo una vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Archivos','security:auto':'🛡️ Auto banea SSH','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banear usuarios','ban_remove':'🔓 Desbanear','ban_list':'📋 Lista de ban'},
- 'en':{'users':'👤 Users','referrals':'🔗 Referrals','language':'🌐 Language','info':'ℹ️ Information','settings':'⚙️ Settings','home':'🔙 Home','create':'➕ Create account','renew':'♻️ Renew','list':'📋 List','online':'🟢 Online','account':'👤 Account','delete':'🗑️ Delete account','cancel':'❌ Cancel','monetization':'💰 Monetization','monetag':'💰 Monetag','monetag_config':'⚙️ Configure','monetag_delete':'🗑️ Delete','monetag_toggle_on':'🟢 Enable','monetag_toggle_off':'⛔ Disable','system_update':'🔄 Update system','system_update_now':'⬇️ Update now','auto_update_toggle_on':'🤖 Enable automatic','auto_update_toggle_off':'⛔ Disable automatic','admin_list':'📋 Admin list','admin_add':'➕ Add admin','admin_remove':'🗑️ Remove admin','admin_rename':'✏️ Rename admin','backup_restore':'💾 Backup & restore','backup_menu':'💾 Backup & restore','backup_now':'📤 Send now','restore':'♻️ Restore','quotas':'📅 Quotas','restart_vps':'♻️ Restart VPS','security':'🛡️ Security','tools':'🛠 Tools','people':'👥 Registered users','message_users':'📢 Message users','bans':'🚫 Ban user','domain':'🌐 Domain','access_toggle':'🔐 Access','ref_renew':'🎁 Redeem 7 days (3 referrals)','create:normal':'👤 Normal account','create:v2ray':'🚀 V2Ray account','backup:daily':'📅 Send daily','backup:7d':'7️⃣ Every 7 days','backup:15d':'1️⃣5️⃣ Every 15 days','backup:30d':'3️⃣0️⃣ Every 30 days','backup:once':'☝️ Once','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimize','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Files','security:auto':'🛡️ Auto-ban SSH','quota_public':'👥 Public','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Ban users','ban_remove':'🔓 Unban','ban_list':'📋 Ban list'},
- 'pt':{'users':'👤 Usuários','referrals':'🔗 Indicações','language':'🌐 Idioma','info':'ℹ️ Informações','settings':'⚙️ Configurações','home':'🔙 Início','create':'➕ Criar conta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Conta','delete':'🗑️ Excluir conta','cancel':'❌ Cancelar','monetization':'💰 Monetização','monetag':'💰 Monetag','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Excluir','monetag_toggle_on':'🟢 Ativar','monetag_toggle_off':'⛔ Desativar','system_update':'🔄 Atualizar sistema','system_update_now':'⬇️ Atualizar agora','auto_update_toggle_on':'🤖 Ativar automática','auto_update_toggle_off':'⛔ Desativar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Adicionar admin','admin_remove':'🗑️ Remover admin','admin_rename':'✏️ Renomear admin','backup_restore':'💾 Backup e restauração','backup_menu':'💾 Backup e restauração','backup_now':'📤 Enviar agora','restore':'♻️ Restaurar','quotas':'📅 Cotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Segurança','tools':'🛠 Ferramentas','people':'👥 Usuários registrados','message_users':'📢 Mensagem aos usuários','bans':'🚫 Banir usuário','domain':'🌐 Domínio','access_toggle':'🔐 Acesso','ref_renew':'🎁 Resgatar 7 dias (3 indicações)','create:normal':'👤 Conta normal','create:v2ray':'🚀 Conta V2Ray','backup:daily':'📅 Enviar diariamente','backup:7d':'7️⃣ A cada 7 dias','backup:15d':'1️⃣5️⃣ A cada 15 dias','backup:30d':'3️⃣0️⃣ A cada 30 dias','backup:once':'☝️ Uma vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Otimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Arquivos','security:auto':'🛡️ Bloqueio SSH automático','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banir usuários','ban_remove':'🔓 Desbanir','ban_list':'📋 Lista de banidos'}
 }
 # Fill the remaining languages from English, replacing the most visible labels.
 for _lg,_name in [('fr','Français'),('de','Deutsch'),('it','Italiano'),('ru','Русский'),('tr','Türkçe')]:
@@ -596,6 +595,8 @@ def create_ad_token(c,action,extra=None):
  ads=ad_configurations()
  if not ads:return None
  selected=None
+ for name,z in ads:
+   selected=(name,z);break
  if selected is None:selected=ads[0]
  name,conf=selected
  host=conf.get('host_url','').strip()
@@ -605,6 +606,7 @@ def create_ad_token(c,action,extra=None):
   'uid':c,'action':action,'extra':extra or {},'platform':name,
   'expires':time.time()+900
  };save_db(d)
+ params={'token':token,'uid':c}
  sep='&' if '?' in host else '?'
  return host+sep+urllib.parse.urlencode(params)+'#token='+urllib.parse.quote(token)
 
@@ -680,7 +682,10 @@ def process_text(c,t,chat_type=None):
  if banned(uid):return send(c,'🚫 Tu acceso está bloqueado.')
  registered(uid)
  if t.startswith('/start') or t.startswith('/star'):return handle_start(c,t)
+ # Esto permite pegar scripts largos o bloques que comienzan con '/'.
  st0=STATE.get(c)
+ if st0 and st0.get('f') in ('monetag','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
+  return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
  if cmd in ('/crear','/crearcuenta','/create'):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot y usa /crear.')
@@ -700,14 +705,6 @@ def process_text(c,t,chat_type=None):
   return send(c,referral_info(c),rows)
  if cmd in ('/idioma','/language'):return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
  if cmd in ('/informacion','/info'):return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
- if cmd in ('/respaldo','/backup') and is_owner(uid):return cb(c,0,c,0,'backup_restore')
- if cmd in ('/ajustes','/settings') and is_owner(uid):return cb(c,0,c,0,'settings')
- if cmd in ('/cuotas','/quota') and is_owner(uid):return cb(c,0,c,0,'quotas')
- if cmd in ('/seguridad','/security') and is_owner(uid):return cb(c,0,c,0,'security')
- if cmd in ('/admins','/administradores') and is_owner(uid):return cb(c,0,c,0,'admins')
- if cmd in ('/ban','/baneos') and is_owner(uid):return cb(c,0,c,0,'bans')
- if cmd in ('/monetizacion','/monetization') and is_owner(uid):return cb(c,0,c,0,'monetization')
- if cmd in ('/herramientas','/tools') and is_owner(uid):return cb(c,0,c,0,'tools')
  if t.startswith('/referidos'):return send(c,referral_info(c))
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
  st=STATE.get(c)
@@ -761,6 +758,14 @@ def cb(c,m,u,i,x,chat_type=None):
  CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  if banned(u):return ans(i,'🚫 Baneado')
  registered(u);ans(i,'⚡');d=db()
+ # Todas las funciones administrativas están reservadas al super admin.
+ admin_callbacks={'settings','admins','admin_list','admin_add','admin_remove','admin_rename',
+  'access_toggle','bans','ban_add','ban_remove','ban_list','backup_restore','backup_menu',
+  'backup_now','restore','monetization','monetag','monetag_config','monetag_delete',
+  'monetag_toggle','restart_vps','people','message_users','quotas','quota_public','quota_admin',
+  'security','security:auto','tools','system_update','system_update_now','auto_update_toggle'}
+ if x in admin_callbacks or x.startswith(('tool:','svc_restart:','proto:','in:','un:','backup:')):
+  if not is_owner(u): return ans(i,'🔒 Solo el super admin puede usar esta función.')
  if x.startswith('lang:'):
   language=x.split(':',1)[1];d['users'][str(u)]['language']=language;d['users'][str(u)]['language_selected']=True;save_db(d);STATE.pop(u,None);return edit(c,m,tr(u,'home'),home(u))
  if x.startswith('adopen:'):
@@ -1003,6 +1008,7 @@ ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'te
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def settings_keyboard():
  d=db()
@@ -1020,6 +1026,13 @@ def monetag_menu(c,m=0):
   except:pass
   k=[[{'text':'⛔ Apagar' if enabled else '🟢 Encender','callback_data':'monetag_toggle'}],[{'text':'⚙️ Reconfigurar','callback_data':'monetag_config'},{'text':'🗑️ Eliminar','callback_data':'monetag_delete'}]]
  else:k=[[{'text':'⚙️ Configurar','callback_data':'monetag_config'}]]
+ k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
+ configured=bool(v);enabled=True;block_id=''
+ if configured:
+  try:
+   z=json.loads(v);enabled=bool(z.get('enabled',True));block_id=str(z.get('block_id',''))
+  except:block_id=str(v)
+ if configured and block_id:text+='\\n\\n🆔 Block ID: <code>'+e(block_id)+'</code>'
  k.append([{'text':'🔙 Monetización','callback_data':'monetization'}]);return edit(c,m,text,k) if m else send(c,text,k)
 
 def _script_markup(code):
@@ -1061,6 +1074,16 @@ def generate_monetag_html(uid,dat):
  fn.write_text(html,encoding='utf-8');os.chmod(fn,0o600);return fn
 
 
+ html=template.read_text(encoding='utf-8')
+ block_id=str(dat.get('block_id','')).strip()
+ bot_url=dat.get('url','').strip() or (f'https://t.me/{BOT_USERNAME}' if BOT_USERNAME else '')
+ if not bot_url:raise ValueError('URL del bot no configurada')
+ html=html.replace('__BOT_URL_JSON__',json.dumps(bot_url))
+ html=re.sub(
+  r'(const\\s+blockId\\s*=\\s*params\\.get\\(["\\\']blockId["\\\']\\)\\s*\\|\\|\\s*)["\\\']\\d+["\\\']',
+  lambda m:m.group(1)+json.dumps(block_id),html
+ )
+ # Preserve the source HTML structure/content; only fill configuration data.
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
@@ -1132,7 +1155,6 @@ def admin_text(c,t):
   dat['host_url']=t.strip();dat['enabled']=True;d['monetization']['monetag']=json.dumps(dat,ensure_ascii=False);save_db(d);STATE.pop(c,None)
   schedule_config_cleanup(c)
   return send(c,'🟢 <b>Monetag configurado correctamente.</b>\n\n📌 ID de zona: <code>'+e(dat['zone'])+'</code>\n🌐 URL guardada: <code>'+e(dat['host_url'])+'</code>\n\n🧹 Los mensajes de configuración se eliminarán automáticamente después de 10 minutos.')
-
  if f=='domain' and step=='value':
   val=t.strip();cfg=BASE/'config.conf';lines=cfg.read_text(errors='ignore').splitlines() if cfg.exists() else [];found=False
   for i,l in enumerate(lines):
