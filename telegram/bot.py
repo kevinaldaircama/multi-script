@@ -153,10 +153,14 @@ I18N.update({
 })
 
 def tr(uid,key):return I18N.get(key,I18N['home']).get(lang(uid),I18N.get(key,I18N['home'])['es'])
+def language_keyboard(uid):
+ langs=['es','en','pt','fr','de','it','ru','tr','zh','ja','ko','id','ar']
+ return [[{'text':LANG_NAMES[k],'callback_data':'lang:'+k} for k in langs[i:i+2]] for i in range(0,len(langs),2)]
 
 LANG_NAMES={
  'es':'🇪🇸 Español','en':'🇺🇸 English','pt':'🇧🇷 Português','fr':'🇫🇷 Français',
  'de':'🇩🇪 Deutsch','it':'🇮🇹 Italiano','ru':'🇷🇺 Русский','tr':'🇹🇷 Türkçe',
+ 'zh':'🇨🇳 中文','ja':'🇯🇵 日本語','ko':'🇰🇷 한국어','id':'🇮🇩 Bahasa Indonesia','ar':'🇸🇦 العربية',
 }
 BUTTONS={
  'es':{'users':'👤 Usuarios','referrals':'🔗 Referidos','language':'🌐 Idioma','info':'ℹ️ Información','settings':'⚙️ Ajustes','home':'🔙 Inicio','create':'➕ Crear cuenta','renew':'♻️ Renovar','list':'📋 Lista','online':'🟢 Online','account':'👤 Cuenta','delete':'🗑️ Eliminar cuenta','cancel':'❌ Cancelar','monetization':'💰 Monetización','monetag':'💰 Monetag','monetag_config':'⚙️ Configurar','monetag_delete':'🗑️ Eliminar','monetag_toggle_on':'🟢 Encender','monetag_toggle_off':'⛔ Apagar','system_update':'🔄 Actualizar sistema','system_update_now':'⬇️ Actualizar ahora','auto_update_toggle_on':'🤖 Activar automática','auto_update_toggle_off':'⛔ Desactivar automática','admin_list':'📋 Lista de admins','admin_add':'➕ Agregar admin','admin_remove':'🗑️ Quitar admin','admin_rename':'✏️ Renombrar admin','backup_restore':'💾 Respaldos y restauración','backup_menu':'💾 Respaldos y restauración','backup_now':'📤 Enviar ahora','restore':'♻️ Restaurar','quotas':'📅 Cuotas','restart_vps':'♻️ Reiniciar VPS','security':'🛡️ Seguridad','tools':'🛠 Herramientas','people':'👥 Personas registradas','message_users':'📢 Mensaje a usuarios','bans':'🚫 Banear usuario','domain':'🌐 Dominio','access_toggle':'🔐 Acceso','ref_renew':'🎁 Cangear 7 días (3 referidos)','create:normal':'👤 Cuenta normal','create:v2ray':'🚀 Cuenta V2Ray','backup:daily':'📅 Enviar diario','backup:7d':'7️⃣ Cada 7 días','backup:15d':'1️⃣5️⃣ Cada 15 días','backup:30d':'3️⃣0️⃣ Cada 30 días','backup:once':'☝️ Solo una vez','tool:firewall':'🔥 Firewall','tool:optimizar':'🚀 Optimizar','tool:ads':'🚫 Ads','tool:torrent':'🚫 Torrent','tool:speed':'📈 Speedtest','tool:scanner':'🔎 Scanner','tool:files':'📁 Archivos','security:auto':'🛡️ Auto banea SSH','quota_public':'👥 Público','quota_admin':'👨‍💼 Admin','ban_add':'🚫 Banear usuarios','ban_remove':'🔓 Desbanear','ban_list':'📋 Lista de ban'},
@@ -171,6 +175,11 @@ BUTTONS['de'].update({'users':'👤 Benutzer','referrals':'🔗 Empfehlungen','l
 BUTTONS['it'].update({'users':'👤 Utenti','referrals':'🔗 Referral','language':'🌐 Lingua','info':'ℹ️ Informazioni','settings':'⚙️ Impostazioni','home':'🔙 Home','create':'➕ Crea account','renew':'♻️ Rinnova','cancel':'❌ Annulla','monetization':'💰 Monetizzazione','system_update':'🔄 Aggiorna sistema','system_update_now':'⬇️ Aggiorna ora','ref_renew':'♻️ Rinnova 24h (3 referral)'})
 BUTTONS['ru'].update({'users':'👤 Пользователи','referrals':'🔗 Рефералы','language':'🌐 Язык','info':'ℹ️ Информация','settings':'⚙️ Настройки','home':'🔙 Главная','create':'➕ Создать аккаунт','renew':'♻️ Продлить','cancel':'❌ Отмена','monetization':'💰 Монетизация','system_update':'🔄 Обновить систему','system_update_now':'⬇️ Обновить сейчас','ref_renew':'♻️ Продлить 24ч (3 реферала)'})
 BUTTONS['tr'].update({'users':'👤 Kullanıcılar','referrals':'🔗 Referanslar','language':'🌐 Dil','info':'ℹ️ Bilgi','settings':'⚙️ Ayarlar','home':'🔙 Ana sayfa','create':'➕ Hesap oluştur','renew':'♻️ Yenile','cancel':'❌ İptal','monetization':'💰 Para kazanma','system_update':'🔄 Sistemi güncelle','system_update_now':'⬇️ Şimdi güncelle','ref_renew':'♻️ 24 saat yenile (3 referans)'})
+BUTTONS['zh']=dict(BUTTONS['en']); BUTTONS['zh'].update({'users':'👤 用户','referrals':'🔗 推荐','language':'🌐 语言','info':'ℹ️ 信息','settings':'⚙️ 设置','home':'🔙 首页','create':'➕ 创建账户','renew':'♻️ 续期','list':'📋 列表','online':'🟢 在线','account':'👤 账户','delete':'🗑️ 删除账户','cancel':'❌ 取消'})
+BUTTONS['ja']=dict(BUTTONS['en']); BUTTONS['ja'].update({'users':'👤 ユーザー','referrals':'🔗 紹介','language':'🌐 言語','info':'ℹ️ 情報','settings':'⚙️ 設定','home':'🔙 ホーム','create':'➕ アカウント作成','renew':'♻️ 更新','list':'📋 一覧','online':'🟢 オンライン','account':'👤 アカウント','delete':'🗑️ 削除','cancel':'❌ キャンセル'})
+BUTTONS['ko']=dict(BUTTONS['en']); BUTTONS['ko'].update({'users':'👤 사용자','referrals':'🔗 추천','language':'🌐 언어','info':'ℹ️ 정보','settings':'⚙️ 설정','home':'🔙 홈','create':'➕ 계정 생성','renew':'♻️ 갱신','list':'📋 목록','online':'🟢 온라인','account':'👤 계정','delete':'🗑️ 삭제','cancel':'❌ 취소'})
+BUTTONS['id']=dict(BUTTONS['en']); BUTTONS['id'].update({'users':'👤 Pengguna','referrals':'🔗 Referensi','language':'🌐 Bahasa','info':'ℹ️ Informasi','settings':'⚙️ Pengaturan','home':'🔙 Beranda','create':'➕ Buat akun','renew':'♻️ Perpanjang','list':'📋 Daftar','online':'🟢 Online','account':'👤 Akun','delete':'🗑️ Hapus','cancel':'❌ Batal'})
+BUTTONS['ar']=dict(BUTTONS['en']); BUTTONS['ar'].update({'users':'👤 المستخدمون','referrals':'🔗 الإحالات','language':'🌐 اللغة','info':'ℹ️ المعلومات','settings':'⚙️ الإعدادات','home':'🔙 الرئيسية','create':'➕ إنشاء حساب','renew':'♻️ تجديد','list':'📋 القائمة','online':'🟢 متصل','account':'👤 الحساب','delete':'🗑️ حذف','cancel':'❌ إلغاء'})
 
 def localized_keyboard(uid,k):
  if not k:return k
@@ -346,10 +355,20 @@ def registered(uid,name=None,username=None):
   if changed:save_db(d)
 
 def home(uid):
- rows=[[{'text':'👤 Usuarios','callback_data':'users'},{'text':'🔗 Referidos','callback_data':'referrals'}],[{'text':'🌐 Idioma','callback_data':'language'},{'text':'ℹ️ Información','callback_data':'info'}]]
- if is_owner(uid):rows.append([{'text':'⚙️ Ajustes','callback_data':'settings'}])
+ b=BUTTONS.get(lang(uid),BUTTONS['es'])
+ rows=[[{'text':b['users'],'callback_data':'users'},{'text':b['referrals'],'callback_data':'referrals'}],
+       [{'text':b['language'],'callback_data':'language'},{'text':b['info'],'callback_data':'info'}]]
+ if is_owner(uid):rows.append([{'text':b['settings'],'callback_data':'settings'}])
  return rows
-USERS=[[{'text':'➕ Crear cuenta','callback_data':'create'},{'text':'♻️ Renovar','callback_data':'renew'}],[{'text':'📋 Lista','callback_data':'list'},{'text':'🟢 Online','callback_data':'online'}],[{'text':'👤 Cuenta','callback_data':'account'},{'text':'🗑️ Eliminar cuenta','callback_data':'delete'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+
+def users_menu(uid):
+ b=BUTTONS.get(lang(uid),BUTTONS['es'])
+ return [[{'text':b['create'],'callback_data':'create'},{'text':b['renew'],'callback_data':'renew'}],
+         [{'text':b['list'],'callback_data':'list'},{'text':b['online'],'callback_data':'online'}],
+         [{'text':b['account'],'callback_data':'account'},{'text':b['delete'],'callback_data':'delete'}],
+         [{'text':b['home'],'callback_data':'home'}]]
+USERS=users_menu
+
 CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
@@ -420,20 +439,23 @@ def referral_info(uid):
  return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 <b>Referidos: {len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
 
 def online_ssh():
- out=subprocess.getoutput("ss -tnp state established 2>/dev/null | grep -E ':22[[:space:]]|sshd' || true")
- names=[]
+ out=subprocess.getoutput("ss -tnp state established 2>/dev/null || true")
+ sessions=[]
  for line in out.splitlines():
-  m=re.search(r'users:\(\("sshd".*pid=([0-9]+)',line)
-  if m:
-   pid=m.group(1);name=subprocess.getoutput(f"ps -o user= -p {pid} 2>/dev/null").strip()
-   if name and name not in ('root','sshd') and name not in names:names.append(name)
- if not names:
-  # Fallback to SSH sessions only; does not count terminal/web sessions unrelated to SSH.
+  if not re.search(r':22\b',line): continue
+  m=re.search(r'users:\(\("sshd"[^)]*pid=([0-9]+)',line)
+  pid=m.group(1) if m else ''
+  name=subprocess.getoutput(f"ps -o user= -p {q(pid)} 2>/dev/null").strip() if pid else ''
+  if not name or name in ('root','sshd'): continue
+  parts=line.split();peer=parts[4] if len(parts)>4 else '—'
+  ip=peer.rsplit(':',1)[0] if ':' in peer else peer
+  sessions.append({'username':name,'ip':ip or '—','device':ip or '—'})
+ if not sessions:
   for line in subprocess.getoutput("who 2>/dev/null").splitlines():
    if 'pts/' in line:
-    name=line.split()[0]
-    if name!='root' and name not in names:names.append(name)
- return names
+    p=line.split();name=p[0]
+    if name!='root':sessions.append({'username':name,'ip':p[4].strip('()') if len(p)>4 else '—','device':p[1] if len(p)>1 else '—'})
+ return sessions
 
 def create_v2ray(username,days):
  try:
@@ -572,7 +594,7 @@ def handle_start(c,raw):
   return process_ad_completion(c,tok)
  if not me.get('language_selected'):
   STATE[c]={'f':'language','s':'pick','d':{}}
-  return send(c,I18N['choose_lang']['es']+'\n\nSelecciona uno de los 8 idiomas disponibles:',[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
+  return send(c,I18N['choose_lang']['es']+'\n\nSelecciona uno de los 13 idiomas disponibles:',language_keyboard(c))
  return send(c,tr(c,'home'),home(c))
 
 def ad_configurations():
@@ -585,15 +607,23 @@ def ad_configurations():
  except:pass
  return items
 
+AD_REQUIREMENTS={'renew':5,'ref_renew':1,'expiry_renew':7}
+
+def ad_count_for(action,extra=None):
+ if action=='create': return 2 if (extra or {}).get('kind')=='v2ray' else 3
+ return AD_REQUIREMENTS.get(action,1)
+
 def ad_gate(c,action,extra=None):
  if is_admin(c):return False
  ads=ad_configurations()
  if not ads:return False
- # Do not create a long-lived token when the user only opens the ad message.
- # The token is generated at the moment the Mini App button is pressed.
+ required=ad_count_for(action,extra)
  pending=secrets.token_urlsafe(9)
- d=db();d.setdefault('ad_pending',{})[pending]={'uid':c,'action':action,'extra':extra or {},'expires':time.time()+3600};save_db(d)
- return send(c,'💰 <b>UN PASO ANTES DE CONTINUAR</b>\n\nPara mantener el servicio gratuito, mira el anuncio y completa la publicidad.\n\nPulsa el botón para abrir la Mini App y generar un enlace nuevo.',[[{'text':'▶️ Ver anuncio y continuar','callback_data':'adopen:'+pending}]]) or True
+ d=db();d.setdefault('ad_pending',{})[pending]={
+  'uid':c,'action':action,'extra':extra or {},'remaining':required,
+  'total':required,'expires':time.time()+3600
+ };save_db(d)
+ return send(c,f'💰 <b>PUBLICIDAD {required} PASOS</b>\n\nPara mantener el servicio gratuito, completa <b>{required} anuncios</b>.\n\nLa publicidad se renueva automáticamente en cada paso.',[[{'text':f'▶️ Ver anuncio 1/{required}','callback_data':'adopen:'+pending}]]) or True
 
 def create_ad_token(c,action,extra=None):
  ads=ad_configurations()
@@ -642,13 +672,10 @@ def renew_now(c,username,days=None):
  except Exception as ex:
   log('RENEW NOW '+repr(ex));return send(c,'🔴 No se pudo renovar la cuenta.')
 
-def start_renew(c,username=None,bypass_ads=False):
+def start_renew(c,username=None,bypass_ads=False,ad_action='renew'):
  if username:
-  if not bypass_ads and ad_gate(c,'renew',{'username':username}):return
-  days=quota(c)[0] if not is_owner(c) else None
-  if is_owner(c):
-   STATE[c]={'f':'renew','s':'days','d':{'user':username}}
-   return send(c,'📅 <b>Días para renovar:</b>')
+  if not bypass_ads and ad_gate(c,ad_action,{'username':username}):return
+  days=quota(c)[0]
   return renew_now(c,username,days)
  if not bypass_ads and ad_gate(c,'renew'):return
  STATE[c]={'f':'renew','s':'u','d':{}}
@@ -673,7 +700,7 @@ def near_expiry_notifications():
       z['expiry_notice'][username]=key;changed=True
       owner=int(sid);mention='@'+z.get('username') if z.get('username') else str(owner)
       text=f'⏳ <b>CUENTA PRÓXIMA A VENCER</b>\n\n👤 Cuenta: <code>{e(username)}</code>\n📅 Vencimiento: <b>{e(ex.strftime("%d/%m/%Y"))}</b>\n⏱️ Tiempo restante: <b>{"hoy" if left==0 else "1 día"}</b>\n\nPuedes renovarla desde el botón inferior.'
-      k=[[{'text':'▶️ Ver anuncio y renovar','callback_data':'renew:'+username}]]
+      k=[[{'text':'▶️ Ver anuncio y renovar','callback_data':'expiryrenew:'+username}]]
       try:send(owner,text,k)
       except:pass
       if owner!=OWNER:
@@ -693,6 +720,11 @@ USER_COMMANDS={
  'it':[('/cmds','Comandi disponibili'),('/crea','Crea account'),('/rinnova','Rinnova account'),('/lista','I miei account'),('/online','Connessioni'),('/account','Informazioni account'),('/elimina','Elimina account'),('/referidos','Referral'),('/lingua','Cambia lingua'),('/informazioni','Informazioni'),('/me','Le mie informazioni e cronologia')],
  'ru':[('/cmds','Доступные команды'),('/create','Создать аккаунт'),('/renew','Продлить аккаунт'),('/list','Мои аккаунты'),('/online','Подключения'),('/account','Информация аккаунта'),('/delete','Удалить аккаунт'),('/referrals','Рефералы'),('/language','Язык'),('/info','Информация'),('/me','Моя информация и история')],
  'tr':[('/cmds','Kullanılabilir komutlar'),('/create','Hesap oluştur'),('/renew','Hesabı yenile'),('/list','Hesaplarım'),('/online','Bağlantılar'),('/account','Hesap bilgisi'),('/delete','Hesabı sil'),('/referrals','Referanslar'),('/language','Dil değiştir'),('/info','Bilgi'),('/me','Bilgilerim ve geçmişim')],
+ 'zh':[('/cmds','查看可用命令'),('/create','创建账户'),('/renew','续期账户'),('/list','我的账户'),('/online','在线连接'),('/account','账户信息'),('/delete','删除账户'),('/referrals','推荐计划'),('/language','切换语言'),('/info','系统信息'),('/me','我的信息和记录')],
+ 'ja':[('/cmds','利用可能なコマンド'),('/create','アカウント作成'),('/renew','アカウント更新'),('/list','自分のアカウント'),('/online','接続状況'),('/account','アカウント情報'),('/delete','アカウント削除'),('/referrals','紹介'),('/language','言語変更'),('/info','情報'),('/me','自分の情報と履歴')],
+ 'ko':[('/cmds','사용 가능한 명령'),('/create','계정 생성'),('/renew','계정 갱신'),('/list','내 계정'),('/online','연결 상태'),('/account','계정 정보'),('/delete','계정 삭제'),('/referrals','추천'),('/language','언어 변경'),('/info','정보'),('/me','내 정보 및 기록')],
+ 'id':[('/cmds','Lihat perintah'),('/create','Buat akun'),('/renew','Perpanjang akun'),('/list','Akun saya'),('/online','Koneksi aktif'),('/account','Info akun'),('/delete','Hapus akun'),('/referrals','Referensi'),('/language','Ganti bahasa'),('/info','Informasi'),('/me','Info dan riwayat saya')],
+ 'ar':[('/cmds','عرض الأوامر المتاحة'),('/create','إنشاء حساب'),('/renew','تجديد الحساب'),('/list','حساباتي'),('/online','الاتصالات'),('/account','معلومات الحساب'),('/delete','حذف الحساب'),('/referrals','الإحالات'),('/language','تغيير اللغة'),('/info','المعلومات'),('/me','معلوماتي وسجلي')],
 }
 def cmds_text(uid):
  rows=USER_COMMANDS.get(lang(uid),USER_COMMANDS['es'])
@@ -704,14 +736,49 @@ def add_history(uid,action,detail=''):
  if len(h)>100: del h[:-100]
  save_db(d)
 
+I18N['choose_lang'].update({
+ 'zh':'🌎 <b>选择语言</b>\n\n请选择你要使用的语言。',
+ 'ja':'🌎 <b>言語を選択</b>\n\n使用する言語を選択してください。',
+ 'ko':'🌎 <b>언어 선택</b>\n\n사용할 언어를 선택하세요.',
+ 'id':'🌎 <b>Pilih bahasa</b>\n\nPilih bahasa yang ingin digunakan.',
+ 'ar':'🌎 <b>اختر لغتك</b>\n\nاختر اللغة التي تريد استخدامها.',
+})
+I18N['home'].update({
+ 'zh':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>主面板</b>\n\n通过 Telegram 快速管理账户。',
+ 'ja':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>メインパネル</b>\n\nTelegramからアカウントを簡単に管理できます。',
+ 'ko':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>메인 패널</b>\n\nTelegram에서 계정을 빠르게 관리하세요.',
+ 'id':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>PANEL UTAMA</b>\n\nKelola akun dengan cepat melalui Telegram.',
+ 'ar':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>اللوحة الرئيسية</b>\n\nأدر حساباتك بسرعة عبر Telegram.',
+})
+ME_I18N={
+ 'es':('👤 <b>MI INFORMACIÓN</b>','Nombre','Usuario','Idioma','Registro','Cuentas','Mis cuentas','Historial reciente','Sin actividad registrada todavía.'),
+ 'en':('👤 <b>MY INFORMATION</b>','Name','Username','Language','Registered','Accounts','My accounts','Recent history','No activity recorded yet.'),
+ 'pt':('👤 <b>MINHAS INFORMAÇÕES</b>','Nome','Usuário','Idioma','Registro','Contas','Minhas contas','Histórico recente','Nenhuma atividade registrada ainda.'),
+ 'fr':('👤 <b>MES INFORMATIONS</b>','Nom','Nom d’utilisateur','Langue','Inscription','Comptes','Mes comptes','Historique récent','Aucune activité enregistrée.'),
+ 'de':('👤 <b>MEINE INFORMATIONEN</b>','Name','Benutzername','Sprache','Registrierung','Konten','Meine Konten','Letzte Aktivitäten','Noch keine Aktivität.'),
+ 'it':('👤 <b>LE MIE INFORMAZIONI</b>','Nome','Nome utente','Lingua','Registrazione','Account','I miei account','Cronologia recente','Nessuna attività registrata.'),
+ 'ru':('👤 <b>МОЯ ИНФОРМАЦИЯ</b>','Имя','Имя пользователя','Язык','Регистрация','Аккаунты','Мои аккаунты','Последняя история','Активность пока не зарегистрирована.'),
+ 'tr':('👤 <b>BİLGİLERİM</b>','Ad','Kullanıcı adı','Dil','Kayıt','Hesaplar','Hesaplarım','Son geçmiş','Henüz etkinlik kaydı yok.'),
+ 'zh':('👤 <b>我的信息</b>','姓名','用户名','语言','注册','账户','我的账户','最近记录','暂无活动记录。'),
+ 'ja':('👤 <b>自分の情報</b>','名前','ユーザー名','言語','登録日','アカウント','自分のアカウント','最近の履歴','まだ活動記録はありません。'),
+ 'ko':('👤 <b>내 정보</b>','이름','사용자명','언어','가입일','계정','내 계정','최근 기록','아직 기록된 활동이 없습니다.'),
+ 'id':('👤 <b>INFORMASI SAYA</b>','Nama','Username','Bahasa','Terdaftar','Akun','Akun saya','Riwayat terbaru','Belum ada aktivitas.'),
+ 'ar':('👤 <b>معلوماتي</b>','الاسم','اسم المستخدم','اللغة','التسجيل','الحسابات','حساباتي','السجل الأخير','لا يوجد نشاط مسجل بعد.'),
+}
 def me_text(uid):
- d=db(); z=d['users'].get(str(uid),{}); name=z.get('name') or str(uid); uname=('@'+z.get('username')) if z.get('username') else '—'; accounts=z.get('accounts',[]); hist=z.get('history',[])
- out=f'👤 <b>MI INFORMACIÓN</b>\n\n🆔 ID: <code>{uid}</code>\n👤 Nombre: <b>{e(name)}</b>\n🔗 Usuario: <b>{e(uname)}</b>\n🌐 Idioma: <b>{e(lang(uid))}</b>\n📅 Registro: <b>{e(z.get("created","—"))}</b>\n👥 Cuentas: <b>{len(accounts)}</b>'
- if accounts: out+='\\n\\n🔐 <b>Mis cuentas</b>\\n'+'\\n'.join('• <code>'+e(a)+'</code>' for a in accounts[:30])
- out+='\\n\\n🕘 <b>Historial reciente</b>'
+ d=db(); z=d['users'].get(str(uid),{}); L=ME_I18N.get(lang(uid),ME_I18N['es'])
+ title,name_l,user_l,lang_l,reg_l,acc_l,myacc_l,hist_l,none=L
+ name=z.get('name') or str(uid); uname=('@'+z.get('username')) if z.get('username') else '—'
+ accounts=z.get('accounts',[]); hist=z.get('history',[])
+ out=(f"{title}\n\n🆔 ID: <code>{uid}</code>\n👤 {name_l}: <b>{e(name)}</b>\n"
+      f"🔗 {user_l}: <b>{e(uname)}</b>\n🌐 {lang_l}: <b>{e(lang(uid))}</b>\n"
+      f"📅 {reg_l}: <b>{e(z.get('created','—'))}</b>\n👥 {acc_l}: <b>{len(accounts)}</b>")
+ if accounts: out+=f"\n\n🔐 <b>{myacc_l}</b>\n"+'\n'.join('• <code>'+e(a)+'</code>' for a in accounts[:30])
+ out+=f"\n\n🕘 <b>{hist_l}</b>"
  if hist:
-  for h in hist[-10:][::-1]: out+=f'\\n• <code>{e(h.get("date",""))}</code> — {e(h.get("action",""))}'+(f' — {e(h.get("detail",""))}' if h.get("detail") else '')
- else: out+='\\n• Sin actividad registrada todavía.'
+  for h in hist[-10:][::-1]:
+   out+=f'\n• <code>{e(h.get("date",""))}</code> — {e(h.get("action",""))}'+(f' — {e(h.get("detail",""))}' if h.get("detail") else '')
+ else: out+=f"\n• {none}"
  return out
 
 def process_text(c,t,chat_type=None):
@@ -730,27 +797,27 @@ def process_text(c,t,chat_type=None):
   return send(c,cmds_text(uid),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd=='/me':
   return send(c,me_text(uid),[[{'text':'🔙 Inicio','callback_data':'home'}]])
- if cmd in ('/crear','/crearcuenta','/create','/criar','/creer','/erstellen','/crea'):
+ if cmd in ('/crear','/crearcuenta','/create','/criar','/creer','/erstellen','/crea','/creercompte','/criarconta','/hesapolustur','/zangmi'):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot.')
   if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
   return send(c,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
- if cmd in ('/renovar','/renew','/renouveler','/erneuern','/rinnova'):
+ if cmd in ('/renovar','/renew','/renouveler','/erneuern','/rinnova','/renouvelercompte','/kontoerneuern','/yenile','/renewaccount'):
   return start_renew(c)
- if cmd in ('/lista','/cuentas','/list','/liste'):
+ if cmd in ('/lista','/cuentas','/list','/liste','/mescomptes','/hesaplarim','/akun'):
   return cb(c,0,c,0,'list')
- if cmd in ('/online','/conectados'):
+ if cmd in ('/online','/conectados','/connections','/connexions','/verbindungen','/koneksi'):
   return cb(c,0,c,0,'online')
- if cmd in ('/cuenta','/info_cuenta','/account','/compte','/konto'):
+ if cmd in ('/cuenta','/info_cuenta','/account','/compte','/konto','/zhanghu','/akaunto','/gyejeong'):
   STATE[c]={'f':'account','s':'u','d':{}};return send(c,'👤 <b>CONSULTAR CUENTA</b>\n\nEscribe el usuario:')
- if cmd in ('/eliminar','/borrar','/delete','/supprimer','/loeschen','/elimina'):
+ if cmd in ('/eliminar','/borrar','/delete','/supprimer','/loeschen','/elimina','/supprimercompte','/hapus','/del'):
   STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'👤 <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
  if cmd in ('/referidos','/referrals','/parrainages','/empfehlungen'):
   rows=[[{'text':'🎁 Cangear 7 días','callback_data':'ref_renew'}]] if len(d['users'].get(str(c),{}).get('referrals',[]))>=3 else []
   rows.append([{'text':'🔙 Inicio','callback_data':'home'}])
   return send(c,referral_info(c),rows)
- if cmd in ('/idioma','/language','/langue','/sprache','/lingua'):
-  return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}]])
- if cmd in ('/informacion','/info','/informacao','/information'):
+ if cmd in ('/idioma','/language','/langue','/sprache','/lingua','/lang','/sprachewechsel','/bahasa','/yuyan'):
+  return send(c,I18N['choose_lang'].get(lang(c),I18N['choose_lang']['es']),language_keyboard(c))
+ if cmd in ('/informacion','/info','/informacao','/information','/informasi','/thongtin'):
   return send(c,tr(c,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if t.startswith('/referidos'):return send(c,referral_info(c))
  if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
@@ -779,15 +846,12 @@ def process_text(c,t,chat_type=None):
   if f=='create':
    # Usuarios: días/dispositivos salen de la cuota. El super admin puede definirlos.
    if dat.get('kind')=='v2ray':
-    if is_owner(c):st['s']='days';return send(c,'📅 Duración de la cuenta (días):')
     maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
    st['s']='p';return send(c,'🔑 Contraseña:')
-  # Renovación: usuarios usan automáticamente su cuota; super admin puede definirla.
-  if is_owner(c):st['s']='days';return send(c,'📅 Días para renovar:')
+  # Renovación: usa siempre la cuota configurada; no solicita días ni límite.
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:renew')
  if f=='create' and step=='p':
   dat['pass']=t
-  if is_owner(c):st['s']='days';return send(c,'📅 Duración de la cuenta (días):')
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
  if f in ('create','renew') and step=='days':
   if not t.isdigit() or int(t)<1:return send(c,'❌ Debes indicar un número de días válido.')
@@ -811,14 +875,15 @@ def cb(c,m,u,i,x,chat_type=None):
   language=x.split(':',1)[1];d['users'][str(u)]['language']=language;d['users'][str(u)]['language_selected']=True;save_db(d);STATE.pop(u,None);return edit(c,m,tr(u,'home'),home(u))
  if x.startswith('adopen:'):
   try:
-   pending=x.split(':',1)[1];pd=db().get('ad_pending',{}).get(pending)
+   pending=x.split(':',1)[1];d=db();pd=d.get('ad_pending',{}).get(pending)
    if not pd or int(pd.get('uid',0))!=c or float(pd.get('expires',0))<time.time():raise ValueError('solicitud expirada')
    action=pd.get('action','');extra=pd.get('extra',{}) or {}
-   if action not in ('create','renew','ref_renew'):raise ValueError('acción inválida')
-   d=db();d.get('ad_pending',{}).pop(pending,None);save_db(d)
+   if action not in ('create','renew','ref_renew','expiry_renew'):raise ValueError('acción inválida')
+   d.get('ad_pending',{}).pop(pending,None);save_db(d)
    url=create_ad_token(c,action,extra)
    if not url:return ans(i,'Publicidad no configurada')
-   return edit(c,m,'💰 <b>ANUNCIO LISTO</b>\n\nPulsa el botón para abrir la Mini App y ver el anuncio.\n\n🔐 El enlace acaba de generarse y es válido por 15 minutos.',[[{'text':'▶️ Ver anuncio y continuar','web_app':{'url':url}}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+   n=int(pd.get('total',1));done=n-int(pd.get('remaining',n))+1
+   return edit(c,m,f'💰 <b>ANUNCIO {done}/{n}</b>\n\nPulsa el botón para abrir la publicidad. Al terminar aparecerá automáticamente el siguiente.',[[{'text':f'▶️ Ver anuncio {done}/{n}','web_app':{'url':url}}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
   except Exception as ex:
    log('AD OPEN '+repr(ex));return ans(i,'No se pudo preparar el anuncio')
  if x=='ref_confirm':
@@ -853,6 +918,10 @@ def cb(c,m,u,i,x,chat_type=None):
   kind='v2ray' if x.endswith('v2ray') else 'normal'
   return start_create(c,kind)
  if x=='renew':return start_renew(c)
+ if x.startswith('expiryrenew:'):
+  username=x.split(':',1)[1]
+  if not userexists(username):return send(c,'❌ Esa cuenta ya no existe.')
+  return start_renew(c,username,False,'expiry_renew')
  if x.startswith('renew:'):
   username=x.split(':',1)[1]
   if not userexists(username):return send(c,'❌ Esa cuenta ya no existe.')
@@ -861,22 +930,35 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='delete':STATE[c]={'f':'delete','s':'u','d':{}};return send(c,'🗑️ <b>ELIMINAR CUENTA</b>\n\nEscribe el usuario:')
  if x=='list':
   if is_owner(u):
-   lines=[]
+   lines=[];total=0
    for sid,z in d['users'].items():
-    mention='@'+str(z.get('username')) if z.get('username') else '<code>'+sid+'</code>'
-    ac=z.get('accounts',[]);lines.append(f'👤 {e(mention)}\n   Cuentas: '+( ', '.join('<code>'+e(a)+'</code>' for a in ac) if ac else 'Ninguna'))
-   text='📋 <b>LISTA DE CUENTAS</b>\n\n'+'\n'.join(lines) if lines else '📋 <b>LISTA DE CUENTAS</b>\n\nNo hay cuentas.'
+    mention='@'+str(z.get('username')) if z.get('username') else sid
+    ac=z.get('accounts',[]);total+=len(ac)
+    lines.append(f'👤 <b>{e(mention)}</b>\n'+('\n'.join(f'   • <code>{e(a)}</code> — 🔑 xxx' for a in ac) if ac else '   • Sin cuentas'))
+   text='📋 <b>TODAS LAS CUENTAS</b>\n\n👥 Propietarios: <b>'+str(len(d['users']))+'</b>\n🔐 Cuentas creadas: <b>'+str(total)+'</b>\n\n'+'\n\n'.join(lines)
   else:
-   z=d['users'].get(str(u),{});ac=z.get('accounts',[]);text='📋 <b>TUS CUENTAS</b>\n\n'+('\n'.join('• <code>'+e(a)+'</code>' for a in ac) if ac else 'No tienes cuentas.')
+   z=d['users'].get(str(u),{});ac=z.get('accounts',[])
+   text='📋 <b>TUS CUENTAS</b>\n\n'+('\n'.join('• <code>'+e(a)+'</code>' for a in ac) if ac else 'No tienes cuentas creadas todavía.')
   return edit(c,m,text)
  if x=='online':
-  names=online_ssh();rows=[]
-  for n in names:
-   owner='—'
-   for sid,z in d['users'].items():
-    if n in z.get('accounts',[]):owner='@'+z.get('username') if z.get('username') else str(sid);break
-   rows.append(f'• <code>{e(n)}</code> — {e(owner)}')
-  text='🟢 <b>CUENTAS SSH ONLINE</b>\n\nConectados: <b>'+str(len(names))+'</b>\n\n'+('\n'.join(rows) if rows else 'No hay cuentas SSH conectadas.')
+  sessions=online_ssh();owners={}
+  for sid,z in d['users'].items():
+   for acc in z.get('accounts',[]): owners.setdefault(acc,[]).append((sid,z))
+  visible=owners if is_owner(u) else {a:v for a,v in owners.items() if any(str(sid)==str(u) for sid,_ in v)}
+  connected={}
+  for s in sessions: connected.setdefault(s['username'],[]).append(s)
+  rows=[]
+  for acc in visible:
+   live=connected.get(acc,[])
+   if live:
+    ips=', '.join(e(x['ip']) for x in live)
+    rows.append(f'🟢 <b>{e(acc)}</b> — <b>{len(live)}</b>\n   🌐 {ips}')
+   else: rows.append(f'⚪ <b>{e(acc)}</b> — <b>0</b>')
+  total=sum(len(connected.get(a,[])) for a in visible)
+  scope='Todas las cuentas' if is_owner(u) else 'Tus cuentas'
+  text=f'🟢 <b>CUENTAS ONLINE</b>\n\n👥 {scope}\n📡 Conectados: <b>{total}</b>\n\n'
+  text+='\n'.join(rows) if rows else 'No hay cuentas registradas todavía.'
+  if is_owner(u): text+='\n\n🔐 <i>Vista de super admin: cuentas, conexiones e IP activas.</i>'
   return edit(c,m,text)
  if x=='cancel':STATE.pop(c,None);return send(c,'❌ Cancelado.')
  if x.startswith('do:'):
@@ -1383,26 +1465,33 @@ def apply_referral_reward(c,username):
 
 def process_ad_completion(c, token):
  try:
-  token=str(token or '').strip()
-  item=consume_ad_token(c,token)
+  token=str(token or '').strip();item=consume_ad_token(c,token)
   if not item:
-   # Telegram can deliver sendData twice in edge cases. Accept the same token briefly
-   # from the completion cache without executing the action twice.
    d=db();done=d.setdefault('ad_completed',{}).get(token)
-   if done and int(done.get('uid',0))==c and float(done.get('expires',0))>=time.time():
-    return True
-   send(c,'❌ Este enlace de publicidad expiró o ya fue utilizado.')
-   return False
-  d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120};save_db(d)
-  if item.get('action')=='create':
-   return bool(start_create(c,item.get('extra',{}).get('kind','normal'),True))
-  if item.get('action')=='renew':
-   username=item.get('extra',{}).get('username')
-   if username:return bool(renew_now(c,username,quota(c)[0] if not is_owner(c) else None))
-   return bool(start_renew(c,bypass_ads=True))
-  if item.get('action')=='ref_renew':
-   username=item.get('extra',{}).get('username')
-   if username:return bool(apply_referral_reward(c,username))
+   if done and int(done.get('uid',0))==c and float(done.get('expires',0))>=time.time():return True
+   send(c,'❌ Este enlace de publicidad expiró o ya fue utilizado.');return False
+  d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120}
+  action=item.get('action');extra=item.get('extra',{}) or {}
+  required=ad_count_for(action,extra)
+  seq_key=f"{c}:{action}:{extra.get('username','')}:{extra.get('kind','')}"
+  seq=d.setdefault('ad_sequences',{}).get(seq_key)
+  if not seq:
+   seq={'remaining':required-1,'total':required,'expires':time.time()+3600}
+   d['ad_sequences'][seq_key]=seq
+  remaining=int(seq.get('remaining',0))
+  if remaining>0:
+   done=required-remaining
+   seq['remaining']=remaining-1
+   next_token=secrets.token_urlsafe(9)
+   d.setdefault('ad_pending',{})[next_token]={'uid':c,'action':action,'extra':extra,'remaining':remaining,'total':required,'expires':time.time()+3600}
+   save_db(d)
+   send(c,f'💰 <b>ANUNCIO {done}/{required} COMPLETADO</b>\n\nContinúa con el siguiente anuncio.',[[{'text':f'▶️ Ver anuncio {done+1}/{required}','callback_data':'adopen:'+next_token}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
+   return True
+  d['ad_sequences'].pop(seq_key,None);save_db(d)
+  if action=='create':return bool(start_create(c,extra.get('kind','normal'),True))
+  if action in ('renew','expiry_renew'):
+   return bool(renew_now(c,extra.get('username'),quota(c)[0] if not is_owner(c) else None) if extra.get('username') else start_renew(c,bypass_ads=True))
+  if action=='ref_renew':return bool(apply_referral_reward(c,extra.get('username')))
  except Exception as ex:
   log('AD COMPLETE '+repr(ex));send(c,'❌ No se pudo completar la publicidad.');return False
 
