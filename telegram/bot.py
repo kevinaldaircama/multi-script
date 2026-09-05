@@ -92,16 +92,16 @@ def lang(uid):
 
 I18N={
  'home':{'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>\n\nAdministra tus cuentas de forma rápida y sencilla desde Telegram.\n\n🔐 Acceso · 👤 Cuentas · 🟢 Conexiones · 🔗 Referidos','en':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Main panel</b>\n\nManage your accounts quickly and easily from Telegram.\n\n🔐 Access · 👤 Accounts · 🟢 Connections · 🔗 Referrals','pt':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Painel principal</b>\n\nGerencie suas contas de forma rápida e simples pelo Telegram.\n\n🔐 Acesso · 👤 Contas · 🟢 Conexões · 🔗 Indicações'},
- 'users':{'es':'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas.','en':'👤 <b>USERS</b>\n\nManage your accounts.','pt':'👤 <b>USUÁRIOS</b>\n\nGerencie suas contas.'},
+ 'users':{'es':'👤 <b>GESTIÓN DE CUENTAS</b>\n\nCrea y consulta tus cuentas, revisa las conexiones activas, elimina accesos cuando lo necesites y utiliza las opciones disponibles para tu nivel de acceso.','en':'👤 <b>USERS</b>\n\nManage your accounts.','pt':'👤 <b>USUÁRIOS</b>\n\nGerencie suas contas.'},
  'info':{'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot te permite gestionar tus accesos desde Telegram: crear cuentas normales o V2Ray, consultar tus cuentas, revisar conexiones, renovar, eliminar y usar el sistema de referidos. Las cuotas definidas por el super admin se aplican automáticamente a los usuarios públicos.','en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you create and manage your server access accounts, view your accounts, check connections and manage referrals.','pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite criar e gerenciar suas contas de acesso ao servidor, consultar suas contas, ver conexões e gerenciar indicações.'},
- 'choose_lang':{'es':'🌎 <b>Selecciona tu idioma</b>\n\nElige el idioma que quieres usar.','en':'🌎 <b>Select your language</b>\n\nChoose the language you want to use.','pt':'🌎 <b>Selecione seu idioma</b>\n\nEscolha o idioma que deseja usar.'},
- 'settings':{'es':'⚙️ <b>AJUSTES DEL SUPER ADMIN</b>\n\nControl central del panel.','en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.','pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.'},
+ 'choose_lang':{'es':'🌎 <b>SELECCIONA TU IDIOMA</b>\n\nElige el idioma de la interfaz. Puedes cambiarlo cuando quieras desde el menú de idioma.\n\n🌐 <b>13 idiomas disponibles</b>.','en':'🌎 <b>Select your language</b>\n\nChoose the language you want to use.','pt':'🌎 <b>Selecione seu idioma</b>\n\nEscolha o idioma que deseja usar.'},
+ 'settings':{'es':'⚙️ <b>CENTRO DEL SUPER ADMIN</b>\n\nControl total del panel: usuarios, administradores, seguridad, cuotas, monetización, respaldos, herramientas y mantenimiento del servidor.','en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.','pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.'},
  'language_saved':{'es':'🟢 Idioma guardado.','en':'🟢 Language saved.','pt':'🟢 Idioma salvo.'},
 }
 # Textos principales traducidos para los 13 idiomas.
 I18N.update({
  'home':{
-  'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>\n\nAdministra tus cuentas de forma rápida y sencilla desde Telegram.',
+  'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Centro de control</b>\n\nGestiona tus accesos desde Telegram de forma rápida, clara y segura. Crea cuentas, consulta conexiones, revisa tu actividad y administra tus servicios desde un solo lugar.',
   'en':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Main panel</b>\n\nManage your accounts quickly and easily from Telegram.',
   'pt':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Painel principal</b>\n\nGerencie suas contas de forma rápida e simples pelo Telegram.',
   'fr':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panneau principal</b>\n\nGérez vos comptes rapidement et facilement depuis Telegram.',
@@ -111,7 +111,7 @@ I18N.update({
   'tr':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Ana panel</b>\n\nHesaplarınızı Telegram üzerinden hızlı ve kolay yönetin.'
  },
  'users':{
-  'es':'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas.',
+  'es':'👤 <b>GESTIÓN DE CUENTAS</b>\n\nCrea y consulta tus cuentas, revisa las conexiones activas, elimina accesos cuando lo necesites y utiliza las opciones disponibles para tu nivel de acceso.',
   'en':'👤 <b>USERS</b>\n\nManage your accounts.',
   'pt':'👤 <b>USUÁRIOS</b>\n\nGerencie suas contas.',
   'fr':'👤 <b>UTILISATEURS</b>\n\nGérez vos comptes.',
@@ -121,7 +121,7 @@ I18N.update({
   'tr':'👤 <b>KULLANICILAR</b>\n\nHesaplarınızı yönetin.'
  },
  'info':{
-  'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot te permite gestionar tus accesos, cuentas, conexiones, renovaciones y referidos.',
+  'es':'ℹ️ <b>CENTRO DE INFORMACIÓN</b>\n\nKevinTech reúne en un solo bot la gestión de cuentas, conexiones, renovaciones, referidos, configuración y herramientas del servidor. Las opciones visibles dependen de tus permisos.',
   'en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you manage access, accounts, connections, renewals and referrals.',
   'pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite gerenciar acessos, contas, conexões, renovações e indicações.',
   'fr':'ℹ️ <b>INFORMATIONS</b>\n\nCe bot vous permet de gérer vos accès, comptes, connexions, renouvellements et parrainages.',
@@ -131,7 +131,7 @@ I18N.update({
   'tr':'ℹ️ <b>BİLGİ</b>\n\nBu bot erişimleri, hesapları, bağlantıları, yenilemeleri ve referansları yönetmenizi sağlar.'
  },
  'choose_lang':{
-  'es':'🌎 <b>Selecciona tu idioma</b>\n\nElige el idioma que quieres usar.',
+  'es':'🌎 <b>SELECCIONA TU IDIOMA</b>\n\nElige el idioma de la interfaz. Puedes cambiarlo cuando quieras desde el menú de idioma.\n\n🌐 <b>13 idiomas disponibles</b>.',
   'en':'🌎 <b>Select your language</b>\n\nChoose the language you want to use.',
   'pt':'🌎 <b>Selecione seu idioma</b>\n\nEscolha o idioma que deseja usar.',
   'fr':'🌎 <b>Choisissez votre langue</b>\n\nSélectionnez la langue à utiliser.',
@@ -141,7 +141,7 @@ I18N.update({
   'tr':'🌎 <b>Dilinizi seçin</b>\n\nKullanmak istediğiniz dili seçin.'
  },
  'settings':{
-  'es':'⚙️ <b>AJUSTES DEL SUPER ADMIN</b>\n\nControl central del panel.',
+  'es':'⚙️ <b>CENTRO DEL SUPER ADMIN</b>\n\nControl total del panel: usuarios, administradores, seguridad, cuotas, monetización, respaldos, herramientas y mantenimiento del servidor.',
   'en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.',
   'pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.',
   'fr':'⚙️ <b>PARAMÈTRES SUPER ADMIN</b>\n\nContrôle central du panneau.',
@@ -443,22 +443,40 @@ def referral_info(uid):
  return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 <b>Referidos: {len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
 
 def online_ssh():
+ """Devuelve solo sesiones SSH que correspondan a cuentas reales del panel.
+ Evita mostrar procesos/usuarios genéricos como `users` y reduce falsos positivos.
+ """
+ d=db()
+ known=set()
+ for z in d.get('users',{}).values():
+  known.update(str(a).strip().lower() for a in z.get('accounts',[]) if a)
+  known.update(str(a).strip().lower() for a in z.get('v2ray_accounts',[]) if a)
+ if not known:
+  return []
  out=subprocess.getoutput("ss -tnp state established 2>/dev/null || true")
  sessions=[]
+ seen=set()
  for line in out.splitlines():
-  if not re.search(r':22\b',line): continue
-  m=re.search(r'users:\(\("sshd"[^)]*pid=([0-9]+)',line)
+  parts=line.split()
+  # En ss -tnp el destino local suele estar en la columna 3 y el peer en 4.
+  if len(parts)<5 or not any(re.search(r':22$',x) for x in parts[3:5]):
+   continue
+  local=parts[3] if len(parts)>3 else ''
+  peer=parts[4] if len(parts)>4 else '—'
+  if not re.search(r':22(?:\]|$)',local):
+   continue
+  m=re.search(r'users:\(\("sshd",pid=(\d+)',line)
   pid=m.group(1) if m else ''
-  name=subprocess.getoutput(f"ps -o user= -p {q(pid)} 2>/dev/null").strip() if pid else ''
-  if not name or name in ('root','sshd'): continue
-  parts=line.split();peer=parts[4] if len(parts)>4 else '—'
-  ip=peer.rsplit(':',1)[0] if ':' in peer else peer
-  sessions.append({'username':name,'ip':ip or '—','device':ip or '—'})
- if not sessions:
-  for line in subprocess.getoutput("who 2>/dev/null").splitlines():
-   if 'pts/' in line:
-    p=line.split();name=p[0]
-    if name!='root':sessions.append({'username':name,'ip':p[4].strip('()') if len(p)>4 else '—','device':p[1] if len(p)>1 else '—'})
+  if not pid:
+   continue
+  name=subprocess.getoutput(f"ps -o user= -p {q(pid)} 2>/dev/null").strip()
+  if not name or name.lower() in ('root','sshd','users') or name.lower() not in known:
+   continue
+  ip=peer.rsplit(':',1)[0].strip('[]') if ':' in peer else peer
+  key=(name.lower(),ip,pid)
+  if key in seen: continue
+  seen.add(key)
+  sessions.append({'username':name,'ip':ip or '—','device':ip or '—','pid':pid})
  return sessions
 
 def create_v2ray(username,days):
@@ -611,32 +629,25 @@ def ad_configurations():
  except:pass
  return items
 
-# La cantidad de anuncios rota en cada nueva operación del mismo tipo.
-# Se guarda por usuario para que no vuelva siempre al mismo número.
-AD_ROTATION={
- 'create:normal':[1,4,3],
- 'create:v2ray':[3,1],
- 'ref_renew':[4,3],
- 'renew':[4,3],
- 'expiry_renew':[4,3],
-}
+# La cantidad de anuncios usa una ROTACIÓN GLOBAL compartida por todas las
+# acciones que requieren publicidad. Así, el siguiente proceso continúa desde
+# donde quedó el anterior y no vuelve a empezar en 1 al cambiar de opción.
+# Secuencia: 1 -> 4 -> 3 -> 3 -> 1 -> 4 -> 3 -> 4 -> 3 -> ...
+AD_ROTATION=[1,4,3,3,1,4,3,4,3]
 
 def next_ad_requirement(c,action,extra=None):
- key=action
- if action=='create':
-  key='create:v2ray' if (extra or {}).get('kind')=='v2ray' else 'create:normal'
- seq=AD_ROTATION.get(key,[1])
- d=db();rot=d.setdefault('ad_rotation',{});k=f'{c}:{key}'
- idx=int(rot.get(k,0) or 0) % len(seq)
- required=int(seq[idx])
- rot[k]=(idx+1)%len(seq)
+ d=db();rot=d.setdefault('ad_rotation',{})
+ # Un único contador por usuario: crear, V2Ray, canjear y renovar comparten
+ # la misma rueda de anuncios.
+ idx=int(rot.get(str(c),0) or 0) % len(AD_ROTATION)
+ required=int(AD_ROTATION[idx])
+ rot[str(c)]=(idx+1)%len(AD_ROTATION)
  save_db(d)
  return required
 
 def ad_count_for(action,extra=None):
- # Solo sirve como respaldo para datos antiguos. Las nuevas operaciones usan
- # next_ad_requirement() y conservan el total dentro de su propia solicitud.
- if action=='create': return 1 if (extra or {}).get('kind')!='v2ray' else 3
+ # Compatibilidad para instalaciones antiguas. La cantidad real se obtiene
+ # siempre mediante next_ad_requirement().
  return 1
 
 def ad_gate(c,action,extra=None):
@@ -754,7 +765,7 @@ USER_COMMANDS={
 }
 def cmds_text(uid):
  rows=USER_COMMANDS.get(lang(uid),USER_COMMANDS['es'])
- return '📚 <b>COMANDOS DISPONIBLES</b>\n\n'+'\n'.join(f'• <code>{e(cmd)}</code> — {e(desc)}' for cmd,desc in rows)
+ return '📚 <b>CENTRO DE COMANDOS</b>\n\nAquí tienes las acciones disponibles para tu nivel de acceso.\n\n'+'\n'.join(f'• <code>{e(cmd)}</code> — {e(desc)}' for cmd,desc in rows)
 
 def add_history(uid,action,detail=''):
  d=db(); z=d['users'].setdefault(str(uid),{}); h=z.setdefault('history',[])
@@ -930,7 +941,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),language_keyboard(u)+[[{'text':BUTTONS.get(lang(u),BUTTONS['es'])['home'],'callback_data':'home'}]])
  if x=='users':
   b=BUTTONS.get(lang(u),BUTTONS['es'])
-  return edit(c,m,'👤 <b>'+b['users'].upper()+'</b>\n\nAquí puedes crear, renovar, consultar, ver conexiones y eliminar tus cuentas.',users_menu(u))
+  return edit(c,m,'👤 <b>GESTIÓN DE CUENTAS</b>\n\nDesde aquí puedes crear cuentas, consultar sus datos, revisar quién está conectado y eliminar accesos.\n\n🔐 Las acciones disponibles dependen de tu nivel de acceso.',users_menu(u))
  if x=='referrals':
   ref_count=len(d['users'].get(str(u),{}).get('referrals',[]))
   rows=[[{'text':'🎁 Cangear 7 días','callback_data':'ref_renew'}]] if ref_count>=3 else []
@@ -986,9 +997,9 @@ def cb(c,m,u,i,x,chat_type=None):
    else: rows.append(f'⚪ <b>{e(acc)}</b> — <b>0</b>')
   total=sum(len(connected.get(a,[])) for a in visible)
   scope='Todas las cuentas' if is_owner(u) else 'Tus cuentas'
-  text=f'🟢 <b>CUENTAS ONLINE</b>\n\n👥 {scope}\n📡 Conectados: <b>{total}</b>\n\n'
+  text=f'🟢 <b>CUENTAS CONECTADAS</b>\n\n👥 {scope}\n📡 Conexiones activas: <b>{total}</b>\n\n'
   text+='\n'.join(rows) if rows else 'No hay cuentas registradas todavía.'
-  if is_owner(u): text+='\n\n🔐 <i>Vista de super admin: cuentas, conexiones e IP activas.</i>'
+  if is_owner(u): text+='\n\n👑 <i>Super Admin: se muestran todas las cuentas registradas y sus conexiones activas.</i>'
   return edit(c,m,text)
  if x=='cancel':STATE.pop(c,None);return send(c,'❌ Cancelado.')
  if x.startswith('do:'):
@@ -1075,7 +1086,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='admin_rename':STATE[c]={'f':'admin_rename','s':'id','d':{}};return send(c,'✏️ ID del administrador:')
  if x=='access_toggle':
   d['access']='public' if d['access']=='private' else 'private';save_db(d);return edit(c,m,f'🔐 <b>ACCESO CAMBIADO</b>\n\nEl acceso ahora está <b>{"PÚBLICO 🟢" if d["access"]=="public" else "PRIVADO 🔴"}</b>.',settings_keyboard())
- if x=='bans':return edit(c,m,'🚫 <b>BANEAR USUARIO</b>',BAN_MENU)
+ if x=='bans':return edit(c,m,'🚫 <b>CONTROL DE ACCESO</b>\n\nBloquea, desbloquea o consulta usuarios con acceso restringido al bot.',BAN_MENU)
  if x=='ban_add':STATE[c]={'f':'ban_add','s':'id','d':{}};return send(c,'🚫 ID de Telegram a banear:')
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
  if x=='ban_list':
@@ -1086,7 +1097,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='backup_now':
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
- if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nSelecciona la plataforma que deseas configurar.',MONETIZATION)
+ if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura la plataforma de anuncios que utilizará el bot para mantener el servicio gratuito.',MONETIZATION)
  if x=='monetag':return monetag_menu(c,m)
  if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11217882</code>",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag_delete':
@@ -1108,7 +1119,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='restart_vps':return send(c,'♻️ ¿Reiniciar el VPS ahora?',[[{'text':'✅ REINICIAR VPS','callback_data':'do_reboot'},{'text':'❌ CANCELAR','callback_data':'settings'}]])
  if x=='people':
   total=sum(1 for z in d['users'].values() if z.get('started'))
-  return edit(c,m,f'👥 <b>PERSONAS REGISTRADAS</b>\n\nUsuarios que han iniciado el bot con /start: <b>{total}</b>',settings_keyboard())
+  return edit(c,m,f'👥 <b>PERSONAS REGISTRADAS</b>\n\nUsuarios con /start: <b>{total}</b>\n🔐 Cuentas creadas: <b>{sum(len(z.get("accounts",[])) for z in d["users"].values())}</b>\n🟢 Conexiones SSH activas: <b>{len(online_ssh())}</b>\n\nResumen general del bot.',settings_keyboard())
  if x=='message_users':STATE[c]={'f':'message_users','s':'text','d':{}};return send(c,'📢 Escribe el mensaje que quieres enviar a todos los usuarios registrados:')
  if x=='quotas':return edit(c,m,quota_text(d),QUOTA)
  if x=='quota_public':STATE[c]={'f':'quota_public','s':'days','d':{}};return send(c,'📅 Días para usuarios públicos:')
@@ -1120,7 +1131,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='security:auto':
   d['security']['auto_ban_ssh']=not d['security'].get('auto_ban_ssh',False);save_db(d)
   return edit(c,m,'🛡️ <b>SEGURIDAD ACTUALIZADA</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d['security']['auto_ban_ssh'] else 'DESACTIVADO 🔴')+'</b>',SECURITY_MENU)
- if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS</b>',TOOLS)
+ if x=='tools':return edit(c,m,'🛠 <b>HERRAMIENTAS DEL VPS</b>\n\nUtilidades de mantenimiento, rendimiento, seguridad y diagnóstico.',TOOLS)
  if x.startswith('tool:'):
   if not is_owner(u):return ans(i,'Solo el super admin')
   k=x.split(':')[1];mp={'optimizar':'optimizar.sh','ads':'blockads.sh','torrent':'blocktorrent.sh','speed':'speedtest.sh','scanner':'scanner.sh',}
@@ -1140,7 +1151,7 @@ def cb(c,m,u,i,x,chat_type=None):
 
 def admin_menu(c,m):return edit(c,m,'👥 <b>ADMINISTRADORES</b>',ADMIN_MENU)
 def quota_text(d):
- qx=d['quotas'];return f'''📅 <b>CUOTAS</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El super admin puede definir días y dispositivos al crear o renovar.'''
+ qx=d['quotas'];return f'''📅 <b>CUOTAS Y LÍMITES</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El Super Admin puede ajustar estos valores desde este menú.'''
 
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
