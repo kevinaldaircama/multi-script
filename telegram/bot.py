@@ -607,7 +607,7 @@ def ad_configurations():
  except:pass
  return items
 
-AD_REQUIREMENTS={'renew':5,'ref_renew':1,'expiry_renew':7}
+AD_REQUIREMENTS={'renew':5,'ref_renew':1,'expiry_renew':5}
 
 def ad_count_for(action,extra=None):
  if action=='create': return 2 if (extra or {}).get('kind')=='v2ray' else 3
@@ -641,7 +641,7 @@ def create_ad_token(c,action,extra=None):
   'uid':c,'action':action,'extra':extra or {},'platform':name,
   'expires':time.time()+900
  };save_db(d)
- params={'token':token,'uid':c}
+ params={'token':token,'uid':c,'step':str(int(time.time()*1000)),'rotate':secrets.token_hex(4)}
  if name.lower()=='':
   params['blockId']=str(conf.get('block_id','')).strip()
  sep='&' if '?' in host else '?'
@@ -901,8 +901,10 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='cancel':STATE.pop(c,None);return edit(c,m,tr(u,'home'),home(u))
  if x=='home':return edit(c,m,tr(u,'home'),home(u))
  if x=='info':return edit(c,m,tr(u,'info'),[[{'text':'🔙 Inicio','callback_data':'home'}]])
- if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),[[{'text':LANG_NAMES['es'],'callback_data':'lang:es'},{'text':LANG_NAMES['en'],'callback_data':'lang:en'}],[{'text':LANG_NAMES['pt'],'callback_data':'lang:pt'},{'text':LANG_NAMES['fr'],'callback_data':'lang:fr'}],[{'text':LANG_NAMES['de'],'callback_data':'lang:de'},{'text':LANG_NAMES['it'],'callback_data':'lang:it'}],[{'text':LANG_NAMES['ru'],'callback_data':'lang:ru'},{'text':LANG_NAMES['tr'],'callback_data':'lang:tr'}],[{'text':'🔙 Inicio','callback_data':'home'}]])
- if x=='users':return edit(c,m,'👤 <b>USUARIOS</b>\n\nGestiona tus cuentas SSH.',USERS)
+ if x=='language':return edit(c,m,I18N['choose_lang'].get(lang(u),I18N['choose_lang']['es']),language_keyboard(u)+[[{'text':BUTTONS.get(lang(u),BUTTONS['es'])['home'],'callback_data':'home'}]])
+ if x=='users':
+  b=BUTTONS.get(lang(u),BUTTONS['es'])
+  return edit(c,m,'👤 <b>'+b['users'].upper()+'</b>\n\nAquí puedes crear, renovar, consultar, ver conexiones y eliminar tus cuentas.',users_menu(u))
  if x=='referrals':
   ref_count=len(d['users'].get(str(u),{}).get('referrals',[]))
   rows=[[{'text':'🎁 Cangear 7 días','callback_data':'ref_renew'}]] if ref_count>=3 else []
