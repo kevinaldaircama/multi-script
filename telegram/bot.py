@@ -98,7 +98,7 @@ I18N={
  'settings':{'es':'⚙️ <b>AJUSTES DEL SUPER ADMIN</b>\n\nControl central del panel.','en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.','pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.'},
  'language_saved':{'es':'🟢 Idioma guardado.','en':'🟢 Language saved.','pt':'🟢 Idioma salvo.'},
 }
-# Textos principales traducidos para los 8 idiomas.
+# Textos principales traducidos para los 13 idiomas.
 I18N.update({
  'home':{
   'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>\n\nAdministra tus cuentas de forma rápida y sencilla desde Telegram.',
@@ -363,10 +363,14 @@ def home(uid):
 
 def users_menu(uid):
  b=BUTTONS.get(lang(uid),BUTTONS['es'])
- return [[{'text':b['create'],'callback_data':'create'},{'text':b['renew'],'callback_data':'renew'}],
-         [{'text':b['list'],'callback_data':'list'},{'text':b['online'],'callback_data':'online'}],
-         [{'text':b['account'],'callback_data':'account'},{'text':b['delete'],'callback_data':'delete'}],
-         [{'text':b['home'],'callback_data':'home'}]]
+ rows=[[{'text':b['create'],'callback_data':'create'}],
+       [{'text':b['list'],'callback_data':'list'},{'text':b['online'],'callback_data':'online'}],
+       [{'text':b['account'],'callback_data':'account'},{'text':b['delete'],'callback_data':'delete'}]]
+ # El botón Renovar manual es exclusivo del SUPER ADMIN.
+ if is_owner(uid):
+  rows.insert(0, [{'text':b['renew'],'callback_data':'renew'}])
+ rows.append([{'text':b['home'],'callback_data':'home'}])
+ return rows
 USERS=users_menu
 
 CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
@@ -607,17 +611,39 @@ def ad_configurations():
  except:pass
  return items
 
-AD_REQUIREMENTS={'renew':5,'ref_renew':1,'expiry_renew':5}
+# La cantidad de anuncios rota en cada nueva operación del mismo tipo.
+# Se guarda por usuario para que no vuelva siempre al mismo número.
+AD_ROTATION={
+ 'create:normal':[1,4,3],
+ 'create:v2ray':[3,1],
+ 'ref_renew':[4,3],
+ 'renew':[4,3],
+ 'expiry_renew':[4,3],
+}
+
+def next_ad_requirement(c,action,extra=None):
+ key=action
+ if action=='create':
+  key='create:v2ray' if (extra or {}).get('kind')=='v2ray' else 'create:normal'
+ seq=AD_ROTATION.get(key,[1])
+ d=db();rot=d.setdefault('ad_rotation',{});k=f'{c}:{key}'
+ idx=int(rot.get(k,0) or 0) % len(seq)
+ required=int(seq[idx])
+ rot[k]=(idx+1)%len(seq)
+ save_db(d)
+ return required
 
 def ad_count_for(action,extra=None):
- if action=='create': return 2 if (extra or {}).get('kind')=='v2ray' else 3
- return AD_REQUIREMENTS.get(action,1)
+ # Solo sirve como respaldo para datos antiguos. Las nuevas operaciones usan
+ # next_ad_requirement() y conservan el total dentro de su propia solicitud.
+ if action=='create': return 1 if (extra or {}).get('kind')!='v2ray' else 3
+ return 1
 
 def ad_gate(c,action,extra=None):
- if is_admin(c):return False
+ if is_owner(c):return False
  ads=ad_configurations()
  if not ads:return False
- required=ad_count_for(action,extra)
+ required=next_ad_requirement(c,action,extra)
  pending=secrets.token_urlsafe(9)
  d=db();d.setdefault('ad_pending',{})[pending]={
   'uid':c,'action':action,'extra':extra or {},'remaining':required,
@@ -625,7 +651,7 @@ def ad_gate(c,action,extra=None):
  };save_db(d)
  return send(c,f'💰 <b>PUBLICIDAD {required} PASOS</b>\n\nPara mantener el servicio gratuito, completa <b>{required} anuncios</b>.\n\nLa publicidad se renueva automáticamente en cada paso.',[[{'text':f'▶️ Ver anuncio 1/{required}','callback_data':'adopen:'+pending}]]) or True
 
-def create_ad_token(c,action,extra=None):
+def create_ad_token(c,action,extra=None,required=None):
  ads=ad_configurations()
  if not ads:return None
  selected=None
@@ -638,7 +664,7 @@ def create_ad_token(c,action,extra=None):
  if not host:return None
  token=secrets.token_urlsafe(24)
  d=db();d.setdefault('ad_tokens',{})[token]={
-  'uid':c,'action':action,'extra':extra or {},'platform':name,
+  'uid':c,'action':action,'extra':extra or {},'required':int(required or 1),'platform':name,
   'expires':time.time()+900
  };save_db(d)
  params={'token':token,'uid':c,'step':str(int(time.time()*1000)),'rotate':secrets.token_hex(4)}
@@ -880,7 +906,7 @@ def cb(c,m,u,i,x,chat_type=None):
    action=pd.get('action','');extra=pd.get('extra',{}) or {}
    if action not in ('create','renew','ref_renew','expiry_renew'):raise ValueError('acción inválida')
    d.get('ad_pending',{}).pop(pending,None);save_db(d)
-   url=create_ad_token(c,action,extra)
+   url=create_ad_token(c,action,extra,int(pd.get('total',1)))
    if not url:return ans(i,'Publicidad no configurada')
    n=int(pd.get('total',1));done=n-int(pd.get('remaining',n))+1
    return edit(c,m,f'💰 <b>ANUNCIO {done}/{n}</b>\n\nPulsa el botón para abrir la publicidad. Al terminar aparecerá automáticamente el siguiente.',[[{'text':f'▶️ Ver anuncio {done}/{n}','web_app':{'url':url}}],[{'text':'❌ Cancelar','callback_data':'cancel'}]])
@@ -891,9 +917,9 @@ def cb(c,m,u,i,x,chat_type=None):
   if not st or st.get('f')!='ref_renew' or st.get('s')!='confirm':return ans(i,'Solicitud de canje expirada')
   username=st.get('d',{}).get('user','');d=db();z=d['users'].get(str(u),{})
   if username not in z.get('accounts',[]):STATE.pop(u,None);return ans(i,'La cuenta ya no pertenece a tu usuario')
-  # Admins/superadmin bypass advertising completely. Public users must watch an
-  # enabled ad before the 7-day referral reward is applied.
-  if is_admin(u):
+  # Solo el SUPER ADMIN queda exento. Usuarios y administradores deben
+  # completar la publicidad antes de aplicar el canje.
+  if is_owner(u):
    return apply_referral_reward(u,username)
   if ad_gate(u,'ref_renew',{'username':username,'days':7}):
    return True
@@ -919,7 +945,9 @@ def cb(c,m,u,i,x,chat_type=None):
   if not allowed(u):return send(c,'🔒 Acceso privado.')
   kind='v2ray' if x.endswith('v2ray') else 'normal'
   return start_create(c,kind)
- if x=='renew':return start_renew(c)
+ if x=='renew':
+  if not is_owner(u):return ans(i,'Solo el SUPER ADMIN puede renovar manualmente.')
+  return start_renew(c)
  if x.startswith('expiryrenew:'):
   username=x.split(':',1)[1]
   if not userexists(username):return send(c,'❌ Esa cuenta ya no existe.')
@@ -1474,7 +1502,7 @@ def process_ad_completion(c, token):
    send(c,'❌ Este enlace de publicidad expiró o ya fue utilizado.');return False
   d=db();d.setdefault('ad_completed',{})[token]={'uid':c,'expires':time.time()+120}
   action=item.get('action');extra=item.get('extra',{}) or {}
-  required=ad_count_for(action,extra)
+  required=int(item.get('required') or ad_count_for(action,extra))
   seq_key=f"{c}:{action}:{extra.get('username','')}:{extra.get('kind','')}"
   seq=d.setdefault('ad_sequences',{}).get(seq_key)
   if not seq:
