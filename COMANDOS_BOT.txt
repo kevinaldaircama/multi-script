@@ -1,46 +1,98 @@
-COMANDOS DEL BOT — KEVINTECH
+# 📚 COMANDOS DEL BOT — KEVINTECH
 
-USUARIOS
-/crear - Crear una cuenta
-/renovar - Renovar una cuenta
-/lista - Ver tus cuentas
-/cuentas - Ver tus cuentas
-/online - Ver cuentas SSH conectadas
-/conectados - Ver cuentas SSH conectadas
-/cuenta - Consultar información de una cuenta
-/info_cuenta - Consultar información de una cuenta
-/eliminar - Eliminar una cuenta
-/borrar - Eliminar una cuenta
-/referidos - Ver tus referidos y canjear días
-/referrals - Ver tus referidos
-/idioma - Cambiar idioma
-/language - Cambiar idioma
-/informacion - Ver información
-/info - Ver información
+## 👤 USUARIOS
 
-SUPER ADMIN
-No se usan comandos administrativos.
+| Comando | Función |
+|---|---|
+| `/crear` | Crear cuenta normal o V2Ray |
+| `/renovar` | Renovar una cuenta |
+| `/lista` | Ver tus cuentas |
+| `/cuentas` | Ver tus cuentas |
+| `/online` | Ver cuentas y conexiones SSH activas |
+| `/conectados` | Ver conexiones activas |
+| `/cuenta` | Consultar información de una cuenta |
+| `/info_cuenta` | Consultar información de una cuenta |
+| `/eliminar` | Eliminar una cuenta |
+| `/borrar` | Eliminar una cuenta |
+| `/referidos` | Ver referidos y canjear 7 días |
+| `/idioma` | Cambiar idioma |
+| `/informacion` | Ver información del bot |
+| `/me` | Ver tus datos e historial en el idioma seleccionado |
+| `/cmds` | Ver los comandos disponibles |
 
-El super admin entra al menú del bot y usa:
-⚙️ Ajustes
+## 💰 PUBLICIDAD
 
-Desde Ajustes puede administrar:
+Las operaciones públicas usan publicidad para mantener el servicio gratuito:
+
+- 👤 Cuenta normal: **3 Ads**
+- 🚀 Cuenta V2Ray: **2 Ads**
+- 🎁 Canjear 7 días: **1 Ad**
+- ♻️ Renovar: **5 Ads**
+- ⏳ Renovación desde aviso de vencimiento: **7 Ads**
+
+Los anuncios se presentan por pasos y cada paso genera un enlace nuevo. Al completar uno, el bot muestra automáticamente el siguiente.
+
+## 🟢 ONLINE
+
+El botón **Online** está organizado por cuenta:
+
+```text
+🟢 Kevin — 1
+   🌐 IP
+
+🟢 caca — 2
+   🌐 IP, IP
+
+⚪ pepe — 0
+```
+
+- El número indica cuántas conexiones SSH están activas.
+- Los usuarios normales ven solamente sus cuentas.
+- El Super Admin ve todas las cuentas creadas y las conexiones activas.
+- Las IP activas se muestran al Super Admin y al propietario de la cuenta.
+
+## 📋 LISTA DEL SUPER ADMIN
+
+El botón **Lista** muestra todas las cuentas creadas por los usuarios registrados, agrupadas por propietario.
+
+Las contraseñas no se exponen: se muestran como `xxx`.
+
+## 👨‍💼 SUPER ADMIN
+
+El Super Admin utiliza el menú:
+
+**⚙️ Ajustes**
+
+Desde allí puede administrar:
 - Administradores
+- Usuarios registrados
 - Banear/desbanear usuarios
-- Respaldos y restauración
-- Monetag
-- Personas registradas
-- Mensajes a usuarios
 - Cuotas
+- Monetag
+- Backups y restauración
 - Seguridad
 - Herramientas
 - Protocolos
 - Actualización del sistema
 - Reinicio del VPS
 
-IMPORTANTE
-- Las funciones administrativas están protegidas exclusivamente para el SUPER ADMIN.
-- Los usuarios normales no pueden abrir funciones administrativas aunque intenten enviar el callback directamente.
-- Los comandos administrativos anteriores (/ajustes, /settings, /backup, /cuotas, /admins, /ban, /monetizacion, /herramientas, etc.) fueron eliminados.
-- La monetización queda únicamente con Monetag.
-- El paquete no incluye __pycache__, archivos .pyc ni la carpeta handlers vacía.
+## 🌎 IDIOMAS
+
+El bot incluye 13 idiomas:
+
+🇪🇸 Español · 🇺🇸 English · 🇧🇷 Português · 🇫🇷 Français · 🇩🇪 Deutsch · 🇮🇹 Italiano · 🇷🇺 Русский · 🇹🇷 Türkçe · 🇨🇳 中文 · 🇯🇵 日本語 · 🇰🇷 한국어 · 🇮🇩 Bahasa Indonesia · 🇸🇦 العربية
+
+`/me` se adapta al idioma seleccionado.
+
+## 🔐 SEGURIDAD
+
+- Las funciones administrativas están protegidas para el Super Admin.
+- Los usuarios no pueden acceder a los callbacks administrativos directamente.
+- Las contraseñas no se muestran en la lista global.
+- Las operaciones de publicidad utilizan tokens temporales.
+
+## ℹ️ IMPORTANTE
+
+- Los días y el límite no se solicitan al usuario público; se aplican automáticamente mediante las cuotas configuradas.
+- Crear cuenta normal, crear V2Ray, renovar, online y eliminar mantienen su flujo principal.
+- El aviso de vencimiento puede llevar directamente al flujo de renovación con 7 anuncios.
