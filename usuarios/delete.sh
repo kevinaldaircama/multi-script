@@ -1,7 +1,7 @@
 #!/bin/bash
 #==================================================
 # KevinTech Multi Script
-# Eliminar Usuarios SSH
+# Gestor de Eliminación de Usuarios SSH
 #==================================================
 
 GREEN="\e[1;92m"
@@ -14,96 +14,248 @@ WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 RESET="\e[0m"
 
-while true; do
+#──────────────────────────────────────────────────
+# FUNCIONES
+#──────────────────────────────────────────────────
 
-clear
-
-echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}║${RED}             🗑 ELIMINAR USUARIOS SSH              ${CYAN}║${RESET}"
-echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
-
-USERS=$(awk -F: '$3>=1000 && $1!="nobody"{print $1}' /etc/passwd)
-
-if [[ -z "$USERS" ]]; then
-    echo -e "${YELLOW}No existen usuarios SSH para eliminar.${RESET}"
+pause() {
     echo
-    read -n1 -s -r -p "Presione una tecla para salir..."
-    exit
-fi
-
-echo -e "${WHITE}Usuarios disponibles:${RESET}"
-echo
-
-i=1
-declare -a LISTA
-
-while read -r user; do
-    FECHA=$(chage -l "$user" | grep "Account expires" | cut -d: -f2)
-    printf "${GREEN}[%02d]${WHITE} %-18s ${GRAY}%s${RESET}\n" "$i" "$user" "$FECHA"
-    LISTA[$i]="$user"
-    ((i++))
-done <<< "$USERS"
-
-echo
-echo -e "${CYAN}──────────────────────────────────────────────────────${RESET}"
-echo -e "${YELLOW}Ejemplos:${RESET}"
-echo -e " ${WHITE}1${RESET}        -> Elimina un usuario"
-echo -e " ${WHITE}1 3 5${RESET}    -> Elimina varios usuarios"
-echo -e " ${WHITE}0${RESET}        -> Cancelar"
-echo
-read -rp "$(echo -e "${GREEN}Seleccione:${RESET} ")" OP
-
-[[ "$OP" == "0" ]] && exit
-
-echo
-echo -e "${RED}Se eliminarán:${RESET}"
-
-VALIDO=0
-
-for N in $OP; do
-    if [[ -n "${LISTA[$N]}" ]]; then
-        echo -e " ${WHITE}• ${LISTA[$N]}"
-        VALIDO=1
-    fi
-done
-
-[[ $VALIDO -eq 0 ]] && {
-    echo
-    echo -e "${RED}Selección inválida.${RESET}"
-    sleep 2
-    continue
+    read -n1 -s -r -p "$(echo -e "${GRAY}Presiona cualquier tecla para continuar...${RESET}")"
 }
 
-echo
-read -rp "$(echo -e "${YELLOW}¿Confirma? [S/N]: ${RESET}")" RESP
+banner() {
+    clear
 
-case "$RESP" in
-s|S|si|SI|Sí|sí)
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║                                                          ║"
+    echo -e "║        ${RED}🗑  KEVINTECH • ELIMINADOR SSH${CYAN}              ║"
+    echo "║                                                          ║"
+    echo "╠══════════════════════════════════════════════════════════╣"
+    echo -e "║  ${WHITE}Gestión rápida de cuentas SSH${CYAN}                     ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${RESET}"
+}
 
-BORRADOS=0
+# Obtener usuarios normales
+obtener_usuarios() {
+    mapfile -t USUARIOS < <(
+        awk -F: '
+        $3 >= 1000 &&
+        $1 != "nobody" &&
+        $1 != "nogroup" &&
+        $1 != "ubuntu" &&
+        $1 != "debian" &&
+        $1 != "adm" &&
+        $1 != "www-data"
+        {
+            print $1
+        }' /etc/passwd
+    )
+}
 
-for N in $OP; do
-    USER="${LISTA[$N]}"
+#──────────────────────────────────────────────────
+# PROGRAMA
+#──────────────────────────────────────────────────
 
-    if [[ -n "$USER" ]]; then
-        pkill -u "$USER" &>/dev/null
-        userdel -f "$USER" &>/dev/null
-        ((BORRADOS++))
+while true; do
+
+    banner
+    obtener_usuarios
+
+    TOTAL=${#USUARIOS[@]}
+
+    if [[ $TOTAL -eq 0 ]]; then
+        echo
+        echo -e " ${YELLOW}╭──────────────────────────────────────────────╮${RESET}"
+        echo -e " ${YELLOW}│${WHITE}        No hay usuarios SSH disponibles.       ${YELLOW}│${RESET}"
+        echo -e " ${YELLOW}╰──────────────────────────────────────────────╯${RESET}"
+        pause
+        exit 0
     fi
-done
 
-echo
-echo -e "${GREEN}✔ $BORRADOS usuario(s) eliminado(s).${RESET}"
-sleep 2
-;;
+    #──────────────────────────────────────────────
+    # ESTADÍSTICAS
+    #──────────────────────────────────────────────
 
-*)
-echo
-echo -e "${YELLOW}Operación cancelada.${RESET}"
-sleep 2
-;;
-esac
+    echo -e "${BLUE}┌──────────────────────────────────────────────────────────┐${RESET}"
+    echo -e "${BLUE}│${WHITE}  📊 USUARIOS DISPONIBLES: ${GREEN}$TOTAL${BLUE}                         │${RESET}"
+    echo -e "${BLUE}└──────────────────────────────────────────────────────────┘${RESET}"
+    echo
 
-break
+    #──────────────────────────────────────────────
+    # LISTA DE USUARIOS
+    #──────────────────────────────────────────────
+
+    echo -e "${WHITE}┌──────┬──────────────────────┬────────────────────────────┐${RESET}"
+    echo -e "${WHITE}│ Nº   │ Usuario              │ Expiración                 │${RESET}"
+    echo -e "${WHITE}├──────┼──────────────────────┼────────────────────────────┤${RESET}"
+
+    for ((i=0; i<TOTAL; i++)); do
+
+        USER="${USUARIOS[$i]}"
+
+        FECHA=$(chage -l "$USER" 2>/dev/null |
+            awk -F: '/Account expires/ {
+                gsub(/^[ \t]+/, "", $2);
+                print $2
+            }')
+
+        [[ -z "$FECHA" ]] && FECHA="Sin información"
+
+        printf "${WHITE}│${GREEN} %-4s ${WHITE}│ %-20s │ ${GRAY}%-26s${WHITE} │${RESET}\n" \
+            "$((i+1))" "$USER" "$FECHA"
+
+    done
+
+    echo -e "${WHITE}└──────┴──────────────────────┴────────────────────────────┘${RESET}"
+
+    #──────────────────────────────────────────────
+    # OPCIONES
+    #──────────────────────────────────────────────
+
+    echo
+    echo -e "${CYAN}╭──────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${CYAN}│${WHITE}                    ACCIONES                             ${CYAN}│${RESET}"
+    echo -e "${CYAN}├──────────────────────────────────────────────────────────┤${RESET}"
+    echo -e "${CYAN}│ ${GREEN}1${WHITE}  → Eliminar un usuario                              ${CYAN}│${RESET}"
+    echo -e "${CYAN}│ ${GREEN}2${WHITE}  → Eliminar varios usuarios                        ${CYAN}│${RESET}"
+    echo -e "${CYAN}│ ${RED}3${WHITE}  → ELIMINAR TODOS los usuarios                     ${CYAN}│${RESET}"
+    echo -e "${CYAN}│ ${GRAY}0${WHITE}  → Salir                                             ${CYAN}│${RESET}"
+    echo -e "${CYAN}╰──────────────────────────────────────────────────────────╯${RESET}"
+
+    echo
+    read -rp "$(echo -e "${GREEN}➜ Seleccione una opción: ${RESET}")" OPCION
+
+    #──────────────────────────────────────────────
+    # SALIR
+    #──────────────────────────────────────────────
+
+    [[ "$OPCION" == "0" ]] && exit 0
+
+    #──────────────────────────────────────────────
+    # ELIMINAR UNO
+    #──────────────────────────────────────────────
+
+    if [[ "$OPCION" == "1" ]]; then
+
+        echo
+        read -rp "$(echo -e "${YELLOW}➜ Número del usuario: ${RESET}")" NUM
+
+        if ! [[ "$NUM" =~ ^[0-9]+$ ]] ||
+           [[ "$NUM" -lt 1 ]] ||
+           [[ "$NUM" -gt "$TOTAL" ]]; then
+
+            echo
+            echo -e "${RED}✘ Número inválido.${RESET}"
+            sleep 2
+            continue
+        fi
+
+        USER="${USUARIOS[$((NUM-1))]}"
+
+        echo
+        echo -e "${RED}🗑 Eliminando usuario: ${WHITE}$USER${RESET}"
+
+        pkill -u "$USER" 2>/dev/null
+        userdel -f "$USER" 2>/dev/null
+
+        if ! id "$USER" &>/dev/null; then
+            echo -e "${GREEN}✔ Usuario eliminado correctamente.${RESET}"
+        else
+            echo -e "${RED}✘ No se pudo eliminar completamente.${RESET}"
+        fi
+
+        sleep 2
+        continue
+    fi
+
+    #──────────────────────────────────────────────
+    # ELIMINAR VARIOS
+    #──────────────────────────────────────────────
+
+    if [[ "$OPCION" == "2" ]]; then
+
+        echo
+        echo -e "${GRAY}Ejemplo: 1 3 5 8${RESET}"
+        echo
+
+        read -rp "$(echo -e "${YELLOW}➜ Números: ${RESET}")" SELECCION
+
+        BORRADOS=0
+
+        for NUM in $SELECCION; do
+
+            if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
+                continue
+            fi
+
+            if [[ "$NUM" -lt 1 || "$NUM" -gt "$TOTAL" ]]; then
+                continue
+            fi
+
+            USER="${USUARIOS[$((NUM-1))]}"
+
+            echo -e "${RED}🗑 Eliminando:${WHITE} $USER${RESET}"
+
+            pkill -u "$USER" 2>/dev/null
+            userdel -f "$USER" 2>/dev/null
+
+            if ! id "$USER" &>/dev/null; then
+                ((BORRADOS++))
+            fi
+
+        done
+
+        echo
+        echo -e "${GREEN}╭──────────────────────────────────────────────╮${RESET}"
+        echo -e "${GREEN}│${WHITE} ✔ Usuarios eliminados: ${GREEN}$BORRADOS${GREEN}                │${RESET}"
+        echo -e "${GREEN}╰──────────────────────────────────────────────╯${RESET}"
+
+        sleep 2
+        continue
+    fi
+
+    #──────────────────────────────────────────────
+    # ELIMINAR TODOS
+    # SIN CONFIRMACIÓN
+    #──────────────────────────────────────────────
+
+    if [[ "$OPCION" == "3" ]]; then
+
+        echo
+        echo -e "${RED}╔══════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${RED}║${WHITE}             ☠ ELIMINANDO TODOS LOS USUARIOS             ${RED}║${RESET}"
+        echo -e "${RED}╚══════════════════════════════════════════════════════════╝${RESET}"
+        echo
+
+        BORRADOS=0
+
+        for USER in "${USUARIOS[@]}"; do
+
+            echo -e "${RED}🗑 Eliminando:${WHITE} $USER${RESET}"
+
+            pkill -u "$USER" 2>/dev/null
+            userdel -f "$USER" 2>/dev/null
+
+            if ! id "$USER" &>/dev/null; then
+                ((BORRADOS++))
+            fi
+
+        done
+
+        echo
+        echo -e "${GREEN}╭──────────────────────────────────────────────────────────╮${RESET}"
+        echo -e "${GREEN}│${WHITE}       ✔ LIMPIEZA COMPLETADA                            ${GREEN}│${RESET}"
+        echo -e "${GREEN}│${WHITE}       Usuarios eliminados: ${GREEN}$BORRADOS${WHITE}                   ${GREEN}│${RESET}"
+        echo -e "${GREEN}╰──────────────────────────────────────────────────────────╯${RESET}"
+
+        sleep 3
+        continue
+    fi
+
+    echo
+    echo -e "${RED}✘ Opción inválida.${RESET}"
+    sleep 2
 
 done
