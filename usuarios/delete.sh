@@ -1,427 +1,704 @@
 #!/bin/bash
-#===========================================================
-# KevinTech Multi Script
-# Eliminador Avanzado de Usuarios SSH
-# Versión: 3.0
-#===========================================================
 
-# Colores
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-BLUE="\e[1;94m"
-CYAN="\e[1;96m"
-MAGENTA="\e[1;95m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-RESET="\e[0m"
+# ============================================================
+#        ⚜ KEVINTECH MULTI SCRIPT — USER MANAGER ⚜
+#        Módulo: Eliminar Usuarios SSH
+#        Versión: 4.0 PREMIUM
+#
+#        FUNCIONES:
+#        • Eliminar 1 usuario
+#        • Eliminar varios usuarios
+#        • Eliminar todos los usuarios administrables
+#        • Mostrar expiración
+#        • Mostrar conexiones
+#        • Cerrar sesiones antes de eliminar
+#        • Limpiar límites de KevinTech
+#        • Protección contra usuarios del sistema
+#        • Confirmación de seguridad
+# ============================================================
 
-#-----------------------------------------------------------
-# Comprobar root
-#-----------------------------------------------------------
-if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}✘ Este script debe ejecutarse como root.${RESET}"
-    exit 1
-fi
+# ============================================================
+# COLORES
+# ============================================================
 
-#-----------------------------------------------------------
-# Usuarios protegidos
-#-----------------------------------------------------------
-PROTEGIDOS=(
-    root
-    daemon
-    bin
-    sys
-    sync
-    games
-    man
-    lp
-    mail
-    news
-    uucp
-    proxy
-    www-data
-    backup
-    list
-    irc
-    gnats
-    nobody
-    systemd-network
-    systemd-resolve
-    systemd-timesync
-    messagebus
-    syslog
-    _apt
-    tss
-    uuidd
-    tcpdump
-    landscape
-    pollinate
-    sshd
-)
+GREEN='\e[1;92m'
+RED='\e[1;91m'
+YELLOW='\e[1;93m'
+BLUE='\e[1;94m'
+CYAN='\e[1;96m'
+MAGENTA='\e[1;95m'
+WHITE='\e[1;97m'
+GRAY='\e[1;90m'
+ORANGE='\e[1;38;5;208m'
+RESET='\e[0m'
 
-#-----------------------------------------------------------
-# Verificar si un usuario está protegido
-#-----------------------------------------------------------
-es_protegido() {
-    local USER="$1"
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
 
-    for P in "${PROTEGIDOS[@]}"; do
-        [[ "$USER" == "$P" ]] && return 0
-    done
+BASE="/etc/kevintech"
+LIMITS_FILE="$BASE/limits.conf"
+
+mkdir -p "$BASE"
+touch "$LIMITS_FILE"
+
+# ============================================================
+# FUNCIONES VISUALES
+# ============================================================
+
+banner() {
+
+    clear
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${MAGENTA}          ⚜ KEVINTECH MULTI SCRIPT ⚜                       ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RED}              🗑 GESTOR DE USUARIOS SSH                     ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${GRAY}                 PREMIUM USER MANAGER                       ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+}
+
+line() {
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+pause() {
+
+    echo
+    read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
+}
+
+ok() {
+
+    echo -e "${GREEN}✔ $1${RESET}"
+}
+
+error() {
+
+    echo -e "${RED}✘ $1${RESET}"
+}
+
+warn() {
+
+    echo -e "${YELLOW}⚠ $1${RESET}"
+}
+
+info() {
+
+    echo -e "${CYAN}➜ $1${RESET}"
+}
+
+# ============================================================
+# USUARIOS PROTEGIDOS
+# ============================================================
+
+es_usuario_protegido() {
+
+    local USERNAME="$1"
+
+    case "$USERNAME" in
+
+        root|sync|shutdown|halt|mail|news|uucp|man|proxy|backup|list|irc|gnats|nobody|libuuid|syslog|messagebus|usbmux|dnsmasq|avahi|polkitd|rtkit|saned|whoopsie|uuidd|tcpdump|_apt|systemd-network|systemd-resolve|systemd-timesync|systemd-coredump|systemd-oom|ubuntu)
+
+            return 0
+            ;;
+
+    esac
 
     return 1
 }
 
-#-----------------------------------------------------------
-# Obtener usuarios normales
-#-----------------------------------------------------------
-obtener_usuarios() {
-    awk -F: '
-        $3 >= 1000 &&
-        $1 != "nobody" &&
-        $7 !~ /(nologin|false)$/ {
-            print $1
-        }
-    ' /etc/passwd
-}
+# ============================================================
+# DETECTAR SI ES USUARIO ADMINISTRABLE
+# ============================================================
 
-#-----------------------------------------------------------
-# Fecha de expiración
-#-----------------------------------------------------------
-obtener_expiracion() {
-    local USER="$1"
+es_usuario_admin() {
 
-    chage -l "$USER" 2>/dev/null |
-        awk -F: '/Account expires/ {
-            gsub(/^[ \t]+/, "", $2);
-            print $2
-        }'
-}
+    local USERNAME="$1"
 
-#-----------------------------------------------------------
-# Detectar sesiones activas
-#-----------------------------------------------------------
-sesiones_activas() {
-    local USER="$1"
+    [[ -z "$USERNAME" ]] && return 1
 
-    who 2>/dev/null | awk -v u="$USER" '$1 == u {count++} END {print count+0}'
-}
+    id "$USERNAME" >/dev/null 2>&1 || return 1
 
-#-----------------------------------------------------------
-# Obtener número de procesos
-#-----------------------------------------------------------
-procesos_usuario() {
-    local USER="$1"
+    # Nunca tocar root
+    [[ "$USERNAME" == "root" ]] && return 1
 
-    pgrep -u "$USER" 2>/dev/null | wc -l
-}
+    # Lista de protección
+    es_usuario_protegido "$USERNAME" && return 1
 
-#-----------------------------------------------------------
-# Pausa
-#-----------------------------------------------------------
-pausa() {
-    echo
-    read -n1 -s -r -p "$(echo -e "${GRAY}Presiona cualquier tecla para continuar...${RESET}")"
-}
+    local UID_USER
 
-#-----------------------------------------------------------
-# Eliminar usuario
-#-----------------------------------------------------------
-eliminar_usuario() {
-    local USER="$1"
+    UID_USER=$(id -u "$USERNAME" 2>/dev/null)
 
-    [[ -z "$USER" ]] && return 1
+    # Usuarios normales
+    if [[ "$UID_USER" =~ ^[0-9]+$ ]] &&
+       (( UID_USER >= 1000 )); then
 
-    if ! id "$USER" &>/dev/null; then
-        echo -e "${RED}✘ El usuario '$USER' ya no existe.${RESET}"
-        return 1
-    fi
-
-    if es_protegido "$USER"; then
-        echo -e "${RED}✘ Usuario protegido: $USER${RESET}"
-        return 1
-    fi
-
-    echo -e "${YELLOW}→ Cerrando sesiones de: ${WHITE}$USER${RESET}"
-
-    # Terminar procesos
-    pkill -TERM -u "$USER" 2>/dev/null
-    sleep 1
-
-    # Si todavía quedan procesos, finalizar
-    pkill -KILL -u "$USER" 2>/dev/null
-
-    echo -e "${YELLOW}→ Eliminando cuenta: ${WHITE}$USER${RESET}"
-
-    if userdel -f "$USER" 2>/dev/null; then
-        echo -e "${GREEN}✔ Usuario eliminado: $USER${RESET}"
         return 0
-    else
-        echo -e "${RED}✘ No se pudo eliminar: $USER${RESET}"
-        return 1
     fi
+
+    # Si KevinTech tiene registrado el usuario,
+    # también se considera administrable.
+    if grep -qE "^${USERNAME}:" "$LIMITS_FILE" 2>/dev/null; then
+
+        return 0
+    fi
+
+    return 1
 }
 
-#-----------------------------------------------------------
-# Menú principal
-#-----------------------------------------------------------
-while true; do
+# ============================================================
+# OBTENER USUARIOS SSH ADMINISTRABLES
+# ============================================================
 
-    clear
+obtener_usuarios() {
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RED}              🗑 KEVINTECH USER MANAGER               ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE}           Eliminador Avanzado de Usuarios SSH         ${CYAN}║${RESET}"
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════╣${RESET}"
+    awk -F: '{print $1}' /etc/passwd |
+    while read -r USERNAME; do
 
-    mapfile -t USERS < <(obtener_usuarios)
+        if es_usuario_admin "$USERNAME"; then
 
-    # Filtrar usuarios protegidos
-    LISTA=()
+            echo "$USERNAME"
 
-    for USER in "${USERS[@]}"; do
-        if ! es_protegido "$USER"; then
-            LISTA+=("$USER")
-        fi
-    done
-
-    TOTAL=${#LISTA[@]}
-
-    if [[ $TOTAL -eq 0 ]]; then
-
-        echo -e "${YELLOW}║ No existen usuarios SSH disponibles para eliminar.   ${CYAN}║${RESET}"
-        echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
-
-        pausa
-        exit 0
-    fi
-
-    echo -e "${CYAN}║ ${WHITE}Usuarios disponibles: ${GREEN}$TOTAL${RESET}${CYAN}                              ║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    printf "${GRAY}%-5s %-20s %-18s %-10s${RESET}\n" \
-        "Nº" "USUARIO" "EXPIRACIÓN" "SESIONES"
-
-    echo -e "${GRAY}──────────────────────────────────────────────────────────${RESET}"
-
-    declare -A LISTA_NUM
-
-    i=1
-
-    for USER in "${LISTA[@]}"; do
-
-        EXPIRA=$(obtener_expiracion "$USER")
-        SESIONES=$(sesiones_activas "$USER")
-
-        [[ -z "$EXPIRA" ]] && EXPIRA="N/A"
-
-        if [[ "$EXPIRA" == "never" ]]; then
-            EXP_COLOR="${GREEN}"
-        else
-            EXP_COLOR="${YELLOW}"
-        fi
-
-        if [[ "$SESIONES" -gt 0 ]]; then
-            SES_COLOR="${RED}"
-        else
-            SES_COLOR="${GRAY}"
-        fi
-
-        printf "${GREEN}[%02d]${RESET} %-20s ${EXP_COLOR}%-18s${RESET} ${SES_COLOR}%-10s${RESET}\n" \
-            "$i" "$USER" "$EXPIRA" "$SESIONES"
-
-        LISTA_NUM[$i]="$USER"
-
-        ((i++))
-    done
-
-    echo
-    echo -e "${CYAN}──────────────────────────────────────────────────────────${RESET}"
-    echo -e "${WHITE}Opciones:${RESET}"
-    echo
-    echo -e " ${GREEN}1${RESET}       → Eliminar un usuario"
-    echo -e " ${GREEN}1 3 5${RESET}   → Eliminar varios usuarios"
-    echo -e " ${RED}ALL${RESET}     → Eliminar TODOS los usuarios"
-    echo -e " ${YELLOW}0${RESET}       → Salir"
-    echo
-
-    read -rp "$(echo -e "${CYAN}➜ Seleccione: ${RESET}")" OPCION
-
-    #-------------------------------------------------------
-    # Salir
-    #-------------------------------------------------------
-    [[ "$OPCION" == "0" ]] && exit 0
-
-    #-------------------------------------------------------
-    # ELIMINAR TODOS
-    #-------------------------------------------------------
-    if [[ "$OPCION" =~ ^([Aa][Ll][Ll]|[Tt][Oo][Dd][Oo][Ss])$ ]]; then
-
-        clear
-
-        echo -e "${RED}╔══════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${RED}║                 ⚠ BORRADO TOTAL                         ║${RESET}"
-        echo -e "${RED}╚══════════════════════════════════════════════════════════╝${RESET}"
-        echo
-        echo -e "${WHITE}Se encontraron ${RED}$TOTAL${WHITE} usuarios para eliminar.${RESET}"
-        echo
-
-        for USER in "${LISTA[@]}"; do
-            echo -e " ${RED}•${RESET} $USER"
-        done
-
-        echo
-        echo -e "${RED}⚠ ATENCIÓN: Esta operación eliminará TODAS las cuentas${RESET}"
-        echo -e "${RED}   de usuario detectadas por este script.${RESET}"
-        echo
-
-        read -rp "$(echo -e "${YELLOW}Escribe ${WHITE}ELIMINAR TODO${YELLOW} para confirmar: ${RESET}")" CONFIRMAR
-
-        if [[ "$CONFIRMAR" != "ELIMINAR TODO" ]]; then
-            echo
-            echo -e "${YELLOW}Operación cancelada.${RESET}"
-            sleep 2
-            continue
-        fi
-
-        echo
-        echo -e "${CYAN}Iniciando eliminación total...${RESET}"
-        echo
-
-        ELIMINADOS=0
-        ERRORES=0
-
-        for USER in "${LISTA[@]}"; do
-
-            if eliminar_usuario "$USER"; then
-                ((ELIMINADOS++))
-            else
-                ((ERRORES++))
-            fi
-
-            sleep 0.3
-        done
-
-        echo
-        echo -e "${CYAN}══════════════════════════════════════════════════════════${RESET}"
-        echo -e "${GREEN}✔ Eliminados : $ELIMINADOS${RESET}"
-        echo -e "${RED}✘ Errores    : $ERRORES${RESET}"
-        echo -e "${CYAN}══════════════════════════════════════════════════════════${RESET}"
-
-        pausa
-        continue
-    fi
-
-    #-------------------------------------------------------
-    # SELECCIÓN INDIVIDUAL / MÚLTIPLE
-    #-------------------------------------------------------
-
-    SELECCIONADOS=()
-    INVALIDO=0
-
-    for NUM in $OPCION; do
-
-        # Solo números
-        if ! [[ "$NUM" =~ ^[0-9]+$ ]]; then
-            echo -e "${RED}✘ Selección inválida: $NUM${RESET}"
-            INVALIDO=1
-            continue
-        fi
-
-        USER="${LISTA_NUM[$NUM]}"
-
-        if [[ -z "$USER" ]]; then
-            echo -e "${RED}✘ Número inválido: $NUM${RESET}"
-            INVALIDO=1
-            continue
-        fi
-
-        # Evitar duplicados
-        YA_EXISTE=0
-
-        for U in "${SELECCIONADOS[@]}"; do
-            [[ "$U" == "$USER" ]] && YA_EXISTE=1
-        done
-
-        if [[ $YA_EXISTE -eq 0 ]]; then
-            SELECCIONADOS+=("$USER")
         fi
 
     done
+}
 
-    if [[ ${#SELECCIONADOS[@]} -eq 0 ]]; then
-        echo
-        echo -e "${RED}✘ No seleccionaste ningún usuario válido.${RESET}"
-        sleep 2
-        continue
-    fi
+# ============================================================
+# CONTAR CONEXIONES
+# ============================================================
 
-    clear
+contar_conexiones() {
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RED}                  ⚠ CONFIRMAR ELIMINACIÓN              ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
-    echo
+    local USERNAME="$1"
 
-    echo -e "${WHITE}Usuarios seleccionados:${RESET}"
-    echo
+    who 2>/dev/null |
+        awk -v u="$USERNAME" '$1 == u {count++} END {print count+0}'
+}
 
-    for USER in "${SELECCIONADOS[@]}"; do
+# ============================================================
+# OBTENER IPs
+# ============================================================
 
-        SESIONES=$(sesiones_activas "$USER")
-        PROCESOS=$(procesos_usuario "$USER")
+obtener_ips() {
 
-        if [[ "$SESIONES" -gt 0 ]]; then
-            ESTADO="${RED}ACTIVO${RESET}"
-        else
-            ESTADO="${GREEN}INACTIVO${RESET}"
-        fi
+    local USERNAME="$1"
 
-        echo -e " ${RED}•${RESET} ${WHITE}$USER${RESET} | Sesiones: $SESIONES | Procesos: $PROCESOS | $ESTADO"
-    done
+    who 2>/dev/null |
+        awk -v u="$USERNAME" '
+            $1 == u {
+                ip=$5
+                gsub(/[()]/, "", ip)
 
-    echo
-    echo -e "${YELLOW}⚠ Los usuarios seleccionados serán eliminados.${RESET}"
-    echo
+                if (ip != "")
+                    print ip
+            }
+        ' |
+        sort -u |
+        paste -sd "," -
+}
 
-    read -rp "$(echo -e "${YELLOW}¿Confirmar? [S/N]: ${RESET}")" RESPUESTA
+# ============================================================
+# OBTENER EXPIRACIÓN
+# ============================================================
 
-    case "$RESPUESTA" in
+obtener_expiracion() {
 
-        s|S|si|SI|Si|sí|Sí)
+    local USERNAME="$1"
 
-            ELIMINADOS=0
-            ERRORES=0
+    local EXP
 
-            echo
+    EXP=$(chage -l "$USERNAME" 2>/dev/null |
+        awk -F': ' '/Account expires/ {
+            print $2
+            exit
+        }')
 
-            for USER in "${SELECCIONADOS[@]}"; do
+    [[ -z "$EXP" ]] && EXP="Ilimitada"
 
-                if eliminar_usuario "$USER"; then
-                    ((ELIMINADOS++))
-                else
-                    ((ERRORES++))
-                fi
+    case "$EXP" in
 
-                sleep 0.3
-            done
-
-            echo
-            echo -e "${CYAN}══════════════════════════════════════════════════════════${RESET}"
-            echo -e "${GREEN}✔ Eliminados : $ELIMINADOS${RESET}"
-            echo -e "${RED}✘ Errores    : $ERRORES${RESET}"
-            echo -e "${CYAN}══════════════════════════════════════════════════════════${RESET}"
-
+        never|Nunca)
+            echo "Ilimitada"
             ;;
 
         *)
-            echo
-            echo -e "${YELLOW}⚠ Operación cancelada.${RESET}"
+            echo "$EXP"
             ;;
-    esac
 
-    pausa
+    esac
+}
+
+# ============================================================
+# CREAR LISTA
+# ============================================================
+
+crear_lista() {
+
+    mapfile -t LISTA < <(obtener_usuarios)
+
+    TOTAL=${#LISTA[@]}
+}
+
+# ============================================================
+# MOSTRAR USUARIOS
+# ============================================================
+
+mostrar_usuarios() {
+
+    crear_lista
+
+    if (( TOTAL == 0 )); then
+
+        echo
+        echo -e "${YELLOW}╭──────────────────────────────────────────────────────────╮${RESET}"
+        echo -e "${YELLOW}│${WHITE}          No hay usuarios SSH administrables.            ${YELLOW}│${RESET}"
+        echo -e "${YELLOW}╰──────────────────────────────────────────────────────────╯${RESET}"
+
+        return 1
+    fi
+
+    echo -e "${WHITE}USUARIOS ADMINISTRABLES${RESET}"
+    echo
+
+    printf "${GRAY}%-5s %-20s %-18s %-8s %-22s${RESET}\n" \
+        "#" "USUARIO" "EXPIRACIÓN" "SESIONES" "IP"
+
+    line
+
+    local I=1
+
+    for USERNAME in "${LISTA[@]}"; do
+
+        EXP=$(obtener_expiracion "$USERNAME")
+        SESIONES=$(contar_conexiones "$USERNAME")
+        IPS=$(obtener_ips "$USERNAME")
+
+        [[ -z "$IPS" ]] && IPS="-"
+
+        if (( SESIONES > 0 )); then
+            ESTADO="${GREEN}ONLINE${RESET}"
+        else
+            ESTADO="${GRAY}OFFLINE${RESET}"
+        fi
+
+        printf "${GREEN}[%02d]${RESET}  ${WHITE}%-18s${RESET} %-18s %-8s %-22s %b\n" \
+            "$I" \
+            "$USERNAME" \
+            "$EXP" \
+            "$SESIONES" \
+            "$IPS" \
+            "$ESTADO"
+
+        MAPA[$I]="$USERNAME"
+
+        ((I++))
+
+    done
+
+    echo
+    line
+
+    echo -e "${GRAY}Total de usuarios administrables: ${WHITE}${TOTAL}${RESET}"
+}
+
+# ============================================================
+# CERRAR SESIONES
+# ============================================================
+
+cerrar_sesiones() {
+
+    local USERNAME="$1"
+
+    if pgrep -u "$USERNAME" >/dev/null 2>&1; then
+
+        pkill -TERM -u "$USERNAME" 2>/dev/null
+
+        sleep 1
+
+        pkill -KILL -u "$USERNAME" 2>/dev/null
+
+    fi
+}
+
+# ============================================================
+# LIMPIAR LIMITS.CONF
+# ============================================================
+
+limpiar_limite() {
+
+    local USERNAME="$1"
+
+    [[ ! -f "$LIMITS_FILE" ]] && return
+
+    sed -i \
+        -E "/^${USERNAME//\//\\/}:/d" \
+        "$LIMITS_FILE"
+
+}
+
+# ============================================================
+# ELIMINAR UN USUARIO
+# ============================================================
+
+eliminar_usuario() {
+
+    local USERNAME="$1"
+
+    if ! es_usuario_admin "$USERNAME"; then
+
+        error "Usuario no permitido: $USERNAME"
+        return 1
+    fi
+
+    info "Cerrando sesiones de ${WHITE}${USERNAME}${RESET}..."
+
+    cerrar_sesiones "$USERNAME"
+
+    info "Eliminando cuenta ${WHITE}${USERNAME}${RESET}..."
+
+    if userdel -r "$USERNAME" >/dev/null 2>&1; then
+
+        limpiar_limite "$USERNAME"
+
+        ok "Usuario ${WHITE}${USERNAME}${GREEN} eliminado correctamente."
+
+        return 0
+
+    fi
+
+    # Si -r falla, intentar sin eliminar HOME
+    if userdel -f "$USERNAME" >/dev/null 2>&1; then
+
+        limpiar_limite "$USERNAME"
+
+        ok "Usuario ${WHITE}${USERNAME}${GREEN} eliminado."
+
+        return 0
+
+    fi
+
+    error "No se pudo eliminar: $USERNAME"
+
+    return 1
+}
+
+# ============================================================
+# CONFIRMACIÓN NORMAL
+# ============================================================
+
+confirmar() {
+
+    local MENSAJE="$1"
+
+    echo
+
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}║${WHITE}                       ⚠ ATENCIÓN                            ${RED}║${RESET}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+    echo -e "${YELLOW}${MENSAJE}${RESET}"
+    echo
+
+    read -rp "$(echo -e "${WHITE}Escriba ${RED}SI${WHITE} para confirmar: ${RESET}")" RESP
+
+    [[ "$RESP" == "SI" || "$RESP" == "si" || "$RESP" == "Sí" || "$RESP" == "sí" ]]
+
+}
+
+# ============================================================
+# ELIMINAR VARIOS
+# ============================================================
+
+eliminar_seleccionados() {
+
+    local OPCION="$1"
+
+    local SELECCIONADOS=()
+    local N USERNAME
+
+    for N in $OPCION; do
+
+        if [[ "$N" =~ ^[0-9]+$ ]] &&
+           [[ -n "${MAPA[$N]}" ]]; then
+
+            USERNAME="${MAPA[$N]}"
+
+            # Evitar duplicados
+            if [[ ! " ${SELECCIONADOS[*]} " =~ " ${USERNAME} " ]]; then
+
+                SELECCIONADOS+=("$USERNAME")
+
+            fi
+
+        fi
+
+    done
+
+    if (( ${#SELECCIONADOS[@]} == 0 )); then
+
+        error "No se seleccionaron usuarios válidos."
+        return 1
+    fi
+
+    echo
+    echo -e "${RED}USUARIOS QUE SERÁN ELIMINADOS:${RESET}"
+    echo
+
+    for USERNAME in "${SELECCIONADOS[@]}"; do
+
+        echo -e " ${RED}✖${RESET} ${WHITE}${USERNAME}${RESET}"
+
+    done
+
+    echo
+
+    if ! confirmar "Esta operación eliminará las cuentas seleccionadas."; then
+
+        warn "Operación cancelada."
+        return 0
+    fi
+
+    echo
+
+    BORRADOS=0
+    ERRORES=0
+
+    for USERNAME in "${SELECCIONADOS[@]}"; do
+
+        if eliminar_usuario "$USERNAME"; then
+
+            ((BORRADOS++))
+
+        else
+
+            ((ERRORES++))
+
+        fi
+
+    done
+
+    echo
+    line
+
+    echo -e "${GREEN}✔ Eliminados : ${BORRADOS}${RESET}"
+    echo -e "${RED}✘ Errores    : ${ERRORES}${RESET}"
+
+    line
+}
+
+# ============================================================
+# ELIMINAR TODOS
+# ============================================================
+
+eliminar_todos() {
+
+    crear_lista
+
+    if (( TOTAL == 0 )); then
+
+        warn "No existen usuarios administrables."
+        return
+    fi
+
+    echo
+    echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}║${WHITE}              ☠ ELIMINACIÓN MASIVA ☠                       ${RED}║${RESET}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${YELLOW}Se eliminarán TODOS los usuarios administrables:${RESET}"
+    echo
+
+    for USERNAME in "${LISTA[@]}"; do
+
+        echo -e " ${RED}✖${RESET} ${WHITE}${USERNAME}${RESET}"
+
+    done
+
+    echo
+
+    echo -e "${GRAY}Los usuarios del sistema están protegidos.${RESET}"
+    echo -e "${GRAY}root y cuentas de servicio NO serán eliminados.${RESET}"
+
+    echo
+
+    read -rp "$(echo -e "${RED}Escriba ${WHITE}ELIMINAR TODO${RED} para continuar: ${RESET}")" RESP
+
+    if [[ "$RESP" != "ELIMINAR TODO" ]]; then
+
+        warn "Operación cancelada."
+
+        return
+    fi
+
+    echo
+
+    BORRADOS=0
+    ERRORES=0
+
+    for USERNAME in "${LISTA[@]}"; do
+
+        if eliminar_usuario "$USERNAME"; then
+
+            ((BORRADOS++))
+
+        else
+
+            ((ERRORES++))
+
+        fi
+
+    done
+
+    # Limpieza final de límites
+    if [[ -f "$LIMITS_FILE" ]]; then
+
+        : > "$LIMITS_FILE"
+        chmod 600 "$LIMITS_FILE"
+
+    fi
+
+    echo
+    line
+
+    echo -e "${GREEN}✔ Usuarios eliminados : ${BORRADOS}${RESET}"
+    echo -e "${RED}✘ Errores             : ${ERRORES}${RESET}"
+
+    line
+}
+
+# ============================================================
+# MENÚ PRINCIPAL
+# ============================================================
+
+while true; do
+
+    banner
+
+    crear_lista
+
+    echo -e "${WHITE}╭──────────────────────────────────────────────────────────╮${RESET}"
+    echo -e "${WHITE}│${CYAN}              PANEL DE CONTROL DE USUARIOS                ${WHITE}│${RESET}"
+    echo -e "${WHITE}╰──────────────────────────────────────────────────────────╯${RESET}"
+
+    echo
+
+    echo -e " ${GREEN}[1]${RESET} 🗑  Eliminar un usuario"
+    echo -e " ${GREEN}[2]${RESET} 🗑  Eliminar varios usuarios"
+    echo -e " ${RED}[3]${RESET} ☠  Eliminar TODOS los usuarios"
+    echo -e " ${BLUE}[4]${RESET} 👥  Actualizar lista"
+    echo -e " ${YELLOW}[0]${RESET} ↩  Salir"
+
+    echo
+    line
+
+    echo -e "${GRAY}Usuarios administrables: ${WHITE}${TOTAL}${RESET}"
+
+    echo
+    read -rp "$(echo -e "${CYAN}Seleccione una opción: ${RESET}")" OPCION
+
+    case "$OPCION" in
+
+        1)
+
+            banner
+
+            if mostrar_usuarios; then
+
+                echo
+                read -rp "$(echo -e "${GREEN}Número del usuario a eliminar: ${RESET}")" NUMERO
+
+                USERNAME="${MAPA[$NUMERO]}"
+
+                if [[ -z "$USERNAME" ]]; then
+
+                    error "Número inválido."
+
+                else
+
+                    echo
+                    echo -e "${RED}Usuario seleccionado:${RESET} ${WHITE}${USERNAME}${RESET}"
+
+                    if confirmar "Se eliminará la cuenta ${USERNAME}."; then
+
+                        eliminar_usuario "$USERNAME"
+
+                    else
+
+                        warn "Operación cancelada."
+
+                    fi
+
+                fi
+
+            fi
+
+            pause
+            ;;
+
+        2)
+
+            banner
+
+            if mostrar_usuarios; then
+
+                echo
+                echo -e "${YELLOW}Ejemplos:${RESET}"
+                echo -e " ${WHITE}1${RESET}       → un usuario"
+                echo -e " ${WHITE}1 3 5${RESET}   → varios usuarios"
+                echo -e " ${WHITE}2 4 7 8${RESET} → múltiples usuarios"
+
+                echo
+
+                read -rp "$(echo -e "${GREEN}Seleccione números: ${RESET}")" SELECCION
+
+                eliminar_seleccionados "$SELECCION"
+
+            fi
+
+            pause
+            ;;
+
+        3)
+
+            banner
+
+            eliminar_todos
+
+            pause
+            ;;
+
+        4)
+
+            info "Actualizando lista..."
+            sleep 1
+            ;;
+
+        0)
+
+            clear
+
+            echo
+            echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+            echo -e "${CYAN}║${GREEN}             ✔ KEVINTECH USER MANAGER                       ${CYAN}║${RESET}"
+            echo -e "${CYAN}║${WHITE}                    Hasta luego...                           ${CYAN}║${RESET}"
+            echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+            echo
+
+            exit 0
+            ;;
+
+        *)
+
+            error "Opción inválida."
+            sleep 1
+            ;;
+
+    esac
 
 done
