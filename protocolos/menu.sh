@@ -10,8 +10,6 @@
 # Versión : 3.1 Premium
 #
 # ==============================================================
-#                    KEVINTECH / PRIVANOX
-# ==============================================================
 
 set -o pipefail
 
@@ -57,9 +55,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-if [[ ! -d "$BASE" ]]; then
-    mkdir -p "$BASE"
-fi
+mkdir -p "$BASE"
 
 if [[ ! -f "$CONFIG" ]]; then
     clear
@@ -119,13 +115,11 @@ run_module() {
         echo
         echo -e "${RED}${BOLD}✘ MÓDULO NO ENCONTRADO${RESET}"
         echo
-
         echo -e "${WHITE}Archivo:${RESET}"
         echo -e "${YELLOW}$FILE${RESET}"
-
         echo
-        pause
 
+        pause
         return 1
     fi
 
@@ -192,31 +186,22 @@ status_service() {
     if service_exists "$SERVICE"; then
 
         if service_active "$SERVICE"; then
-
             echo -e "${GREEN}● ONLINE${RESET}"
 
         elif service_enabled "$SERVICE"; then
-
             echo -e "${YELLOW}● STOPPED${RESET}"
 
         else
-
             echo -e "${RED}● OFF${RESET}"
-
         fi
 
     else
 
         if [[ "${CONFIG_STATUS^^}" == "ON" ]]; then
-
             echo -e "${YELLOW}● CONFIG${RESET}"
-
         else
-
             echo -e "${GRAY}● OFF${RESET}"
-
         fi
-
     fi
 }
 
@@ -227,17 +212,12 @@ status_config() {
     case "${VALUE^^}" in
 
         ON|1|YES|TRUE)
-
             echo -e "${GREEN}● ON${RESET}"
-
             ;;
 
         *)
-
             echo -e "${GRAY}● OFF${RESET}"
-
             ;;
-
     esac
 }
 
@@ -246,7 +226,6 @@ status_config() {
 # ==============================================================
 
 get_hostname() {
-
     hostname 2>/dev/null || echo "Servidor"
 }
 
@@ -523,7 +502,7 @@ get_statuses() {
 }
 
 # ==============================================================
-# MENÚ DE PROTOCOLOS
+# MENÚ DE PROTOCOLOS - 2 COLUMNAS
 # ==============================================================
 
 show_protocol_menu() {
@@ -536,51 +515,39 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 %-14s %b    ${GREEN}${BOLD}[02]${RESET} 📦 %-14s %b\n" \
         "OpenSSH" \
-        "$OPENSSH_STATUS"
-
-    printf "  ${GREEN}${BOLD}[02]${RESET} 📦 %-20s %b\n" \
+        "$OPENSSH_STATUS" \
         "ZIPVPN" \
         "$ZIPVPN_STATUS"
 
-    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 %-14s %b    ${GREEN}${BOLD}[04]${RESET} 🔒 %-14s %b\n" \
         "Dropbear" \
-        "$DROPBEAR_STATUS"
-
-    printf "  ${GREEN}${BOLD}[04]${RESET} 🔒 %-20s %b\n" \
+        "$DROPBEAR_STATUS" \
         "SSL / TLS" \
         "$SSL_STATUS"
 
-    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ %-14s %b    ${GREEN}${BOLD}[06]${RESET} 🚀 %-14s %b\n" \
         "BadVPN" \
-        "$BADVPN_STATUS"
-
-    printf "  ${GREEN}${BOLD}[06]${RESET} 🚀 %-20s %b\n" \
+        "$BADVPN_STATUS" \
         "UDP Custom" \
         "$UDP_STATUS"
 
-    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 %-14s %b    ${GREEN}${BOLD}[08]${RESET} ☁️  %-14s %b\n" \
         "SlowDNS" \
-        "$SLOWDNS_STATUS"
-
-    printf "  ${GREEN}${BOLD}[08]${RESET} ☁️  %-20s %b\n" \
+        "$SLOWDNS_STATUS" \
         "Xray / V2Ray" \
         "$XRAY_STATUS"
 
-    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 %-14s %b    ${GREEN}${BOLD}[10]${RESET} 🔐 %-14s %b\n" \
         "CheckUser" \
-        "$CHECKUSER_STATUS"
-
-    printf "  ${GREEN}${BOLD}[10]${RESET} 🔐 %-20s %b\n" \
+        "$CHECKUSER_STATUS" \
         "OpenVPN" \
         "$OPENVPN_STATUS"
 
-    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  %-20s %b\n" \
+    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  %-14s %b    ${MAGENTA}${BOLD}[12]${RESET} 🌐 %-14s %b\n" \
         "Hysteria" \
-        "$HYSTERIA_STATUS"
-
-    printf "  ${MAGENTA}${BOLD}[12]${RESET} 🌐 %-20s %b\n" \
+        "$HYSTERIA_STATUS" \
         "BHTTP" \
         "$BHTTP_STATUS"
 
@@ -590,13 +557,13 @@ show_protocol_menu() {
 
     line
 
-    echo -e "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas"
+    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 %-22s    ${GREEN}${BOLD}[14]${RESET} 🔄 %s\n" \
+        "Herramientas" \
+        "Reiniciar Servicios"
 
-    echo -e "  ${GREEN}${BOLD}[14]${RESET} 🔄 Reiniciar Servicios"
-
-    echo -e "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall"
-
-    echo -e "  ${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram"
+    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 %-22s    ${GREEN}${BOLD}[16]${RESET} 🤖 %s\n" \
+        "Firewall" \
+        "Bot Telegram"
 
     echo
 
@@ -622,107 +589,67 @@ process_option() {
     case "$OP" in
 
         1|01)
-
             run_module "$PROTOCOL_DIR/openssh.sh"
-
             ;;
 
         2|02)
-
             run_module "$PROTOCOL_DIR/zipvpn.sh"
-
             ;;
 
         3|03)
-
             run_module "$PROTOCOL_DIR/dropbear.sh"
-
             ;;
 
         4|04)
-
             run_module "$PROTOCOL_DIR/ssl.sh"
-
             ;;
 
         5|05)
-
             run_module "$PROTOCOL_DIR/badvpn.sh"
-
             ;;
 
         6|06)
-
             run_module "$PROTOCOL_DIR/udpcustom.sh"
-
             ;;
 
         7|07)
-
             run_module "$PROTOCOL_DIR/slowdns.sh"
-
             ;;
 
         8|08)
-
             run_module "$PROTOCOL_DIR/v2ray.sh"
-
             ;;
 
         9|09)
-
             run_module "$PROTOCOL_DIR/checkuser.sh"
-
             ;;
 
         10)
-
             run_module "$PROTOCOL_DIR/openvpn.sh"
-
             ;;
 
         11)
-
             run_module "$PROTOCOL_DIR/histeria.sh"
-
             ;;
-
-        # ======================================================
-        # BHTTP
-        # ======================================================
 
         12)
-
             run_module "$PROTOCOL_DIR/bhttp.sh"
-
             ;;
 
-        # ======================================================
-        # ADMINISTRACIÓN
-        # ======================================================
-
         13)
-
             run_module "$TOOLS_DIR/menu.sh"
-
             ;;
 
         14)
-
             run_module "$TOOLS_DIR/reiniciar.sh"
-
             ;;
 
         15)
-
             run_module "$TOOLS_DIR/firewall.sh"
-
             ;;
 
         16)
-
             run_module "$BASE/telegram/install.sh"
-
             ;;
 
         0|00)
@@ -730,31 +657,23 @@ process_option() {
             clear
 
             if [[ -f "$BASE/menu.sh" ]]; then
-
                 exec bash "$BASE/menu.sh"
-
             else
-
                 exit 0
-
             fi
 
             ;;
 
         "")
-
             ;;
 
         *)
 
             echo
-
             echo -e "  ${RED}${BOLD}✘ Opción inválida: $OP${RESET}"
-
             sleep 1
 
             ;;
-
     esac
 }
 
