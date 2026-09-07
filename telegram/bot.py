@@ -3,15 +3,8 @@
 import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime,io,secrets
 from pathlib import Path
 
-BASE=Path('/etc/kevintech')
-TD=BASE/'telegram'
-PERSIST=BASE/'telegram-data'
-ENV=TD/'.env'
-LOG=TD/'logs'/'bot.log'
-OFF=PERSIST/'offset'
-DB=PERSIST/'data.json'
-BACK=PERSIST/'backups'
-STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
+BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
+DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
 
 DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="https://libtl.com/sdk.js" data-zone="11217882" data-sdk="show_11217882"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;function sendSuccessAndClose(){const payload=JSON.stringify({type:'adcompleted',token:token});try{if(tg&&typeof tg.sendData==='function'&&token){tg.sendData(payload);setTimeout(()=>tg.close(),250);return}}catch(e){}const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
@@ -21,7 +14,7 @@ DEFAULT={
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
  'monetization':{'monetag':''},
- 'auto_update':{'enabled':False,'last_version':'','checked_at':0},
+ 'auto_update':{'enabled':False,'last_version':'','notified_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
  'chat_messages':{},
@@ -32,20 +25,10 @@ def log(s):
  LOG.parent.mkdir(parents=True,exist_ok=True); LOG.open('a').write(time.strftime('[%F %T] ')+str(s)+'\n')
 
 def load_db():
- DB.parent.mkdir(parents=True,exist_ok=True);os.chmod(DB.parent,0o700)
- legacy_db=TD/'data.json'
- if not DB.exists() and legacy_db.exists():
-  try: DB.write_bytes(legacy_db.read_bytes()); os.chmod(DB,0o600); log('DB MIGRADA A telegram-data')
-  except Exception as ex: log('DB MIGRATION '+repr(ex))
- if not DB.exists():
-  DB.write_text(json.dumps(DEFAULT,indent=2,ensure_ascii=False)); os.chmod(DB,0o600)
-  return json.loads(json.dumps(DEFAULT))
+ DB.parent.mkdir(parents=True,exist_ok=True)
+ if not DB.exists(): DB.write_text(json.dumps(DEFAULT,indent=2,ensure_ascii=False)); return json.loads(json.dumps(DEFAULT))
  try:d=json.loads(DB.read_text(errors='ignore'))
- except Exception:
-  try:
-   bad=DB.with_suffix('.corrupt-'+str(int(time.time()))+'.json'); bad.write_bytes(DB.read_bytes())
-  except Exception: pass
-  d=json.loads(json.dumps(DEFAULT))
+ except Exception:d=json.loads(json.dumps(DEFAULT))
  for k,v in DEFAULT.items():
   if k not in d:d[k]=json.loads(json.dumps(v))
  if not isinstance(d.get('auto_update'),dict):d['auto_update']=json.loads(json.dumps(DEFAULT['auto_update']))
@@ -54,13 +37,11 @@ def load_db():
   if not isinstance(d.get(k),dict):d[k]={}
  if not isinstance(d.get('quotas'),dict):d['quotas']=json.loads(json.dumps(DEFAULT['quotas']))
  for k,v in DEFAULT['quotas'].items():d['quotas'].setdefault(k,v)
- # Compatibilidad: V2Ray usa siempre la misma cuota pública y ya no tiene cuota propia.
- d['quotas'].pop('v2ray_days',None); d['quotas'].pop('v2ray_devices',None)
+ # Compatibilidad: conservar cualquier configuración existente.
  if not isinstance(d.get('security'),dict):d['security']=json.loads(json.dumps(DEFAULT['security']))
  for k,v in DEFAULT['security'].items():d['security'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
  if not isinstance(d.get('monetization'),dict):d['monetization']=json.loads(json.dumps(DEFAULT['monetization']))
  for k,v in DEFAULT['monetization'].items():d['monetization'].setdefault(k,v)
- d['monetization'].pop('',None)
  if not isinstance(d.get('backup_schedule'),dict):d['backup_schedule']=json.loads(json.dumps(DEFAULT['backup_schedule']))
  d['backup_schedule'].setdefault('mode','once');d['backup_schedule'].setdefault('next_at',0)
  if not isinstance(d.get('ad_tokens'),dict):d['ad_tokens']={}
@@ -310,34 +291,32 @@ def run_update(c=None,auto=False,key=None):
    time.sleep(2)
    sh('systemctl restart kevintech-telegram.service',20)
 
-def notify_update_available(new_version_value,current_version_value):
- try:
-  text=(f'🆕 <b>NUEVA VERSIÓN DISPONIBLE</b>\n\n'
-        f'📌 Versión instalada: <code>{e(current_version_value)}</code>\n'
-        f'🚀 Nueva versión: <code>{e(new_version_value)}</code>\n\n'
-        '🤖 El aviso automático está activo.\n'
-        'Pulsa <b>Actualizar ahora</b> para iniciar la actualización y luego ingresar tu Key.')
-  send(OWNER,text,[[{'text':'⬇️ Actualizar ahora','callback_data':'system_update_now'}],
-                   [{'text':'🔄 Ver actualización','callback_data':'system_update'}]])
-  return True
- except Exception as ex:
-  log('UPDATE NOTICE '+repr(ex));return False
-
 def auto_update_monitor():
  while True:
   try:
    d=db()
-   if d.get('auto_update',{}).get('enabled'):
+   au=d.setdefault('auto_update',{})
+   if au.get('enabled'):
     cur,new,available=update_available()
-    last=str(d.get('auto_update',{}).get('last_version',''))
-    if available and new!=last:
-     log(f'UPDATE NOTICE {cur} -> {new}')
-     if notify_update_available(new,cur):
-      d=db();d['auto_update']['last_version']=new
-      d['auto_update']['checked_at']=time.time();save_db(d)
-    elif new!='No disponible':
-     d=db();d['auto_update']['checked_at']=time.time();save_db(d)
-  except Exception as ex:log('AUTO UPDATE '+repr(ex))
+    # La actualización automática NO instala nada por su cuenta.
+    # Solo avisa al SUPER ADMIN cuando detecta una versión nueva y
+    # le ofrece el botón "Actualizar ahora".
+    notified=str(au.get('notified_version','') or '')
+    if available and new != notified:
+     log(f'AUTO UPDATE NOTICE {cur} -> {new}')
+     send(OWNER,
+          f'🆕 <b>NUEVA VERSIÓN DISPONIBLE</b>\n\n'
+          f'📌 Versión instalada: <code>{e(cur)}</code>\n'
+          f'🆕 Nueva versión: <code>{e(new)}</code>\n\n'
+          f'🤖 La actualización automática está activa.\n'
+          f'Pulsa el botón para ir directamente a <b>Actualizar ahora</b>.',
+          [[{'text':'⬇️ Actualizar ahora','callback_data':'system_update_now'}]])
+     au['notified_version']=new
+    au['last_version']=new
+    au['checked_at']=time.time()
+    save_db(d)
+  except Exception as ex:
+   log('AUTO UPDATE '+repr(ex))
   time.sleep(21600)
 
 def bg(c,title,cmd,timeout=300,k=None,restart_after=False):
@@ -379,7 +358,7 @@ def banned(uid):return str(uid) in db()['bans']
 def registered(uid,name=None,username=None):
  d=db();k=str(uid)
  if k not in d['users']:
-  d['users'][k]={'id':uid,'name':name or str(uid),'username':username or '','created':time.strftime('%F'),'started':False,'accounts':[],'v2ray_accounts':[],'language':'es','language_selected':False,'referrer':None,'referrals':[],'referral_renews':0,'history':[],'credits':0}
+  d['users'][k]={'id':uid,'name':name or str(uid),'username':username or '','created':time.strftime('%F'),'started':False,'accounts':[],'v2ray_accounts':[],'language':'es','language_selected':False,'referrer':None,'referrals':[],'referral_points':0,'referral_renews':0,'history':[]}
   save_db(d)
  else:
   changed=False
@@ -387,7 +366,7 @@ def registered(uid,name=None,username=None):
   if username is not None and d['users'][k].get('username','')!=username:d['users'][k]['username']=username;changed=True
   if 'v2ray_accounts' not in d['users'][k]:d['users'][k]['v2ray_accounts']=[];changed=True
   if 'history' not in d['users'][k]:d['users'][k]['history']=[];changed=True
-  if 'credits' not in d['users'][k]:d['users'][k]['credits']=0;changed=True
+  if 'referral_points' not in d['users'][k]:d['users'][k]['referral_points']=len(d['users'][k].get('referrals',[]));changed=True
   if changed:save_db(d)
 
 def home(uid):
@@ -476,7 +455,7 @@ def referral_info(uid):
  remaining=max(0,3-used)
  link=f'https://t.me/{BOT_USERNAME}?start=ref_{uid}' if BOT_USERNAME else f'/start ref_{uid}'
  reset='Disponible nuevamente después de 24 horas.' if used>=3 else 'El contador se reinicia cada 24 horas.'
- return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 <b>Referidos: {len(refs)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
+ return f'''🔗 <b>PROGRAMA DE REFERIDOS</b>\n\n👥 <b>Referidos: {len(refs)}</b>\n💰 <b>Puntos: {int(u.get('referral_points',len(refs)) or 0)}</b>\n🎁 Renovaciones usadas en 24h: <b>{used}/3</b>\n⭐ Renovaciones disponibles: <b>{remaining}</b>\n\n🔗 <b>Tu enlace:</b>\n<code>{e(link)}</code>\n\n🎯 Necesitas <b>3 referidos</b> para activar el canje.\n♻️ Cada canje agrega <b>7 días</b> a la cuenta que elijas.\n⏱️ {reset}'''
 
 def online_ssh():
  """Devuelve solo sesiones SSH que correspondan a cuentas reales del panel.
@@ -514,6 +493,29 @@ def online_ssh():
   seen.add(key)
   sessions.append({'username':name,'ip':ip or '—','device':ip or '—','pid':pid})
  return sessions
+
+def notify_new_referral(referrer_id, referred_user):
+ # Un único aviso al dueño del enlace cuando el referido crea su primera cuenta.
+ try:
+  d=db()
+  referrer=str(referrer_id)
+  if referrer not in d.get('users',{}): return
+  inviter=d['users'][referrer]
+  points=int(inviter.get('referral_points',0) or 0)+1
+  inviter['referral_points']=points
+  save_db(d)
+  uname=str(referred_user.get('username','')).strip()
+  mention=f'@{uname}' if uname else str(referred_user.get('name','Usuario')).strip()
+  text=(
+   '🎉 <b>¡NUEVO REFERIDO!</b>\n\n'
+   f'👤 {e(mention)} se unió usando tu link\n'
+   '💰 Has ganado 1 punto\n'
+   '🎁 Total en tu cuenta actualizado\n\n'
+   '¡Sigue compartiendo tu link para ganar más puntos!'
+  )
+  send(int(referrer_id),text)
+ except Exception as ex:
+  log('REF NOTIFY '+repr(ex))
 
 def create_v2ray(username,days):
  try:
@@ -759,6 +761,11 @@ def near_expiry_notifications():
   try:
    d=db();today=datetime.date.today();changed=False
    for sid,z in d.get('users',{}).items():
+    owner=int(sid)
+    # El SUPER ADMIN nunca recibe avisos de vencimiento de sus propias cuentas
+    # ni avisos duplicados de cuentas administradas.
+    if owner==OWNER:
+     continue
     for username in list(z.get('accounts',[])):
      if username in z.get('v2ray_accounts',[]):ds=z.get('v2ray_expirations',{}).get(username,'')
      else:ds=subprocess.getoutput(f"chage -l {q(username)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'")
@@ -771,16 +778,13 @@ def near_expiry_notifications():
       key=f'{username}:{ex.isoformat()}'
       if z.setdefault('expiry_notice',{}).get(username)==key:continue
       z['expiry_notice'][username]=key;changed=True
-      owner=int(sid);mention='@'+z.get('username') if z.get('username') else str(owner)
       text=f'⏳ <b>CUENTA PRÓXIMA A VENCER</b>\n\n👤 Cuenta: <code>{e(username)}</code>\n📅 Vencimiento: <b>{e(ex.strftime("%d/%m/%Y"))}</b>\n⏱️ Tiempo restante: <b>{"hoy" if left==0 else "1 día"}</b>\n\nPuedes renovarla desde el botón inferior.'
       k=[[{'text':'▶️ Ver anuncio y renovar','callback_data':'expiryrenew:'+username}]]
       try:send(owner,text,k)
-      except:pass
-      # El aviso de vencimiento se envía solo al propietario; nunca al SUPER ADMIN.
+      except Exception as er:log('EXPIRY USER NOTICE '+repr(er))
    if changed:save_db(d)
   except Exception as ex:log('EXPIRY NOTICE '+repr(ex))
   time.sleep(1800)
-
 
 USER_COMMANDS={
  'es':[('/cmds','Ver comandos disponibles'),('/crear','Crear cuenta'),('/renovar','Renovar cuenta'),('/lista','Ver mis cuentas'),('/online','Ver conexiones'),('/cuenta','Consultar cuenta'),('/eliminar','Eliminar cuenta'),('/referidos','Ver referidos'),('/idioma','Cambiar idioma'),('/informacion','Información'),('/me','Mi información e historial')],
@@ -843,7 +847,7 @@ def me_text(uid):
  accounts=z.get('accounts',[]); hist=z.get('history',[])
  out=(f"{title}\n\n🆔 ID: <code>{uid}</code>\n👤 {name_l}: <b>{e(name)}</b>\n"
       f"🔗 {user_l}: <b>{e(uname)}</b>\n🌐 {lang_l}: <b>{e(lang(uid))}</b>\n"
-      f"📅 {reg_l}: <b>{e(z.get('created','—'))}</b>\n👥 {acc_l}: <b>{len(accounts)}</b>\n💰 Créditos: <b>{int(z.get('credits',0) or 0)}</b>")
+      f"📅 {reg_l}: <b>{e(z.get('created','—'))}</b>\n👥 {acc_l}: <b>{len(accounts)}</b>")
  if accounts: out+=f"\n\n🔐 <b>{myacc_l}</b>\n"+'\n'.join('• <code>'+e(a)+'</code>' for a in accounts[:30])
  out+=f"\n\n🕘 <b>{hist_l}</b>"
  if hist:
@@ -1048,15 +1052,8 @@ def cb(c,m,u,i,x,chat_type=None):
      d=db();urow=d['users'][str(c)];urow.setdefault('v2ray_accounts',[]).append(dat['user']);urow.setdefault('accounts',[]).append(dat['user']);urow.setdefault('v2ray_expirations',{})[dat['user']]=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
      ref=urow.get('referrer')
      if ref and str(ref) in d['users'] and c not in d['users'][str(ref)].setdefault('referrals',[]):
-      inviter=d['users'][str(ref)]
-      inviter['referrals'].append(c)
-      inviter['credits']=int(inviter.get('credits',0) or 0)+15
-      total_credits=inviter['credits']
-      mention=("@"+urow.get("username")) if urow.get("username") else urow.get("name",str(c))
-      save_db(d)
-      try:
-       send(int(ref),f'🎉 <b>¡NUEVO REFERIDO!</b>\n\n👤 {e(mention)} se unió usando tu link\n💰 Has ganado <b>15 créditos</b>\n🎁 Total en tu cuenta: <b>{total_credits} créditos</b>\n\n¡Sigue compartiendo tu link para ganar más puntos!')
-      except:pass
+      d['users'][str(ref)]['referrals'].append(c);save_db(d)
+      notify_new_referral(ref,urow)
      save_db(d)
      add_history(c,'Cuenta creada',dat['user']+' (V2Ray)');return send(c,v2ray_account_message(c,dat))
     return send(c,'🔴 <b>No se pudo crear la cuenta V2Ray</b>\n<pre>'+e(o)+'</pre>')
@@ -1066,15 +1063,10 @@ def cb(c,m,u,i,x,chat_type=None):
     d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0)
     ref=d['users'][str(c)].get('referrer')
     if ref and str(ref) in d['users']:
-     inviter=d['users'][str(ref)]
+     inviter=d['users'][str(ref)];
      if c not in inviter.setdefault('referrals',[]):
-      inviter['referrals'].append(c)
-      inviter['credits']=int(inviter.get('credits',0) or 0)+15
-      total_credits=inviter['credits']
-      uname=d['users'][str(c)].get('username') or '';mention=f'@{uname}' if uname else d['users'][str(c)].get('name','Usuario')
-      save_db(d)
-      try:send(int(ref),f'🎉 <b>¡NUEVO REFERIDO!</b>\n\n👤 {e(mention)} se unió usando tu link\n💰 Has ganado <b>15 créditos</b>\n🎁 Total en tu cuenta: <b>{total_credits} créditos</b>\n\n¡Sigue compartiendo tu link para ganar más puntos!')
-      except Exception as er:log('REF NOTIFY '+repr(er))
+      inviter['referrals'].append(c);save_db(d)
+      notify_new_referral(ref,d['users'][str(c)])
     else:save_db(d)
     return send(c,account_message(c,dat))
    return send(c,'🔴 <b>Error al crear</b>\n<pre>'+e(o)+'</pre>')
@@ -1113,7 +1105,7 @@ def cb(c,m,u,i,x,chat_type=None):
   cur,new,available=update_available();enabled=bool(d.get('auto_update',{}).get('enabled'));status='🟢 Nueva versión disponible' if available else '✅ Sin actualizaciones'
   text=f'🔄 <b>ACTUALIZACIÓN DEL SISTEMA</b>\n\n📌 Versión instalada: <b>{e(cur)}</b>\n🆕 Nueva versión: <b>{e(new)}</b>\n📡 Estado: <b>{status}</b>\n🤖 Actualización automática: <b>'+('ACTIVADA' if enabled else 'DESACTIVADA')+'</b>'
   return edit(c,m,text,[[{'text':'⬇️ Actualizar ahora','callback_data':'system_update_now'}],[{'text':('⛔ Desactivar automática' if enabled else '🤖 Activar automática'),'callback_data':'auto_update_toggle'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- if x=='auto_update_toggle':d['auto_update']['enabled']=not bool(d.get('auto_update',{}).get('enabled'));d['auto_update']['checked_at']=0;save_db(d);return cb(c,m,u,i,'system_update')
+ if x=='auto_update_toggle':d['auto_update']['enabled']=not bool(d.get('auto_update',{}).get('enabled'));d['auto_update']['checked_at']=0;d['auto_update']['notified_version']='';save_db(d);return cb(c,m,u,i,'system_update')
  if x=='system_update_now':return run_update(c,True)
  if x=='settings':
   if not is_owner(u):return ans(i,'Solo el super admin')
