@@ -1,343 +1,339 @@
 #!/bin/bash
-#==================================================
-# KevinTech Multi Script
-# Banner Manager - SSH / Dropbear
-# Version: 4.0
-#
-# Sistema:
-# - Banners individuales por usuario
-# - /etc/ssh_banners/
-# - Match User en sshd_config
-# - CheckUser integrado en el banner
-# - Expiración por usuario
-# - Límite IP por usuario
-# - Backups
-# - OpenSSH
-# - Dropbear
-#==================================================
 
-#==================================================
-# COLORES
-#==================================================
+# =========================================================
+# DEPWISE USER BANNER SYSTEM
+# Conversión independiente de Go → Bash
+# =========================================================
 
-GREEN="\e[1;92m"
-RED="\e[1;91m"
-YELLOW="\e[1;93m"
-BLUE="\e[1;94m"
-CYAN="\e[1;96m"
-MAGENTA="\e[1;95m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-RESET="\e[0m"
-
-#==================================================
-# CONFIGURACIÓN
-#==================================================
-
-BASE="/etc/kevintech"
-CONFIG="$BASE/config.conf"
-
-# Directorio de banners individuales
 BANNER_DIR="/etc/ssh_banners"
+SSHD_CONFIG="/etc/ssh/sshd_config"
+CONFIG_FILE="$BANNER_DIR/config.conf"
 
-# Configuración SSH
-SSHD="/etc/ssh/sshd_config"
+MARKER_START="# >>> DEPWISE_USER_BANNERS_START <<<"
+MARKER_END="# >>> DEPWISE_USER_BANNERS_END <<<"
 
-# Dropbear
-DROPBEAR="/etc/default/dropbear"
-
-# Límites
-LIMITS_FILE="$BASE/limits.conf"
-
-# Backups
-BACKUP_DIR="$BASE/banner-backups"
-
-# Marcadores de sshd_config
-MARKER_START="# >>> KEVINTECH_USER_BANNERS_START <<<"
-MARKER_END="# >>> KEVINTECH_USER_BANNERS_END <<<"
-
-mkdir -p "$BASE"
 mkdir -p "$BANNER_DIR"
-mkdir -p "$BACKUP_DIR"
-
-touch "$LIMITS_FILE"
-
-chmod 600 "$LIMITS_FILE"
 chmod 755 "$BANNER_DIR"
 
-[[ -f "$CONFIG" ]] && source "$CONFIG"
+# =========================================================
+# CONFIGURACIÓN
+# =========================================================
 
-#==================================================
-# ROOT
-#==================================================
+PROMO_TEXT="🔥 ¡SERVIDORES PREMIUM! 🔥"
+PROMO_CHANNEL="@vpn_privanox"
+PROMO_SUPPORT="@KTTOFICIAL"
+PROMO_BOT="@sshprivanoxbot"
 
-if [[ $EUID -ne 0 ]]; then
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 
-    echo -e "${RED}✘ Este script debe ejecutarse como root.${RESET}"
+# =========================================================
+# ESCAPAR HTML
+# =========================================================
 
-    exit 1
+html_escape() {
+    local text="$1"
 
-fi
+    text="${text//&/&amp;}"
+    text="${text//</&lt;}"
+    text="${text//>/&gt;}"
+    text="${text//\"/&quot;}"
 
-#==================================================
-# FUNCIONES GENERALES
-#==================================================
-
-pause() {
-
-    echo
-
-    read -n1 -s -r -p \
-        "$(echo -e "${YELLOW}Presione cualquier tecla para continuar...${RESET}")"
-
-    echo
-
+    printf '%s' "$text"
 }
 
-header() {
+# =========================================================
+# GENERAR BANNER
+# =========================================================
 
-    clear
+generate_user_banner() {
 
-    echo -e "${CYAN}╔════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}          KEVINTECH BANNER MANAGER                ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE}          SSH BANNERS + CHECK USER                 ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════╝${RESET}"
+    local username="$1"
+    local title="$2"
+    local limit="$3"
+    local expire_date="$4"
 
-    echo
+    [[ -z "$title" ]] &&
+        title="INTERNET ILIMITADO"
 
-}
+    [[ -z "$PROMO_TEXT" ]] &&
+        PROMO_TEXT="🔥 ¡SERVIDORES PREMIUM! 🔥"
 
-#==================================================
-# COMPROBAR OPENSSH
-#==================================================
+    [[ -z "$PROMO_CHANNEL" ]] &&
+        PROMO_CHANNEL="@vpn_privanox"
 
-ssh_installed() {
+    [[ -z "$PROMO_SUPPORT" ]] &&
+        PROMO_SUPPORT="@KTTOFICIAL"
 
-    [[ -f "$SSHD" ]] || return 1
+    [[ -z "$PROMO_BOT" ]] &&
+        PROMO_BOT="@sshprivanoxbot"
 
-    command -v sshd >/dev/null 2>&1
+    # -----------------------------------------------------
+    # ESCAPAR DATOS
+    # -----------------------------------------------------
 
-}
+    username=$(html_escape "$username")
+    title=$(html_escape "$title")
+    expire_date=$(html_escape "$expire_date")
+    PROMO_TEXT=$(html_escape "$PROMO_TEXT")
+    PROMO_CHANNEL=$(html_escape "$PROMO_CHANNEL")
+    PROMO_SUPPORT=$(html_escape "$PROMO_SUPPORT")
+    PROMO_BOT=$(html_escape "$PROMO_BOT")
 
-#==================================================
-# COMPROBAR DROPBEAR
-#==================================================
+    # -----------------------------------------------------
+    # DÍAS RESTANTES
+    # -----------------------------------------------------
 
-dropbear_installed() {
+    local days_left=0
+    local expiration_timestamp
+    local now_timestamp
 
-    [[ -f "$DROPBEAR" ]] || return 1
+    expiration_timestamp=$(date -d "$expire_date 23:59:59" +%s 2>/dev/null)
+    now_timestamp=$(date +%s)
 
-}
+    if [[ -n "$expiration_timestamp" ]]; then
 
-#==================================================
-# OBTENER SERVICIO SSH
-#==================================================
-
-get_ssh_service() {
-
-    if systemctl list-unit-files 2>/dev/null |
-        grep -q "^ssh.service"; then
-
-        echo "ssh"
-
-    elif systemctl list-unit-files 2>/dev/null |
-        grep -q "^sshd.service"; then
-
-        echo "sshd"
-
-    fi
-
-}
-
-#==================================================
-# ESTADO SSH
-#==================================================
-
-service_status() {
-
-    if ssh_installed; then
-
-        if systemctl is-active --quiet ssh 2>/dev/null ||
-           systemctl is-active --quiet sshd 2>/dev/null; then
-
-            echo -e "${GREEN}✔ ACTIVO${RESET}"
-
-        else
-
-            echo -e "${YELLOW}⚠ INSTALADO / INACTIVO${RESET}"
-
-        fi
+        days_left=$(
+            awk -v exp="$expiration_timestamp" \
+                -v now="$now_timestamp" \
+                'BEGIN {
+                    diff=(exp-now)/86400
+                    if (diff < 0)
+                        print 0
+                    else
+                        print int(diff+0.999999)
+                }'
+        )
 
     else
 
-        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
+        days_left=0
 
     fi
 
-}
+    # -----------------------------------------------------
+    # LÍMITE
+    # -----------------------------------------------------
 
-#==================================================
-# ESTADO DROPBEAR
-#==================================================
+    local limit_str
 
-dropbear_status() {
+    if [[ "$limit" =~ ^[0-9]+$ ]] &&
+       (( limit > 0 )); then
 
-    if dropbear_installed; then
-
-        if systemctl is-active --quiet dropbear 2>/dev/null; then
-
-            echo -e "${GREEN}✔ ACTIVO${RESET}"
-
-        else
-
-            echo -e "${YELLOW}⚠ INSTALADO / INACTIVO${RESET}"
-
-        fi
+        limit_str="$limit"
 
     else
 
-        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
+        limit_str="∞ Ilimitado"
 
     fi
 
+    # -----------------------------------------------------
+    # TELEGRAM
+    # -----------------------------------------------------
+
+    local channel_name
+    local support_name
+
+    channel_name="${PROMO_CHANNEL#@}"
+    support_name="${PROMO_SUPPORT#@}"
+
+    cat <<EOF
+<html>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+<h5 style="text-align:center;">
+<font face="monospace" color="#00ff00">
+⠀⠀⢀⣶⡆kevin tech tutorials⢰⣶⡀⠀⠀<br>
+</font>
+</h5>
+
+<h1 style="text-align:center;">
+<font face="monospace" color="#00ff00">
+<b>DEPWISE</b>
+</font>
+</h1>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+<h3 style="text-align:center;">
+<font color='#FF00FF'>
+<b>⚡ ${title} ⚡</b>
+</font>
+</h3>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+<h5 style="text-align:center;">
+
+<font color='#ffffff'>👤 Usuario: </font>
+<font color='#f1c40f'><b>${username}</b></font>
+<br>
+
+<font color='#ffffff'>📅 Vence: </font>
+<font color='#f1c40f'><b>${expire_date}</b></font>
+<br>
+
+<font color='#ffffff'>⏳ Días Restant.: </font>
+<font color='#f1c40f'><b>${days_left}</b></font>
+<br>
+
+<font color='#ffffff'>💻 Límite: </font>
+<font color='#f1c40f'><b>${limit_str}</b></font>
+
+</h5>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+<h4 style="text-align:center;">
+<font color='#FF00FF'>
+<b>${PROMO_TEXT}</b>
+</font>
+</h4>
+
+<h5 style="text-align:center;">
+
+<font color='#ffffff'>📢 Canal: </font>
+<a href="https://t.me/${channel_name}">
+<font color='#f1c40f'>${PROMO_CHANNEL}</font>
+</a>
+<br>
+
+<font color='#ffffff'>👤 Soporte: </font>
+<a href="https://t.me/${support_name}">
+<font color='#f1c40f'>${PROMO_SUPPORT}</font>
+</a>
+
+</h5>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+<h5 style="text-align:center;">
+<font color='#00e676'>
+<b>✅ CREADO EN : ${PROMO_BOT}</b>
+</font>
+</h5>
+
+<h5 style="text-align:center;">
+<font color='#29b6f6'>══════════════════════</font>
+</h5>
+
+</html>
+EOF
 }
 
-#==================================================
-# CONTAR BANNERS
-#==================================================
+# =========================================================
+# CREAR BANNER DE USUARIO
+# =========================================================
 
-count_banners() {
+write_user_banner() {
 
-    if [[ -d "$BANNER_DIR" ]]; then
+    local username="$1"
+    local title="$2"
+    local limit="$3"
+    local expire_date="$4"
 
-        find "$BANNER_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -name "*.banner" |
-            wc -l
+    [[ -z "$username" ]] && return 1
 
-    else
+    local banner_file="$BANNER_DIR/${username}.banner"
 
-        echo "0"
+    generate_user_banner \
+        "$username" \
+        "$title" \
+        "$limit" \
+        "$expire_date" \
+        > "$banner_file"
 
-    fi
+    chmod 644 "$banner_file"
 
+    echo "Banner creado: $banner_file"
 }
 
-#==================================================
-# ESTADO
-#==================================================
+# =========================================================
+# ELIMINAR BANNER
+# =========================================================
 
-show_status() {
+remove_user_banner() {
 
-    echo -e "${CYAN}Estado del sistema${RESET}"
+    local username="$1"
 
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    [[ -z "$username" ]] && return 1
 
-    echo -e "Directorio : ${WHITE}$BANNER_DIR${RESET}"
+    rm -f "$BANNER_DIR/${username}.banner"
 
-    echo -e "Banners    : ${GREEN}$(count_banners) usuarios${RESET}"
-
-    echo -n "OpenSSH    : "
-    service_status
-
-    echo -n "Dropbear   : "
-    dropbear_status
-
-    echo
-
+    echo "Banner eliminado: $username"
 }
 
-#==================================================
-# BACKUP
-#==================================================
+# =========================================================
+# OBTENER LÍMITES
+# =========================================================
 
-create_backup() {
+get_all_user_max_logins() {
 
-    local DATE
-    DATE=$(date +"%Y%m%d_%H%M%S")
+    [[ ! -f /etc/security/limits.conf ]] && return
 
-    local DIR="$BACKUP_DIR/$DATE"
+    awk '
+        /^[[:space:]]*#/ { next }
+        NF < 4 { next }
 
-    mkdir -p "$DIR"
+        $2 == "hard" &&
+        $3 == "maxlogins" {
 
-    # Backup sshd_config
-    [[ -f "$SSHD" ]] &&
-        cp -a "$SSHD" "$DIR/sshd_config"
+            print $1 ":" $4
+        }
 
-    # Backup Dropbear
-    [[ -f "$DROPBEAR" ]] &&
-        cp -a "$DROPBEAR" "$DIR/dropbear"
-
-    # Backup banners
-    if [[ -d "$BANNER_DIR" ]]; then
-
-        mkdir -p "$DIR/ssh_banners"
-
-        cp -a "$BANNER_DIR"/. "$DIR/ssh_banners/" 2>/dev/null
-
-    fi
-
-    echo "$DIR" > "$BACKUP_DIR/latest"
-
-    echo -e "${GREEN}✔ Backup creado:${RESET} $DIR"
-
+    ' /etc/security/limits.conf
 }
 
-#==================================================
-# OBTENER LÍMITE DEL USUARIO
-#==================================================
+# =========================================================
+# OBTENER LÍMITE DE UN USUARIO
+# =========================================================
 
 get_user_limit() {
 
-    local USERNAME="$1"
+    local username="$1"
 
-    local LIMIT
+    local limit
 
-    LIMIT=$(
-        awk -F: -v u="$USERNAME" '
-            $1 == u {
-                print $2
+    limit=$(
+        awk -v user="$username" '
+            $1 == user &&
+            $2 == "hard" &&
+            $3 == "maxlogins" {
+
+                print $4
                 exit
             }
-        ' "$LIMITS_FILE" 2>/dev/null
+        ' /etc/security/limits.conf
     )
 
-    # Si no existe en limits.conf,
-    # intentar /etc/security/limits.conf
-    if [[ -z "$LIMIT" ]]; then
-
-        LIMIT=$(
-            awk -v u="$USERNAME" '
-                $1 == u &&
-                $2 == "hard" &&
-                $3 == "maxlogins" {
-                    print $4
-                    exit
-                }
-            ' /etc/security/limits.conf 2>/dev/null
-        )
-
-    fi
-
-    [[ -z "$LIMIT" ]] && LIMIT=0
-
-    echo "$LIMIT"
-
+    [[ "$limit" =~ ^[0-9]+$ ]] &&
+        printf '%s' "$limit" ||
+        printf '0'
 }
 
-#==================================================
-# OBTENER EXPIRACIÓN
-#==================================================
+# =========================================================
+# OBTENER FECHA DE EXPIRACIÓN
+# =========================================================
 
 get_user_expiration() {
 
-    local USERNAME="$1"
+    local username="$1"
 
-    local EXP
+    local expiration
 
-    EXP=$(
-        chage -l "$USERNAME" 2>/dev/null |
+    expiration=$(
+        chage -l "$username" 2>/dev/null |
         awk -F': ' '
             /Account expires/ {
                 print $2
@@ -346,376 +342,57 @@ get_user_expiration() {
         '
     )
 
-    if [[ -z "$EXP" ||
-          "$EXP" == "never" ||
-          "$EXP" == "Nunca" ]]; then
+    if [[ -z "$expiration" ||
+          "$expiration" == "never" ||
+          "$expiration" == "Nunca" ]]; then
 
-        echo "Ilimitada"
+        printf '%s' "Ilimitada"
 
         return
 
     fi
 
-    local DATE
-
-    DATE=$(date -d "$EXP" +"%Y-%m-%d" 2>/dev/null)
-
-    if [[ -n "$DATE" ]]; then
-
-        echo "$DATE"
-
-    else
-
-        echo "$EXP"
-
-    fi
-
+    date -d "$expiration" +"%Y-%m-%d" 2>/dev/null ||
+        printf '%s' "$expiration"
 }
 
-#==================================================
-# DÍAS RESTANTES
-#==================================================
+# =========================================================
+# OBTENER USUARIOS SSH
+# =========================================================
 
-get_days_left() {
+get_ssh_users() {
 
-    local EXP="$1"
+    awk -F: '
+        $3 >= 1000 &&
+        $1 != "nobody" {
 
-    if [[ "$EXP" == "Ilimitada" ||
-          "$EXP" == "never" ||
-          "$EXP" == "Nunca" ]]; then
-
-        echo "∞"
-
-        return
-
-    fi
-
-    local EXP_DATE
-    local TODAY
-    local DIFF
-
-    EXP_DATE=$(date -d "$EXP" +%s 2>/dev/null)
-    TODAY=$(date +%s)
-
-    if [[ -z "$EXP_DATE" ]]; then
-
-        echo "N/D"
-
-        return
-
-    fi
-
-    DIFF=$(( (EXP_DATE - TODAY) / 86400 ))
-
-    (( DIFF < 0 )) && DIFF=0
-
-    echo "$DIFF"
-
-}
-
-#==================================================
-# IPs ACTUALES
-#==================================================
-
-get_user_ips() {
-
-    local USERNAME="$1"
-
-    who 2>/dev/null |
-    awk -v u="$USERNAME" '
-        $1 == u {
-
-            ip=$5
-
-            gsub(/[()]/, "", ip)
-
-            if (ip != "" &&
-                ip != "-" &&
-                ip != "localhost")
-                print ip
+            print $1
         }
-    ' |
-    sort -u
-
+    ' /etc/passwd
 }
 
-#==================================================
-# CONEXIONES ACTUALES
-#==================================================
+# =========================================================
+# SINCRONIZAR SSHD_CONFIG
+# =========================================================
 
-get_user_connections() {
+sync_sshd_banners() {
 
-    local USERNAME="$1"
-
-    local IPS
-
-    IPS=$(get_user_ips "$USERNAME")
-
-    if [[ -z "$IPS" ]]; then
-
-        echo "0"
-
-    else
-
-        printf '%s\n' "$IPS" |
-            grep -c .
-
-    fi
-
-}
-
-#==================================================
-# GENERAR CHECKUSER
-#==================================================
-
-generate_checkuser() {
-
-    local USERNAME="$1"
-    local TITLE="$2"
-    local LIMIT="$3"
-    local EXPIRATION="$4"
-
-    local DAYS
-
-    DAYS=$(get_days_left "$EXPIRATION")
-
-    local LIMIT_TEXT
-
-    if (( LIMIT <= 0 )); then
-
-        LIMIT_TEXT="∞ Ilimitado"
-
-    elif (( LIMIT == 1 )); then
-
-        LIMIT_TEXT="1 IP"
-
-    else
-
-        LIMIT_TEXT="${LIMIT} IPs"
-
-    fi
-
-    local CONNECTIONS
-
-    CONNECTIONS=$(get_user_connections "$USERNAME")
-
-    cat <<EOF
-╠════════════════════════════════════════════════════╣
-║                  CHECK USER                        ║
-╠════════════════════════════════════════════════════╣
-║ 👤 Usuario        : $USERNAME
-║ 🔌 Conexiones     : $CONNECTIONS/$LIMIT
-║ 📅 Expiración     : $EXPIRATION
-║ ⏳ Días restantes : $DAYS
-║ 👥 Límite IP      : $LIMIT_TEXT
-╚════════════════════════════════════════════════════╝
-EOF
-
-}
-
-#==================================================
-# GENERAR BANNER INDIVIDUAL
-#==================================================
-
-generate_user_banner() {
-
-    local USERNAME="$1"
-    local SERVER="$2"
-    local PROMO="$3"
-    local CHANNEL="$4"
-    local SUPPORT="$5"
-
-    local LIMIT
-    LIMIT=$(get_user_limit "$USERNAME")
-
-    local EXPIRATION
-    EXPIRATION=$(get_user_expiration "$USERNAME")
-
-    local DAYS
-    DAYS=$(get_days_left "$EXPIRATION")
-
-    local LIMIT_TEXT
-
-    if (( LIMIT <= 0 )); then
-
-        LIMIT_TEXT="∞ Ilimitado"
-
-    elif (( LIMIT == 1 )); then
-
-        LIMIT_TEXT="1 IP"
-
-    else
-
-        LIMIT_TEXT="${LIMIT} IPs"
-
-    fi
-
-    cat <<EOF
-╔════════════════════════════════════════════════════╗
-║                 $SERVER
-╠════════════════════════════════════════════════════╣
-║                                                    ║
-║ $PROMO
-║                                                    ║
-║ 📢 Canal   : $CHANNEL
-║ 👤 Soporte : $SUPPORT
-║                                                    ║
-╠════════════════════════════════════════════════════╣
-║                  CHECK USER                        ║
-╠════════════════════════════════════════════════════╣
-║ 👤 Usuario        : $USERNAME
-║ 🔌 Conexiones     : 0/$LIMIT
-║ 📅 Expiración     : $EXPIRATION
-║ ⏳ Días restantes : $DAYS
-║ 👥 Límite IP      : $LIMIT_TEXT
-╚════════════════════════════════════════════════════╝
-EOF
-
-}
-
-#==================================================
-# CREAR BANNER DE USUARIO
-#==================================================
-
-create_user_banner() {
-
-    header
-
-    echo -e "${MAGENTA}              CREAR BANNER DE USUARIO${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GREEN}Usuario Linux:${RESET} ")" USERNAME
-
-    USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]')
-
-    if [[ -z "$USERNAME" ]]; then
-
-        echo -e "${RED}✘ Usuario vacío.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    if ! id "$USERNAME" >/dev/null 2>&1; then
-
-        echo -e "${RED}✘ El usuario no existe.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GREEN}Nombre del servidor:${RESET} ")" SERVER
-
-    [[ -z "$SERVER" ]] &&
-        SERVER="KevinTech VPN"
-
-    read -rp \
-        "$(echo -e "${GREEN}Texto promocional:${RESET} ")" PROMO
-
-    [[ -z "$PROMO" ]] &&
-        PROMO="🔥 Bienvenido a $SERVER 🔥"
-
-    read -rp \
-        "$(echo -e "${GREEN}Canal Telegram:${RESET} ")" CHANNEL
-
-    [[ -z "$CHANNEL" ]] &&
-        CHANNEL="@KevinTech"
-
-    read -rp \
-        "$(echo -e "${GREEN}Soporte:${RESET} ")" SUPPORT
-
-    [[ -z "$SUPPORT" ]] &&
-        SUPPORT="@KevinSupport"
-
-    local USER_BANNER="$BANNER_DIR/${USERNAME}.banner"
-
-    create_backup
-
-    generate_user_banner \
-        "$USERNAME" \
-        "$SERVER" \
-        "$PROMO" \
-        "$CHANNEL" \
-        "$SUPPORT" \
-        > "$USER_BANNER"
-
-    chmod 644 "$USER_BANNER"
-
-    echo
-
-    echo -e "${GREEN}✔ Banner creado:${RESET}"
-    echo "$USER_BANNER"
-
-    echo
-
-    echo -e "${CYAN}Vista previa:${RESET}"
-
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-    cat "$USER_BANNER"
-
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${YELLOW}¿Aplicar a OpenSSH? [S/N]: ${RESET}")" RESP
-
-    case "$RESP" in
-
-    s|S|si|SI|sí|Sí)
-
-        sync_ssh_banners
-
-        ;;
-
-    *)
-
-        echo -e "${YELLOW}Banner guardado pero no aplicado.${RESET}"
-
-        ;;
-
-    esac
-
-    sleep 2
-
-}
-
-#==================================================
-# SINCRONIZAR SSH
-#==================================================
-
-sync_ssh_banners() {
-
-    if ! ssh_installed; then
-
-        echo -e "${RED}✘ OpenSSH no está instalado.${RESET}"
-
+    [[ ! -f "$SSHD_CONFIG" ]] && {
+        echo "ERROR: no existe $SSHD_CONFIG"
         return 1
+    }
 
-    fi
+    local temp
 
-    create_backup
+    temp=$(mktemp) || return 1
 
-    local TMP
-
-    TMP=$(mktemp)
-
-    #------------------------------------------
-    # Eliminar bloque anterior
-    #------------------------------------------
+    # -----------------------------------------------------
+    # ELIMINAR BLOQUE DEPWISE ANTERIOR
+    # -----------------------------------------------------
 
     awk -v start="$MARKER_START" \
         -v end="$MARKER_END" '
+
         $0 == start {
             inside=1
             next
@@ -729,847 +406,346 @@ sync_ssh_banners() {
         !inside {
             print
         }
-    ' "$SSHD" > "$TMP"
 
-    #------------------------------------------
-    # Construir nuevo bloque
-    #------------------------------------------
+    ' "$SSHD_CONFIG" > "$temp"
+
+    # -----------------------------------------------------
+    # AGREGAR NUEVO BLOQUE
+    # -----------------------------------------------------
 
     {
-        cat "$TMP"
-
         echo
         echo "$MARKER_START"
-        echo
 
-        for BANNER in "$BANNER_DIR"/*.banner; do
+        find "$BANNER_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -name "*.banner" \
+            -print |
+        sort |
+        while read -r banner_file; do
 
-            [[ -f "$BANNER" ]] || continue
+            username=$(basename "$banner_file" .banner)
 
-            USERNAME=$(basename "$BANNER" .banner)
+            [[ "$username" =~ ^[a-zA-Z0-9_-]+$ ]] || continue
 
-            # Validar usuario
-            if ! id "$USERNAME" >/dev/null 2>&1; then
-                continue
-            fi
-
-            echo "Match User $USERNAME"
-            echo "    Banner $BANNER"
+            echo "Match User $username"
+            echo "    Banner $banner_file"
             echo
 
         done
 
         echo "$MARKER_END"
 
-    } > "${TMP}.new"
+    } >> "$temp"
 
-    #------------------------------------------
-    # Validar antes de instalar
-    #------------------------------------------
+    # -----------------------------------------------------
+    # VALIDAR SSH ANTES DE REEMPLAZAR
+    # -----------------------------------------------------
 
-    if ! sshd -t -f "${TMP}.new" 2>/dev/null; then
+    if sshd -t -f "$temp" >/dev/null 2>&1; then
 
-        echo -e "${RED}✘ sshd_config generado no es válido.${RESET}"
+        cp "$temp" "$SSHD_CONFIG"
 
-        rm -f "$TMP" "${TMP}.new"
+        rm -f "$temp"
+
+        echo "Configuración SSH válida."
+
+    else
+
+        echo "ERROR: sshd_config generado no es válido."
+
+        rm -f "$temp"
 
         return 1
-
     fi
 
-    cp -a "${TMP}.new" "$SSHD"
+    # -----------------------------------------------------
+    # RECARGAR SSH
+    # -----------------------------------------------------
 
-    rm -f "$TMP" "${TMP}.new"
+    if systemctl reload ssh 2>/dev/null; then
 
-    echo -e "${GREEN}✔ sshd_config actualizado.${RESET}"
+        echo "SSH recargado correctamente."
 
-    local SERVICE
+    elif systemctl reload sshd 2>/dev/null; then
 
-    SERVICE=$(get_ssh_service)
+        echo "SSHD recargado correctamente."
 
-    if [[ -n "$SERVICE" ]]; then
+    else
 
-        if systemctl reload "$SERVICE" 2>/dev/null; then
-
-            echo -e "${GREEN}✔ OpenSSH recargado correctamente.${RESET}"
-
-        else
-
-            echo -e "${YELLOW}⚠ No se pudo recargar OpenSSH.${RESET}"
-
-        fi
+        echo "ADVERTENCIA: no se pudo recargar SSH."
 
     fi
-
-    return 0
-
 }
 
-#==================================================
-# REGENERAR TODOS LOS BANNERS
-#==================================================
+# =========================================================
+# REFRESCAR TODOS LOS BANNERS
+# =========================================================
 
 refresh_all_banners() {
 
-    header
+    mkdir -p "$BANNER_DIR"
 
-    echo -e "${MAGENTA}              ACTUALIZAR BANNERS${RESET}"
+    declare -A USERS_FOUND
 
-    echo
+    while IFS=: read -r username _ uid _ _ _ shell; do
 
-    if [[ ! -d "$BANNER_DIR" ]]; then
+        [[ "$uid" =~ ^[0-9]+$ ]] || continue
 
-        echo -e "${RED}✘ No existe $BANNER_DIR${RESET}"
+        (( uid >= 1000 )) || continue
 
-        pause
+        [[ "$username" == "nobody" ]] && continue
 
-        return
-
-    fi
-
-    local COUNT=0
-
-    for BANNER in "$BANNER_DIR"/*.banner; do
-
-        [[ -f "$BANNER" ]] || continue
-
-        USERNAME=$(basename "$BANNER" .banner)
-
-        if ! id "$USERNAME" >/dev/null 2>&1; then
-
-            echo -e "${YELLOW}⚠ Usuario inexistente: $USERNAME${RESET}"
-
-            continue
-
-        fi
-
-        # Leer información existente del banner
-        SERVER="KevinTech VPN"
-        PROMO="🔥 Bienvenido a KevinTech VPN 🔥"
-        CHANNEL="@KevinTech"
-        SUPPORT="@KevinSupport"
-
-        generate_user_banner \
-            "$USERNAME" \
-            "$SERVER" \
-            "$PROMO" \
-            "$CHANNEL" \
-            "$SUPPORT" \
-            > "$BANNER"
-
-        chmod 644 "$BANNER"
-
-        ((COUNT++))
-
-    done
-
-    echo
-
-    echo -e "${GREEN}✔ $COUNT banners actualizados.${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${YELLOW}¿Sincronizar sshd_config? [S/N]: ${RESET}")" RESP
-
-    case "$RESP" in
-
-        s|S|si|SI|sí|Sí)
-
-            sync_ssh_banners
-
-            ;;
-
-    esac
-
-    pause
-
-}
-
-#==================================================
-# LISTAR BANNERS
-#==================================================
-
-list_banners() {
-
-    header
-
-    echo -e "${MAGENTA}                 BANNERS DE USUARIOS${RESET}"
-
-    echo
-
-    if [[ ! -d "$BANNER_DIR" ]]; then
-
-        echo -e "${RED}✘ No existe el directorio.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    local COUNT=0
-
-    for BANNER in "$BANNER_DIR"/*.banner; do
-
-        [[ -f "$BANNER" ]] || continue
-
-        USERNAME=$(basename "$BANNER" .banner)
-
-        LIMIT=$(get_user_limit "$USERNAME")
-        EXPIRATION=$(get_user_expiration "$USERNAME")
-        DAYS=$(get_days_left "$EXPIRATION")
-
-        ((COUNT++))
-
-        echo -e "${CYAN}[$COUNT]${RESET} ${GREEN}$USERNAME${RESET}"
-        echo -e "    Límite      : $LIMIT"
-        echo -e "    Expiración  : $EXPIRATION"
-        echo -e "    Días        : $DAYS"
-        echo -e "    Archivo     : $BANNER"
-
-        echo
-
-    done
-
-    if (( COUNT == 0 )); then
-
-        echo -e "${YELLOW}No existen banners de usuarios.${RESET}"
-
-    fi
-
-    pause
-
-}
-
-#==================================================
-# VER BANNER
-#==================================================
-
-view_banner() {
-
-    header
-
-    echo -e "${MAGENTA}                 VER BANNER${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GREEN}Usuario:${RESET} ")" USERNAME
-
-    USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]')
-
-    local USER_BANNER="$BANNER_DIR/${USERNAME}.banner"
-
-    if [[ ! -f "$USER_BANNER" ]]; then
-
-        echo -e "${RED}✘ No existe banner para $USERNAME.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    echo
-
-    echo -e "${GREEN}Archivo:${RESET} $USER_BANNER"
-
-    echo
-
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-    cat "$USER_BANNER"
-
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-
-    pause
-
-}
-
-#==================================================
-# EDITAR BANNER
-#==================================================
-
-edit_banner() {
-
-    header
-
-    echo -e "${MAGENTA}                 EDITAR BANNER${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GREEN}Usuario:${RESET} ")" USERNAME
-
-    USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]')
-
-    local USER_BANNER="$BANNER_DIR/${USERNAME}.banner"
-
-    if [[ ! -f "$USER_BANNER" ]]; then
-
-        echo -e "${YELLOW}No existe el banner de $USERNAME.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    create_backup
-
-    if ! command -v nano >/dev/null 2>&1; then
-
-        echo -e "${RED}✘ Nano no está instalado.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    nano "$USER_BANNER"
-
-    echo
-
-    echo -e "${GREEN}✔ Banner editado.${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${YELLOW}¿Aplicar cambios a OpenSSH? [S/N]: ${RESET}")" RESP
-
-    case "$RESP" in
-
-        s|S|si|SI|sí|Sí)
-
-            sync_ssh_banners
-
-            ;;
-
-        *)
-
-            echo -e "${YELLOW}Cambios guardados pero no aplicados.${RESET}"
-
-            ;;
-
-    esac
-
-    sleep 2
-
-}
-
-#==================================================
-# ELIMINAR BANNER
-#==================================================
-
-delete_banner() {
-
-    header
-
-    echo -e "${MAGENTA}                 ELIMINAR BANNER${RESET}"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GREEN}Usuario:${RESET} ")" USERNAME
-
-    USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]')
-
-    local USER_BANNER="$BANNER_DIR/${USERNAME}.banner"
-
-    if [[ ! -f "$USER_BANNER" ]]; then
-
-        echo -e "${RED}✘ No existe banner para $USERNAME.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    echo
-
-    cat "$USER_BANNER"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${RED}¿Eliminar banner de $USERNAME? [S/N]: ${RESET}")" RESP
-
-    case "$RESP" in
-
-        s|S|si|SI|sí|Sí)
-
-            create_backup
-
-            rm -f "$USER_BANNER"
-
-            echo
-
-            echo -e "${GREEN}✔ Banner eliminado.${RESET}"
-
-            sync_ssh_banners
-
-            ;;
-
-        *)
-
-            echo -e "${YELLOW}Operación cancelada.${RESET}"
-
-            ;;
-
-    esac
-
-    sleep 2
-
-}
-
-#==================================================
-# PROBAR CONFIGURACIÓN
-#==================================================
-
-test_configuration() {
-
-    header
-
-    echo -e "${MAGENTA}                 PRUEBA DEL SISTEMA${RESET}"
-
-    echo
-
-    #------------------------------------------
-    # Directorio
-    #------------------------------------------
-
-    if [[ -d "$BANNER_DIR" ]]; then
-
-        echo -e "${GREEN}✔ Directorio existe:${RESET}"
-        echo "$BANNER_DIR"
-
-    else
-
-        echo -e "${RED}✘ Directorio no existe.${RESET}"
-
-    fi
-
-    echo
-
-    #------------------------------------------
-    # SSH
-    #------------------------------------------
-
-    if ssh_installed; then
-
-        echo -e "${GREEN}✔ OpenSSH instalado${RESET}"
-
-        if sshd -t 2>/dev/null; then
-
-            echo -e "${GREEN}✔ sshd_config válido${RESET}"
-
-        else
-
-            echo -e "${RED}✘ sshd_config inválido${RESET}"
-
-        fi
-
-        if grep -qF "$MARKER_START" "$SSHD" 2>/dev/null; then
-
-            echo -e "${GREEN}✔ Bloque KevinTech encontrado${RESET}"
-
-        else
-
-            echo -e "${YELLOW}⚠ Bloque KevinTech no encontrado${RESET}"
-
-        fi
-
-    else
-
-        echo -e "${GRAY}⚠ OpenSSH no instalado${RESET}"
-
-    fi
-
-    echo
-
-    #------------------------------------------
-    # Banners
-    #------------------------------------------
-
-    echo -e "${CYAN}Banners encontrados:${RESET}"
-
-    for BANNER in "$BANNER_DIR"/*.banner; do
-
-        [[ -f "$BANNER" ]] || continue
-
-        USERNAME=$(basename "$BANNER" .banner)
-
-        if id "$USERNAME" >/dev/null 2>&1; then
-
-            echo -e "${GREEN}✔${RESET} $USERNAME → $BANNER"
-
-        else
-
-            echo -e "${YELLOW}⚠${RESET} $USERNAME → usuario no existe"
-
-        fi
-
-    done
-
-    echo
-
-    #------------------------------------------
-    # Dropbear
-    #------------------------------------------
-
-    if dropbear_installed; then
-
-        echo -e "${GREEN}✔ Dropbear instalado${RESET}"
-
-        if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
-
-            echo -e "${GREEN}✔ Dropbear tiene banner configurado${RESET}"
-
-        else
-
-            echo -e "${YELLOW}⚠ Dropbear no tiene banner configurado${RESET}"
-
-        fi
-
-    else
-
-        echo -e "${GRAY}⚠ Dropbear no instalado${RESET}"
-
-    fi
-
-    pause
-
-}
-
-#==================================================
-# CONFIGURAR DROPBEAR
-#==================================================
-
-configure_dropbear() {
-
-    if ! dropbear_installed; then
-
-        echo -e "${YELLOW}⚠ Dropbear no está instalado.${RESET}"
-
-        return
-
-    fi
-
-    # Dropbear utiliza un banner global.
-    # Usamos el primer banner disponible.
-
-    local FIRST_BANNER
-
-    FIRST_BANNER=$(find "$BANNER_DIR" \
-        -maxdepth 1 \
-        -type f \
-        -name "*.banner" |
-        sort |
-        head -1)
-
-    if [[ -z "$FIRST_BANNER" ]]; then
-
-        echo -e "${YELLOW}⚠ No existen banners para Dropbear.${RESET}"
-
-        return
-
-    fi
-
-    if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
-
-        sed -i \
-            "s|^DROPBEAR_BANNER=.*|DROPBEAR_BANNER=\"$FIRST_BANNER\"|" \
-            "$DROPBEAR"
-
-    else
-
-        echo "DROPBEAR_BANNER=\"$FIRST_BANNER\"" >> "$DROPBEAR"
-
-    fi
-
-    systemctl restart dropbear 2>/dev/null
-
-    if systemctl is-active --quiet dropbear; then
-
-        echo -e "${GREEN}✔ Dropbear reiniciado correctamente.${RESET}"
-
-    else
-
-        echo -e "${YELLOW}⚠ Dropbear no está activo.${RESET}"
-
-    fi
-
-}
-
-#==================================================
-# RESTAURAR BACKUP
-#==================================================
-
-restore_backup() {
-
-    header
-
-    echo -e "${MAGENTA}                 RESTAURAR BACKUP${RESET}"
-
-    echo
-
-    if [[ ! -f "$BACKUP_DIR/latest" ]]; then
-
-        echo -e "${RED}✘ No existe ningún backup.${RESET}"
-
-        pause
-
-        return
-
-    fi
-
-    local BACKUP
-
-    BACKUP=$(cat "$BACKUP_DIR/latest")
-
-    echo -e "${GREEN}Último backup:${RESET}"
-    echo "$BACKUP"
-
-    echo
-
-    read -rp \
-        "$(echo -e "${YELLOW}¿Restaurar este backup? [S/N]: ${RESET}")" RESP
-
-    case "$RESP" in
-
-    s|S|si|SI|sí|Sí)
-
-        #------------------------------------------
-        # SSHD
-        #------------------------------------------
-
-        if [[ -f "$BACKUP/sshd_config" ]]; then
-
-            cp -a \
-                "$BACKUP/sshd_config" \
-                "$SSHD"
-
-        fi
-
-        #------------------------------------------
-        # Dropbear
-        #------------------------------------------
-
-        if [[ -f "$BACKUP/dropbear" ]]; then
-
-            cp -a \
-                "$BACKUP/dropbear" \
-                "$DROPBEAR"
-
-        fi
-
-        #------------------------------------------
-        # Banners
-        #------------------------------------------
-
-        if [[ -d "$BACKUP/ssh_banners" ]]; then
-
-            rm -rf "$BANNER_DIR"
-
-            mkdir -p "$BANNER_DIR"
-
-            cp -a \
-                "$BACKUP/ssh_banners"/. \
-                "$BANNER_DIR/"
-
-        fi
-
-        echo
-
-        echo -e "${GREEN}✔ Backup restaurado.${RESET}"
-
-        #------------------------------------------
-        # Validar SSH
-        #------------------------------------------
-
-        if ssh_installed &&
-           sshd -t 2>/dev/null; then
-
-            local SERVICE
-
-            SERVICE=$(get_ssh_service)
-
-            [[ -n "$SERVICE" ]] &&
-                systemctl reload "$SERVICE"
-
-        fi
-
-        systemctl restart dropbear 2>/dev/null
-
-        ;;
-
-    *)
-
-        echo -e "${YELLOW}Operación cancelada.${RESET}"
-
-        ;;
-
-    esac
-
-    sleep 2
-
-}
-
-#==================================================
-# SINCRONIZAR TODOS LOS USUARIOS EXISTENTES
-#==================================================
-
-sync_existing_users() {
-
-    header
-
-    echo -e "${MAGENTA}        CREAR BANNERS PARA USUARIOS SSH${RESET}"
-
-    echo
-
-    echo -e "${GRAY}Se buscarán usuarios Linux con shell relacionada a SSH.${RESET}"
-
-    echo
-
-    local COUNT=0
-
-    while IFS=: read -r USERNAME _ UID GID HOME SHELL; do
-
-        # UID normales
-        if (( UID < 1000 )); then
-            continue
-        fi
-
-        # Ignorar usuarios sin shell
-        if [[ "$SHELL" == "/usr/sbin/nologin" ||
-              "$SHELL" == "/bin/false" ||
-              "$SHELL" == "/usr/bin/false" ]]; then
-
-            # Aun así permitimos usuarios de túnel
-            :
-        fi
-
-        local BANNER="$BANNER_DIR/${USERNAME}.banner"
-
-        if [[ ! -f "$BANNER" ]]; then
-
-            generate_user_banner \
-                "$USERNAME" \
-                "KevinTech VPN" \
-                "🔥 Bienvenido a KevinTech VPN 🔥" \
-                "@KevinTech" \
-                "@KevinSupport" \
-                > "$BANNER"
-
-            chmod 644 "$BANNER"
-
-            echo -e "${GREEN}✔ Creado:${RESET} $USERNAME"
-
-            ((COUNT++))
-
-        fi
+        USERS_FOUND["$username"]=1
 
     done < /etc/passwd
 
-    echo
+    while read -r username; do
 
-    echo -e "${GREEN}✔ $COUNT nuevos banners creados.${RESET}"
+        [[ -z "$username" ]] && continue
 
-    echo
+        USERS_FOUND["$username"]=1
 
-    sync_ssh_banners
+    done < <(
+        find "$BANNER_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -name "*.banner" |
+        sed 's|.*/||;s/\.banner$//'
+    )
 
-    pause
+    for username in "${!USERS_FOUND[@]}"; do
 
+        id "$username" >/dev/null 2>&1 || continue
+
+        local limit
+        local expiration
+        local title
+
+        limit=$(get_user_limit "$username")
+        expiration=$(get_user_expiration "$username")
+
+        title=""
+
+        if [[ -f "$BANNER_DIR/${username}.title" ]]; then
+            title=$(cat "$BANNER_DIR/${username}.title")
+        fi
+
+        write_user_banner \
+            "$username" \
+            "$title" \
+            "$limit" \
+            "$expiration" \
+            >/dev/null
+
+    done
+
+    echo "Banners actualizados."
+
+    sync_sshd_banners
 }
 
-#==================================================
-# MENÚ
-#==================================================
+# =========================================================
+# CREAR TÍTULO PERSONALIZADO
+# =========================================================
 
-while true; do
+set_user_title() {
 
-    header
+    local username="$1"
+    local title="$2"
 
-    show_status
+    [[ -z "$username" ]] && return 1
 
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    printf '%s\n' "$title" \
+        > "$BANNER_DIR/${username}.title"
+
+    echo "Título actualizado."
+
+    local limit
+    local expiration
+
+    limit=$(get_user_limit "$username")
+    expiration=$(get_user_expiration "$username")
+
+    write_user_banner \
+        "$username" \
+        "$title" \
+        "$limit" \
+        "$expiration"
+
+    sync_sshd_banners
+}
+
+# =========================================================
+# MOSTRAR BANNER
+# =========================================================
+
+show_user_banner() {
+
+    local username="$1"
+
+    if [[ -f "$BANNER_DIR/${username}.banner" ]]; then
+
+        cat "$BANNER_DIR/${username}.banner"
+
+    else
+
+        echo "Banner no encontrado."
+
+        return 1
+    fi
+}
+
+# =========================================================
+# AYUDA
+# =========================================================
+
+usage() {
+
+    cat <<EOF
+
+DEPWISE USER BANNER SYSTEM
+
+Uso:
+
+  $0 create USUARIO [TITULO]
+  $0 remove USUARIO
+  $0 title USUARIO "TITULO"
+  $0 refresh
+  $0 sync
+  $0 show USUARIO
+  $0 list
+
+Ejemplos:
+
+  $0 create kevin
+  $0 create kevin "INTERNET ILIMITADO"
+  $0 title kevin "SERVIDOR PREMIUM"
+  $0 remove kevin
+  $0 refresh
+  $0 sync
+  $0 show kevin
+  $0 list
+
+EOF
+}
+
+# =========================================================
+# LISTAR BANNERS
+# =========================================================
+
+list_banners() {
 
     echo
-
-    echo -e "${GREEN}[1]${WHITE} Crear Banner para usuario"
-    echo -e "${BLUE}[2]${WHITE} Ver Banner de usuario"
-    echo -e "${YELLOW}[3]${WHITE} Editar Banner de usuario"
-    echo -e "${CYAN}[4]${WHITE} Listar Banners"
-    echo -e "${MAGENTA}[5]${WHITE} Sincronizar usuarios existentes"
-    echo -e "${MAGENTA}[6]${WHITE} Actualizar Banners"
-    echo -e "${CYAN}[7]${WHITE} Probar configuración"
-    echo -e "${BLUE}[8]${WHITE} Sincronizar OpenSSH"
-    echo -e "${YELLOW}[9]${WHITE} Restaurar último Backup"
-    echo -e "${RED}[10]${WHITE} Eliminar Banner"
-    echo -e "${GRAY}[0]${WHITE} Regresar"
-
+    echo "════════════════ DEPWISE BANNERS ════════════════"
     echo
 
-    read -rp \
-        "$(echo -e "${GREEN}Seleccione una opción:${RESET} ")" OP
+    shopt -s nullglob
 
-    case "$OP" in
+    local files=(
+        "$BANNER_DIR"/*.banner
+    )
 
-    1)
-        create_user_banner
+    if (( ${#files[@]} == 0 )); then
+
+        echo "No hay banners."
+
+        return
+    fi
+
+    for file in "${files[@]}"; do
+
+        basename "$file" .banner
+
+    done
+
+    echo
+}
+
+# =========================================================
+# PROGRAMA PRINCIPAL
+# =========================================================
+
+case "$1" in
+
+    create)
+
+        USERNAME="$2"
+        TITLE="$3"
+
+        if [[ -z "$USERNAME" ]]; then
+
+            echo "Falta usuario."
+
+            usage
+
+            exit 1
+        fi
+
+        if ! id "$USERNAME" >/dev/null 2>&1; then
+
+            echo "El usuario no existe."
+
+            exit 1
+        fi
+
+        LIMIT=$(get_user_limit "$USERNAME")
+        EXPIRATION=$(get_user_expiration "$USERNAME")
+
+        write_user_banner \
+            "$USERNAME" \
+            "$TITLE" \
+            "$LIMIT" \
+            "$EXPIRATION"
+
+        sync_sshd_banners
         ;;
 
-    2)
-        view_banner
+    remove)
+
+        USERNAME="$2"
+
+        remove_user_banner "$USERNAME"
+
+        rm -f "$BANNER_DIR/${USERNAME}.title"
+
+        sync_sshd_banners
         ;;
 
-    3)
-        edit_banner
+    title)
+
+        USERNAME="$2"
+        TITLE="$3"
+
+        set_user_title \
+            "$USERNAME" \
+            "$TITLE"
         ;;
 
-    4)
-        list_banners
-        ;;
+    refresh)
 
-    5)
-        sync_existing_users
-        ;;
-
-    6)
         refresh_all_banners
         ;;
 
-    7)
-        test_configuration
+    sync)
+
+        sync_sshd_banners
         ;;
 
-    8)
-        sync_ssh_banners
-        pause
+    show)
+
+        show_user_banner "$2"
         ;;
 
-    9)
-        restore_backup
-        ;;
+    list)
 
-    10)
-        delete_banner
-        ;;
-
-    0)
-        break
+        list_banners
         ;;
 
     *)
-        echo
-        echo -e "${RED}✘ Opción inválida.${RESET}"
-        sleep 2
+
+        usage
         ;;
 
-    esac
-
-done
+esac
