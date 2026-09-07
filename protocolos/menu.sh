@@ -10,6 +10,8 @@
 # Versión : 3.1 Premium
 #
 # ==============================================================
+#                    KEVINTECH / PRIVANOX
+# ==============================================================
 
 set -o pipefail
 
@@ -55,7 +57,9 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-mkdir -p "$BASE"
+if [[ ! -d "$BASE" ]]; then
+    mkdir -p "$BASE"
+fi
 
 if [[ ! -f "$CONFIG" ]]; then
     clear
@@ -115,11 +119,13 @@ run_module() {
         echo
         echo -e "${RED}${BOLD}✘ MÓDULO NO ENCONTRADO${RESET}"
         echo
+
         echo -e "${WHITE}Archivo:${RESET}"
         echo -e "${YELLOW}$FILE${RESET}"
-        echo
 
+        echo
         pause
+
         return 1
     fi
 
@@ -186,22 +192,31 @@ status_service() {
     if service_exists "$SERVICE"; then
 
         if service_active "$SERVICE"; then
+
             echo -e "${GREEN}● ONLINE${RESET}"
 
         elif service_enabled "$SERVICE"; then
+
             echo -e "${YELLOW}● STOPPED${RESET}"
 
         else
+
             echo -e "${RED}● OFF${RESET}"
+
         fi
 
     else
 
         if [[ "${CONFIG_STATUS^^}" == "ON" ]]; then
+
             echo -e "${YELLOW}● CONFIG${RESET}"
+
         else
+
             echo -e "${GRAY}● OFF${RESET}"
+
         fi
+
     fi
 }
 
@@ -212,12 +227,17 @@ status_config() {
     case "${VALUE^^}" in
 
         ON|1|YES|TRUE)
+
             echo -e "${GREEN}● ON${RESET}"
+
             ;;
 
         *)
+
             echo -e "${GRAY}● OFF${RESET}"
+
             ;;
+
     esac
 }
 
@@ -226,6 +246,7 @@ status_config() {
 # ==============================================================
 
 get_hostname() {
+
     hostname 2>/dev/null || echo "Servidor"
 }
 
@@ -515,55 +536,81 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 %-14s %b    ${GREEN}${BOLD}[02]${RESET} 📦 %-14s %b\n" \
-        "OpenSSH" \
-        "$OPENSSH_STATUS" \
-        "ZIPVPN" \
+    # ----------------------------------------------------------
+    # FILA 1
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 OpenSSH        %-10b    " \
+        "$OPENSSH_STATUS"
+
+    printf "${GREEN}${BOLD}[02]${RESET} 📦 ZIPVPN         %-10b\n" \
         "$ZIPVPN_STATUS"
 
-    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 %-14s %b    ${GREEN}${BOLD}[04]${RESET} 🔒 %-14s %b\n" \
-        "Dropbear" \
-        "$DROPBEAR_STATUS" \
-        "SSL / TLS" \
+    # ----------------------------------------------------------
+    # FILA 2
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 Dropbear       %-10b    " \
+        "$DROPBEAR_STATUS"
+
+    printf "${GREEN}${BOLD}[04]${RESET} 🔒 SSL / TLS      %-10b\n" \
         "$SSL_STATUS"
 
-    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ %-14s %b    ${GREEN}${BOLD}[06]${RESET} 🚀 %-14s %b\n" \
-        "BadVPN" \
-        "$BADVPN_STATUS" \
-        "UDP Custom" \
+    # ----------------------------------------------------------
+    # FILA 3
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ BadVPN         %-10b    " \
+        "$BADVPN_STATUS"
+
+    printf "${GREEN}${BOLD}[06]${RESET} 🚀 UDP Custom      %-10b\n" \
         "$UDP_STATUS"
 
-    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 %-14s %b    ${GREEN}${BOLD}[08]${RESET} ☁️  %-14s %b\n" \
-        "SlowDNS" \
-        "$SLOWDNS_STATUS" \
-        "Xray / V2Ray" \
+    # ----------------------------------------------------------
+    # FILA 4
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 SlowDNS        %-10b    " \
+        "$SLOWDNS_STATUS"
+
+    printf "${GREEN}${BOLD}[08]${RESET} ☁️  Xray / V2Ray   %-10b\n" \
         "$XRAY_STATUS"
 
-    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 %-14s %b    ${GREEN}${BOLD}[10]${RESET} 🔐 %-14s %b\n" \
-        "CheckUser" \
-        "$CHECKUSER_STATUS" \
-        "OpenVPN" \
+    # ----------------------------------------------------------
+    # FILA 5
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 CheckUser      %-10b    " \
+        "$CHECKUSER_STATUS"
+
+    printf "${GREEN}${BOLD}[10]${RESET} 🔐 OpenVPN        %-10b\n" \
         "$OPENVPN_STATUS"
 
-    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  %-14s %b    ${MAGENTA}${BOLD}[12]${RESET} 🌐 %-14s %b\n" \
-        "Hysteria" \
-        "$HYSTERIA_STATUS" \
-        "BHTTP" \
+    # ----------------------------------------------------------
+    # FILA 6
+    # ----------------------------------------------------------
+
+    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  Hysteria       %-10b    " \
+        "$HYSTERIA_STATUS"
+
+    printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP           %-10b\n" \
         "$BHTTP_STATUS"
 
     echo
+
+    # ==========================================================
+    # ADMINISTRACIÓN
+    # ==========================================================
 
     echo -e "${BLUE}${BOLD}  🛠️  ADMINISTRACIÓN DEL SISTEMA${RESET}"
 
     line
 
-    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 %-22s    ${GREEN}${BOLD}[14]${RESET} 🔄 %s\n" \
-        "Herramientas" \
-        "Reiniciar Servicios"
+    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas            "
+    printf "${GREEN}${BOLD}[14]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 %-22s    ${GREEN}${BOLD}[16]${RESET} 🤖 %s\n" \
-        "Firewall" \
-        "Bot Telegram"
+    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall                "
+    printf "${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram\n"
 
     echo
 
@@ -589,67 +636,99 @@ process_option() {
     case "$OP" in
 
         1|01)
+
             run_module "$PROTOCOL_DIR/openssh.sh"
+
             ;;
 
         2|02)
+
             run_module "$PROTOCOL_DIR/zipvpn.sh"
+
             ;;
 
         3|03)
+
             run_module "$PROTOCOL_DIR/dropbear.sh"
+
             ;;
 
         4|04)
+
             run_module "$PROTOCOL_DIR/ssl.sh"
+
             ;;
 
         5|05)
+
             run_module "$PROTOCOL_DIR/badvpn.sh"
+
             ;;
 
         6|06)
+
             run_module "$PROTOCOL_DIR/udpcustom.sh"
+
             ;;
 
         7|07)
+
             run_module "$PROTOCOL_DIR/slowdns.sh"
+
             ;;
 
         8|08)
+
             run_module "$PROTOCOL_DIR/v2ray.sh"
+
             ;;
 
         9|09)
+
             run_module "$PROTOCOL_DIR/checkuser.sh"
+
             ;;
 
         10)
+
             run_module "$PROTOCOL_DIR/openvpn.sh"
+
             ;;
 
         11)
+
             run_module "$PROTOCOL_DIR/histeria.sh"
+
             ;;
 
         12)
+
             run_module "$PROTOCOL_DIR/bhttp.sh"
+
             ;;
 
         13)
+
             run_module "$TOOLS_DIR/menu.sh"
+
             ;;
 
         14)
+
             run_module "$TOOLS_DIR/reiniciar.sh"
+
             ;;
 
         15)
+
             run_module "$TOOLS_DIR/firewall.sh"
+
             ;;
 
         16)
+
             run_module "$BASE/telegram/install.sh"
+
             ;;
 
         0|00)
@@ -657,14 +736,19 @@ process_option() {
             clear
 
             if [[ -f "$BASE/menu.sh" ]]; then
+
                 exec bash "$BASE/menu.sh"
+
             else
+
                 exit 0
+
             fi
 
             ;;
 
         "")
+
             ;;
 
         *)
@@ -674,6 +758,7 @@ process_option() {
             sleep 1
 
             ;;
+
     esac
 }
 
