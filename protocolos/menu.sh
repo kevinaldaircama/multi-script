@@ -10,8 +10,6 @@
 # Versión : 3.1 Premium
 #
 # ==============================================================
-#                    KEVINTECH / PRIVANOX
-# ==============================================================
 
 set -o pipefail
 
@@ -44,16 +42,19 @@ WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 
 # ==============================================================
-# SEGURIDAD / PREPARACIÓN
+# SEGURIDAD
 # ==============================================================
 
 if [[ $EUID -ne 0 ]]; then
+
     clear
+
     echo
     echo -e "${RED}${BOLD}✘ ACCESO DENEGADO${RESET}"
     echo
     echo -e "${WHITE}Este panel requiere permisos de root.${RESET}"
     echo
+
     exit 1
 fi
 
@@ -62,13 +63,16 @@ if [[ ! -d "$BASE" ]]; then
 fi
 
 if [[ ! -f "$CONFIG" ]]; then
+
     clear
+
     echo
     echo -e "${RED}${BOLD}✘ ERROR DE CONFIGURACIÓN${RESET}"
     echo
     echo -e "${WHITE}No se encontró:${RESET}"
     echo -e "${YELLOW}$CONFIG${RESET}"
     echo
+
     exit 1
 fi
 
@@ -80,19 +84,23 @@ source "$CONFIG" 2>/dev/null
 # ==============================================================
 
 separator() {
+
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 }
 
 line() {
+
     echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
 }
 
 pause() {
+
     echo
     read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
 }
 
 valid_number() {
+
     [[ "$1" =~ ^[0-9]+$ ]]
 }
 
@@ -101,6 +109,7 @@ valid_number() {
 # ==============================================================
 
 module_exists() {
+
     [[ -f "$1" ]]
 }
 
@@ -109,8 +118,11 @@ run_module() {
     local FILE="$1"
 
     if [[ -z "$FILE" ]]; then
+
         echo -e "${RED}✘ Módulo no especificado.${RESET}"
+
         pause
+
         return 1
     fi
 
@@ -124,13 +136,16 @@ run_module() {
         echo -e "${YELLOW}$FILE${RESET}"
 
         echo
+
         pause
 
         return 1
     fi
 
     if [[ ! -x "$FILE" ]]; then
+
         chmod +x "$FILE" 2>/dev/null
+
     fi
 
     clear
@@ -142,6 +157,7 @@ run_module() {
     echo -e "${RESET}"
 
     echo -e "${GRAY}Ejecutando:${RESET} ${WHITE}$(basename "$FILE")${RESET}"
+
     echo
 
     bash "$FILE"
@@ -151,74 +167,29 @@ run_module() {
     echo
 
     if [[ $EXIT_CODE -eq 0 ]]; then
+
         echo -e "${GREEN}✔ Módulo finalizado correctamente.${RESET}"
+
     else
+
         echo -e "${RED}✘ El módulo terminó con código: $EXIT_CODE${RESET}"
+
     fi
 
     pause
 }
 
 # ==============================================================
-# SYSTEMD
+# ESTADO DE PROTOCOLOS
+#
+# IMPORTANTE:
+# SOLO SE UTILIZA config.conf
+#
+# ON  = configurado/activado
+# OFF = apagado/desactivado
+#
+# Ya NO muestra ONLINE / STOPPED / CONFIG
 # ==============================================================
-
-service_exists() {
-
-    local SERVICE="$1"
-
-    systemctl cat "$SERVICE" &>/dev/null
-}
-
-service_active() {
-
-    local SERVICE="$1"
-
-    systemctl is-active --quiet "$SERVICE" 2>/dev/null
-}
-
-service_enabled() {
-
-    local SERVICE="$1"
-
-    systemctl is-enabled --quiet "$SERVICE" 2>/dev/null
-}
-
-status_service() {
-
-    local SERVICE="$1"
-    local CONFIG_STATUS="${2:-OFF}"
-
-    if service_exists "$SERVICE"; then
-
-        if service_active "$SERVICE"; then
-
-            echo -e "${GREEN}● ONLINE${RESET}"
-
-        elif service_enabled "$SERVICE"; then
-
-            echo -e "${YELLOW}● STOPPED${RESET}"
-
-        else
-
-            echo -e "${RED}● OFF${RESET}"
-
-        fi
-
-    else
-
-        if [[ "${CONFIG_STATUS^^}" == "ON" ]]; then
-
-            echo -e "${YELLOW}● CONFIG${RESET}"
-
-        else
-
-            echo -e "${GRAY}● OFF${RESET}"
-
-        fi
-
-    fi
-}
 
 status_config() {
 
@@ -239,6 +210,20 @@ status_config() {
             ;;
 
     esac
+}
+
+status_service() {
+
+    local SERVICE="$1"
+    local CONFIG_STATUS="${2:-OFF}"
+
+    # ----------------------------------------------------------
+    # NO SE CONSULTA SYSTEMD
+    #
+    # El estado visual depende solamente de config.conf
+    # ----------------------------------------------------------
+
+    status_config "$CONFIG_STATUS"
 }
 
 # ==============================================================
@@ -379,11 +364,15 @@ progress_bar() {
     local BAR=""
 
     for ((i=0; i<FILLED; i++)); do
+
         BAR+="█"
+
     done
 
     for ((i=FILLED; i<SIZE; i++)); do
+
         BAR+="░"
+
     done
 
     echo "$BAR"
@@ -523,7 +512,8 @@ get_statuses() {
 }
 
 # ==============================================================
-# MENÚ DE PROTOCOLOS - 2 COLUMNAS
+# MENÚ DE PROTOCOLOS
+# 2 COLUMNAS COMPACTAS
 # ==============================================================
 
 show_protocol_menu() {
@@ -540,76 +530,76 @@ show_protocol_menu() {
     # FILA 1
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 OpenSSH        %-10b    " \
+    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 OpenSSH    %b    " \
         "$OPENSSH_STATUS"
 
-    printf "${GREEN}${BOLD}[02]${RESET} 📦 ZIPVPN         %-10b\n" \
+    printf "${GREEN}${BOLD}[02]${RESET} 📦 ZIPVPN     %b\n" \
         "$ZIPVPN_STATUS"
 
     # ----------------------------------------------------------
     # FILA 2
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 Dropbear       %-10b    " \
+    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 Dropbear   %b    " \
         "$DROPBEAR_STATUS"
 
-    printf "${GREEN}${BOLD}[04]${RESET} 🔒 SSL / TLS      %-10b\n" \
+    printf "${GREEN}${BOLD}[04]${RESET} 🔒 SSL/TLS    %b\n" \
         "$SSL_STATUS"
 
     # ----------------------------------------------------------
     # FILA 3
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ BadVPN         %-10b    " \
+    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ BadVPN     %b    " \
         "$BADVPN_STATUS"
 
-    printf "${GREEN}${BOLD}[06]${RESET} 🚀 UDP Custom      %-10b\n" \
+    printf "${GREEN}${BOLD}[06]${RESET} 🚀 UDP Custom  %b\n" \
         "$UDP_STATUS"
 
     # ----------------------------------------------------------
     # FILA 4
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 SlowDNS        %-10b    " \
+    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 SlowDNS    %b    " \
         "$SLOWDNS_STATUS"
 
-    printf "${GREEN}${BOLD}[08]${RESET} ☁️  Xray / V2Ray   %-10b\n" \
+    printf "${GREEN}${BOLD}[08]${RESET} ☁️ Xray/V2Ray %b\n" \
         "$XRAY_STATUS"
 
     # ----------------------------------------------------------
     # FILA 5
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 CheckUser      %-10b    " \
+    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 CheckUser  %b    " \
         "$CHECKUSER_STATUS"
 
-    printf "${GREEN}${BOLD}[10]${RESET} 🔐 OpenVPN        %-10b\n" \
+    printf "${GREEN}${BOLD}[10]${RESET} 🔐 OpenVPN    %b\n" \
         "$OPENVPN_STATUS"
 
     # ----------------------------------------------------------
     # FILA 6
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️  Hysteria       %-10b    " \
+    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️ Hysteria   %b    " \
         "$HYSTERIA_STATUS"
 
-    printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP           %-10b\n" \
+    printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP      %b\n" \
         "$BHTTP_STATUS"
 
     echo
 
     # ==========================================================
-    # ADMINISTRACIÓN
-    # ==========================================================
+    # ADMINISTRACIÓN DEL SISTEMA
+    # ==============================================================
 
     echo -e "${BLUE}${BOLD}  🛠️  ADMINISTRACIÓN DEL SISTEMA${RESET}"
 
     line
 
-    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas            "
+    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas          "
     printf "${GREEN}${BOLD}[14]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall                "
+    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall              "
     printf "${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram\n"
 
     echo
@@ -755,6 +745,7 @@ process_option() {
 
             echo
             echo -e "  ${RED}${BOLD}✘ Opción inválida: $OP${RESET}"
+
             sleep 1
 
             ;;
