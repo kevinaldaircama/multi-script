@@ -3,7 +3,7 @@
 #==================================================
 # KevinTech Multi Script
 # Banner Manager - SSH / Dropbear
-# + CheckUser Dinámico
+# Banner + CheckUser
 # Version: 3.1 PREMIUM
 #==================================================
 
@@ -35,19 +35,21 @@ DROPBEAR="/etc/default/dropbear"
 
 BACKUP_DIR="$BASE/banner-backups"
 
+# CheckUser YA EXISTENTE
 CHECKUSER="/usr/local/bin/kevintech-checkuser"
-CHECKUSER_STATE="$BASE/checkuser.state"
 
 mkdir -p "$BASE" "$BACKUP_DIR"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
 #==============================
-# ROOT
+# COMPROBAR ROOT
 #==============================
 
 if [[ $EUID -ne 0 ]]; then
+
     echo -e "${RED}✘ Este script debe ejecutarse como root.${RESET}"
+
     exit 1
 fi
 
@@ -60,7 +62,7 @@ pause() {
     echo
 
     read -n1 -s -r \
-        -p "Presione cualquier tecla para continuar..."
+        -p "$(echo -e "${YELLOW}Presione cualquier tecla para continuar...${RESET}")"
 
     echo
 }
@@ -83,7 +85,7 @@ line() {
 }
 
 #==================================================
-# DETECTAR OPENSSH
+# OPENSSH
 #==================================================
 
 ssh_installed() {
@@ -93,7 +95,7 @@ ssh_installed() {
 }
 
 #==================================================
-# DETECTAR DROPBEAR
+# DROPBEAR
 #==================================================
 
 dropbear_installed() {
@@ -121,7 +123,7 @@ ssh_service() {
 }
 
 #==================================================
-# ESTADO OPENSSH
+# ESTADO SSH
 #==================================================
 
 service_status() {
@@ -129,8 +131,8 @@ service_status() {
     if ! ssh_installed; then
 
         echo -e "${GRAY}✘ NO INSTALADO${RESET}"
-        return
 
+        return
     fi
 
     local SERVICE
@@ -158,8 +160,8 @@ dropbear_status() {
     if ! dropbear_installed; then
 
         echo -e "${GRAY}✘ NO INSTALADO${RESET}"
-        return
 
+        return
     fi
 
     if systemctl is-active --quiet dropbear 2>/dev/null; then
@@ -174,170 +176,52 @@ dropbear_status() {
 }
 
 #==================================================
-# CHECKUSER - CREAR SCRIPT
+# ESTADO CHECKUSER
 #==================================================
 
-install_checkuser_script() {
+checkuser_status() {
 
-    cat > "$CHECKUSER" <<'EOF'
-#!/bin/bash
+    if [[ ! -x "$CHECKUSER" ]]; then
 
-#==================================================
-# KevinTech Dynamic CheckUser
-#==================================================
+        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
 
-BASE="/etc/kevintech"
-LIMITS_FILE="$BASE/limits.conf"
+        return
+    fi
 
-USER_NAME="${USER:-${LOGNAME:-}}"
+    if [[ -f "$SSHRC" ]] &&
+       grep -q "BEGIN KEVINTECH CHECKUSER" "$SSHRC" 2>/dev/null; then
 
-[[ -z "$USER_NAME" ]] && exit 0
-
-id "$USER_NAME" >/dev/null 2>&1 || exit 0
-
-#==================================================
-# OBTENER LÍMITE
-#==================================================
-
-LIMIT=$(awk -F: -v u="$USER_NAME" '
-    $1 == u {
-        print $2
-        exit
-}
-' "$LIMITS_FILE" 2>/dev/null)
-
-[[ -z "$LIMIT" ]] && LIMIT=0
-
-#==================================================
-# OBTENER IPs
-#==================================================
-
-IPS=$(
-    who 2>/dev/null |
-    awk -v u="$USER_NAME" '
-        $1 == u {
-            ip=$5
-            gsub(/[()]/, "", ip)
-
-            if (ip != "")
-                print ip
-        }
-    ' |
-    sort -u
-)
-
-if [[ -n "$IPS" ]]; then
-
-    CONNECTIONS=$(printf '%s\n' "$IPS" | grep -c .)
-
-else
-
-    CONNECTIONS=0
-
-fi
-
-#==================================================
-# EXPIRACIÓN
-#==================================================
-
-EXPIRATION=$(
-    chage -l "$USER_NAME" 2>/dev/null |
-    awk -F': ' '/Account expires/ {
-        print $2
-        exit
-    }'
-)
-
-[[ -z "$EXPIRATION" ]] &&
-    EXPIRATION="Ilimitada"
-
-DAYS="∞"
-
-if [[ "$EXPIRATION" != "Ilimitada" &&
-      "$EXPIRATION" != "never" &&
-      "$EXPIRATION" != "Nunca" ]]; then
-
-    EXP_DATE=$(date -d "$EXPIRATION" +%s 2>/dev/null)
-    TODAY=$(date +%s)
-
-    if [[ -n "$EXP_DATE" ]]; then
-
-        DIFF=$(( (EXP_DATE - TODAY) / 86400 ))
-
-        (( DIFF < 0 )) &&
-            DIFF=0
-
-        DAYS="$DIFF"
-
-        EXPIRATION=$(date \
-            -d "$EXPIRATION" \
-            +"%d/%m/%Y" 2>/dev/null)
+        echo -e "${GREEN}✔ INTEGRADO${RESET}"
 
     else
 
-        DAYS="N/D"
+        echo -e "${YELLOW}⚠ INSTALADO / NO INTEGRADO${RESET}"
 
     fi
-
-fi
-
-#==================================================
-# TEXTO DEL LÍMITE
-#==================================================
-
-if (( LIMIT == 0 )); then
-
-    LIMIT_TEXT="∞"
-
-else
-
-    LIMIT_TEXT="$LIMIT"
-
-fi
-
-#==================================================
-# MOSTRAR CHECKUSER
-#==================================================
-
-printf '\n'
-printf '%s\n' '════════════════════════════════════════════════════════════'
-printf '%s\n' '                         CHECK USER'
-printf '%s\n' '════════════════════════════════════════════════════════════'
-printf '\n'
-
-printf '👤 Usuario        : %s\n' "$USER_NAME"
-printf '🔌 Conexiones     : %s/%s\n' "$CONNECTIONS" "$LIMIT_TEXT"
-printf '📅 Expiración     : %s\n' "$EXPIRATION"
-printf '⏳ Días restantes : %s\n' "$DAYS"
-
-printf '\n'
-printf '%s\n' '════════════════════════════════════════════════════════════'
-printf '\n'
-
-exit 0
-EOF
-
-    chmod 755 "$CHECKUSER"
-
-    echo "1" > "$CHECKUSER_STATE"
-
-    echo -e "${GREEN}✔ CheckUser instalado.${RESET}"
 }
 
 #==================================================
-# CHECKUSER - ACTIVAR EN SSH
+# INTEGRAR CHECKUSER
 #==================================================
 
-enable_checkuser() {
+configure_checkuser() {
 
-    if ! ssh_installed; then
+    echo -e "${BLUE}➜ Comprobando CheckUser...${RESET}"
 
-        echo -e "${RED}✘ OpenSSH no está instalado.${RESET}"
+    # IMPORTANTE:
+    # Este script NO crea usuarios.
+    # Solamente utiliza el CheckUser que ya existe.
 
-        return 1
+    if [[ ! -x "$CHECKUSER" ]]; then
+
+        echo -e "${YELLOW}⚠ No existe:${RESET}"
+        echo -e "${WHITE}$CHECKUSER${RESET}"
+
+        echo
+        echo -e "${GRAY}El creador de cuentas debe proporcionar este archivo.${RESET}"
+
+        return 0
     fi
-
-    install_checkuser_script
 
     # Crear sshrc si no existe
     touch "$SSHRC"
@@ -345,7 +229,7 @@ enable_checkuser() {
     chmod 755 "$SSHRC"
 
     #==================================================
-    # ELIMINAR BLOQUE ANTERIOR
+    # ELIMINAR ÚNICAMENTE NUESTRO BLOQUE
     #==================================================
 
     sed -i \
@@ -353,7 +237,7 @@ enable_checkuser() {
         "$SSHRC"
 
     #==================================================
-    # AGREGAR BLOQUE
+    # INSERTAR CHECKUSER
     #==================================================
 
     cat >> "$SSHRC" <<'EOF'
@@ -368,87 +252,48 @@ fi
 
 EOF
 
-    echo "1" > "$CHECKUSER_STATE"
+    chmod 755 "$SSHRC"
 
-    echo
-    echo -e "${GREEN}✔ CheckUser activado.${RESET}"
-    echo -e "${GRAY}Se mostrará automáticamente después del banner SSH.${RESET}"
+    echo -e "${GREEN}✔ CheckUser integrado en /etc/ssh/sshrc${RESET}"
 }
 
 #==================================================
-# CHECKUSER - DESACTIVAR
+# REPARAR CHECKUSER
 #==================================================
 
-disable_checkuser() {
+repair_checkuser() {
 
-    if [[ -f "$SSHRC" ]]; then
+    header
 
-        sed -i \
-            '/# BEGIN KEVINTECH CHECKUSER/,/# END KEVINTECH CHECKUSER/d' \
-            "$SSHRC"
-
-    fi
-
-    echo "0" > "$CHECKUSER_STATE"
+    echo -e "${MAGENTA}              ⚡ REPARAR CHECKUSER ⚡${RESET}"
 
     echo
-    echo -e "${YELLOW}⚠ CheckUser desactivado.${RESET}"
-}
 
-#==================================================
-# ESTADO CHECKUSER
-#==================================================
+    if [[ ! -x "$CHECKUSER" ]]; then
 
-checkuser_status() {
+        echo -e "${RED}✘ CheckUser no existe.${RESET}"
 
-    if [[ -x "$CHECKUSER" ]] &&
-       [[ "$(cat "$CHECKUSER_STATE" 2>/dev/null)" == "1" ]] &&
-       grep -q "BEGIN KEVINTECH CHECKUSER" "$SSHRC" 2>/dev/null; then
+        echo
+        echo -e "${GRAY}Ruta esperada:${RESET}"
+        echo -e "${WHITE}$CHECKUSER${RESET}"
 
-        echo -e "${GREEN}✔ ACTIVO${RESET}"
+        pause
 
-    elif [[ -x "$CHECKUSER" ]]; then
-
-        echo -e "${YELLOW}⚠ INSTALADO / DESACTIVADO${RESET}"
-
-    else
-
-        echo -e "${GRAY}✘ NO INSTALADO${RESET}"
-
-    fi
-}
-
-#==================================================
-# ESTADO GENERAL
-#==================================================
-
-show_status() {
-
-    echo -e "${CYAN}ESTADO DEL SISTEMA${RESET}"
-
-    line
-
-    if [[ -f "$BANNER" ]]; then
-
-        echo -e "Banner    : ${GREEN}✔ ACTIVO${RESET}"
-        echo -e "Archivo   : ${WHITE}$BANNER${RESET}"
-
-    else
-
-        echo -e "Banner    : ${RED}✘ NO EXISTE${RESET}"
-
+        return
     fi
 
-    echo -n "OpenSSH   : "
-    service_status
-
-    echo -n "Dropbear  : "
-    dropbear_status
-
-    echo -n "CheckUser : "
-    checkuser_status
+    configure_checkuser
 
     echo
+
+    echo -e "${GREEN}✔ Integración reparada.${RESET}"
+
+    echo
+
+    echo -e "${WHITE}Archivo:${RESET}"
+    echo -e "${GRAY}$SSHRC${RESET}"
+
+    pause
 }
 
 #==================================================
@@ -458,6 +303,7 @@ show_status() {
 create_backup() {
 
     local DATE
+
     DATE=$(date +"%Y%m%d_%H%M%S")
 
     local DIR="$BACKUP_DIR/$DATE"
@@ -490,6 +336,9 @@ create_backup() {
 configure_ssh() {
 
     if ! ssh_installed; then
+
+        echo -e "${GRAY}⚠ OpenSSH no está instalado.${RESET}"
+
         return 0
     fi
 
@@ -500,10 +349,7 @@ configure_ssh() {
 
     echo "Banner $BANNER" >> "$SSHD"
 
-    #==================================================
-    # VALIDAR SSH
-    #==================================================
-
+    # Validar configuración
     if ! sshd -t 2>/dev/null; then
 
         echo -e "${RED}✘ Error en la configuración de OpenSSH.${RESET}"
@@ -515,6 +361,8 @@ configure_ssh() {
         if [[ -f "$BACKUP/sshd_config" ]]; then
 
             cp -a "$BACKUP/sshd_config" "$SSHD"
+
+            echo -e "${YELLOW}⚠ Configuración restaurada.${RESET}"
 
         fi
 
@@ -555,6 +403,7 @@ configure_ssh() {
 configure_dropbear() {
 
     if ! dropbear_installed; then
+
         return 0
     fi
 
@@ -589,33 +438,54 @@ configure_dropbear() {
 }
 
 #==================================================
-# APLICAR BANNER + CHECKUSER
+# APLICAR TODO
 #==================================================
 
-apply_banner() {
+apply_configuration() {
 
     echo
-    echo -e "${CYAN}Aplicando configuración...${RESET}"
+
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}              APLICANDO CONFIGURACIÓN                      ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
+
     echo
+
+    #----------------------------------------------
+    # BANNER
+    #----------------------------------------------
+
+    echo -e "${BLUE}➜ Configurando Banner...${RESET}"
 
     configure_ssh
 
     configure_dropbear
 
-    #==================================================
+    echo
+
+    #----------------------------------------------
     # CHECKUSER
-    #==================================================
+    #----------------------------------------------
 
-    if [[ "$(cat "$CHECKUSER_STATE" 2>/dev/null)" == "1" ]]; then
+    echo -e "${BLUE}➜ Integrando CheckUser...${RESET}"
 
-        enable_checkuser
-
-    fi
+    configure_checkuser
 
     echo
+
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}║${WHITE}             ✔ CONFIGURACIÓN APLICADA                      ${GREEN}║${RESET}"
+    echo -e "${GREEN}║${WHITE}             ✔ CONFIGURACIÓN COMPLETA                     ${GREEN}║${RESET}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${WHITE}Flujo SSH configurado:${RESET}"
+
+    echo -e " ${CYAN}①${RESET} Banner"
+    echo -e " ${CYAN}②${RESET} CheckUser"
+    echo -e " ${CYAN}③${RESET} Sesión SSH"
+
+    echo
 }
 
 #==================================================
@@ -641,12 +511,16 @@ create_banner() {
 
     case "$TYPE" in
 
+    #================================================
+    # PLANTILLAS
+    #================================================
+
     1)
 
         clear
 
         echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${CYAN}║${MAGENTA}                 SELECCIONAR PLANTILLA                    ${CYAN}║${RESET}"
+        echo -e "${CYAN}║${MAGENTA}                 DATOS DEL BANNER                         ${CYAN}║${RESET}"
         echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
 
         echo
@@ -689,6 +563,10 @@ create_banner() {
 
         case "$TEMPLATE" in
 
+        #--------------------------------------------
+        # CLÁSICA
+        #--------------------------------------------
+
         1)
 
             create_backup
@@ -707,7 +585,12 @@ create_banner() {
 ║              Gracias por usar el servicio          ║
 ╚════════════════════════════════════════════════════╝
 EOF
+
             ;;
+
+        #--------------------------------------------
+        # PREMIUM
+        #--------------------------------------------
 
         2)
 
@@ -729,7 +612,12 @@ EOF
 ║              ★ SERVICIO PREMIUM ★                  ║
 ╚════════════════════════════════════════════════════╝
 EOF
+
             ;;
+
+        #--------------------------------------------
+        # MINIMAL
+        #--------------------------------------------
 
         3)
 
@@ -747,16 +635,20 @@ Soporte : $SUPPORT
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
+
             ;;
 
         0)
+
             return
             ;;
 
         *)
 
-            error "Plantilla inválida."
+            echo -e "${RED}Plantilla inválida.${RESET}"
+
             sleep 2
+
             return
             ;;
 
@@ -764,12 +656,16 @@ EOF
 
         ;;
 
+    #================================================
+    # PERSONALIZADO
+    #================================================
+
     2)
 
         clear
 
         echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${CYAN}║${MAGENTA}                  BANNER PERSONALIZADO                    ${CYAN}║${RESET}"
+        echo -e "${CYAN}║${MAGENTA}                BANNER PERSONALIZADO                      ${CYAN}║${RESET}"
         echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${RESET}"
 
         echo
@@ -807,6 +703,10 @@ EOF
 
     esac
 
+    #================================================
+    # VISTA PREVIA
+    #================================================
+
     echo
 
     echo -e "${GREEN}✔ Banner preparado correctamente.${RESET}"
@@ -824,13 +724,13 @@ EOF
     echo
 
     read -rp \
-        "$(echo -e "${YELLOW}¿Aplicar este banner? [S/N]: ${RESET}")" APPLY
+        "$(echo -e "${YELLOW}¿Aplicar Banner + CheckUser? [S/N]: ${RESET}")" APPLY
 
     case "$APPLY" in
 
     s|S|si|SI|sí|Sí)
 
-        apply_banner
+        apply_configuration
         ;;
 
     *)
@@ -916,13 +816,13 @@ edit_banner() {
     echo
 
     read -rp \
-        "$(echo -e "${YELLOW}¿Aplicar cambios? [S/N]: ${RESET}")" RESP
+        "$(echo -e "${YELLOW}¿Aplicar Banner + CheckUser? [S/N]: ${RESET}")" RESP
 
     case "$RESP" in
 
     s|S|si|SI|sí|Sí)
 
-        apply_banner
+        apply_configuration
         ;;
 
     *)
@@ -936,112 +836,108 @@ edit_banner() {
 }
 
 #==================================================
-# CONFIGURAR CHECKUSER
+# CHECKUSER MANAGER
 #==================================================
 
 checkuser_manager() {
 
-    while true; do
+    header
+
+    echo -e "${MAGENTA}              ⚡ CHECKUSER MANAGER ⚡${RESET}"
+
+    echo
+
+    echo -n "Estado : "
+    checkuser_status
+
+    echo
+
+    line
+
+    echo
+
+    echo -e "${GREEN}[1]${WHITE} Integrar CheckUser"
+    echo -e "${BLUE}[2]${WHITE} Probar CheckUser"
+    echo -e "${YELLOW}[3]${WHITE} Reparar integración"
+    echo -e "${RED}[4]${WHITE} Desintegrar CheckUser"
+    echo -e "${GRAY}[0]${WHITE} Regresar"
+
+    echo
+
+    read -rp \
+        "$(echo -e "${GREEN}Seleccione:${RESET} ")" OP
+
+    case "$OP" in
+
+    1)
+
+        configure_checkuser
+
+        pause
+        ;;
+
+    2)
 
         header
 
-        echo -e "${MAGENTA}              ⚡ CHECKUSER MANAGER ⚡${RESET}"
+        echo -e "${MAGENTA}              ⚡ PRUEBA CHECKUSER ⚡${RESET}"
 
         echo
 
-        echo -n "Estado actual : "
-        checkuser_status
+        if [[ -x "$CHECKUSER" ]]; then
 
-        echo
+            "$CHECKUSER"
 
-        line
+        else
 
-        echo
+            echo -e "${RED}✘ CheckUser no existe.${RESET}"
 
-        echo -e "${GREEN}[1]${WHITE} Instalar / Activar CheckUser"
-        echo -e "${RED}[2]${WHITE} Desactivar CheckUser"
-        echo -e "${BLUE}[3]${WHITE} Ver CheckUser"
-        echo -e "${YELLOW}[4]${WHITE} Reparar integración SSH"
-        echo -e "${GRAY}[0]${WHITE} Regresar"
+        fi
 
-        echo
+        pause
+        ;;
 
-        read -rp \
-            "$(echo -e "${GREEN}Seleccione:${RESET} ")" OP
+    3)
 
-        case "$OP" in
+        repair_checkuser
+        ;;
 
-        1)
+    4)
 
-            install_checkuser_script
-            enable_checkuser
+        if [[ -f "$SSHRC" ]]; then
 
-            echo
+            sed -i \
+                '/# BEGIN KEVINTECH CHECKUSER/,/# END KEVINTECH CHECKUSER/d' \
+                "$SSHRC"
 
-            echo -e "${GREEN}✔ Listo.${RESET}"
+            echo -e "${GREEN}✔ Integración eliminada.${RESET}"
 
-            pause
-            ;;
+        else
 
-        2)
+            echo -e "${YELLOW}⚠ No existe sshrc.${RESET}"
 
-            disable_checkuser
+        fi
 
-            pause
-            ;;
+        pause
+        ;;
 
-        3)
+    0)
 
-            header
+        return
+        ;;
 
-            echo -e "${MAGENTA}              CHECKUSER INSTALADO${RESET}"
+    *)
 
-            echo
+        echo -e "${RED}✘ Opción inválida.${RESET}"
 
-            if [[ -x "$CHECKUSER" ]]; then
+        sleep 1
+        ;;
 
-                "$CHECKUSER"
-
-            else
-
-                echo -e "${RED}✘ CheckUser no está instalado.${RESET}"
-
-            fi
-
-            pause
-            ;;
-
-        4)
-
-            install_checkuser_script
-            enable_checkuser
-
-            echo
-
-            echo -e "${GREEN}✔ Integración reparada.${RESET}"
-
-            pause
-            ;;
-
-        0)
-
-            return
-            ;;
-
-        *)
-
-            echo -e "${RED}✘ Opción inválida.${RESET}"
-
-            sleep 1
-            ;;
-
-        esac
-
-    done
+    esac
 }
 
 #==================================================
-# PRUEBA DE CONFIGURACIÓN
+# DIAGNÓSTICO
 #==================================================
 
 test_banner() {
@@ -1056,6 +952,8 @@ test_banner() {
 
     echo
 
+    # Banner
+
     if [[ -f "$BANNER" ]]; then
 
         echo -e "${GREEN}✔${RESET} /etc/issue.net existe"
@@ -1066,15 +964,17 @@ test_banner() {
 
     fi
 
+    # SSH
+
     if ssh_installed; then
 
         if sshd -t 2>/dev/null; then
 
-            echo -e "${GREEN}✔${RESET} Configuración OpenSSH válida"
+            echo -e "${GREEN}✔${RESET} OpenSSH válido"
 
         else
 
-            echo -e "${RED}✘${RESET} Configuración OpenSSH inválida"
+            echo -e "${RED}✘${RESET} OpenSSH tiene errores"
 
         fi
 
@@ -1082,11 +982,11 @@ test_banner() {
             "^[[:space:]]*Banner[[:space:]]+$BANNER" \
             "$SSHD"; then
 
-            echo -e "${GREEN}✔${RESET} OpenSSH apunta a $BANNER"
+            echo -e "${GREEN}✔${RESET} OpenSSH usa $BANNER"
 
         else
 
-            echo -e "${YELLOW}⚠${RESET} OpenSSH no apunta al banner"
+            echo -e "${YELLOW}⚠${RESET} OpenSSH no usa $BANNER"
 
         fi
 
@@ -1095,6 +995,8 @@ test_banner() {
         echo -e "${GRAY}⚠${RESET} OpenSSH no instalado"
 
     fi
+
+    # CheckUser
 
     if [[ -x "$CHECKUSER" ]]; then
 
@@ -1106,15 +1008,34 @@ test_banner() {
 
     fi
 
-    if grep -q \
-        "BEGIN KEVINTECH CHECKUSER" \
-        "$SSHRC" 2>/dev/null; then
+    if [[ -f "$SSHRC" ]] &&
+       grep -q "BEGIN KEVINTECH CHECKUSER" "$SSHRC"; then
 
         echo -e "${GREEN}✔${RESET} CheckUser integrado en sshrc"
 
     else
 
-        echo -e "${YELLOW}⚠${RESET} CheckUser no está integrado"
+        echo -e "${YELLOW}⚠${RESET} CheckUser no integrado"
+
+    fi
+
+    # Dropbear
+
+    if dropbear_installed; then
+
+        if grep -q "^DROPBEAR_BANNER=" "$DROPBEAR"; then
+
+            echo -e "${GREEN}✔${RESET} Dropbear usa el banner"
+
+        else
+
+            echo -e "${YELLOW}⚠${RESET} Dropbear no usa el banner"
+
+        fi
+
+    else
+
+        echo -e "${GRAY}⚠${RESET} Dropbear no instalado"
 
     fi
 
@@ -1123,6 +1044,82 @@ test_banner() {
     line
 
     pause
+}
+
+#==================================================
+# RESTAURAR BACKUP
+#==================================================
+
+restore_backup() {
+
+    header
+
+    echo -e "${MAGENTA}                 RESTAURAR BACKUP${RESET}"
+
+    echo
+
+    if [[ ! -f "$BACKUP_DIR/latest" ]]; then
+
+        echo -e "${RED}✘ No existe ningún backup.${RESET}"
+
+        pause
+
+        return
+    fi
+
+    BACKUP=$(cat "$BACKUP_DIR/latest")
+
+    echo -e "${GREEN}Último backup:${RESET}"
+    echo -e "${WHITE}$BACKUP${RESET}"
+
+    echo
+
+    read -rp \
+        "$(echo -e "${YELLOW}¿Restaurar este backup? [S/N]: ${RESET}")" RESP
+
+    case "$RESP" in
+
+    s|S|si|SI|sí|Sí)
+
+        [[ -f "$BACKUP/issue.net" ]] &&
+            cp -a "$BACKUP/issue.net" "$BANNER"
+
+        [[ -f "$BACKUP/sshd_config" ]] &&
+            cp -a "$BACKUP/sshd_config" "$SSHD"
+
+        [[ -f "$BACKUP/dropbear" ]] &&
+            cp -a "$BACKUP/dropbear" "$DROPBEAR"
+
+        [[ -f "$BACKUP/sshrc" ]] &&
+            cp -a "$BACKUP/sshrc" "$SSHRC"
+
+        echo
+
+        echo -e "${GREEN}✔ Backup restaurado.${RESET}"
+
+        if ssh_installed &&
+           sshd -t 2>/dev/null; then
+
+            SERVICE=$(ssh_service)
+
+            [[ -n "$SERVICE" ]] &&
+                systemctl restart "$SERVICE"
+
+        fi
+
+        systemctl restart dropbear 2>/dev/null
+
+        ;;
+
+    *)
+
+        echo -e "${YELLOW}Operación cancelada.${RESET}"
+
+        ;;
+
+    esac
+
+    sleep 2
 }
 
 #==================================================
@@ -1213,6 +1210,35 @@ while true; do
 
     header
 
+    show_status() {
+
+        echo -e "${CYAN}ESTADO DEL SISTEMA${RESET}"
+
+        line
+
+        if [[ -f "$BANNER" ]]; then
+
+            echo -e "Banner    : ${GREEN}✔ ACTIVO${RESET}"
+            echo -e "Archivo   : ${WHITE}$BANNER${RESET}"
+
+        else
+
+            echo -e "Banner    : ${RED}✘ NO EXISTE${RESET}"
+
+        fi
+
+        echo -n "OpenSSH   : "
+        service_status
+
+        echo -n "Dropbear  : "
+        dropbear_status
+
+        echo -n "CheckUser : "
+        checkuser_status
+
+        echo
+    }
+
     show_status
 
     line
@@ -1224,7 +1250,8 @@ while true; do
     echo -e "${YELLOW}[3]${WHITE} ✏  Editar Banner"
     echo -e "${CYAN}[4]${WHITE} ⚡ CheckUser Manager"
     echo -e "${MAGENTA}[5]${WHITE} 🔎 Diagnóstico"
-    echo -e "${RED}[6]${WHITE} 🗑  Eliminar Banner"
+    echo -e "${BLUE}[6]${WHITE} ♻  Restaurar Backup"
+    echo -e "${RED}[7]${WHITE} 🗑  Eliminar Banner"
     echo -e "${GRAY}[0]${WHITE} ↩  Regresar"
 
     echo
@@ -1255,18 +1282,24 @@ while true; do
         ;;
 
     6)
+        restore_backup
+        ;;
+
+    7)
         delete_banner
         ;;
 
     0)
 
         clear
+
         exit 0
         ;;
 
     *)
 
         echo
+
         echo -e "${RED}✘ Opción inválida.${RESET}"
 
         sleep 1
