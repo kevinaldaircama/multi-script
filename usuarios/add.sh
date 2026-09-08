@@ -1269,10 +1269,27 @@ while true; do
 
     instalar_checkuser
 
-    msg_ok "Usuario creado correctamente."
+msg_ok "Usuario creado correctamente."
 
-    HOST="${SERVER_DOMAIN:-$IP}"
+#=========================================================
+# BANNER AUTOMÁTICO PARA NUEVA CUENTA
+#=========================================================
 
+BANNER_MANAGER="/etc/kevintech/usuarios/banner.sh"
+
+if [[ -x "$BANNER_MANAGER" ]]; then
+
+    "$BANNER_MANAGER" --auto-user "$USER" >/dev/null 2>&1 || true
+
+    if [[ -f "/etc/ssh_banners/$USER.banner" ]]; then
+
+        msg_ok "Banner automático creado para $USER."
+
+    fi
+
+fi
+
+HOST="${SERVER_DOMAIN:-$IP}"
     #=====================================================
     # DETECTAR PROTOCOLOS
     #=====================================================
