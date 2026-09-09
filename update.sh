@@ -19,7 +19,7 @@ REPO="https://github.com/kevinaldaircama/multi-script.git"
 
 VERSION_FILE="$BASE/version.txt"
 
-LICENSE_API="https://usa.socialstreaming.xyz"
+LICENSE_API="https://api.kevintechtutorials.site"
 
 #=========================================================
 # COLORES
