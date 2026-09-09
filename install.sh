@@ -45,7 +45,7 @@ TMP="/tmp/kevintech_install"
 
 # SOLO HTTPS
 REPO="https://github.com/kevinaldaircama/multi-script.git"
-LICENSE_API="https://usa.socialstreaming.xyz"
+LICENSE_API="https://api.kevintechtutorials.site"
 
 LICENSE_BOT="@multiscriptkeygen_bot"
 
