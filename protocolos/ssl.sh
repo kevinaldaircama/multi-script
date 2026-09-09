@@ -90,7 +90,45 @@ fi
 
 # shellcheck disable=SC1090
 source "$CONFIG" 2>/dev/null
+# ==============================================================
+# HOST DEL SERVIDOR
+# DOMINIO → IP PÚBLICA SI NO HAY DOMINIO
+# ==============================================================
 
+get_server_host() {
+
+    # Si existe dominio configurado, usarlo
+    if [[ -n "${SERVER_DOMAIN:-}" ]] &&
+       [[ "${SERVER_DOMAIN}" != "NO CONFIGURADO" ]] &&
+       [[ "${SERVER_DOMAIN}" != "none" ]] &&
+       [[ "${SERVER_DOMAIN}" != "null" ]]; then
+
+        echo "$SERVER_DOMAIN"
+        return 0
+    fi
+
+    # Si existe SERVER_IP válida, usarla
+    if [[ -n "${SERVER_IP:-}" ]] &&
+       [[ "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+
+        echo "$SERVER_IP"
+        return 0
+    fi
+
+    # Intentar obtener IP pública
+    local PUBLIC_IP
+
+    PUBLIC_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null)"
+
+    if [[ "$PUBLIC_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+
+        echo "$PUBLIC_IP"
+        return 0
+    fi
+
+    # Último recurso: IP local
+    hostname -I 2>/dev/null | awk '{print $1}'
+}
 # ==============================================================
 # FUNCIONES VISUALES
 # ==============================================================
@@ -277,7 +315,8 @@ generate_certificate() {
 
     rm -f "$TMP_KEY" "$TMP_CERT"
 
-    local CERT_HOST="${SERVER_DOMAIN:-${SERVER_IP:-$(hostname -I | awk '{print $1}')}}"
+    local CERT_HOST
+CERT_HOST="$(get_server_host)"
     local SAN="DNS:${CERT_HOST}"
     if [[ "$CERT_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then SAN="IP:${CERT_HOST}"; fi
     if ! openssl req \
@@ -844,7 +883,15 @@ install_ssl_tunnel() {
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
 
-    echo -e "${WHITE}Dominio:${RESET} ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
+    SERVER_HOST="$(get_server_host)"
+
+if [[ "$SERVER_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${WHITE}Servidor:${RESET} ${GREEN}${SERVER_HOST}${RESET}"
+    echo -e "${WHITE}Modo:${RESET}     ${YELLOW}IP (sin dominio)${RESET}"
+else
+    echo -e "${WHITE}Servidor:${RESET} ${GREEN}${SERVER_HOST}${RESET}"
+    echo -e "${WHITE}Modo:${RESET}     ${GREEN}DOMINIO${RESET}"
+fi
     echo -e "${WHITE}Puertos:${RESET} ${CYAN}$PORT_HTTP, $PORT_HTTPS, $PORT_ALT${RESET}"
     echo
 
@@ -1046,7 +1093,15 @@ show_status() {
 
     line
 
-    echo -e "${WHITE}Dominio:${RESET}       ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
+    SERVER_HOST="$(get_server_host)"
+
+if [[ "$SERVER_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${WHITE}Servidor:${RESET}       ${GREEN}${SERVER_HOST}${RESET}"
+    echo -e "${WHITE}Modo:${RESET}           ${YELLOW}IP / SIN DOMINIO${RESET}"
+else
+    echo -e "${WHITE}Servidor:${RESET}       ${GREEN}${SERVER_HOST}${RESET}"
+    echo -e "${WHITE}Modo:${RESET}           ${GREEN}DOMINIO${RESET}"
+fi
     echo -e "${WHITE}Certificado:${RESET}   ${GREEN}$CERT_FILE${RESET}"
     echo -e "${WHITE}HAProxy config:${RESET} ${GREEN}$HAPROXY_CFG${RESET}"
 
@@ -1307,7 +1362,13 @@ while true; do
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
     echo -e "${WHITE}Estado:${RESET}       $(get_status)"
-    echo -e "${WHITE}Dominio:${RESET}      ${GREEN}${SERVER_DOMAIN:-NO CONFIGURADO}${RESET}"
+    SERVER_HOST="$(get_server_host)"
+
+if [[ "$SERVER_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${WHITE}Servidor:${RESET}     ${GREEN}${SERVER_HOST}${RESET} ${YELLOW}(IP)${RESET}"
+else
+    echo -e "${WHITE}Servidor:${RESET}     ${GREEN}${SERVER_HOST}${RESET}"
+fi
     echo -e "${WHITE}HAProxy:${RESET}      $(
         if service_active "$SERVICE_HAPROXY"; then
             echo -e "${GREEN}● ACTIVO${RESET}"
