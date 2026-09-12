@@ -3,23 +3,30 @@
 # ==============================================================
 #              🛡️ KEVINTECH MULTI SCRIPT
 #                    BADVPN UDPGW MANAGER
-#                         v2.1
+#                         v2.2
 # ==============================================================
 # Servicio 1 : badvpn-udpgw-7300
 # Servicio 2 : badvpn-udpgw-7200
 # Puertos    : 7300 / 7200
+# Bind       : 0.0.0.0
+#
+# IMPORTANTE:
+# BadVPN UDPGW recibe conexiones de clientes mediante TCP
+# y realiza el gateway hacia UDP.
 # ==============================================================
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-VERSION="2.1"
+VERSION="2.2"
 
 SERVICE1="badvpn-udpgw-7300"
 SERVICE2="badvpn-udpgw-7200"
 
 PORT1="7300"
 PORT2="7200"
+
+LISTEN_ADDR="0.0.0.0"
 
 BIN="/usr/local/bin/badvpn-udpgw"
 SOURCE_DIR="/tmp/kevintech-badvpn"
@@ -157,7 +164,7 @@ service_active() {
 }
 
 # ==============================================================
-# ESTADO
+# ESTADO GENERAL
 # ==============================================================
 
 get_status() {
@@ -193,15 +200,22 @@ binary_installed() {
 }
 
 # ==============================================================
-# PUERTO
+# COMPROBAR PUERTO TCP
 # ==============================================================
+
+port_listening() {
+
+    local PORT="$1"
+
+    ss -ltn 2>/dev/null |
+        grep -qE "[:.]${PORT}[[:space:]]"
+}
 
 port_status() {
 
     local PORT="$1"
 
-    if ss -lunp 2>/dev/null |
-        grep -qE ":${PORT}([[:space:]]|$)"; then
+    if port_listening "$PORT"; then
 
         echo -e "${GREEN}● ESCUCHANDO${RESET}"
 
@@ -210,6 +224,36 @@ port_status() {
         echo -e "${RED}● CERRADO${RESET}"
 
     fi
+}
+
+# ==============================================================
+# MOSTRAR BIND
+# ==============================================================
+
+get_bind_address() {
+
+    local PORT="$1"
+
+    ss -ltn 2>/dev/null |
+        awk -v p=":$PORT" '$4 ~ p"$" {print $4; exit}'
+}
+
+# ==============================================================
+# COMPROBAR PUERTO OCUPADO
+# ==============================================================
+
+check_port_conflict() {
+
+    local PORT="$1"
+
+    if ss -ltnp 2>/dev/null |
+        grep -qE "[:.]${PORT}[[:space:]]"; then
+
+        return 0
+
+    fi
+
+    return 1
 }
 
 # ==============================================================
@@ -233,6 +277,7 @@ install_dependencies() {
         git \
         cmake \
         build-essential \
+        iproute2 \
         >/dev/null 2>&1; then
 
         error_msg "No se pudieron instalar las dependencias."
@@ -351,7 +396,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN --listen-addr 127.0.0.1:$PORT1 --max-clients 999 --max-connections-for-client 10
+ExecStart=$BIN --listen-addr $LISTEN_ADDR:$PORT1 --max-clients 999 --max-connections-for-client 10
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -368,7 +413,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BIN --listen-addr 127.0.0.1:$PORT2 --max-clients 999 --max-connections-for-client 10
+ExecStart=$BIN --listen-addr $LISTEN_ADDR:$PORT2 --max-clients 999 --max-connections-for-client 10
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
@@ -413,8 +458,13 @@ start_badvpn() {
 
     sleep 2
 
-    if service_active "$SERVICE1" &&
-       service_active "$SERVICE2"; then
+    local OK1="NO"
+    local OK2="NO"
+
+    service_active "$SERVICE1" && OK1="SI"
+    service_active "$SERVICE2" && OK2="SI"
+
+    if [[ "$OK1" == "SI" && "$OK2" == "SI" ]]; then
 
         set_config "ON"
 
@@ -510,10 +560,10 @@ install_badvpn() {
     success "BADVPN COMPLETADO."
 
     echo -e \
-        "${WHITE}UDPGW 1:${RESET} ${GREEN}127.0.0.1:$PORT1${RESET}"
+        "${WHITE}UDPGW 1:${RESET} ${GREEN}${LISTEN_ADDR}:$PORT1${RESET}"
 
     echo -e \
-        "${WHITE}UDPGW 2:${RESET} ${GREEN}127.0.0.1:$PORT2${RESET}"
+        "${WHITE}UDPGW 2:${RESET} ${GREEN}${LISTEN_ADDR}:$PORT2${RESET}"
 
     echo -e \
         "${WHITE}Servicio 1:${RESET} ${GREEN}$SERVICE1${RESET}"
@@ -553,11 +603,12 @@ restart_badvpn() {
 
         error_msg \
             "No se pudieron iniciar correctamente ambos servicios."
+
     fi
 }
 
 # ==============================================================
-# ESTADO
+# ESTADO DETALLADO
 # ==============================================================
 
 show_status() {
@@ -565,8 +616,13 @@ show_status() {
     clear
 
     local STATUS
+    local BIND1
+    local BIND2
 
     STATUS=$(get_status)
+
+    BIND1=$(get_bind_address "$PORT1")
+    BIND2=$(get_bind_address "$PORT2")
 
     echo -e \
         "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
@@ -595,13 +651,30 @@ show_status() {
 
     fi
 
+    echo -e \
+        "${WHITE}Dirección:${RESET} ${CYAN}$LISTEN_ADDR${RESET}"
+
     separator
 
     echo -e \
         "${WHITE}🔌 Puerto $PORT1:${RESET} $(port_status "$PORT1")"
 
+    if [[ -n "$BIND1" ]]; then
+
+        echo -e \
+            "${GRAY}   └─ Escuchando en: $BIND1${RESET}"
+
+    fi
+
     echo -e \
         "${WHITE}🔌 Puerto $PORT2:${RESET} $(port_status "$PORT2")"
+
+    if [[ -n "$BIND2" ]]; then
+
+        echo -e \
+            "${GRAY}   └─ Escuchando en: $BIND2${RESET}"
+
+    fi
 
     separator
 
@@ -730,15 +803,6 @@ uninstall_badvpn() {
 # ==============================================================
 # MODO AUTOMÁTICO
 # ==============================================================
-#
-# IMPORTANTE:
-# El instalador principal ejecuta:
-#
-# bash badvpn.sh --auto
-#
-# Este bloque evita que se abra el menú y permite que el
-# instalador principal continúe con el siguiente protocolo.
-# ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
 
@@ -774,10 +838,10 @@ if [[ "$1" == "--auto" ]]; then
                 "${GREEN}✔ BadVPN instalado correctamente.${RESET}"
 
             echo -e \
-                "${GREEN}✔ UDPGW: 7300${RESET}"
+                "${GREEN}✔ UDPGW: 0.0.0.0:$PORT1${RESET}"
 
             echo -e \
-                "${GREEN}✔ UDPGW: 7200${RESET}"
+                "${GREEN}✔ UDPGW: 0.0.0.0:$PORT2${RESET}"
 
             echo -e \
                 "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -841,6 +905,9 @@ while true; do
             "${WHITE}Binario:${RESET}      ${GRAY}● NO INSTALADO${RESET}"
 
     fi
+
+    echo -e \
+        "${WHITE}Dirección:${RESET}    ${CYAN}$LISTEN_ADDR${RESET}"
 
     echo -e \
         "${WHITE}Puerto 1:${RESET}     ${CYAN}$PORT1${RESET}  $(port_status "$PORT1")"
@@ -922,10 +989,10 @@ while true; do
                     "${GREEN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 
                 echo -e \
-                    "${GREEN}║${RESET}  UDPGW 1 → 127.0.0.1:$PORT1                             ${GREEN}║${RESET}"
+                    "${GREEN}║${RESET}  UDPGW 1 → 0.0.0.0:$PORT1                               ${GREEN}║${RESET}"
 
                 echo -e \
-                    "${GREEN}║${RESET}  UDPGW 2 → 127.0.0.1:$PORT2                             ${GREEN}║${RESET}"
+                    "${GREEN}║${RESET}  UDPGW 2 → 0.0.0.0:$PORT2                               ${GREEN}║${RESET}"
 
                 echo -e \
                     "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
