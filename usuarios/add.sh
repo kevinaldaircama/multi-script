@@ -83,6 +83,14 @@ WEBSOCKET="${WEBSOCKET:-OFF}"
 SSL="${SSL:-OFF}"
 SLOWDNS="${SLOWDNS:-OFF}"
 
+# Protocolos independientes (cada cuenta recibe recurso propio)
+HYSTERIA="${HYSTERIA:-OFF}"
+SHADOWSOCKS="${SHADOWSOCKS:-OFF}"
+BTUN="${BTUN:-OFF}"
+SOCKS5="${SOCKS5:-OFF}"
+
+ACCOUNT_SCRIPT="$BASE/usuarios/account.sh"
+
 #========================#
 #    OBTENER IP PÚBLICA  #
 #========================#
@@ -232,6 +240,60 @@ if [[ $? -ne 0 ]]; then
 fi
 
 msg_ok "Usuario creado correctamente."
+
+#========================#
+# PROTOCOLOS INDIVIDUALES #
+# (cada protocolo crea recurso propio por cuenta, igual que el bot)
+#========================#
+
+HYST_INFO=""
+SS_INFO=""
+BTUN_INFO=""
+SOCKS_INFO=""
+
+if [[ "$HYSTERIA" == "ON" ]]; then
+    msg_info "Creando Hysteria individual..."
+    HYST_RESULT=$(bash "$ACCOUNT_SCRIPT" hysteria_add "$USER" 2>/dev/null)
+    if [[ "$HYST_RESULT" == OK:hysteria_added:* ]]; then
+        HYST_INFO=$(echo "$HYST_RESULT" | awk -F: '{print "IP="$4" PORT="$5" AUTH="$6" OBFS="$7}')
+        msg_ok "Hysteria creado: $HYST_INFO"
+    else
+        msg_warn "Hysteria no disponible: $HYST_RESULT"
+    fi
+fi
+
+if [[ "$SHADOWSOCKS" == "ON" ]]; then
+    msg_info "Creando Shadowsocks individual..."
+    SS_RESULT=$(bash "$ACCOUNT_SCRIPT" ss_add "$USER" 2>/dev/null)
+    if [[ "$SS_RESULT" == OK:ss_added:* ]]; then
+        SS_INFO=$(echo "$SS_RESULT" | awk -F: '{print "IP="$4" PORT="$5" PASS="$6}')
+        msg_ok "Shadowsocks creado: $SS_INFO"
+    else
+        msg_warn "Shadowsocks no disponible: $SS_RESULT"
+    fi
+fi
+
+if [[ "$BTUN" == "ON" ]]; then
+    msg_info "Creando BTun individual..."
+    BTUN_RESULT=$(bash "$ACCOUNT_SCRIPT" btun_add "$USER" 2>/dev/null)
+    if [[ "$BTUN_RESULT" == OK:btun_added:* ]]; then
+        BTUN_INFO=$(echo "$BTUN_RESULT" | awk -F: '{print "IP="$4" PORT="$5" PASS="$6}')
+        msg_ok "BTun creado: $BTUN_INFO"
+    else
+        msg_warn "BTun no disponible: $BTUN_RESULT"
+    fi
+fi
+
+if [[ "$SOCKS5" == "ON" ]]; then
+    msg_info "Creando SOCKS5 individual..."
+    SOCKS_RESULT=$(bash "$ACCOUNT_SCRIPT" socks5_add "$USER" 2>/dev/null)
+    if [[ "$SOCKS_RESULT" == OK:socks_added:* ]]; then
+        SOCKS_INFO=$(echo "$SOCKS_RESULT" | awk -F: '{print "IP="$4" PORT="$5" PASS="$6}')
+        msg_ok "SOCKS5 creado: $SOCKS_INFO"
+    else
+        msg_warn "SOCKS5 no disponible: $SOCKS_RESULT"
+    fi
+fi
 
 HOST="${SERVER_DOMAIN:-$IP}"
 
@@ -424,6 +486,38 @@ fi
 echo
 echo -e "🚀 SSH UDP"
 echo -e "${GREEN}${SSH_UDP}${RESET}"
+
+echo
+echo -e "${CYAN}🔌 PROTOCOLOS INDEPENDIENTES (recurso propio por cuenta)${RESET}"
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+[[ -n "$HYST_INFO" ]] && {
+echo -e "⚡ Hysteria"
+echo -e "${GREEN}${HYST_INFO}${RESET}"
+echo
+}
+
+[[ -n "$SS_INFO" ]] && {
+echo -e "🔑 Shadowsocks"
+echo -e "${GREEN}${SS_INFO}${RESET}"
+echo
+}
+
+[[ -n "$BTUN_INFO" ]] && {
+echo -e "🌐 BTun"
+echo -e "${GREEN}${BTUN_INFO}${RESET}"
+echo
+}
+
+[[ -n "$SOCKS_INFO" ]] && {
+echo -e "🛡 SOCKS5"
+echo -e "${GREEN}${SOCKS_INFO}${RESET}"
+echo
+}
+
+if [[ -z "$HYST_INFO" && -z "$SS_INFO" && -z "$BTUN_INFO" && -z "$SOCKS_INFO" ]]; then
+    echo -e "${GRAY}Ningún protocolo individual activo (HYSTERIA/SHADOWSOCKS/BTUN/SOCKS5 = OFF)${RESET}"
+fi
 
 echo
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"

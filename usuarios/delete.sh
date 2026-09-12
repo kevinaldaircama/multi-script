@@ -14,6 +14,20 @@ WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 RESET="\e[0m"
 
+#========================#
+#      CONFIGURACIÓN     #
+#========================#
+
+if [ -d /etc/movivip ]; then
+    BASE="/etc/movivip"
+elif [ -d /etc/kevintech ]; then
+    BASE="/etc/kevintech"
+else
+    BASE="/etc/movivip"
+fi
+
+ACCOUNT_SCRIPT="$BASE/usuarios/account.sh"
+
 while true; do
 
 clear
@@ -87,6 +101,15 @@ for N in $OP; do
 
     if [[ -n "$USER" ]]; then
         pkill -u "$USER" &>/dev/null
+
+        # Limpiar protocolos individuales del usuario (hysteria/ss/btun/socks5)
+        [[ -x "$ACCOUNT_SCRIPT" ]] && {
+            bash "$ACCOUNT_SCRIPT" hysteria_del "$USER" &>/dev/null
+            bash "$ACCOUNT_SCRIPT" ss_del "$USER" &>/dev/null
+            bash "$ACCOUNT_SCRIPT" btun_del "$USER" &>/dev/null
+            bash "$ACCOUNT_SCRIPT" socks5_del "$USER" &>/dev/null
+        }
+
         userdel -f "$USER" &>/dev/null
         ((BORRADOS++))
     fi
