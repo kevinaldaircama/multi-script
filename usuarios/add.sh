@@ -866,12 +866,6 @@ mostrar_cuenta() {
 
     clear
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}          ⚜ CUENTA SSH CREADA EXITOSAMENTE ⚜             ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-
     echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
 
     echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
@@ -894,6 +888,10 @@ mostrar_cuenta() {
     echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
 
     echo
+
+    #=====================================================
+    # INFORMACIÓN DEL SERVIDOR
+    #=====================================================
 
     echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
 
@@ -923,7 +921,7 @@ mostrar_cuenta() {
 
 
     #=====================================================
-    # SSL
+    # SSL TUNNEL
     #=====================================================
 
     if [[ -n "$HAPROXY_PORTS" ]]; then
@@ -945,17 +943,6 @@ mostrar_cuenta() {
 
 
     #=====================================================
-    # UDP CUSTOM
-    #=====================================================
-
-    if [[ -n "$UDPCUSTOM_PORTS" ]]; then
-
-        echo -e " ${WHITE}UDP Custom   : ${GREEN}$UDPCUSTOM_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
     # OPENVPN
     #=====================================================
 
@@ -963,6 +950,17 @@ mostrar_cuenta() {
           -n "$OPENVPN_PORTS" ]]; then
 
         echo -e " ${WHITE}OpenVPN      : ${GREEN}$OPENVPN_PORTS${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # BHTTP
+    #=====================================================
+
+    if [[ "$BHTTP_INSTALADO" == "SI" ]]; then
+
+        echo -e " ${WHITE}BHTTP         : ${GREEN}8088${RESET}"
 
     fi
 
@@ -977,51 +975,25 @@ mostrar_cuenta() {
 
         echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
 
-        [[ -n "$SLOWDNS_NS" ]] &&
-            echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
+        if [[ -n "$SLOWDNS_NS" ]]; then
 
-        [[ -n "$SLOWDNS_KEY" ]] &&
-            echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
+            echo -e \
+                " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
 
-    fi
+        fi
 
+        if [[ -n "$SLOWDNS_KEY" ]]; then
 
-    #=====================================================
-    # BHTTP
-    #=====================================================
+            echo -e \
+                " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
 
-    if [[ "$BHTTP_INSTALADO" == "SI" ]]; then
-
-        echo
-
-        echo -e "${YELLOW}══════════ BHTTP (8088) ══════════${RESET}"
-
-        echo -e " ${WHITE}Servidor    : ${GREEN}${HOST}:8088${RESET}"
-        echo -e " ${WHITE}Backend SSH : ${GREEN}127.0.0.1:22${RESET}"
-        echo -e " ${WHITE}Estado      : ${GREEN}● ONLINE${RESET}"
+        fi
 
     fi
 
 
     #=====================================================
-    # HYSTERIA
-    #=====================================================
-
-    if [[ "$HYSTERIA_INSTALADO" == "SI" ]]; then
-
-        echo
-
-        echo -e "${YELLOW}══════════ HYSTERIA V1 ══════════${RESET}"
-
-        echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${HYSTERIA_PORT:-N/D}${RESET}"
-        echo -e " ${WHITE}OBFS         : ${GREEN}${HYSTERIA_OBFS:-N/D}${RESET}"
-        echo -e " ${WHITE}Credenciales : ${GREEN}${USER}:${PASS}${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # ZIVPN
+    # ZIVPN UDP
     #=====================================================
 
     if [[ "$ZIVPN_INSTALADO" == "SI" ]]; then
@@ -1030,9 +1002,29 @@ mostrar_cuenta() {
 
         echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
 
-        echo -e " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT:-N/D}${RESET}"
-        echo -e " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
-        echo -e " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
+        echo -e \
+            " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT:-N/D}${RESET}"
+
+        echo -e \
+            " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
+
+        echo -e \
+            " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
+
+    fi
+
+
+    #=====================================================
+    # CONEXIÓN DIRECTA / CUSTOM
+    #=====================================================
+
+    if [[ -n "$HTTP_PORTS" ||
+          -n "$UDPCUSTOM_PORTS" ]]; then
+
+        echo
+
+        echo -e \
+            "${YELLOW}══════════ conexión directa/custom══════════${RESET}"
 
     fi
 
@@ -1043,18 +1035,9 @@ mostrar_cuenta() {
 
     if [[ -n "$HTTP_PORTS" ]]; then
 
-        echo
-
-        echo -e "${YELLOW}══════════ HTTP CUSTOM ══════════${RESET}"
-
-        IFS=',' read -ra HTTP_ARRAY <<< "$HTTP_PORTS"
-
-        for PORT in "${HTTP_ARRAY[@]}"; do
-
-            echo -e \
-                " ${GREEN}${HOST}:${PORT}@${USER}:${PASS}${RESET}"
-
-        done
+        # Una sola línea con todos los puertos HTTP
+        echo -e \
+            " ${GREEN}${HOST}:${HTTP_PORTS}@${USER}:${PASS}${RESET}"
 
     fi
 
@@ -1065,23 +1048,77 @@ mostrar_cuenta() {
 
     if [[ -n "$UDPCUSTOM_PORTS" ]]; then
 
-        echo
-
-        echo -e "${YELLOW}══════════ UDP CUSTOM ══════════${RESET}"
-
+        # Formato solicitado
         echo -e \
-            " ${GREEN}${HOST}:1-65535@${USER}:${PASS}${RESET}"
+            " ${GREEN}udp: ${HOST}::1-65535:${USER}:${PASS}${RESET}"
 
     fi
 
 
+    #=====================================================
+    # SERVICIO OVPN
+    #=====================================================
+
+    OVPN_FILE=""
+
+    # Buscar configuración OVPN del usuario
+    if [[ -f "/etc/openvpn/client/${USER}.ovpn" ]]; then
+
+        OVPN_FILE="/etc/openvpn/client/${USER}.ovpn"
+
+    elif [[ -f "/etc/openvpn/${USER}.ovpn" ]]; then
+
+        OVPN_FILE="/etc/openvpn/${USER}.ovpn"
+
+    elif [[ -f "/root/${USER}.ovpn" ]]; then
+
+        OVPN_FILE="/root/${USER}.ovpn"
+
+    fi
+
+
+    if [[ "$OPENVPN_INSTALADO" == "SI" ]]; then
+
+        echo
+
+        echo -e \
+            "${YELLOW}══════════ SERVICIO OVPN ══════════${RESET}"
+
+        if [[ -n "$OVPN_FILE" ]]; then
+
+            # URL del archivo OVPN
+            OVPN_URL="${SERVER_DOMAIN:-$HOST}/${USER}.ovpn"
+
+            echo
+
+            echo -e \
+                " ${WHITE}ovpn url: ${GREEN}https://${OVPN_URL}${RESET}"
+
+        else
+
+            echo
+
+            echo -e \
+                " ${WHITE}ovpn url: ${YELLOW}Archivo no generado${RESET}"
+
+        fi
+
+    fi
+
+
+    #=====================================================
+    # FINAL
+    #=====================================================
+
     echo
 
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo -e \
+        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
 
-    echo -e "${YELLOW}          Presione ENTER para continuar...${RESET}"
+    echo -e \
+        "${YELLOW}          Presione ENTER para continuar...${RESET}"
 
     read
 
