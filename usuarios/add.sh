@@ -3,7 +3,7 @@
 #=========================================================
 # KevinTech Multi Script Premium
 # Módulo: Crear Usuario SSH
-# Versión: 3.3 Premium
+# Versión: 3.4 Premium
 # Autor: KevinTech
 #
 # FUNCIONES:
@@ -539,8 +539,6 @@ detectar_protocolos() {
         paste -sd "," -
     )
 
-    [[ -z "$SSH_PORTS" ]] &&
-        SSH_PORTS="22"
 
 
     #=====================================================
@@ -578,9 +576,9 @@ detectar_protocolos() {
     #=====================================================
 
     BADVPN_PORTS=$(
-        ss -lunp 2>/dev/null |
-        awk '/badvpn/ {
-            split($5,a,":");
+        ss -H -ltnp 2>/dev/null |
+        awk '/badvpn-udpgw|badvpn/ {
+            split($4,a,":");
             print a[length(a)]
         }' |
         sort -nu |
@@ -822,7 +820,15 @@ mostrar_cuenta() {
 
     echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
     echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
-    echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
+    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
+
+        echo -e " ${WHITE}Expira       : ${GREEN}Nunca${RESET}"
+
+    else
+
+        echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
+
+    fi
     echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
 
     echo
@@ -1122,11 +1128,20 @@ while true; do
         read -rp \
             "$(echo -e "${GREEN}📅 Duración (días)       : ${RESET}")" DIAS
 
-        [[ -z "$DIAS" ]] && DIAS=30
+        # ENTER = cuenta sin expiración
+        if [[ -z "$DIAS" ]]; then
+
+            DIAS=0
+            SIN_EXPIRACION="SI"
+            break
+
+        fi
+
+        SIN_EXPIRACION="NO"
 
         if ! [[ "$DIAS" =~ ^[0-9]+$ ]]; then
 
-            msg_error "Debe ingresar un número."
+            msg_error "Debe ingresar un número o presionar ENTER para ilimitada."
 
             continue
 
@@ -1134,7 +1149,7 @@ while true; do
 
         if (( DIAS <= 0 )); then
 
-            msg_error "La duración debe ser mayor que 0."
+            msg_error "Usa un número mayor que 0 o presiona ENTER para ilimitada."
 
             continue
 
@@ -1203,9 +1218,18 @@ while true; do
     # FECHA
     #=====================================================
 
-    FECHA=$(date -d "+${DIAS} days" +"%Y-%m-%d")
+    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
 
-    FECHA_MOSTRAR=$(date -d "$FECHA" +"%d/%m/%Y")
+        FECHA=""
+        FECHA_MOSTRAR="Nunca"
+
+    else
+
+        FECHA=$(date -d "+${DIAS} days" +"%Y-%m-%d")
+
+        FECHA_MOSTRAR=$(date -d "$FECHA" +"%d/%m/%Y")
+
+    fi
 
     #=====================================================
     # CREAR USUARIO
@@ -1213,11 +1237,22 @@ while true; do
 
     msg_info "Creando usuario SSH..."
 
-    useradd \
-        -e "$FECHA" \
-        -M \
-        -s /usr/sbin/nologin \
-        "$USER"
+    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
+
+        useradd \
+            -M \
+            -s /usr/sbin/nologin \
+            "$USER"
+
+    else
+
+        useradd \
+            -e "$FECHA" \
+            -M \
+            -s /usr/sbin/nologin \
+            "$USER"
+
+    fi
 
     if [[ $? -ne 0 ]]; then
 
@@ -1236,6 +1271,13 @@ while true; do
     #=====================================================
 
     echo "${USER}:${PASS}" | chpasswd
+
+    # ENTER en duración = cuenta sin fecha de expiración
+    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
+
+        chage -E -1 "$USER" >/dev/null 2>&1
+
+    fi
 
     if [[ $? -ne 0 ]]; then
 
