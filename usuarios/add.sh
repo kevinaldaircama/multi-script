@@ -4,16 +4,16 @@
 # KevinTech Multi Script Premium
 # Módulo: Crear Usuario SSH
 # Versión: 3.4 Premium
-# Autor: KevinTech
 #
 # FUNCIONES:
 # - Crear usuario SSH
-# - Expiración automática
+# - Expiración automática / ilimitada
 # - Límite IP por usuario
 # - CheckUser dinámico
 # - Integración ZiVPN
 # - BHTTP 8088
-# - Detección real de protocolos
+# - Detección REAL de protocolos
+# - BadVPN TCP UDPGW 7200/7300
 #=========================================================
 
 #========================#
@@ -144,18 +144,16 @@ EXPIRATION=$(chage -l "$USER_NAME" 2>/dev/null |
         exit
     }')
 
-if [[ -z "$EXPIRATION" ]]; then
+if [[ -z "$EXPIRATION" ||
+      "$EXPIRATION" == "never" ||
+      "$EXPIRATION" == "Nunca" ]]; then
 
     EXPIRATION="Ilimitada"
+    DAYS="∞"
 
-fi
-
-if [[ "$EXPIRATION" != "Ilimitada" &&
-      "$EXPIRATION" != "never" &&
-      "$EXPIRATION" != "Nunca" ]]; then
+else
 
     EXP_DATE=$(date -d "$EXPIRATION" +%s 2>/dev/null)
-
     TODAY=$(date +%s)
 
     if [[ -n "$EXP_DATE" ]]; then
@@ -163,13 +161,9 @@ if [[ "$EXPIRATION" != "Ilimitada" &&
         DIFF=$(( (EXP_DATE - TODAY) / 86400 ))
 
         if (( DIFF < 0 )); then
-
             DAYS=0
-
         else
-
             DAYS=$DIFF
-
         fi
 
         EXPIRATION=$(date -d "$EXPIRATION" +"%d/%m/%Y")
@@ -179,10 +173,6 @@ if [[ "$EXPIRATION" != "Ilimitada" &&
         DAYS="N/D"
 
     fi
-
-else
-
-    DAYS="∞"
 
 fi
 
@@ -297,9 +287,9 @@ while IFS=: read -r USERNAME LIMIT; do
 
     [[ -z "$USERNAME" ]] && continue
     [[ "$USERNAME" =~ ^# ]] && continue
-
     [[ ! "$LIMIT" =~ ^[0-9]+$ ]] && continue
 
+    # 0 = ilimitado
     (( LIMIT == 0 )) && continue
 
     id "$USERNAME" >/dev/null 2>&1 || continue
@@ -466,8 +456,8 @@ titulo() {
     clear
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}               ⚜ KevinTech Multi Script ⚜                ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE}                 CREAR USUARIO SSH PREMIUM               ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}          ⚜ KevinTech Multi Script ⚜                     ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${WHITE}              CREAR USUARIO SSH PREMIUM                  ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo
@@ -478,12 +468,6 @@ titulo() {
 #=========================================================
 
 SERVER_DOMAIN="${SERVER_DOMAIN:-}"
-
-OPENSSH="${OPENSSH:-OFF}"
-DROPBEAR="${DROPBEAR:-OFF}"
-WEBSOCKET="${WEBSOCKET:-OFF}"
-SSL="${SSL:-OFF}"
-SLOWDNS="${SLOWDNS:-OFF}"
 
 #=========================================================
 # OBTENER IP PÚBLICA
@@ -520,6 +504,81 @@ instalar_componentes() {
 }
 
 #=========================================================
+# DETECTAR PUERTOS TCP DE UN PROCESO
+#=========================================================
+
+detectar_tcp_proceso() {
+
+    local PROCESO="$1"
+
+    ss -H -ltnp 2>/dev/null |
+        grep -i "$PROCESO" |
+        sed -nE 's/.*:([0-9]+)[[:space:]].*/\1/p' |
+        sort -nu |
+        paste -sd "," -
+}
+
+#=========================================================
+# DETECTAR PUERTOS UDP DE UN PROCESO
+#=========================================================
+
+detectar_udp_proceso() {
+
+    local PROCESO="$1"
+
+    ss -H -lunp 2>/dev/null |
+        grep -i "$PROCESO" |
+        sed -nE 's/.*:([0-9]+)[[:space:]].*/\1/p' |
+        sort -nu |
+        paste -sd "," -
+}
+
+#=========================================================
+# DETECTAR BADVPN
+#
+# BadVPN UDPGW recibe conexiones de clientes por TCP.
+# Por eso NO usamos ss -lunp.
+#=========================================================
+
+detectar_badvpn() {
+
+    BADVPN_PORTS=""
+
+    local PORTS=""
+
+    # Método principal: detectar procesos BadVPN
+    PORTS=$(detectar_tcp_proceso "badvpn-udpgw")
+
+    # Método alternativo: detectar servicios systemd
+    if [[ -z "$PORTS" ]]; then
+
+        for PORT in 7200 7300; do
+
+            if systemctl is-active \
+                --quiet "badvpn-udpgw-$PORT" 2>/dev/null; then
+
+                if ss -H -ltn 2>/dev/null |
+                    awk '{print $4}' |
+                    grep -qE ":${PORT}$"; then
+
+                    if [[ -z "$PORTS" ]]; then
+                        PORTS="$PORT"
+                    else
+                        PORTS="${PORTS},${PORT}"
+                    fi
+
+                fi
+
+            fi
+
+        done
+
+    fi
+
+    BADVPN_PORTS="$PORTS"
+}
+
+#=========================================================
 # DETECTAR PROTOCOLOS
 #=========================================================
 
@@ -539,6 +598,7 @@ detectar_protocolos() {
         paste -sd "," -
     )
 
+    [[ -z "$SSH_PORTS" ]] && SSH_PORTS="22"
 
 
     #=====================================================
@@ -575,15 +635,7 @@ detectar_protocolos() {
     # BADVPN
     #=====================================================
 
-    BADVPN_PORTS=$(
-        ss -H -ltnp 2>/dev/null |
-        awk '/badvpn-udpgw|badvpn/ {
-            split($4,a,":");
-            print a[length(a)]
-        }' |
-        sort -nu |
-        paste -sd "," -
-    )
+    detectar_badvpn
 
 
     #=====================================================
@@ -623,6 +675,7 @@ detectar_protocolos() {
             SLOWDNS_KEY=$(cat /etc/slowdns/server.pub 2>/dev/null)
 
         fi
+
     fi
 
 
@@ -643,6 +696,7 @@ detectar_protocolos() {
             BHTTP_INSTALADO="SI"
 
         fi
+
     fi
 
 
@@ -697,6 +751,7 @@ detectar_protocolos() {
             fi
 
         fi
+
     fi
 
 
@@ -719,13 +774,14 @@ detectar_protocolos() {
 
                 ZIVPN_PORT=$(
                     jq -r '.listen // empty' \
-                    /etc/zivpn/config.json 2>/dev/null |
+                        /etc/zivpn/config.json 2>/dev/null |
                     tr -d ':'
                 )
 
             fi
 
         fi
+
     fi
 
 
@@ -820,15 +876,21 @@ mostrar_cuenta() {
 
     echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
     echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
-    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
 
-        echo -e " ${WHITE}Expira       : ${GREEN}Nunca${RESET}"
+    #=====================================================
+    # EXPIRACIÓN
+    #=====================================================
+
+    if [[ "$ILIMITADA" == "SI" ]]; then
+
+        echo -e " ${WHITE}Expira       : ${GREEN}Ilimitada ♾${RESET}"
 
     else
 
         echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
 
     fi
+
     echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
 
     echo
@@ -836,6 +898,7 @@ mostrar_cuenta() {
     echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
 
     echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
+
 
     #=====================================================
     # SSH
@@ -914,15 +977,17 @@ mostrar_cuenta() {
 
         echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
 
-        echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
-        echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
+        [[ -n "$SLOWDNS_NS" ]] &&
+            echo -e " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
+
+        [[ -n "$SLOWDNS_KEY" ]] &&
+            echo -e " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
 
     fi
 
 
     #=====================================================
     # BHTTP
-    # SIEMPRE DEBAJO DE SLOWDNS
     #=====================================================
 
     if [[ "$BHTTP_INSTALADO" == "SI" ]]; then
@@ -1121,6 +1186,8 @@ while true; do
 
     #=====================================================
     # DURACIÓN
+    #
+    # ENTER = ILIMITADA
     #=====================================================
 
     while true; do
@@ -1128,16 +1195,15 @@ while true; do
         read -rp \
             "$(echo -e "${GREEN}📅 Duración (días)       : ${RESET}")" DIAS
 
-        # ENTER = cuenta sin expiración
+        # ENTER = ilimitada
         if [[ -z "$DIAS" ]]; then
 
-            DIAS=0
-            SIN_EXPIRACION="SI"
+            ILIMITADA="SI"
+            DIAS="∞"
+
             break
 
         fi
-
-        SIN_EXPIRACION="NO"
 
         if ! [[ "$DIAS" =~ ^[0-9]+$ ]]; then
 
@@ -1149,11 +1215,13 @@ while true; do
 
         if (( DIAS <= 0 )); then
 
-            msg_error "Usa un número mayor que 0 o presiona ENTER para ilimitada."
+            msg_error "La duración debe ser mayor que 0."
 
             continue
 
         fi
+
+        ILIMITADA="NO"
 
         break
 
@@ -1218,10 +1286,10 @@ while true; do
     # FECHA
     #=====================================================
 
-    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
+    if [[ "$ILIMITADA" == "SI" ]]; then
 
         FECHA=""
-        FECHA_MOSTRAR="Nunca"
+        FECHA_MOSTRAR="Ilimitada"
 
     else
 
@@ -1237,7 +1305,7 @@ while true; do
 
     msg_info "Creando usuario SSH..."
 
-    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
+    if [[ "$ILIMITADA" == "SI" ]]; then
 
         useradd \
             -M \
@@ -1272,13 +1340,6 @@ while true; do
 
     echo "${USER}:${PASS}" | chpasswd
 
-    # ENTER en duración = cuenta sin fecha de expiración
-    if [[ "${SIN_EXPIRACION:-NO}" == "SI" ]]; then
-
-        chage -E -1 "$USER" >/dev/null 2>&1
-
-    fi
-
     if [[ $? -ne 0 ]]; then
 
         msg_error "No fue posible establecer la contraseña."
@@ -1311,27 +1372,30 @@ while true; do
 
     instalar_checkuser
 
-msg_ok "Usuario creado correctamente."
+    msg_ok "Usuario creado correctamente."
 
-#=========================================================
-# BANNER AUTOMÁTICO PARA NUEVA CUENTA
-#=========================================================
+    #=====================================================
+    # BANNER AUTOMÁTICO
+    #=====================================================
 
-BANNER_MANAGER="/etc/kevintech/usuarios/banner.sh"
+    BANNER_MANAGER="/etc/kevintech/usuarios/banner.sh"
 
-if [[ -x "$BANNER_MANAGER" ]]; then
+    if [[ -x "$BANNER_MANAGER" ]]; then
 
-    "$BANNER_MANAGER" --auto-user "$USER" >/dev/null 2>&1 || true
+        "$BANNER_MANAGER" \
+            --auto-user "$USER" \
+            >/dev/null 2>&1 || true
 
-    if [[ -f "/etc/ssh_banners/$USER.banner" ]]; then
+        if [[ -f "/etc/ssh_banners/$USER.banner" ]]; then
 
-        msg_ok "Banner automático creado para $USER."
+            msg_ok "Banner automático creado para $USER."
+
+        fi
 
     fi
 
-fi
+    HOST="${SERVER_DOMAIN:-$IP}"
 
-HOST="${SERVER_DOMAIN:-$IP}"
     #=====================================================
     # DETECTAR PROTOCOLOS
     #=====================================================
