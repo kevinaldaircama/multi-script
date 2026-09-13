@@ -937,7 +937,7 @@ SLOWDNS=OFF
 XRAY=OFF
 V2RAY=OFF
 OPENVPN=OFF
-
+BHTTP=OFF
 ZIPVPN=OFF
 WEBSOCKET=OFF
 TROJAN=OFF
@@ -1247,7 +1247,14 @@ instalar_modulo \
     "OpenVPN" \
     "$BASE/protocolos/openvpn.sh" \
     "OPENVPN"
+#=========================================================
+# BHTTP
+#=========================================================
 
+instalar_modulo \
+    "BHTTP" \
+    "$BASE/protocolos/bhttp.sh" \
+    "BHTTP"
 #=========================================================
 # ESTADO DE PROTOCOLOS
 #=========================================================
