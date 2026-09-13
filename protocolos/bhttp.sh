@@ -1559,6 +1559,63 @@ BHTTP_PROBE
 chmod 755 "$PROBE"
 
 # ==============================================================
+# MODO AUTOMÁTICO PARA INSTALL.SH
+# ==============================================================
+
+if [[ "${1:-}" == "--auto" ]]; then
+
+    echo
+    echo "=============================================================="
+    echo "        INSTALACIÓN AUTOMÁTICA DE BHTTP"
+    echo "=============================================================="
+    echo
+
+    # Instala el servidor BHTTP sin interacción.
+    bash "$INSTALL"
+
+    RC=$?
+
+    if [[ "$RC" -ne 0 ]]; then
+        echo "❌ La instalación de BHTTP terminó con errores."
+        exit "$RC"
+    fi
+
+    # Verificar servicio
+    if systemctl is-active --quiet bhttp; then
+
+        if grep -q '^BHTTP=' "$BASE/config.conf" 2>/dev/null; then
+            sed -i 's/^BHTTP=.*/BHTTP=ON/' "$BASE/config.conf"
+        else
+            echo 'BHTTP=ON' >> "$BASE/config.conf"
+        fi
+
+        echo
+        echo "✅ BHTTP instalado correctamente."
+        echo "✅ Servicio BHTTP activo."
+        echo "✅ BHTTP=ON"
+        echo
+
+        exit 0
+
+    else
+
+        if grep -q '^BHTTP=' "$BASE/config.conf" 2>/dev/null; then
+            sed -i 's/^BHTTP=.*/BHTTP=OFF/' "$BASE/config.conf"
+        else
+            echo 'BHTTP=OFF' >> "$BASE/config.conf"
+        fi
+
+        echo
+        echo "❌ BHTTP fue instalado pero el servicio no está activo."
+        echo
+
+        systemctl status bhttp --no-pager -l 2>/dev/null
+
+        exit 1
+    fi
+fi
+
+# ==============================================================
 # MENÚ KEVINTECH
 # ==============================================================
 mostrar_menu(){
