@@ -489,8 +489,8 @@ get_statuses() {
         "${SLOWDNS:-OFF}")
 
     XRAY_STATUS=$(status_service \
-        "xray" \
-        "${V2RAY:-OFF}")
+    "xray" \
+    "${XRAY:-OFF}")
 
     OPENVPN_STATUS=$(status_service \
         "openvpn-server@server" \
