@@ -8,26 +8,27 @@ BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
 #=========================================================
-# Verificar configuración
+# VERIFICAR CONFIGURACIÓN
 #=========================================================
 
-[[ ! -f "$CONFIG" ]] && {
+if [[ ! -f "$CONFIG" ]]; then
     clear
     echo ""
     echo "❌ No se encontró config.conf"
     echo "👉 Ejecuta primero install.sh"
     echo ""
     exit 1
-}
+fi
 
 source "$CONFIG"
 
-grep -q "^OPTIMIZAR=" "$CONFIG" || echo "OPTIMIZAR=OFF" >> "$CONFIG"
+grep -q "^OPTIMIZAR=" "$CONFIG" || \
+echo "OPTIMIZAR=OFF" >> "$CONFIG"
 
 source "$CONFIG"
 
 #=========================================================
-# Variables
+# VARIABLES
 #=========================================================
 
 ZIPVPN=${ZIPVPN:-OFF}
@@ -40,20 +41,45 @@ CLOUDFLARE_STATUS=${CLOUDFLARE_STATUS:-OFF}
 PROXY_STATUS=${PROXY_STATUS:-OFF}
 AUTO_START=${AUTO_START:-OFF}
 
+OPENSSH=${OPENSSH:-ON}
 DROPBEAR=${DROPBEAR:-OFF}
 BADVPN=${BADVPN:-OFF}
 UDP_CUSTOM=${UDP_CUSTOM:-OFF}
 SLOWDNS=${SLOWDNS:-OFF}
 HYSTERIA=${HYSTERIA:-OFF}
 OPENVPN=${OPENVPN:-OFF}
-OPENSSH=${OPENSSH:-ON}
 BHTTP=${BHTTP:-OFF}
+CHECKUSER=${CHECKUSER:-OFF}
 
 #=========================================================
-# Detectar HAProxy / SSL
+# PUERTOS DEL SISTEMA
 #=========================================================
 
-if systemctl is-active --quiet haproxy; then
+SSH_PORT=22
+
+DROPBEAR_PORTS="90,143,109"
+
+SSL_PORTS="80,443,8080"
+
+ZIPVPN_PORT="${ZIPVPN_PORT:-22643}"
+
+BADVPN_PORTS="7200,7300"
+
+UDP_CUSTOM_PORT="${UDP_CUSTOM_PORT:-36712}"
+
+SLOWDNS_PORT="${SLOWDNS_PORT:-53}"
+
+XRAY_PORT="${XRAY_PORT:-443}"
+
+OPENVPN_PORT="${OPENVPN_PORT:-1194}"
+
+BHTTP_PORT="8088"
+
+#=========================================================
+# DETECTAR HAPROXY / SSL
+#=========================================================
+
+if systemctl is-active --quiet haproxy 2>/dev/null; then
     SSL="ON"
     SSL_TUNNEL="ON"
 else
@@ -62,15 +88,21 @@ else
 fi
 
 #=========================================================
-# Detectar Cloudflare
+# DETECTAR CLOUDFLARE
 #=========================================================
 
-if [[ -n "$SERVER_DOMAIN" ]] && command -v dig >/dev/null 2>&1; then
+if [[ -n "$SERVER_DOMAIN" ]] &&
+   command -v dig >/dev/null 2>&1; then
 
-    if dig +short NS "$SERVER_DOMAIN" 2>/dev/null | grep -qi cloudflare; then
+    if dig +short NS "$SERVER_DOMAIN" 2>/dev/null |
+       grep -qi cloudflare; then
+
         CLOUDFLARE_STATUS="ON"
+
     else
+
         CLOUDFLARE_STATUS="OFF"
+
     fi
 
 fi
@@ -106,17 +138,28 @@ BLINK="\e[5m"
 #=========================================================
 
 VERSION_FILE="$BASE/version.txt"
+
 VERSION_URL="https://raw.githubusercontent.com/kevinaldaircama/multi-script/main/version.txt"
 
 if [[ -f "$VERSION_FILE" ]]; then
-    VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" | tr -d '\r')
+
+    VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" |
+        tr -d '\r')
+
 else
+
     VERSION_ACTUAL="v2.0"
+
 fi
 
-NUEVA_VERSION=$(curl -fsSL --max-time 5 "$VERSION_URL" 2>/dev/null | head -n1 | tr -d '\r')
+NUEVA_VERSION=$(curl -fsSL \
+    --max-time 5 \
+    "$VERSION_URL" 2>/dev/null |
+    head -n1 |
+    tr -d '\r')
 
-[[ -z "$NUEVA_VERSION" ]] && NUEVA_VERSION="No disponible"
+[[ -z "$NUEVA_VERSION" ]] &&
+NUEVA_VERSION="No disponible"
 
 #=========================================================
 # INFORMACIÓN VPS
@@ -126,30 +169,50 @@ OS=$(source /etc/os-release && echo "$NAME $VERSION_ID")
 
 CPU=$(nproc)
 
-IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+IP=$(hostname -I 2>/dev/null |
+    awk '{print $1}')
 
-TOTAL_RAM=$(free -h | awk '/Mem:/ {print $2}')
-USED_RAM=$(free -h | awk '/Mem:/ {print $3}')
-FREE_RAM=$(free -h | awk '/Mem:/ {print $7}')
+TOTAL_RAM=$(free -h |
+    awk '/Mem:/ {print $2}')
 
-RAM_USE=$(free | awk '/Mem:/ {printf("%.0f"),$3/$2*100}')
+USED_RAM=$(free -h |
+    awk '/Mem:/ {print $3}')
+
+FREE_RAM=$(free -h |
+    awk '/Mem:/ {print $7}')
+
+RAM_USE=$(free |
+    awk '/Mem:/ {
+        printf("%.0f"),$3/$2*100
+    }')
 
 CPU_USE=$(top -bn1 2>/dev/null |
     grep "Cpu(s)" |
     awk '{print int($2+$4)}')
 
-DISK=$(df -h / | awk 'NR==2 {print $5}')
+DISK=$(df -h / |
+    awk 'NR==2 {print $5}')
 
-UPTIME=$(uptime -p 2>/dev/null | sed 's/up //')
+UPTIME=$(uptime -p 2>/dev/null |
+    sed 's/up //')
 
 #=========================================================
-# FUNCIONES DE CUENTAS
+# FUNCIÓN ESTADO
 #=========================================================
 
-#---------------------------------------------------------
-# SSH / DROPBEAR
-# Cuenta usuarios normales creados para SSH
-#---------------------------------------------------------
+estado_simple() {
+
+    if [[ "$1" == "ON" ]]; then
+        printf "${GREEN}${BOLD}ON${RESET}"
+    else
+        printf "${RED}OFF${RESET}"
+    fi
+
+}
+
+#=========================================================
+# SSH - CUENTAS CREADAS
+#=========================================================
 
 get_ssh_users() {
 
@@ -171,25 +234,27 @@ get_ssh_users() {
     echo "${TOTAL:-0}"
 }
 
-#---------------------------------------------------------
-# SSH CONECTADOS
-#---------------------------------------------------------
+#=========================================================
+# SSH - CUENTAS CONECTADAS
+#=========================================================
 
 get_ssh_online() {
 
     local ONLINE
 
     ONLINE=$(who 2>/dev/null |
-        awk 'NF >= 1 {print $1}' |
+        awk 'NF >= 1 {
+            print $1
+        }' |
         sort -u |
         wc -l)
 
     echo "${ONLINE:-0}"
 }
 
-#---------------------------------------------------------
-# XRAY / VMESS CREADOS
-#---------------------------------------------------------
+#=========================================================
+# XRAY / V2RAY - CUENTAS CREADAS
+#=========================================================
 
 get_v2ray_users() {
 
@@ -201,7 +266,9 @@ get_v2ray_users() {
 
         TOTAL=$(jq '
             [
-                .inbounds[]?.settings.clients[]?
+                .inbounds[]?.
+                settings?.
+                clients[]?
             ] | length
         ' "$CFG" 2>/dev/null)
 
@@ -210,10 +277,9 @@ get_v2ray_users() {
     echo "${TOTAL:-0}"
 }
 
-#---------------------------------------------------------
-# XRAY / VMESS CONECTADOS
-# Detecta actividad reciente en access.log
-#---------------------------------------------------------
+#=========================================================
+# XRAY / V2RAY - CONECTADOS
+#=========================================================
 
 get_v2ray_online() {
 
@@ -226,23 +292,24 @@ get_v2ray_online() {
 
     local ONLINE
 
-    ONLINE=$(tail -n 1000 "$LOG" 2>/dev/null |
-        grep -Ei "email:|accepted|proxy" |
-        tail -n 200 |
-        sed -nE 's/.*email: ([^, ]+).*/\1/p' |
+    ONLINE=$(tail -n 3000 "$LOG" 2>/dev/null |
+        sed -nE '
+            s/.*email: ([^, ]+).*/\1/p
+        ' |
         sort -u |
         wc -l)
 
     echo "${ONLINE:-0}"
 }
 
-#---------------------------------------------------------
-# OPENVPN CREADOS
-#---------------------------------------------------------
+#=========================================================
+# OPENVPN - CUENTAS CREADAS
+#=========================================================
 
 get_openvpn_users() {
 
     local DIR="/etc/openvpn/server/easy-rsa/pki/issued"
+
     local TOTAL=0
     local CERT
     local NAME
@@ -267,22 +334,26 @@ get_openvpn_users() {
     echo "$TOTAL"
 }
 
-#---------------------------------------------------------
-# OPENVPN CONECTADOS
-#---------------------------------------------------------
+#=========================================================
+# OPENVPN - CONECTADOS
+#=========================================================
 
 get_openvpn_online() {
 
     local STATUS=""
 
     if [[ -f "/etc/openvpn/server/openvpn-status.log" ]]; then
+
         STATUS="/etc/openvpn/server/openvpn-status.log"
 
     elif [[ -f "/var/log/openvpn/status.log" ]]; then
+
         STATUS="/var/log/openvpn/status.log"
 
     elif [[ -f "/etc/openvpn/openvpn-status.log" ]]; then
+
         STATUS="/etc/openvpn/openvpn-status.log"
+
     fi
 
     if [[ -z "$STATUS" ]]; then
@@ -290,9 +361,7 @@ get_openvpn_online() {
         return
     fi
 
-    local ONLINE
-
-    ONLINE=$(awk -F',' '
+    awk -F',' '
         /^CLIENT_LIST,/ {
             count++
         }
@@ -300,23 +369,17 @@ get_openvpn_online() {
         END {
             print count+0
         }
-    ' "$STATUS" 2>/dev/null)
-
-    echo "${ONLINE:-0}"
+    ' "$STATUS" 2>/dev/null
 }
 
-#---------------------------------------------------------
-# HYSTERIA
-#
-# Si no existe un gestor independiente de usuarios
-# se muestra 0 en lugar de inventar cuentas.
-#---------------------------------------------------------
+#=========================================================
+# HYSTERIA - CUENTAS
+#=========================================================
 
 get_hysteria_users() {
 
     local TOTAL=0
 
-    # Intentar detectar archivos de usuarios comunes
     if [[ -f "/etc/hysteria/config.yaml" ]]; then
 
         TOTAL=$(grep -Eic \
@@ -327,6 +390,10 @@ get_hysteria_users() {
 
     echo "${TOTAL:-0}"
 }
+
+#=========================================================
+# HYSTERIA - CONECTADOS
+#=========================================================
 
 get_hysteria_online() {
 
@@ -347,9 +414,41 @@ get_hysteria_online() {
     echo "${ONLINE:-0}"
 }
 
-#---------------------------------------------------------
-# BHTTP
-#---------------------------------------------------------
+#=========================================================
+# BHTTP - DETECTAR PUERTO
+#=========================================================
+
+get_bhttp_port() {
+
+    local PORT
+
+    # Primero intenta leer el ExecStart real
+    PORT=$(systemctl cat bhttp.service 2>/dev/null |
+        grep -oE -- '--port[= ]+[0-9]+' |
+        grep -oE '[0-9]+' |
+        tail -n1)
+
+    # Segundo intento: archivo de servicio
+    if [[ -z "$PORT" ]]; then
+
+        PORT=$(grep -oE \
+            -- '--port[= ]+[0-9]+' \
+            /etc/systemd/system/bhttp.service \
+            2>/dev/null |
+            grep -oE '[0-9]+' |
+            tail -n1)
+
+    fi
+
+    # Puerto configurado por el proyecto
+    [[ -z "$PORT" ]] && PORT="8088"
+
+    echo "$PORT"
+}
+
+#=========================================================
+# BHTTP - ESTADO REAL
+#=========================================================
 
 get_bhttp_status() {
 
@@ -361,35 +460,63 @@ get_bhttp_status() {
 }
 
 #=========================================================
+# CHECKUSER
+#=========================================================
+
+get_checkuser_status() {
+
+    if systemctl is-active --quiet checkgestor 2>/dev/null; then
+
+        echo "ON"
+
+    elif systemctl is-active --quiet ssh-ws-internal 2>/dev/null; then
+
+        echo "ON"
+
+    elif [[ "$CHECKUSER" == "ON" ]]; then
+
+        echo "ON"
+
+    else
+
+        echo "OFF"
+
+    fi
+}
+
+#=========================================================
 # CALCULAR CUENTAS
 #=========================================================
 
 SSH_COUNT=$(get_ssh_users)
+
 SSH_ONLINE=$(get_ssh_online)
 
 DROPBEAR_COUNT="$SSH_COUNT"
+
 DROPBEAR_ONLINE="$SSH_ONLINE"
 
 V2RAY_COUNT=$(get_v2ray_users)
+
 V2RAY_ONLINE=$(get_v2ray_online)
 
 HYSTERIA_COUNT=$(get_hysteria_users)
+
 HYSTERIA_ONLINE=$(get_hysteria_online)
 
 OPENVPN_COUNT=$(get_openvpn_users)
+
 OPENVPN_ONLINE=$(get_openvpn_online)
 
 #=========================================================
-# DETECTAR BHTTP REAL
+# ESTADOS REALES
 #=========================================================
 
 BHTTP_STATUS=$(get_bhttp_status)
 
-if [[ "$BHTTP_STATUS" == "ON" ]]; then
-    BHTTP="ON"
-else
-    BHTTP="${BHTTP:-OFF}"
-fi
+BHTTP_PORT=$(get_bhttp_port)
+
+CHECKUSER_STATUS=$(get_checkuser_status)
 
 #=========================================================
 # MENÚ PRINCIPAL
@@ -398,8 +525,11 @@ fi
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${CYAN}║${RESET} ${BOLD}${WHITE}             KEVIN TECH CONTROL PANEL${RESET}             ${CYAN}║${RESET}"
+
 echo -e "${CYAN}║${RESET} ${GRAY}                  PREMIUM EDITION${RESET}                  ${CYAN}║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 echo ""
@@ -417,43 +547,24 @@ echo -e " ${GOLD}◆${RESET} ${YELLOW}CPU${RESET}     ${GRAY}:${RESET} ${LIME}${
 echo -e " ${GOLD}◆${RESET} ${YELLOW}RAM${RESET}     ${GRAY}:${RESET} ${LIME}${USED_RAM}/${TOTAL_RAM}${RESET} ${GRAY}|${RESET} ${WHITE}Libre: $FREE_RAM${RESET}"
 
 #=========================================================
-# PROTOCOLOS ACTIVOS - 2 COLUMNAS
+# PROTOCOLOS ACTIVOS
 #=========================================================
 
 echo ""
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-echo -e " ${MAGENTA}${BOLD}◆ PROTOCOLOS${RESET}"
+echo -e " ${MAGENTA}${BOLD}◆ PROTOCOLOS ACTIVOS${RESET}"
 
 echo ""
 
-#---------------------------------------------------------
-# FILA 1
-#---------------------------------------------------------
+#=========================================================
+# ESTADOS
+#=========================================================
 
-if [[ "$OPENSSH" == "ON" ]]; then
-    SSH_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    SSH_STATE="${RED}OFF${RESET}"
-fi
+SSH_STATE=$(estado_simple "$OPENSSH")
 
-if [[ "$DROPBEAR" == "ON" ]]; then
-    DROPBEAR_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    DROPBEAR_STATE="${RED}OFF${RESET}"
-fi
-
-printf "   ${GREEN}●${RESET} ${WHITE}SSH${RESET}          ${GRAY}:${RESET} %-18b" \
-    "$SSH_STATE"
-
-printf "${GREEN}●${RESET} ${WHITE}Dropbear${RESET}     ${GRAY}:${RESET} %b\n" \
-    "$DROPBEAR_STATE"
-
-
-#---------------------------------------------------------
-# FILA 2
-#---------------------------------------------------------
+DROPBEAR_STATE=$(estado_simple "$DROPBEAR")
 
 if [[ "$SSL" == "ON" || "$SSL_TUNNEL" == "ON" ]]; then
     SSL_STATE="${GREEN}${BOLD}ON${RESET}"
@@ -461,116 +572,120 @@ else
     SSL_STATE="${RED}OFF${RESET}"
 fi
 
-if [[ "$ZIPVPN" == "ON" ]]; then
-    ZIPVPN_STATE="${GREEN}${BOLD}ON${RESET}"
+ZIPVPN_STATE=$(estado_simple "$ZIPVPN")
+
+BADVPN_STATE=$(estado_simple "$BADVPN")
+
+UDP_STATE=$(estado_simple "$UDP_CUSTOM")
+
+SLOWDNS_STATE=$(estado_simple "$SLOWDNS")
+
+#=========================================================
+# XRAY
+# IMPORTANTE:
+# systemctl está FUERA de [[ ]]
+#=========================================================
+
+if [[ "$XRAY" == "ON" ]] ||
+   systemctl is-active --quiet xray 2>/dev/null; then
+
+    XRAY_STATE="${GREEN}${BOLD}ON${RESET}"
+
 else
-    ZIPVPN_STATE="${RED}OFF${RESET}"
+
+    XRAY_STATE="${RED}OFF${RESET}"
+
 fi
+
+HYSTERIA_STATE=$(estado_simple "$HYSTERIA")
+
+OPENVPN_STATE=$(estado_simple "$OPENVPN")
+
+BHTTP_STATE=$(estado_simple "$BHTTP_STATUS")
+
+CHECKUSER_STATE=$(estado_simple "$CHECKUSER_STATUS")
+
+#=========================================================
+# FILA 1
+#=========================================================
+
+printf "   ${GREEN}●${RESET} ${WHITE}SSH${RESET}          ${GRAY}:${RESET} %-18b" \
+    "$SSH_STATE"
+
+printf "${GRAY}(${RESET}${WHITE}${SSH_PORT}${RESET}${GRAY})${RESET}   "
+
+printf "${GREEN}●${RESET} ${WHITE}Dropbear${RESET}     ${GRAY}:${RESET} %b" \
+    "$DROPBEAR_STATE"
+
+printf " ${GRAY}(${WHITE}${DROPBEAR_PORTS}${GRAY})${RESET}\n"
+
+#=========================================================
+# FILA 2
+#=========================================================
 
 printf "   ${GREEN}●${RESET} ${WHITE}SSL Tunnel${RESET}   ${GRAY}:${RESET} %-18b" \
     "$SSL_STATE"
 
-printf "${GREEN}●${RESET} ${WHITE}ZiVPN${RESET}        ${GRAY}:${RESET} %b\n" \
+printf "${GRAY}(${WHITE}${SSL_PORTS}${GRAY})${RESET} "
+
+printf " ${GREEN}●${RESET} ${WHITE}ZiVPN${RESET}        ${GRAY}:${RESET} %b" \
     "$ZIPVPN_STATE"
 
+printf " ${GRAY}(${WHITE}${ZIPVPN_PORT}${GRAY})${RESET}\n"
 
-#---------------------------------------------------------
+#=========================================================
 # FILA 3
-#---------------------------------------------------------
-
-if [[ "$BADVPN" == "ON" ]]; then
-    BADVPN_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    BADVPN_STATE="${RED}OFF${RESET}"
-fi
-
-if [[ "$UDP_CUSTOM" == "ON" ]]; then
-    UDP_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    UDP_STATE="${RED}OFF${RESET}"
-fi
+#=========================================================
 
 printf "   ${GREEN}●${RESET} ${WHITE}BadVPN${RESET}       ${GRAY}:${RESET} %-18b" \
     "$BADVPN_STATE"
 
-printf "${GREEN}●${RESET} ${WHITE}UDP Custom${RESET}   ${GRAY}:${RESET} %b\n" \
+printf "${GRAY}(${WHITE}${BADVPN_PORTS}${GRAY})${RESET} "
+
+printf " ${GREEN}●${RESET} ${WHITE}UDP Custom${RESET}   ${GRAY}:${RESET} %b" \
     "$UDP_STATE"
 
+printf " ${GRAY}(${WHITE}${UDP_CUSTOM_PORT}${GRAY})${RESET}\n"
 
-#---------------------------------------------------------
+#=========================================================
 # FILA 4
-#---------------------------------------------------------
-
-if [[ "$SLOWDNS" == "ON" ]]; then
-    SLOWDNS_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    SLOWDNS_STATE="${RED}OFF${RESET}"
-fi
-
-if [[ "$XRAY" == "ON" || systemctl is-active --quiet xray 2>/dev/null ]]; then
-    XRAY_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    XRAY_STATE="${RED}OFF${RESET}"
-fi
+#=========================================================
 
 printf "   ${GREEN}●${RESET} ${WHITE}SlowDNS${RESET}      ${GRAY}:${RESET} %-18b" \
     "$SLOWDNS_STATE"
 
-printf "${GREEN}●${RESET} ${WHITE}Xray/V2Ray${RESET}   ${GRAY}:${RESET} %b\n" \
+printf "${GRAY}(${WHITE}${SLOWDNS_PORT}${GRAY})${RESET} "
+
+printf " ${GREEN}●${RESET} ${WHITE}Xray/V2Ray${RESET}   ${GRAY}:${RESET} %b" \
     "$XRAY_STATE"
 
+printf " ${GRAY}(${WHITE}${XRAY_PORT}${GRAY})${RESET}\n"
 
-#---------------------------------------------------------
+#=========================================================
 # FILA 5
-#---------------------------------------------------------
-
-if [[ "$HYSTERIA" == "ON" ]]; then
-    HYSTERIA_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    HYSTERIA_STATE="${RED}OFF${RESET}"
-fi
-
-if [[ "$OPENVPN" == "ON" ]]; then
-    OPENVPN_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    OPENVPN_STATE="${RED}OFF${RESET}"
-fi
+#=========================================================
 
 printf "   ${GREEN}●${RESET} ${WHITE}Hysteria${RESET}     ${GRAY}:${RESET} %-18b" \
     "$HYSTERIA_STATE"
 
-printf "${GREEN}●${RESET} ${WHITE}OpenVPN${RESET}      ${GRAY}:${RESET} %b\n" \
+printf " "
+
+printf " ${GREEN}●${RESET} ${WHITE}OpenVPN${RESET}      ${GRAY}:${RESET} %b" \
     "$OPENVPN_STATE"
 
+printf " ${GRAY}(${WHITE}${OPENVPN_PORT}${GRAY})${RESET}\n"
 
-#---------------------------------------------------------
-# FILA 6 - BHTTP / CHECKUSER
-#---------------------------------------------------------
-
-if [[ "$BHTTP_STATUS" == "ON" ]]; then
-    BHTTP_STATE="${GREEN}${BOLD}ON${RESET}"
-else
-    BHTTP_STATE="${RED}OFF${RESET}"
-fi
-
-if [[ "$CHECKUSER" == "ON" ]] ||
-   systemctl is-active --quiet checkgestor 2>/dev/null ||
-   systemctl is-active --quiet ssh-ws-internal 2>/dev/null; then
-
-    CHECKUSER_STATE="${GREEN}${BOLD}ON${RESET}"
-
-else
-
-    CHECKUSER_STATE="${RED}OFF${RESET}"
-
-fi
+#=========================================================
+# FILA 6
+#=========================================================
 
 printf "   ${GREEN}●${RESET} ${WHITE}BHTTP${RESET}        ${GRAY}:${RESET} %-18b" \
     "$BHTTP_STATE"
 
-printf "${GREEN}●${RESET} ${WHITE}CheckUser${RESET}    ${GRAY}:${RESET} %b\n" \
-    "$CHECKUSER_STATE"
+printf " ${GRAY}(${WHITE}${BHTTP_PORT}${GRAY})${RESET} "
 
+printf " ${GREEN}●${RESET} ${WHITE}CheckUser${RESET}    ${GRAY}:${RESET} %b\n" \
+    "$CHECKUSER_STATE"
 
 echo ""
 
@@ -584,9 +699,9 @@ echo -e " ${BLUE}${BOLD}◆ CUENTAS POR PROTOCOLO${RESET}"
 
 echo ""
 
-#---------------------------------------------------------
+#=========================================================
 # FILA 1
-#---------------------------------------------------------
+#=========================================================
 
 printf "   ${WHITE}SSH${RESET}        ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}    " \
     "$SSH_COUNT" "$SSH_ONLINE"
@@ -594,10 +709,9 @@ printf "   ${WHITE}SSH${RESET}        ${GRAY}:${RESET} ${CYAN}%s creados${RESET}
 printf "${WHITE}Dropbear${RESET}   ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
     "$DROPBEAR_COUNT" "$DROPBEAR_ONLINE"
 
-
-#---------------------------------------------------------
+#=========================================================
 # FILA 2
-#---------------------------------------------------------
+#=========================================================
 
 printf "   ${WHITE}V2Ray${RESET}      ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}    " \
     "$V2RAY_COUNT" "$V2RAY_ONLINE"
@@ -605,23 +719,21 @@ printf "   ${WHITE}V2Ray${RESET}      ${GRAY}:${RESET} ${CYAN}%s creados${RESET}
 printf "${WHITE}Hysteria${RESET}   ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
     "$HYSTERIA_COUNT" "$HYSTERIA_ONLINE"
 
-
-#---------------------------------------------------------
+#=========================================================
 # FILA 3
-#---------------------------------------------------------
+#=========================================================
 
 printf "   ${WHITE}OpenVPN${RESET}    ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}    " \
     "$OPENVPN_COUNT" "$OPENVPN_ONLINE"
 
 printf "${WHITE}BHTTP${RESET}      ${GRAY}:${RESET} ${CYAN}SSH${RESET} ${GRAY}(usa cuentas SSH)${RESET}\n"
 
-
 echo ""
 
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
 #=========================================================
-# OPCIONES PRINCIPALES
+# OPCIONES
 #=========================================================
 
 echo -e " ${GOLD}${BOLD}[01]${RESET} ${WHITE}👥 Usuarios SSH${RESET}        ${GOLD}${BOLD}[05]${RESET} ${WHITE}📦 Instalar protocolos${RESET}"
@@ -635,7 +747,7 @@ echo -e " ${GOLD}${BOLD}[04]${RESET} ${WHITE}⚒️ Auto inicio${RESET}"
 echo -e "${CYAN}────────────────────────────────────────────────${RESET}"
 
 #=========================================================
-# VERSION
+# VERSIÓN
 #=========================================================
 
 if [[ "$NUEVA_VERSION" != "No disponible" &&
@@ -673,13 +785,20 @@ read -r OPCION
 
 case "$OPCION" in
 
+#=========================================================
+# 01 - USUARIOS SSH
+#=========================================================
+
 1)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${WHITE}║                 👥 CREACION DE USUARIOS                      ║${RESET}"
+
+echo -e "${WHITE}║                 👥 CREACION DE USUARIOS                     ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 echo ""
 
 if [[ -f "$BASE/usuarios/menu.sh" ]]; then
@@ -699,14 +818,19 @@ fi
 ;;
 
 #=========================================================
+# 02 - OPTIMIZAR VPS
+#=========================================================
 
 2)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${WHITE}║                    🚀 OPTIMIZAR VPS                         ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 echo ""
 
 if [[ -f "$BASE/herramientas/optimizar.sh" ]]; then
@@ -737,14 +861,19 @@ fi
 ;;
 
 #=========================================================
+# 03 - CAMBIAR DOMINIO
+#=========================================================
 
 3)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${WHITE}║                  🌐 CAMBIAR DOMINIO                         ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 echo ""
 
 if [[ -f "$BASE/herramientas/change-domain" ]]; then
@@ -775,6 +904,8 @@ fi
 ;;
 
 #=========================================================
+# 04 - AUTO INICIO
+#=========================================================
 
 4)
 
@@ -783,8 +914,11 @@ FILE="/etc/profile.d/kevintech.sh"
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${WHITE}║                    🔄 AUTO INICIO                           ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 echo ""
 
 if [[ "$AUTO_START" == "OFF" ]]; then
@@ -820,14 +954,19 @@ exec bash "$BASE/menu.sh"
 ;;
 
 #=========================================================
+# 05 - PROTOCOLOS
+#=========================================================
 
 5)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${WHITE}║                📦 INSTALADOR DE PROTOCOLOS                  ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 echo ""
 
 if [[ -f "$BASE/protocolos/menu.sh" ]]; then
@@ -858,13 +997,17 @@ fi
 ;;
 
 #=========================================================
+# 06 - UPDATE / REMOVE
+#=========================================================
 
 6)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${WHITE}║                    🛠 UPDATE / REMOVE                        ║${RESET}"
+
+echo -e "${WHITE}║                    🛠 UPDATE / REMOVE                       ║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 echo ""
@@ -872,6 +1015,8 @@ echo ""
 echo -e "${YELLOW}[1]${WHITE} 🗑 Remover Script"
 
 echo -e "${YELLOW}[2]${WHITE} 🔄 Actualizar Script"
+
+echo -e "${YELLOW}[0]${WHITE} 🔙 Volver"
 
 echo ""
 
@@ -884,7 +1029,9 @@ case "$OP6" in
 clear
 
 echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${WHITE}║                  ⚠️ ELIMINAR SCRIPT                         ║${RESET}"
+
 echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 echo ""
@@ -963,14 +1110,14 @@ esac
 
 ;;
 
-#=========================================================
-
 2)
 
 clear
 
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
 echo -e "${CYAN}║${RESET} ${WHITE}${BOLD}                 🔄 ACTUALIZANDO SCRIPT${RESET}              ${CYAN}║${RESET}"
+
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 echo ""
@@ -984,7 +1131,9 @@ UPDATE="/etc/kevintech/update.sh"
 if [[ ! -f "$UPDATE" ]]; then
 
     echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
     echo -e "${RED}║${RESET} ${WHITE}❌ No se encontró update.sh${RESET}                            ${RED}║${RESET}"
+
     echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     echo ""
@@ -1014,13 +1163,17 @@ echo ""
 if [[ $STATUS -eq 0 ]]; then
 
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
     echo -e "${GREEN}║${RESET} ${WHITE}${BOLD}        ✅ ACTUALIZACIÓN COMPLETADA CORRECTAMENTE${RESET}      ${GREEN}║${RESET}"
+
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 else
 
     echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${RESET}"
+
     echo -e "${RED}║${RESET} ${WHITE}${BOLD}              ❌ ERROR EN LA ACTUALIZACIÓN${RESET}             ${RED}║${RESET}"
+
     echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
 fi
@@ -1035,10 +1188,28 @@ exec menu
 
 ;;
 
+0)
+
+exec menu
+
+;;
+
+*)
+
+echo -e "${RED}❌ Opción inválida.${RESET}"
+
+sleep 2
+
+exec menu
+
+;;
+
 esac
 
 ;;
 
+#=========================================================
+# 00 - SALIR
 #=========================================================
 
 0)
@@ -1055,6 +1226,8 @@ exit
 
 ;;
 
+#=========================================================
+# OPCIÓN INVÁLIDA
 #=========================================================
 
 *)
