@@ -1559,60 +1559,63 @@ BHTTP_PROBE
 chmod 755 "$PROBE"
 
 # ==============================================================
-# MODO AUTOMÁTICO PARA INSTALL.SH
+# MODO AUTOMÁTICO KEVINTECH
+# BHTTP = PUERTO 8088
 # ==============================================================
 
 if [[ "${1:-}" == "--auto" ]]; then
 
-    echo
+    clear
+
+    echo -e "${CYAN}${BOLD}"
     echo "=============================================================="
     echo "        INSTALACIÓN AUTOMÁTICA DE BHTTP"
     echo "=============================================================="
+    echo -e "${RESET}"
+
+    PUERTO_BHTTP=8088
+
+    echo -e "${WHITE}➜ Puerto BHTTP: ${GREEN}${PUERTO_BHTTP}${RESET}"
     echo
 
-    # Instala el servidor BHTTP sin interacción.
-    bash "$INSTALL"
+    if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE ":${PUERTO_BHTTP}$"; then
+        echo -e "${RED}❌ El puerto 8088 ya está ocupado.${RESET}"
+        echo
+        echo "Comprueba quién lo usa:"
+        echo "  ss -ltnp | grep ':8088'"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}🚀 Instalando BHTTP automáticamente...${RESET}"
+    echo
+
+    bash "$INSTALL" --puerto "$PUERTO_BHTTP"
 
     RC=$?
 
     if [[ "$RC" -ne 0 ]]; then
-        echo "❌ La instalación de BHTTP terminó con errores."
+        echo -e "${RED}❌ Error instalando BHTTP.${RESET}"
         exit "$RC"
     fi
 
-    # Verificar servicio
-    if systemctl is-active --quiet bhttp; then
-
-        if grep -q '^BHTTP=' "$BASE/config.conf" 2>/dev/null; then
+    if [[ -f "$BASE/config.conf" ]]; then
+        if grep -q '^BHTTP=' "$BASE/config.conf"; then
             sed -i 's/^BHTTP=.*/BHTTP=ON/' "$BASE/config.conf"
         else
-            echo 'BHTTP=ON' >> "$BASE/config.conf"
+            echo "BHTTP=ON" >> "$BASE/config.conf"
         fi
-
-        echo
-        echo "✅ BHTTP instalado correctamente."
-        echo "✅ Servicio BHTTP activo."
-        echo "✅ BHTTP=ON"
-        echo
-
-        exit 0
-
-    else
-
-        if grep -q '^BHTTP=' "$BASE/config.conf" 2>/dev/null; then
-            sed -i 's/^BHTTP=.*/BHTTP=OFF/' "$BASE/config.conf"
-        else
-            echo 'BHTTP=OFF' >> "$BASE/config.conf"
-        fi
-
-        echo
-        echo "❌ BHTTP fue instalado pero el servicio no está activo."
-        echo
-
-        systemctl status bhttp --no-pager -l 2>/dev/null
-
-        exit 1
     fi
+
+    echo
+    echo -e "${GREEN}${BOLD}"
+    echo "=============================================================="
+    echo "        ✅ BHTTP INSTALADO AUTOMÁTICAMENTE"
+    echo "        ✅ PUERTO: 8088"
+    echo "        ✅ ESTADO: ON"
+    echo "=============================================================="
+    echo -e "${RESET}"
+
+    exit 0
 fi
 
 # ==============================================================
