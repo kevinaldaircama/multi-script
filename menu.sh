@@ -500,16 +500,24 @@ get_ssh_users() {
 # SSH CONECTADOS
 #=========================================================
 
+#=========================================================
+# SSH CONECTADOS
+# MISMO MÉTODO DEL MÓDULO USUARIOS ONLINE
+#=========================================================
+
 get_ssh_online() {
 
-    local ONLINE
+    local ONLINE=0
 
-    ONLINE=$(who 2>/dev/null |
-        awk 'NF >= 1 {
-            print $1
-        }' |
+    ONLINE=$(
+        ps -C sshd -o args= 2>/dev/null |
+        grep '\[priv\]' |
+        awk -F'sshd: ' '{print $2}' |
+        awk '{print $1}' |
+        grep -Ev '^(root|unknown|invalid|\(null\))$' |
         sort -u |
-        wc -l)
+        wc -l
+    )
 
     echo "${ONLINE:-0}"
 }
