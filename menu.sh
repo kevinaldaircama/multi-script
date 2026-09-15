@@ -780,11 +780,13 @@ mostrar_protocolo() {
 
     IFS='|' read -r NOMBRE PUERTO ICONO ESTADO <<< "$ITEM"
 
-    printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
+    printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET} " \
         "$NOMBRE"
 
     if [[ -n "$PUERTO" ]]; then
-        printf " ${GRAY}(%s)${RESET}" "$PUERTO"
+        printf "${GRAY}(%-11s)${RESET}" "$PUERTO"
+    else
+        printf "%-13s" ""
     fi
 }
 
@@ -835,23 +837,20 @@ else
 
     for ((i=0; i<TOTAL_PROTO; i+=2)); do
 
-        ITEM1="${PROTOCOLOS[$i]}"
+    ITEM1="${PROTOCOLOS[$i]}"
+    ITEM2="${PROTOCOLOS[$((i+1))]}"
 
-        mostrar_protocolo "$ITEM1"
+    mostrar_protocolo "$ITEM1"
 
-        printf "     "
+    printf "%-8s" ""
 
-        if (( i + 1 < TOTAL_PROTO )); then
+    if (( i + 1 < TOTAL_PROTO )); then
+        mostrar_protocolo "$ITEM2"
+    fi
 
-            ITEM2="${PROTOCOLOS[$((i+1))]}"
+    printf "\n"
 
-            mostrar_protocolo "$ITEM2"
-
-        fi
-
-        printf "\n"
-
-    done
+done
 
 fi
 
