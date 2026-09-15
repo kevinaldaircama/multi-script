@@ -770,8 +770,8 @@ if bhttp_instalado; then
 fi
 
 #=========================================================
-# FUNCIÓN MOSTRAR PROTOCOLO
-# SIN ON/OFF
+# MOSTRAR PROTOCOLO
+# FORMATO COMPACTO
 #=========================================================
 
 mostrar_protocolo() {
@@ -780,13 +780,16 @@ mostrar_protocolo() {
 
     IFS='|' read -r NOMBRE PUERTO ICONO ESTADO <<< "$ITEM"
 
-    printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET} " \
-        "$NOMBRE"
-
     if [[ -n "$PUERTO" ]]; then
-        printf "${GRAY}(%-11s)${RESET}" "$PUERTO"
+
+        printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %s${RESET} ${GRAY}(%s)${RESET}" \
+            "$NOMBRE" "$PUERTO"
+
     else
-        printf "%-13s" ""
+
+        printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %s${RESET}" \
+            "$NOMBRE"
+
     fi
 }
 
@@ -837,20 +840,23 @@ else
 
     for ((i=0; i<TOTAL_PROTO; i+=2)); do
 
-    ITEM1="${PROTOCOLOS[$i]}"
-    ITEM2="${PROTOCOLOS[$((i+1))]}"
+        ITEM1="${PROTOCOLOS[$i]}"
+        ITEM2="${PROTOCOLOS[$((i+1))]}"
 
-    mostrar_protocolo "$ITEM1"
+        # PRIMERA COLUMNA
+        mostrar_protocolo "$ITEM1"
 
-    printf "%-8s" ""
+        # SEPARACIÓN ENTRE COLUMNAS
+        printf "        "
 
-    if (( i + 1 < TOTAL_PROTO )); then
-        mostrar_protocolo "$ITEM2"
-    fi
+        # SEGUNDA COLUMNA
+        if (( i + 1 < TOTAL_PROTO )); then
+            mostrar_protocolo "$ITEM2"
+        fi
 
-    printf "\n"
+        printf "\n"
 
-done
+    done
 
 fi
 
@@ -860,7 +866,6 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 #=========================================================
 # CUENTAS
-# SOLO SSH / V2RAY / OPENVPN
 #=========================================================
 
 echo -e " ${BLUE}${BOLD}◆ CUENTAS POR PROTOCOLO${RESET}"
