@@ -103,7 +103,7 @@ VERSION_URL="https://raw.githubusercontent.com/kevinaldaircama/multi-script/main
 if [[ -f "$VERSION_FILE" ]]; then
     VERSION_ACTUAL=$(head -n1 "$VERSION_FILE" | tr -d '\r')
 else
-    VERSION_ACTUAL="v2.0"
+    VERSION_ACTUAL="v2.7"
 fi
 
 NUEVA_VERSION=$(curl -fsSL \
@@ -445,6 +445,8 @@ get_bhttp_port() {
 
 #=========================================================
 # CHECKUSER
+# NOTA:
+# CheckUser NO se muestra como protocolo.
 #=========================================================
 
 checkuser_instalado() {
@@ -467,8 +469,6 @@ checkuser_activo() {
     systemctl is-active --quiet checkgestor.service 2>/dev/null && return 0
 
     systemctl is-active --quiet checkuser.service 2>/dev/null && return 0
-
-    systemctl is-active --quiet ssh-ws-internal.service 2>/dev/null && return 0
 
     return 1
 }
@@ -725,43 +725,7 @@ if bhttp_instalado; then
 fi
 
 #=========================================================
-# FUNCIÓN PARA MOSTRAR PROTOCOLO
-#=========================================================
-
-mostrar_protocolo() {
-
-    local NOMBRE="$1"
-    local PUERTO="$2"
-    local ICONO="$3"
-    local ESTADO="$4"
-
-    if [[ "$ESTADO" == "ON" ]]; then
-
-        printf "   ${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
-            "$NOMBRE"
-
-        if [[ -n "$PUERTO" ]]; then
-            printf " ${GRAY}(%s)${RESET}" "$PUERTO"
-        fi
-
-        printf " ${GREEN}ON${RESET}\n"
-
-    else
-
-        printf "   ${YELLOW}[!]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
-            "$NOMBRE"
-
-        if [[ -n "$PUERTO" ]]; then
-            printf " ${GRAY}(%s)${RESET}" "$PUERTO"
-        fi
-
-        printf " ${RED}OFF${RESET}\n"
-
-    fi
-}
-
-#=========================================================
-# ESTADO DE PROTOCOLOS
+# PROTOCOLOS
 #=========================================================
 
 PROTOCOLOS=()
@@ -846,15 +810,9 @@ if xray_instalado; then
 
 fi
 
-if checkuser_instalado; then
-
-    if checkuser_activo; then
-        PROTOCOLOS+=("CheckUser||👤|ON")
-    else
-        PROTOCOLOS+=("CheckUser||👤|OFF")
-    fi
-
-fi
+#=========================================================
+# CHECKUSER INTENCIONALMENTE NO SE AGREGA
+#=========================================================
 
 if openvpn_instalado; then
 
@@ -887,6 +845,39 @@ if bhttp_instalado; then
 fi
 
 #=========================================================
+# FUNCIÓN MOSTRAR PROTOCOLO
+#=========================================================
+
+mostrar_protocolo() {
+
+    local ITEM="$1"
+
+    IFS='|' read -r NOMBRE PUERTO ICONO ESTADO <<< "$ITEM"
+
+    if [[ "$ESTADO" == "ON" ]]; then
+
+        printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
+            "$NOMBRE"
+
+    else
+
+        printf "${YELLOW}[!]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
+            "$NOMBRE"
+
+    fi
+
+    if [[ -n "$PUERTO" ]]; then
+        printf " ${GRAY}(%s)${RESET}" "$PUERTO"
+    fi
+
+    if [[ "$ESTADO" == "ON" ]]; then
+        printf " ${GREEN}ON${RESET}"
+    else
+        printf " ${RED}OFF${RESET}"
+    fi
+}
+
+#=========================================================
 # VPS
 #=========================================================
 
@@ -912,7 +903,7 @@ echo -e " ${GOLD}◆${RESET} ${YELLOW}CPU${RESET}     ${GRAY}:${RESET} ${LIME}${
 echo -e " ${GOLD}◆${RESET} ${YELLOW}RAM${RESET}     ${GRAY}:${RESET} ${LIME}${USED_RAM}/${TOTAL_RAM}${RESET} ${GRAY}|${RESET} ${WHITE}Libre: $FREE_RAM${RESET}"
 
 #=========================================================
-# PROTOCOLOS
+# PROTOCOLOS - 2 COLUMNAS
 #=========================================================
 
 echo ""
@@ -931,15 +922,23 @@ if (( TOTAL_PROTO == 0 )); then
 
 else
 
-    for ITEM in "${PROTOCOLOS[@]}"; do
+    for ((i=0; i<TOTAL_PROTO; i+=2)); do
 
-        IFS='|' read -r NOMBRE PUERTO ICONO ESTADO <<< "$ITEM"
+        ITEM1="${PROTOCOLOS[$i]}"
 
-        mostrar_protocolo \
-            "$NOMBRE" \
-            "$PUERTO" \
-            "$ICONO" \
-            "$ESTADO"
+        mostrar_protocolo "$ITEM1"
+
+        printf "     "
+
+        if (( i + 1 < TOTAL_PROTO )); then
+
+            ITEM2="${PROTOCOLOS[$((i+1))]}"
+
+            mostrar_protocolo "$ITEM2"
+
+        fi
+
+        printf "\n"
 
     done
 
@@ -1281,7 +1280,9 @@ EOF
 
                         echo ""
                         echo -e "${GREEN}Operación cancelada.${RESET}"
+
                         sleep 2
+
                         exec menu
 
                     fi
