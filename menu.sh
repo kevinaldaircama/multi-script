@@ -445,8 +445,7 @@ get_bhttp_port() {
 
 #=========================================================
 # CHECKUSER
-# NOTA:
-# CheckUser NO se muestra como protocolo.
+# NO SE MUESTRA EN EL MENÚ
 #=========================================================
 
 checkuser_instalado() {
@@ -699,19 +698,14 @@ get_hysteria_online() {
 
 #=========================================================
 # CUENTAS
+# SOLO SSH / V2RAY / OPENVPN
 #=========================================================
 
 SSH_COUNT=$(get_ssh_users)
 SSH_ONLINE=$(get_ssh_online)
 
-DROPBEAR_COUNT="$SSH_COUNT"
-DROPBEAR_ONLINE="$SSH_ONLINE"
-
 V2RAY_COUNT=$(get_v2ray_users)
 V2RAY_ONLINE=$(get_v2ray_online)
-
-HYSTERIA_COUNT=$(get_hysteria_users)
-HYSTERIA_ONLINE=$(get_hysteria_online)
 
 OPENVPN_COUNT=$(get_openvpn_users)
 OPENVPN_ONLINE=$(get_openvpn_online)
@@ -726,126 +720,58 @@ fi
 
 #=========================================================
 # PROTOCOLOS
+# CHECKUSER NO SE AGREGA
 #=========================================================
 
 PROTOCOLOS=()
 
 if ssh_instalado; then
-
-    if ssh_activo; then
-        PROTOCOLOS+=("SSH|${SSH_PORT}|🔐|ON")
-    else
-        PROTOCOLOS+=("SSH|${SSH_PORT}|🔐|OFF")
-    fi
-
+    PROTOCOLOS+=("SSH|${SSH_PORT}|🔐|ON")
 fi
 
 if zivpn_instalado; then
-
-    if zivpn_activo; then
-        PROTOCOLOS+=("ZiVPN|${ZIPVPN_PORT}|📦|ON")
-    else
-        PROTOCOLOS+=("ZiVPN|${ZIPVPN_PORT}|📦|OFF")
-    fi
-
+    PROTOCOLOS+=("ZiVPN|${ZIPVPN_PORT}|📦|ON")
 fi
 
 if dropbear_instalado; then
-
-    if dropbear_activo; then
-        PROTOCOLOS+=("Dropbear|${DROPBEAR_PORTS}|🚪|ON")
-    else
-        PROTOCOLOS+=("Dropbear|${DROPBEAR_PORTS}|🚪|OFF")
-    fi
-
+    PROTOCOLOS+=("Dropbear|${DROPBEAR_PORTS}|🚪|ON")
 fi
 
 if ssl_instalado; then
-
-    if ssl_activo; then
-        PROTOCOLOS+=("SSL/TLS|${SSL_PORTS}|🔒|ON")
-    else
-        PROTOCOLOS+=("SSL/TLS|${SSL_PORTS}|🔒|OFF")
-    fi
-
+    PROTOCOLOS+=("SSL/TLS|${SSL_PORTS}|🔒|ON")
 fi
 
 if badvpn_instalado; then
-
-    if badvpn_activo; then
-        PROTOCOLOS+=("BadVPN|${BADVPN_PORTS}|⚡|ON")
-    else
-        PROTOCOLOS+=("BadVPN|${BADVPN_PORTS}|⚡|OFF")
-    fi
-
+    PROTOCOLOS+=("BadVPN|${BADVPN_PORTS}|⚡|ON")
 fi
 
 if udpcustom_instalado; then
-
-    if udpcustom_activo; then
-        PROTOCOLOS+=("UDP Custom|${UDP_CUSTOM_PORT}|🚀|ON")
-    else
-        PROTOCOLOS+=("UDP Custom|${UDP_CUSTOM_PORT}|🚀|OFF")
-    fi
-
+    PROTOCOLOS+=("UDP Custom|${UDP_CUSTOM_PORT}|🚀|ON")
 fi
 
 if slowdns_instalado; then
-
-    if slowdns_activo; then
-        PROTOCOLOS+=("SlowDNS|${SLOWDNS_PORT}|🌐|ON")
-    else
-        PROTOCOLOS+=("SlowDNS|${SLOWDNS_PORT}|🌐|OFF")
-    fi
-
+    PROTOCOLOS+=("SlowDNS|${SLOWDNS_PORT}|🌐|ON")
 fi
 
 if xray_instalado; then
-
-    if xray_activo; then
-        PROTOCOLOS+=("Xray/V2Ray|${XRAY_PORT}|☁️|ON")
-    else
-        PROTOCOLOS+=("Xray/V2Ray|${XRAY_PORT}|☁️|OFF")
-    fi
-
+    PROTOCOLOS+=("Xray/V2Ray|${XRAY_PORT}|☁️|ON")
 fi
 
-#=========================================================
-# CHECKUSER INTENCIONALMENTE NO SE AGREGA
-#=========================================================
-
 if openvpn_instalado; then
-
-    if openvpn_activo; then
-        PROTOCOLOS+=("OpenVPN|${OPENVPN_PORT}|🔐|ON")
-    else
-        PROTOCOLOS+=("OpenVPN|${OPENVPN_PORT}|🔐|OFF")
-    fi
-
+    PROTOCOLOS+=("OpenVPN|${OPENVPN_PORT}|🔐|ON")
 fi
 
 if hysteria_instalado; then
-
-    if hysteria_activo; then
-        PROTOCOLOS+=("Hysteria||🛡️|ON")
-    else
-        PROTOCOLOS+=("Hysteria||🛡️|OFF")
-    fi
-
+    PROTOCOLOS+=("Hysteria||🛡️|ON")
 fi
 
 if bhttp_instalado; then
-
-    if bhttp_activo; then
-        PROTOCOLOS+=("BHTTP|${BHTTP_PORT}|🌐|ON")
-    else
-        PROTOCOLOS+=("BHTTP|${BHTTP_PORT}|🌐|OFF")
-    fi
-
+    PROTOCOLOS+=("BHTTP|${BHTTP_PORT}|🌐|ON")
 fi
 
 #=========================================================
 # FUNCIÓN MOSTRAR PROTOCOLO
+# SIN ON/OFF
 #=========================================================
 
 mostrar_protocolo() {
@@ -854,26 +780,11 @@ mostrar_protocolo() {
 
     IFS='|' read -r NOMBRE PUERTO ICONO ESTADO <<< "$ITEM"
 
-    if [[ "$ESTADO" == "ON" ]]; then
-
-        printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
-            "$NOMBRE"
-
-    else
-
-        printf "${YELLOW}[!]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
-            "$NOMBRE"
-
-    fi
+    printf "${GREEN}[✓]${RESET} ${WHITE}${ICONO} %-13s${RESET}" \
+        "$NOMBRE"
 
     if [[ -n "$PUERTO" ]]; then
         printf " ${GRAY}(%s)${RESET}" "$PUERTO"
-    fi
-
-    if [[ "$ESTADO" == "ON" ]]; then
-        printf " ${GREEN}ON${RESET}"
-    else
-        printf " ${RED}OFF${RESET}"
     fi
 }
 
@@ -950,6 +861,7 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 
 #=========================================================
 # CUENTAS
+# SOLO SSH / V2RAY / OPENVPN
 #=========================================================
 
 echo -e " ${BLUE}${BOLD}◆ CUENTAS POR PROTOCOLO${RESET}"
@@ -963,13 +875,6 @@ if ssh_instalado; then
 
 fi
 
-if dropbear_instalado; then
-
-    printf "   ${WHITE}Dropbear${RESET}   ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
-        "$DROPBEAR_COUNT" "$DROPBEAR_ONLINE"
-
-fi
-
 if xray_instalado; then
 
     printf "   ${WHITE}V2Ray${RESET}      ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
@@ -977,23 +882,10 @@ if xray_instalado; then
 
 fi
 
-if hysteria_instalado; then
-
-    printf "   ${WHITE}Hysteria${RESET}   ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
-        "$HYSTERIA_COUNT" "$HYSTERIA_ONLINE"
-
-fi
-
 if openvpn_instalado; then
 
     printf "   ${WHITE}OpenVPN${RESET}    ${GRAY}:${RESET} ${CYAN}%s creados${RESET} / ${GREEN}%s conectados${RESET}\n" \
         "$OPENVPN_COUNT" "$OPENVPN_ONLINE"
-
-fi
-
-if bhttp_instalado; then
-
-    printf "   ${WHITE}BHTTP${RESET}      ${GRAY}:${RESET} ${CYAN}SSH${RESET} ${GRAY}(usa cuentas SSH)${RESET}\n"
 
 fi
 
