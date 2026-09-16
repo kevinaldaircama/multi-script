@@ -562,8 +562,11 @@ def ovpn_account_message(c,d):
   for l in cfg.read_text(errors='ignore').splitlines():
    if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('\"').strip("'")
  host=domain or (subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or '0.0.0.0').strip()
- ovpn_link=str(d.get('ovpn_link') or 'https://rw.duduls.my.id/allovpn.zip').strip()
- sub_base=str(d.get('sub_base') or 'https://rw.duduls.my.id/ssh/sub').strip().rstrip('/')
+ # El enlace OVPN usa el dominio configurado en SERVER_DOMAIN (HAProxy).
+ # Cada cuenta apunta a su propio archivo .zip: https://DOMINIO/USUARIO.zip
+ # Si el flujo ya proporciona ovpn_link, se respeta para no romper instalaciones existentes.
+ ovpn_link=str(d.get('ovpn_link') or f'https://{host}/{urllib.parse.quote(username)}.zip').strip()
+ sub_base=str(d.get('sub_base') or f'https://{host}/ssh/sub').strip().rstrip('/')
  sub_link=sub_base+'?id='+urllib.parse.quote(username)
  return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>SSH OVPN Account</b>
