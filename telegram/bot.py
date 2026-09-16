@@ -13,7 +13,7 @@ DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
- 'monetization':{'monetag':''},
+ 'monetization':{'monetag':'','ad_counts':{'create_normal':3,'create_v2ray':2,'create_ovpn':2,'ref_renew':1,'renew':5,'expiry_renew':7}},
  'auto_update':{'enabled':False,'last_version':'','notified_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
@@ -41,7 +41,11 @@ def load_db():
  if not isinstance(d.get('security'),dict):d['security']=json.loads(json.dumps(DEFAULT['security']))
  for k,v in DEFAULT['security'].items():d['security'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
  if not isinstance(d.get('monetization'),dict):d['monetization']=json.loads(json.dumps(DEFAULT['monetization']))
- for k,v in DEFAULT['monetization'].items():d['monetization'].setdefault(k,v)
+ for k,v in DEFAULT['monetization'].items():d['monetization'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
+ if not isinstance(d['monetization'].get('ad_counts'),dict):d['monetization']['ad_counts']=json.loads(json.dumps(DEFAULT['monetization']['ad_counts']))
+ for k,v in DEFAULT['monetization']['ad_counts'].items():
+  try:d['monetization']['ad_counts'][k]=max(1,int(d['monetization']['ad_counts'].get(k,v)))
+  except:d['monetization']['ad_counts'][k]=v
  if not isinstance(d.get('backup_schedule'),dict):d['backup_schedule']=json.loads(json.dumps(DEFAULT['backup_schedule']))
  d['backup_schedule'].setdefault('mode','once');d['backup_schedule'].setdefault('next_at',0)
  if not isinstance(d.get('ad_tokens'),dict):d['ad_tokens']={}
@@ -230,13 +234,8 @@ def clear_chat_messages(c, keep_latest=False, older_than=None):
  save_db(d)
 
 def schedule_config_cleanup(c):
- def w():
-  time.sleep(600)
-  try:
-   # Monetag setup messages/documents are transient and are removed after 10 minutes.
-   clear_chat_messages(c, keep_latest=False, older_than=0)
-  except Exception as ex: log('CONFIG CLEANUP '+repr(ex))
- threading.Thread(target=w,daemon=True).start()
+ # No borrar automáticamente mensajes ni datos del usuario.
+ return None
 
 def send(c,t,k=None):
  d={'chat_id':c,'text':t,'parse_mode':'HTML','disable_web_page_preview':'true'}
@@ -388,7 +387,7 @@ def users_menu(uid):
  return rows
 USERS=users_menu
 
-CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
+CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔐 SSH OVPN','callback_data':'create:ovpn'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
 SVCS={k:v[2] for k,v in PROTO.items()}
@@ -517,7 +516,7 @@ def notify_new_referral(referrer_id, referred_user):
  except Exception as ex:
   log('REF NOTIFY '+repr(ex))
 
-def create_v2ray(username,days):
+def create_v2ray(username,expiration):
  try:
   cfg=Path('/usr/local/etc/xray/config.json')
   if not cfg.exists():return 1,'Xray no está instalado.'
@@ -550,11 +549,35 @@ def v2ray_account_message(c,d):
   for l in cfg.read_text(errors='ignore').splitlines():
    if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"').strip("'")
  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
- host=domain or ip;exp=subprocess.getoutput(f"date -d '+{int(d['days'])} days' '+%d/%m/%Y'")
+ host=domain or ip;exp=d.get('expiration') or subprocess.getoutput(f"date -d '+{int(d.get('days',1))} days' '+%d/%m/%Y'")
  import base64
  raw=f'v:vmess@{host}:443?type=ws&path=/vmess&security=tls&uuid={uuid}'
  link='vmess://'+base64.b64encode(raw.encode()).decode()
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
+
+def ovpn_account_message(c,d):
+ username=d['user'];pw=d.get('pass','');exp=d.get('expiration','No disponible')
+ cfg=BASE/'config.conf';domain=''
+ if cfg.exists():
+  for l in cfg.read_text(errors='ignore').splitlines():
+   if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('\"').strip("'")
+ host=domain or (subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or '0.0.0.0').strip()
+ ovpn_link=str(d.get('ovpn_link') or 'https://rw.duduls.my.id/allovpn.zip').strip()
+ sub_base=str(d.get('sub_base') or 'https://rw.duduls.my.id/ssh/sub').strip().rstrip('/')
+ sub_link=sub_base+'?id='+urllib.parse.quote(username)
+ return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>SSH OVPN Account</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>domino:</b> {e(host)}
+<b>Username</b> : <code>{e(username)}</code>
+<b>Password</b> : <code>{e(pw)}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>OpenVPN Link</b> : {e(ovpn_link)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>Sub Link</b> : {e(sub_link)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>Expiration</b> : {e(exp)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
 def account_message(c,d,renew=False):
  u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
@@ -667,38 +690,27 @@ def ad_configurations():
  except:pass
  return items
 
-# La cantidad de anuncios usa una ROTACIÓN GLOBAL compartida por todas las
-# acciones que requieren publicidad. Así, el siguiente proceso continúa desde
-# donde quedó el anterior y no vuelve a empezar en 1 al cambiar de opción.
-# Secuencia: 1 -> 4 -> 3 -> 3 -> 1 -> 4 -> 3 -> 4 -> 3 -> ...
-AD_ROTATION=[1,4,3,3,1,4,3,4,3]
-
-def next_ad_requirement(c,action,extra=None):
- d=db();rot=d.setdefault('ad_rotation',{})
- # Un único contador por usuario: crear, V2Ray, canjear y renovar comparten
- # la misma rueda de anuncios.
- idx=int(rot.get(str(c),0) or 0) % len(AD_ROTATION)
- required=int(AD_ROTATION[idx])
- rot[str(c)]=(idx+1)%len(AD_ROTATION)
- save_db(d)
- return required
-
+# Cantidad de anuncios configurable por acción.
+# Valores por defecto: normal=3, V2Ray=2, OVPN=2, canje=1, renovar=5, vencimiento=7.
 def ad_count_for(action,extra=None):
- # Compatibilidad para instalaciones antiguas. La cantidad real se obtiene
- # siempre mediante next_ad_requirement().
- return 1
+ d=db();counts=d.get('monetization',{}).get('ad_counts',{})
+ kind=(extra or {}).get('kind','')
+ key=action
+ if action=='create':key='create_'+('v2ray' if kind=='v2ray' else 'ovpn' if kind=='ovpn' else 'normal')
+ try:return max(1,int(counts.get(key,DEFAULT['monetization']['ad_counts'].get(key,1))))
+ except:return 1
 
 def ad_gate(c,action,extra=None):
  if is_owner(c):return False
  ads=ad_configurations()
  if not ads:return False
- required=next_ad_requirement(c,action,extra)
+ required=ad_count_for(action,extra)
  pending=secrets.token_urlsafe(9)
  d=db();d.setdefault('ad_pending',{})[pending]={
   'uid':c,'action':action,'extra':extra or {},'remaining':required,
-  'total':required,'expires':time.time()+3600
+  'total':required,'required':required,'expires':time.time()+3600
  };save_db(d)
- return send(c,f'💰 <b>PUBLICIDAD {required} PASOS</b>\n\nPara mantener el servicio gratuito, completa <b>{required} anuncios</b>.\n\nLa publicidad se renueva automáticamente en cada paso.',[[{'text':f'▶️ Ver anuncio 1/{required}','callback_data':'adopen:'+pending}]]) or True
+ return send(c,f'💰 <b>PUBLICIDAD {required} PASOS</b>\n\nPara continuar, completa <b>{required} anuncios</b>.',[[{'text':f'▶️ Ver anuncio 1/{required}','callback_data':'adopen:'+pending}]]) or True
 
 def create_ad_token(c,action,extra=None,required=None):
  ads=ad_configurations()
@@ -865,7 +877,7 @@ def process_text(c,t,chat_type=None):
  # La configuración de Monetag deben procesarse antes que cualquier comando.
  # Esto permite pegar scripts largos o bloques que comienzan con '/'.
  st0=STATE.get(c)
- if st0 and st0.get('f') in ('monetag','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
+ if st0 and st0.get('f') in ('monetag','ads_config','domain','admin_add','admin_remove','admin_rename','ban_add','ban_remove','message_users','quota_public','quota_admin','system_update_key'):
   return admin_text(c,t)
  cmd=t.split()[0].lower() if t.split() else ''
  if cmd=='/cmds':
@@ -919,16 +931,28 @@ def process_text(c,t,chat_type=None):
   if f=='account':STATE.pop(c,None);return send(c,account_info(c,u))
   if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Seguro que deseas eliminar <code>{e(u)}</code>?',[[{'text':'🗑️ Eliminar','callback_data':'userop:delete'},{'text':'Cancelar','callback_data':'cancel'}]])
   if f=='create':
-   # Usuarios: días/dispositivos salen de la cuota. El super admin puede definirlos.
    if dat.get('kind')=='v2ray':
-    maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
+    st['s']='days';return send(c,'📅 <b>Fecha de expiración</b> (DD/MM/YYYY):')
    st['s']='p';return send(c,'🔑 Contraseña:')
   # Renovación: usa siempre la cuota configurada; no solicita días ni límite.
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:renew')
  if f=='create' and step=='p':
   dat['pass']=t
+  if dat.get('kind')=='ovpn':
+   st['s']='days';return send(c,'📅 <b>Fecha de expiración</b> (DD/MM/YYYY):')
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
  if f in ('create','renew') and step=='days':
+  if f=='create' and dat.get('kind') in ('v2ray','ovpn'):
+   try:
+    ex=datetime.datetime.strptime(t.strip(),'%d/%m/%Y').date()
+    if ex<datetime.date.today():return send(c,'❌ La fecha de expiración no puede estar vencida. Usa DD/MM/YYYY.')
+    dat['expiration']=ex.strftime('%d/%m/%Y');dat['days']=(ex-datetime.date.today()).days
+    maxdays,_=quota(c)
+    if not is_owner(c) and dat['days']>maxdays:
+     return send(c,f'❌ Tu cuota permite como máximo <b>{maxdays} días</b>. Elige una fecha dentro de ese límite.')
+   except:return send(c,'❌ Fecha inválida. Usa el formato <code>DD/MM/YYYY</code>, por ejemplo <code>13/09/2026</code>.')
+   dat['limit']=quota(c)[1]
+   return cb(c,0,c,0,'do:create')
   if not t.isdigit() or int(t)<1:return send(c,'❌ Debes indicar un número de días válido.')
   maxdays,maxdev=quota(c)
   if not is_owner(c) and int(t)>maxdays:return send(c,f'❌ Tu cuota permite como máximo <b>{maxdays} días</b>.')
@@ -944,7 +968,7 @@ def cb(c,m,u,i,x,chat_type=None):
  CHAT_TYPES[c]=chat_type or CHAT_TYPES.get(c,'private')
  if banned(u):return ans(i,'🚫 Baneado')
  registered(u);ans(i,'⚡');d=db()
- admin_only=(x in ('settings','admins','admin_list','admin_add','admin_remove','admin_rename','bans','ban_add','ban_remove','ban_list','backup_restore','backup_menu','backup_now','restore','monetization','monetag','monetag_toggle','monetag_config','monetag_delete','quotas','quota_public','quota_admin','security','security:auto','tools','domain','people','message_users','restart_vps','system_update','system_update_now','auto_update_toggle','do_reboot') or x.startswith(('admin_','ban_','quota_','tool:','proto:','in:','un:','svc_restart:')))
+ admin_only=(x in ('settings','admins','admin_list','admin_add','admin_remove','admin_rename','bans','ban_add','ban_remove','ban_list','backup_restore','backup_menu','backup_now','restore','monetization','monetag','monetag_toggle','monetag_config','monetag_delete','ads_config','ads_config_select','quotas','quota_public','quota_admin','security','security:auto','tools','domain','people','message_users','restart_vps','system_update','system_update_now','auto_update_toggle','do_reboot') or x.startswith(('admin_','ban_','quota_','tool:','proto:','in:','un:','svc_restart:')))
  if admin_only and not is_owner(u): return ans(i,'Solo el SUPER ADMIN puede usar esta función.')
  if x.startswith('lang:'):
   language=x.split(':',1)[1];d['users'][str(u)]['language']=language;d['users'][str(u)]['language_selected']=True;save_db(d);STATE.pop(u,None);return edit(c,m,tr(u,'home'),home(u))
@@ -989,10 +1013,10 @@ def cb(c,m,u,i,x,chat_type=None):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
   return edit(c,m,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
- if x in ('create:normal','create:v2ray'):
+ if x in ('create:normal','create:v2ray','create:ovpn'):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
-  kind='v2ray' if x.endswith('v2ray') else 'normal'
+  kind='v2ray' if x.endswith('v2ray') else 'ovpn' if x.endswith('ovpn') else 'normal'
   return start_create(c,kind)
  if x=='renew':
   if not is_owner(u):return ans(i,'Solo el SUPER ADMIN puede renovar manualmente.')
@@ -1046,10 +1070,10 @@ def cb(c,m,u,i,x,chat_type=None):
   dat=st['d'];u0=dat['user'];days=int(dat['days']);exp=subprocess.getoutput(f"date -d '+{days} days' +%F")
   if x=='do:create':
    if dat.get('kind')=='v2ray':
-    rc,o=create_v2ray(dat['user'],days)
+    rc,o=create_v2ray(dat['user'],dat.get('expiration'))
     if rc==0:
      dat['uuid']=o
-     d=db();urow=d['users'][str(c)];urow.setdefault('v2ray_accounts',[]).append(dat['user']);urow.setdefault('accounts',[]).append(dat['user']);urow.setdefault('v2ray_expirations',{})[dat['user']]=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
+     d=db();urow=d['users'][str(c)];urow.setdefault('v2ray_accounts',[]).append(dat['user']);urow.setdefault('accounts',[]).append(dat['user']);urow.setdefault('v2ray_expirations',{})[dat['user']]=dat.get('expiration') or subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
      ref=urow.get('referrer')
      if ref and str(ref) in d['users'] and c not in d['users'][str(ref)].setdefault('referrals',[]):
       d['users'][str(ref)]['referrals'].append(c);save_db(d)
@@ -1057,13 +1081,21 @@ def cb(c,m,u,i,x,chat_type=None):
      save_db(d)
      add_history(c,'Cuenta creada',dat['user']+' (V2Ray)');return send(c,v2ray_account_message(c,dat))
     return send(c,'🔴 <b>No se pudo crear la cuenta V2Ray</b>\n<pre>'+e(o)+'</pre>')
+   if dat.get('kind')=='ovpn':
+    rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
+    if rc==0:
+     (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
+     d=db();row=d['users'][str(c)];row.setdefault('accounts',[]).append(u0);row.setdefault('ovpn_accounts',[]).append(u0);save_db(d)
+     add_history(c,'Cuenta creada',u0+' (OVPN)')
+     return send(c,ovpn_account_message(c,dat))
+    return send(c,'🔴 <b>No se pudo crear la cuenta OVPN</b>\n<pre>'+e(o)+'</pre>')
    rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
    if rc==0:
     (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
     d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0)
     ref=d['users'][str(c)].get('referrer')
     if ref and str(ref) in d['users']:
-     inviter=d['users'][str(ref)];
+     inviter=d['users'][str(ref)]
      if c not in inviter.setdefault('referrals',[]):
       inviter['referrals'].append(c);save_db(d)
       notify_new_referral(ref,d['users'][str(c)])
@@ -1118,7 +1150,7 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='admin_remove':STATE[c]={'f':'admin_remove','s':'id','d':{}};return send(c,'🗑️ ID del administrador:')
  if x=='admin_rename':STATE[c]={'f':'admin_rename','s':'id','d':{}};return send(c,'✏️ ID del administrador:')
  if x=='access_toggle':
-  d['access']='public' if d['access']=='private' else 'private';save_db(d);return edit(c,m,f'🔐 <b>ACCESO CAMBIADO</b>\n\nEl acceso ahora está <b>{"PÚBLICO 🟢" if d["access"]=="public" else "PRIVADO 🔴"}</b>.',settings_keyboard())
+  d['access']='public' if d['access']=='private' else 'private';save_db(d);return edit(c,m,f'🔐 <b>ACCESO CAMBIADO</b>\n\nEl acceso ahora está <b>{"PÚBLICO 🟢" if d["access"]=="public" else "PRIVADO 🔴"}</b>.',SECURITY_MENU)
  if x=='bans':return edit(c,m,'🚫 <b>CONTROL DE ACCESO</b>\n\nBloquea, desbloquea o consulta usuarios con acceso restringido al bot.',BAN_MENU)
  if x=='ban_add':STATE[c]={'f':'ban_add','s':'id','d':{}};return send(c,'🚫 ID de Telegram a banear:')
  if x=='ban_remove':STATE[c]={'f':'ban_remove','s':'id','d':{}};return send(c,'🔓 ID de Telegram a desbanear:')
@@ -1131,6 +1163,19 @@ def cb(c,m,u,i,x,chat_type=None):
   fn=backup_now();return send_document(c,fn,'💾 Respaldo actual del sistema.')
  if x=='restore':return send(c,'♻️ <b>RESTAURACIÓN</b>\n\nEnvía ahora el archivo JSON como documento. La restauración se aplicará y el VPS se reiniciará automáticamente.')
  if x=='monetization':return edit(c,m,'💰 <b>MONETIZACIÓN</b>\n\nConfigura la plataforma de anuncios que utilizará el bot para mantener el servicio gratuito.',MONETIZATION)
+ if x=='ads_config':
+  counts=d.setdefault('monetization',{}).setdefault('ad_counts',json.loads(json.dumps(DEFAULT['monetization']['ad_counts'])))
+  text=(f'⚙️ <b>CONFIGURAR ADS</b>\n\n'
+        f'👤 Crear cuenta normal: <b>{counts.get("create_normal",3)}</b>\n'
+        f'🚀 Crear cuenta V2Ray: <b>{counts.get("create_v2ray",2)}</b>\n'
+        f'🔐 Crear cuenta OVPN: <b>{counts.get("create_ovpn",2)}</b>\n'
+        f'🎁 Canjear 7 días: <b>{counts.get("ref_renew",1)}</b>\n'
+        f'♻️ Renovar cuenta: <b>{counts.get("renew",5)}</b>\n'
+        f'⏳ Aviso de vencimiento → renovar: <b>{counts.get("expiry_renew",7)}</b>')
+  return edit(c,m,text,[[{'text':'👤 Normal','callback_data':'ads_config_select:create_normal'},{'text':'🚀 V2Ray','callback_data':'ads_config_select:create_v2ray'}],[{'text':'🔐 OVPN','callback_data':'ads_config_select:create_ovpn'},{'text':'🎁 Canje','callback_data':'ads_config_select:ref_renew'}],[{'text':'♻️ Renovar','callback_data':'ads_config_select:renew'},{'text':'⏳ Vencimiento','callback_data':'ads_config_select:expiry_renew'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
+ if x.startswith('ads_config_select:'):
+  key=x.split(':',1)[1];STATE[c]={'f':'ads_config','s':'value','d':{'key':key}}
+  return send(c,f'⚙️ <b>CONFIGURAR ADS</b>\n\nCantidad de anuncios para <code>{e(key)}</code> (1-50):',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag':return monetag_menu(c,m)
  if x=='monetag_config':STATE[c]={'f':'monetag','s':'zone','d':{}};return send(c,"💰 <b>MONETAG — PASO 1</b>\n\nEscribe únicamente tu <b>ID de zona</b> de Monetag.\n\nEjemplo: <code>11217882</code>",[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
  if x=='monetag_delete':
@@ -1159,7 +1204,17 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='quota_admin':STATE[c]={'f':'quota_admin','s':'days','d':{}};return send(c,'📅 Días para administradores:')
  if x=='security':
   if not is_owner(u):return ans(i,'Solo el super admin')
-  stxt='🛡️ <b>SEGURIDAD</b>\n\nAuto banea SSH: <b>'+('ACTIVADO 🟢' if d.get('security',{}).get('auto_ban_ssh') else 'DESACTIVADO 🔴')+'</b>\n\nSi una cuenta supera su límite de conexiones, recibe una advertencia. Al llegar a 3 infracciones, la cuenta se elimina y el usuario recibe aviso.'
+  cfg=BASE/'config.conf';dom='No configurado'
+  if cfg.exists():
+   for ln in cfg.read_text(errors='ignore').splitlines():
+    if ln.startswith('SERVER_DOMAIN='):dom=ln.split('=',1)[1].strip().strip('\"').strip("'");break
+  stxt=(
+   '🛡️ <b>SEGURIDAD</b>\n\n'
+   + '🔐 Acceso: <b>'+('PÚBLICO 🟢' if d.get('access')=='public' else 'PRIVADO 🔴')+'</b>\n'
+   + '🌐 Dominio: <code>'+e(dom)+'</code>\n'
+   + '🛡️ Auto banea SSH: <b>'+('ACTIVADO 🟢' if d.get('security',{}).get('auto_ban_ssh') else 'DESACTIVADO 🔴')+'</b>\n\n'
+   + 'Si una cuenta supera su límite de conexiones, recibe una advertencia. Al llegar a 3 infracciones, la cuenta se elimina y el usuario recibe aviso.'
+  )
   return edit(c,m,stxt,SECURITY_MENU)
  if x=='security:auto':
   d['security']['auto_ban_ssh']=not d['security'].get('auto_ban_ssh',False);save_db(d)
@@ -1211,17 +1266,17 @@ def backup_scheduler():
   except Exception as er:log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
-SETTINGS=[[{'text':'🔐 Acceso: PRIVADO','callback_data':'access_toggle'}],[{'text':'👥 Administradores','callback_data':'admins'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
+SETTINGS=[[{'text':'👥 Administradores','callback_data':'admins'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
 ADMIN_MENU=[[{'text':'📋 Lista de admins','callback_data':'admin_list'}],[{'text':'➕ Agregar admin','callback_data':'admin_add'},{'text':'🗑️ Quitar admin','callback_data':'admin_remove'}],[{'text':'✏️ Renombrar admin','callback_data':'admin_rename'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 BAN_MENU=[[{'text':'🚫 Banear usuarios','callback_data':'ban_add'}],[{'text':'🔓 Desbanear','callback_data':'ban_remove'},{'text':'📋 Lista de ban','callback_data':'ban_list'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 QUOTA=[[{'text':'👥 Público','callback_data':'quota_public'},{'text':'👨‍💼 Admin','callback_data':'quota_admin'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-SECURITY_MENU=[[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
-MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+SECURITY_MENU=[[{'text':'🔐 Acceso','callback_data':'access_toggle'},{'text':'🌐 Dominio','callback_data':'domain'}],[{'text':'🛡️ Auto banea SSH','callback_data':'security:auto'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
+MONETIZATION=[[{'text':'💰 Monetag','callback_data':'monetag'}],[{'text':'⚙️ Configurar Ads','callback_data':'ads_config'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
 
 def settings_keyboard():
  d=db()
  access='🔐 Acceso: PÚBLICO 🟢' if d.get('access')=='public' else '🔐 Acceso: PRIVADO 🔴'
- return [[{'text':access,'callback_data':'access_toggle'}], *SETTINGS[1:]]
+ return SETTINGS
 
 def monetag_menu(c,m=0):
  d=db();v=d.get('monetization',{}).get('monetag','');configured=bool(v);enabled=True
@@ -1304,6 +1359,12 @@ def generate__html(uid,dat):
 
 def admin_text(c,t):
  st=STATE.get(c);d=db();f=st['f'];step=st['s'];dat=st['d']
+ if f=='ads_config' and step=='value':
+  try:n=int(t.strip())
+  except:return send(c,'❌ Debes indicar un número entre 1 y 50.')
+  if n<1 or n>50:return send(c,'❌ Debes indicar un número entre 1 y 50.')
+  key=dat['key'];d.setdefault('monetization',{}).setdefault('ad_counts',{})[key]=n;save_db(d);STATE.pop(c,None)
+  return send(c,f'🟢 <b>Ads actualizados</b>\n\n<code>{e(key)}</code> = <b>{n} anuncios</b>.',[[{'text':'⚙️ Configurar Ads','callback_data':'ads_config'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
  if f=='monetag':
   # Remove the previous setup prompt/document before moving to the next step.
   clear_chat_messages(c, keep_latest=False, older_than=0)
@@ -1403,7 +1464,7 @@ def admin_text(c,t):
   for i,l in enumerate(lines):
    if l.startswith('SERVER_DOMAIN='):lines[i]=f'SERVER_DOMAIN="{val}"';found=True
   if not found:lines.append(f'SERVER_DOMAIN="{val}"')
-  cfg.write_text('\n'.join(lines)+'\n');STATE.pop(c,None);return send(c,'🟢 Dominio actualizado.',settings_keyboard())
+  cfg.write_text('\n'.join(lines)+'\n');STATE.pop(c,None);return send(c,'🟢 Dominio actualizado.',SECURITY_MENU)
  if f in ('quota_public','quota_admin','system_update_key'):
   key='public' if f=='quota_public' else 'admin'
   if step=='days':
@@ -1422,7 +1483,7 @@ def restore_document(c,msg):
  try:
   z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path'];token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('"');url=f'https://api.telegram.org/file/bot{token}/{fp}';raw=urllib.request.urlopen(url,timeout=30).read();new=json.loads(raw.decode())
   if not isinstance(new,dict) or 'quotas' not in new or 'users' not in new:raise ValueError('JSON incompatible')
-  BACK.mkdir(parents=True,exist_ok=True);(BACK/'restore_before.json').write_text(DB.read_text() if DB.exists() else '{}');current=db(); preserved={k:current.get(k) for k in ('backup_schedule','security')}
+  BACK.mkdir(parents=True,exist_ok=True);(BACK/'restore_before.json').write_text(DB.read_text() if DB.exists() else '{}');current=db(); preserved={k:current.get(k) for k in ('backup_schedule','security','monetization','ad_tokens','ad_pending','ad_completed','ad_sequences')}
   for k,v in preserved.items():
    if k not in new:new[k]=v
   save_db(new);send(c,'🟢 <b>Restauración completada.</b>\n\n♻️ El VPS se reiniciará para aplicar la restauración.');time.sleep(2);sh('reboot',10)
@@ -1449,8 +1510,8 @@ def v2ray_expiration_monitor():
      if expired:
       rc,_=delete_v2ray(username)
       if rc==0:
-       z['accounts']=[a for a in z.get('accounts',[]) if a!=username];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if a!=username];z['v2ray_expirations'].pop(username,None);changed=True
-       try:send(int(sid),f'⌛ <b>Cuenta V2Ray vencida</b>\n\nLa cuenta <code>{e(username)}</code> fue eliminada al finalizar su periodo.')
+       z.setdefault('expired_accounts',{})[username]=ds;changed=True
+       try:send(int(sid),f'⌛ <b>Cuenta V2Ray vencida</b>\n\nLa cuenta <code>{e(username)}</code> expiró y su acceso activo fue retirado. Los datos se conservaron.')
        except:pass
    if changed:save_db(d)
   except Exception as ex:log('V2 EXPIRY '+repr(ex))
@@ -1503,18 +1564,7 @@ def message_cleanup_scheduler():
     try:
      if float(item.get('expires',0))<now:d['ad_tokens'].pop(token,None)
     except: d['ad_tokens'].pop(token,None)
-   for chat,arr in list(d.get('chat_messages',{}).items()):
-    if len(arr)<=1:continue
-    # After 24h remove old bot messages but always preserve the latest bot message.
-    latest_id=arr[-1].get('id')
-    kept=[]
-    for item in arr:
-     mid=item.get('id');ts=float(item.get('ts',0) or 0)
-     if mid==latest_id or now-ts<86400:
-      kept.append(item)
-     else:
-      delete_message(int(chat),int(mid))
-    d['chat_messages'][chat]=kept
+   # No borrar mensajes ni historial automáticamente.
    save_db(d)
   except Exception as ex:log('MESSAGE CLEANUP '+repr(ex))
   time.sleep(1800)
