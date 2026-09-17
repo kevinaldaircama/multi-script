@@ -601,7 +601,8 @@ show_protocol_menu() {
 
     printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall              "
     printf "${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram\n"
-
+    printf "${GREEN}${BOLD}[17]${RESET} 🌐web universal\n"
+    
     echo
 
     line
@@ -718,6 +719,11 @@ process_option() {
         16)
 
             run_module "$BASE/telegram/install.sh"
+
+            ;;
+            17)
+
+            run_module "$BASE/web/install.sh"
 
             ;;
 
