@@ -83,9 +83,8 @@ systemctl enable --now "$SERVICE.service"
 sleep 1
 systemctl is-active --quiet "$SERVICE.service" || { journalctl -u "$SERVICE" -n 30 --no-pager; exit 1; }
 
-# Integra la web en HAProxy como una ruta HTTP/HTTPS adicional.
-# IMPORTANTE: NO cambia los backends de protocolos existentes.
-# La web se identifica por las rutas propias del panel y por /.
+# Integra la web en HAProxy sin tocar los módulos originales. Se enruta por SNI del dominio
+# únicamente en el frontend TLS interno; 80/8080 siguen perteneciendo al túnel existente.
 PATCH="$WEB/haproxy-web-route.sh"
 cat > "$PATCH" <<'PATCHSCRIPT'
 #!/bin/bash
@@ -94,59 +93,38 @@ CFG=/etc/haproxy/haproxy.cfg
 WEB_PORT=18080
 BASE=/etc/kevintech
 [[ -f "$CFG" ]] || exit 0
-
-BACKUP="$CFG.web-backup"
-cp -a "$CFG" "$BACKUP" 2>/dev/null || true
-
-python3 - "$CFG" "$WEB_PORT" <<'PYCODE'
+source "$BASE/config.conf" 2>/dev/null || true
+DOMAIN="${SERVER_DOMAIN:-}"
+[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || exit 0
+cp -a "$CFG" "$CFG.web-backup" 2>/dev/null || true
+# Idempotencia: elimina bloques previos que haya creado este instalador.
+sed -i '/# KEVINTECH_WEB_BEGIN/,/# KEVINTECH_WEB_END/d' "$CFG"
+# Inserta ACL antes del default_backend del frontend TLS interno y un backend al final.
+python3 - "$CFG" "$DOMAIN" "$WEB_PORT" <<'PY'
 import sys
-from pathlib import Path
-cfg=Path(sys.argv[1]); port=sys.argv[2]
-s=cfg.read_text()
-BEGIN='# KEVINTECH_WEB_BEGIN'
-END='# KEVINTECH_WEB_END'
-while BEGIN in s and END in s:
-    a=s.index(BEGIN)
-    b=s.index(END,a)+len(END)
-    s=s[:a]+s[b:]
-marker='    use_backend websocket_backend if acl_upgrade acl_websocket\n'
-block='''    # KEVINTECH_WEB_BEGIN
-    # Solo rutas HTTP del panel; los protocolos conservan sus backends.
-    acl kevintech_web_path path -i / /index.html
-    acl kevintech_web_path path_beg /api/ /static/
-    use_backend kevintech_web_backend if kevintech_web_path
-    # KEVINTECH_WEB_END
-'''
-if marker not in s:
-    raise SystemExit('No se encontró el punto seguro de integración en ssl_frontend')
-if 'use_backend kevintech_web_backend if kevintech_web_path' not in s:
-    s=s.replace(marker,block+marker,1)
-backend='''
-# KEVINTECH_WEB_BEGIN
-backend kevintech_web_backend
-    mode http
-    option httpclose
-    option forwardfor
-    server kevintech_web 127.0.0.1:%s check
-# KEVINTECH_WEB_END
-''' % port
+p,domain,port=sys.argv[1:]
+s=open(p).read()
+needle='    use_backend websocket_backend if acl_upgrade acl_websocket\n'
+block=f'''    # KEVINTECH_WEB_BEGIN\n    acl kevintech_web_sni ssl_fc_sni -i {domain}\n    use_backend kevintech_web_backend if kevintech_web_sni\n    # KEVINTECH_WEB_END\n'''
+if needle in s and 'use_backend kevintech_web_backend if kevintech_web_sni' not in s:
+    s=s.replace(needle,block+needle,1)
+backend=f'''\n# KEVINTECH_WEB_BEGIN\nbackend kevintech_web_backend\n    mode http\n    option httpclose\n    option forwardfor\n    server kevintech_web 127.0.0.1:{port} check\n# KEVINTECH_WEB_END\n'''
 if 'backend kevintech_web_backend' not in s:
     s += backend
-cfg.write_text(s)
-PYCODE
-
+open(p,'w').write(s)
+PY
 if haproxy -c -f "$CFG" >/dev/null 2>&1; then
-    systemctl reload haproxy
-    echo "HAProxy: panel web integrado sin modificar los backends de protocolos."
+  systemctl reload haproxy 2>/dev/null || systemctl restart haproxy 2>/dev/null || true
+  echo "HAProxy: ruta web aplicada para $DOMAIN"
 else
-    echo "ERROR: validación HAProxy falló; restaurando configuración anterior." >&2
-    cp -a "$BACKUP" "$CFG"
-    exit 2
+  echo "ADVERTENCIA: la configuración HAProxy no se modificó porque la validación falló." >&2
+  cp -a "$CFG.web-backup" "$CFG" 2>/dev/null || true
+  exit 2
 fi
 PATCHSCRIPT
 chmod 755 "$PATCH"
 
-cat > /etc/systemd/system/kevintech-web-route.service <<EOF2
+cat > /etc/systemd/system/kevintech-web-route.service <<EOF
 [Unit]
 Description=KevinTech Web HAProxy route
 After=network-online.target haproxy.service kevintech-web.service
@@ -159,12 +137,18 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-EOF2
+EOF
+mkdir -p /etc/systemd/system/haproxy.service.d
+cat > /etc/systemd/system/haproxy.service.d/20-kevintech-web.conf <<EOF
+[Service]
+ExecStartPost=$PATCH
+EOF
 
 systemctl daemon-reload
 systemctl enable kevintech-web-route.service >/dev/null 2>&1 || true
-if systemctl is-active --quiet haproxy 2>/dev/null; then
-    "$PATCH"
+
+if systemctl is-active --quiet haproxy 2>/dev/null && [[ -f /etc/haproxy/haproxy.cfg ]]; then
+  "$PATCH" || true
 fi
 systemctl start kevintech-web-route.service >/dev/null 2>&1 || true
 

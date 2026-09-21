@@ -172,16 +172,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def csrf_ok(self, s, payload):
         return hmac.compare_digest(str(payload.get('csrf','')), str(s.get('csrf','')))
 
-    def do_HEAD(self):
-        path=urllib.parse.urlsplit(self.path).path
-        if path in ('/','/index.html'):
-            body=(WEB/'static'/'index.html').read_bytes()
-            self.send_response(200)
-            self.send_header('Content-Type','text/html; charset=utf-8')
-            self.send_header('Content-Length',str(len(body)))
-            self.headers_common(); self.end_headers(); return
-        self.send_response(404); self.headers_common(); self.end_headers()
-
     def do_GET(self):
         path=urllib.parse.urlsplit(self.path).path
         if path in ('/','/index.html'):
