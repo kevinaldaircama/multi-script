@@ -23,8 +23,8 @@ Environment=PYTHONUNBUFFERED=1
 Environment=KEVINTECH_WEB_PORT=$PORT
 Environment=KEVINTECH_WEB_PREFIX=$PREFIX
 ExecStart=/usr/bin/python3 $WEB/server.py
-Restart=always
-RestartSec=2
+Restart=on-failure
+RestartSec=5
 TimeoutStartSec=30
 TimeoutStopSec=20
 LimitNOFILE=65535
@@ -122,7 +122,14 @@ prompt_credentials(){
 }
 
 install_web(){
-  root_check; mkdir -p "$DATA"; prompt_credentials
+  root_check
+  if [[ ! -f "$WEB/server.py" ]]; then
+    echo -e "${red}✘ Falta $WEB/server.py${reset}"
+    echo -e "${yellow}El servicio NO se instalará ni se iniciará para evitar un bucle de reinicios.${reset}"
+    echo -e "${yellow}Vuelve a copiar el directorio web completo y ejecuta nuevamente la instalación.${reset}"
+    return 1
+  fi
+  mkdir -p "$DATA"; prompt_credentials
   python3 - "$DATA/config.json" "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" <<'PY'
 import json,sys,hashlib,base64,secrets,os
 p,u,pw,domain=sys.argv[1:]
@@ -139,7 +146,7 @@ PY
 }
 
 update_web(){
-  root_check; [[ -f "$WEB/server.py" ]] || { echo -e "${red}Web no instalada.${reset}"; return 1; }
+  root_check; [[ -f "$WEB/server.py" ]] || { echo -e "${red}Falta $WEB/server.py; instalación incompleta.${reset}"; return 1; }
   WEB_DOMAIN="$(python3 - "$DATA/config.json" <<'PY'
 import json,sys
 try: print(json.load(open(sys.argv[1])).get('server_domain',''))
@@ -166,6 +173,6 @@ show_logs(){ root_check; echo -e "${cyan}═══ LOG EN VIVO: $SERVICE ══�
 remove_web(){ root_check; systemctl stop "$SERVICE" 2>/dev/null || true; systemctl disable "$SERVICE" 2>/dev/null || true; rm -f "/etc/systemd/system/$SERVICE"; systemctl daemon-reload; remove_haproxy || true; rm -rf "$WEB"; systemctl reset-failed "$SERVICE" >/dev/null 2>&1 || true; echo -e "${green}✔ KevinTech Web eliminada completamente.${reset}"; echo -e "${green}✔ usuarios/protocolos/herramientas/telegram no fueron tocados.${reset}"; }
 
 menu(){
-  root_check; while true; do clear; echo -e "${cyan}╔══════════════════════════════════════════════════════════════╗${reset}"; echo -e "${cyan}║${white}             KEVINTECH WEB INSTALLER${cyan}                  ║${reset}"; echo -e "${cyan}╚══════════════════════════════════════════════════════════════╝${reset}"; echo; echo -e "${green}[1]${reset} Instalar / Actualizar web"; echo -e "${yellow}[2]${reset} Cambiar datos de acceso"; echo -e "${cyan}[3]${reset} Ver logs"; echo -e "${red}[4]${reset} Eliminar web"; echo -e "[0] Salir"; echo; read -rp "Opción: " op; case "$op" in 1) install_web; read -rp "ENTER para continuar..." _;; 2) change_data; read -rp "ENTER para continuar..." _;; 3) show_logs;; 4) read -rp "Escribe ELIMINAR para confirmar: " x; [[ "$x" == ELIMINAR ]] && remove_web; read -rp "ENTER para continuar..." _;; 0) exit 0;; *) echo "Opción inválida"; sleep 1;; esac; done
+  root_check; while true; do clear; echo -e "${cyan}╔══════════════════════════════════════════════════════════════╗${reset}"; echo -e "${cyan}║${white}             KEVINTECH WEB INSTALLER${cyan}                  ║${reset}"; echo -e "${cyan}╚══════════════════════════════════════════════════════════════╝${reset}"; echo; echo -e "${green}[1]${reset} Instalar / Actualizar web"; echo -e "${yellow}[2]${reset} Cambiar datos de acceso"; echo -e "${cyan}[3]${reset} Ver logs"; echo -e "${red}[4]${reset} Eliminar web"; echo -e "[0] Salir"; echo; read -rp "Opción: " op; case "$op" in 1) if [[ -f "$WEB/server.py" ]]; then update_web; else install_web; fi; read -rp "ENTER para continuar..." _;; 2) change_data; read -rp "ENTER para continuar..." _;; 3) show_logs;; 4) read -rp "Escribe ELIMINAR para confirmar: " x; [[ "$x" == ELIMINAR ]] && remove_web; read -rp "ENTER para continuar..." _;; 0) exit 0;; *) echo "Opción inválida"; sleep 1;; esac; done
 }
 case "${1:-menu}" in install|update) [[ "$1" == update ]] && update_web || install_web;; change) change_data;; logs) show_logs;; remove) remove_web;; menu) menu;; *) echo "Uso: $0 {install|update|change|logs|remove|menu}"; exit 1;; esac
