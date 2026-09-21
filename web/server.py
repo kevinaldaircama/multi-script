@@ -306,6 +306,13 @@ class Handler(BaseHTTPRequestHandler):
     def val(self,d,k,default=''):return d.get(k,[default])[0].strip()
 
 
+    def do_HEAD(self):
+        p=self.route_path()
+        if p in ('/','/static/health'):
+            self.send(200,'text/html; charset=utf-8','')
+        else:
+            self.send(404,'text/plain; charset=utf-8','')
+
     def do_GET(self):
         p=self.route_path(); u=self.session()
         if p=='/': return self.redirect('/dashboard' if u else '/login')

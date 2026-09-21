@@ -18,6 +18,8 @@ cat > /etc/systemd/system/$SERVICE <<EOF
 Description=KevinTech Web Panel
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -83,6 +85,11 @@ install_web(){
   # First start creates secure DB/config and generates credentials if needed.
   systemctl restart "$SERVICE"
   sleep 1
+  if ! systemctl is-active --quiet "$SERVICE"; then
+    echo -e "${red}✘ $SERVICE no quedó activo.${reset}"
+    journalctl -u "$SERVICE" -n 40 --no-pager || true
+    return 1
+  fi
   patch_haproxy || true
   if systemctl is-active --quiet "$SERVICE"; then
     echo -e "${green}✔ KevinTech Web activo en 127.0.0.1:$PORT${reset}"
@@ -108,6 +115,11 @@ update_web(){
   [[ -f "$WEB/server.py" ]] || { echo -e "${red}Web no instalada.${reset}"; return 1; }
   write_service
   systemctl restart "$SERVICE"
+  if ! systemctl is-active --quiet "$SERVICE"; then
+    echo -e "${red}✘ La actualización dejó el servicio inactivo.${reset}"
+    journalctl -u "$SERVICE" -n 40 --no-pager || true
+    return 1
+  fi
   patch_haproxy || true
   echo -e "${green}✔ Web actualizada/reiniciada.${reset}"
 }
