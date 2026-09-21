@@ -266,6 +266,9 @@ class Handler(BaseHTTPRequestHandler):
         if PREFIX and p.startswith(PREFIX): p=p[len(PREFIX):] or '/'
         return p
 
+    def do_HEAD(self):
+        self.send(200, 'text/html; charset=utf-8', '')
+
     def send(self,status=200,ctype='text/html; charset=utf-8',body=''):
         b=body.encode() if isinstance(body,str) else body
         self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(b)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(b)
@@ -305,13 +308,6 @@ class Handler(BaseHTTPRequestHandler):
         n=int(self.headers.get('Content-Length','0')); raw=self.rfile.read(min(n,1024*1024)); return parse_qs(raw.decode(errors='ignore'),keep_blank_values=True)
     def val(self,d,k,default=''):return d.get(k,[default])[0].strip()
 
-
-    def do_HEAD(self):
-        p=self.route_path()
-        if p in ('/','/static/health'):
-            self.send(200,'text/html; charset=utf-8','')
-        else:
-            self.send(404,'text/plain; charset=utf-8','')
 
     def do_GET(self):
         p=self.route_path(); u=self.session()
