@@ -1,0 +1,3 @@
+<div class="card"><h2>🖥️ Consola VPS</h2><p class="muted">Solo administradores. Ejecuta comandos con el mismo usuario del servicio (root).</p><div id="out" class="terminal">KevinTech Web Console
+Listo.
+</div><div class="cmdrow"><input id="cmd" class="input" placeholder="Escribe un comando..."><button class="btn primary" onclick="run()">Ejecutar</button></div></div><script>async function run(){let x=document.getElementById('cmd'),o=document.getElementById('out'),c=x.value.trim();if(!c)return;o.textContent+='\n# '+c+'\nEjecutando...\n';x.value='';let r=await fetch('{{PREFIX}}/console',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({command:c})});o.textContent=await r.text();o.scrollTop=o.scrollHeight}</script>
