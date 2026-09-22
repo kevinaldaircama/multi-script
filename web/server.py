@@ -15,7 +15,7 @@ KEYFILE = DATA / '.credential.key'
 LOG = DATA / 'web.log'
 HOST = '127.0.0.1'
 PORT = int(os.environ.get('KEVINTECH_WEB_PORT', '18080'))
-PREFIX = os.environ.get('KEVINTECH_WEB_PREFIX', '/kevintech-web').rstrip('/') or ''
+PREFIX = os.environ.get('KEVINTECH_WEB_PREFIX', '/').strip().rstrip('/')
 SESSION_TTL = 86400 * 3
 TOKEN_TTL = 600
 
@@ -237,16 +237,17 @@ def consume_pass(c,token,user_id):
     if not row:return None
     c.execute('DELETE FROM ad_tokens WHERE token=?',(token,));c.commit();return row
 
-def page(title,body,user=None):
-    nav=''
+def page(title, body, user=None):
+    nav = ''
     if user:
-        nav='<a href="%s/dashboard">Panel</a><a href="%s/profile">Perfil</a><a href="%s/online">Online</a><a href="%s/referrals">Referidos</a>'%(PREFIX,PREFIX,PREFIX,PREFIX)
-        if user.get('role')=='admin': nav='<a href="%s/admin">Admin</a><a href="%s/console">Consola</a>'%(PREFIX,PREFIX)
-        nav+='<a href="%s/logout">Salir</a>'%PREFIX
-    else: nav='<a href="%s/login">Ingresar</a><a href="%s/register">Registrarse</a>'%(PREFIX,PREFIX)
-    return '''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>__TITLE__ · KevinTech</title><style>
-    :root{--bg:#070a12;--card:#0e1421;--line:#233044;--text:#eef5ff;--muted:#91a0b6;--a:#19d3ff;--ok:#40e0a0;--bad:#ff637d}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10%% 0%%,#10233a 0,#070a12 42%%);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif;min-height:100vh}a{color:var(--a);text-decoration:none}.top{position:sticky;top:0;z-index:5;background:#070a12e8;border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}.nav{max-width:1200px;margin:auto;padding:14px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.brand{font-weight:900;letter-spacing:1px;margin-right:auto}.nav a{padding:8px 10px;border:1px solid transparent}.nav a:hover{border-color:var(--line);background:#101827;border-radius:10px}.wrap{max-width:1200px;margin:auto;padding:28px 18px}.hero{padding:22px 0 12px}.hero h1{font-size:clamp(28px,5vw,48px);margin:0 0 8px}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.card{background:linear-gradient(180deg,#111a2a,#0c121d);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 18px 45px #0003}.card h3{margin-top:0}.stat{font-size:30px;font-weight:900}.btn{display:inline-block;border:1px solid #2d88a8;background:#102334;color:#fff;border-radius:12px;padding:11px 14px;cursor:pointer}.btn.primary{background:#0d617d;border-color:#19d3ff}.btn.danger{border-color:#a73b52;background:#30131c}.btn.ok{border-color:#2c9471;background:#103126}.btn+.btn{margin-left:6px}.form{max-width:560px}.input,select,textarea{width:100%;background:#080d16;color:#fff;border:1px solid var(--line);border-radius:11px;padding:12px;margin:7px 0 14px}.table{width:100%%;border-collapse:collapse}.table th,.table td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.tag{display:inline-block;padding:4px 8px;border-radius:99px;background:#142234;color:#9bdfff;font-size:12px}.oktxt{color:var(--ok)}.bad{color:var(--bad)}.notice{padding:12px 14px;border-radius:12px;background:#101d2c;border:1px solid var(--line);margin-bottom:15px}.terminal{background:#020509;border:1px solid #263242;border-radius:14px;padding:14px;font-family:ui-monospace,SFMono-Regular,monospace;min-height:360px;white-space:pre-wrap;overflow:auto}.cmdrow{display:flex;gap:8px}.cmdrow input{flex:1}.footer{text-align:center;color:#65748a;padding:30px}.small{font-size:12px}.danger-text{color:#ff8295}</style></head><body><div class="top"><nav class="nav"><div class="brand">⚡ KEVINTECH WEB</div>__NAV__</nav></div><main class="wrap">__BODY__</main><div class="footer">KevinTech Multi Script · Web Panel</div></body></html>'''.replace('__TITLE__',html_escape(title)).replace('__NAV__',nav).replace('__BODY__',body)
-
+        nav = '<a href="%s/dashboard">Panel</a><a href="%s/profile">Perfil</a><a href="%s/online">Online</a><a href="%s/referrals">Referidos</a>' % (PREFIX, PREFIX, PREFIX, PREFIX)
+        if user.get('role') == 'admin': nav = '<a href="%s/admin">Admin</a><a href="%s/console">Consola</a>' % (PREFIX, PREFIX)
+        nav += '<a href="%s/logout">Salir</a>' % PREFIX
+    else: nav = '<a href="%s/login">Ingresar</a><a href="%s/register">Registrarse</a>' % (PREFIX, PREFIX)
+    template = WEB / 'templates' / 'base.html'
+    try: html = template.read_text(encoding='utf-8')
+    except Exception: html = '<!doctype html><html><head><title>{{TITLE}}</title></head><body>{{NAV}}{{BODY}}</body></html>'
+    return html.replace('{{TITLE}}', html_escape(title)).replace('{{NAV}}', nav).replace('{{BODY}}', body)
 
 def form_page(title,action,fields,button='Continuar',extra=''):
     fs=''.join('<label>%s</label><input class="input" name="%s" type="%s" %s>'%(lab,name,typ,attrs) for name,lab,typ,attrs in fields)
