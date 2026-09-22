@@ -106,7 +106,7 @@ r=subprocess.run(['systemctl','reload','haproxy'],capture_output=True,text=True)
 if r.returncode: print(r.stdout+r.stderr); raise SystemExit(4)
 PY
 }
-copy_web_files(){ local src; src="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$WEB/templates"; for f in server.py requirements.txt version.txt README.md; do [[ -f "$src/$f" ]] && cp -f "$src/$f" "$WEB/$f"; done; [[ -f "$src/templates/base.html" ]] && cp -f "$src/templates/base.html" "$WEB/templates/base.html"; mkdir -p "$DATA"; }
+copy_web_files(){ local src dst; src="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$WEB/templates"; for f in server.py requirements.txt version.txt README.md; do if [[ -f "$src/$f" ]]; then dst="$WEB/$f"; [[ "$(readlink -f "$src/$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$src/$f" "$dst"; fi; done; for f in "$src/templates"/*.html; do [[ -f "$f" ]] || continue; dst="$WEB/templates/$(basename "$f")"; [[ "$(readlink -f "$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$f" "$dst"; done; mkdir -p "$DATA"; }
 save_credentials(){ python3 - "$DATA/config.json" "$1" "$2" "$3" <<'PY'
 import json,sys,hashlib,base64,secrets,os
 p,u,pw,domain=sys.argv[1:]; os.makedirs(os.path.dirname(p),exist_ok=True)
@@ -125,21 +125,69 @@ try: print(json.load(open(sys.argv[1])).get('server_domain',''))
 except: print('')
 PY
 )"; existing_domain="${existing_domain:-$(current_domain)}"; if [[ -z "$existing_domain" ]]; then prompt_fresh || return 1; save_credentials "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" || return 1; else WEB_DOMAIN="$existing_domain"; echo -e "${cyan}Actualizando: se conservan usuario, contraseña y dominio.${reset}"; fi; write_service; write_acme_service; make_temp_cert "$WEB_DOMAIN"; patch_haproxy "$WEB_DOMAIN" || return 1; ensure_cert "$WEB_DOMAIN" || return 1; systemctl daemon-reload; systemctl enable "$SERVICE" "$ACME_SERVICE" >/dev/null 2>&1 || true; systemctl restart "$SERVICE"; sleep 1; if systemctl is-active --quiet "$SERVICE"; then echo -e "${green}✔ KevinTech Web instalada/actualizada.${reset}"; echo -e "${cyan}✔ Panel: https://$WEB_DOMAIN/login${reset}"; else journalctl -u "$SERVICE" -n 40 --no-pager; return 1; fi; }
-change_data(){ root_check; [[ -f "$DATA/config.json" ]] || { echo -e "${red}Web no instalada.${reset}"; return 1; }; local u p domain; domain="$(python3 - "$DATA/config.json" <<'PY'
+change_data(){
+ root_check; [[ -f "$DATA/config.json" ]] || { echo -e "${red}Web no instalada. Primero usa opción 1.${reset}"; return 1; }
+ local oldu olddomain u p domain
+ oldu="$(python3 - "$DATA/config.json" <<'PY2'
+import json,sys
+try: print(json.load(open(sys.argv[1])).get('admin_username','admin'))
+except: print('admin')
+PY2
+)"
+ olddomain="$(python3 - "$DATA/config.json" <<'PY2'
 import json,sys
 try: print(json.load(open(sys.argv[1])).get('server_domain',''))
 except: print('')
-PY
-)"; domain="${domain:-$(current_domain)}"; read -rp "Nuevo usuario admin [ENTER = conservar]: " u; read -rsp "Nueva contraseña [ENTER = conservar]: " p; echo; [[ -n "$u" || -n "$p" ]] || return 0; [[ -z "$u" || "$u" =~ ^[A-Za-z0-9_.-]{3,32}$ ]] || { echo "Usuario inválido"; return 1; }; [[ -z "$p" || ${#p} -ge 8 ]] || { echo "Contraseña demasiado corta"; return 1; }; python3 - "$DATA/config.json" "$u" "$p" <<'PY'
+PY2
+)"; olddomain="${olddomain:-$(current_domain)}"
+ read -rp "Nuevo usuario admin [ENTER = $oldu]: " u; u="${u:-$oldu}"
+ read -rsp "Nueva contraseña [ENTER = conservar]: " p; echo
+ [[ "$u" =~ ^[A-Za-z0-9_.-]{3,32}$ ]] || { echo "Usuario inválido"; return 1; }
+ read -rp "Nuevo dominio HTTPS [ENTER = $olddomain]: " domain; domain="${domain:-$olddomain}"; domain="$(echo "$domain"|tr -d '[:space:]')"; valid_domain "$domain" || { echo "Dominio inválido"; return 1; }
+ python3 - "$DATA/config.json" "$u" "$p" "$domain" <<'PY2'
 import json,sys,hashlib,base64,secrets,os
-p,u,pw=sys.argv[1:]; d=json.load(open(p));
-if u:d['admin_username']=u
+p,u,pw,domain=sys.argv[1:];d=json.load(open(p));d['admin_username']=u;d['server_domain']=domain
 if pw:
- salt=secrets.token_bytes(16); h=hashlib.scrypt(pw.encode(),salt=salt,n=2**14,r=8,p=1); d['admin_password_hash']='scrypt$'+base64.urlsafe_b64encode(salt).decode()+'$'+base64.urlsafe_b64encode(h).decode()
-json.dump(d,open(p,'w'),indent=2,ensure_ascii=False); os.chmod(p,0o600)
-PY
-systemctl restart "$SERVICE" >/dev/null 2>&1 || true; echo -e "${green}✔ Datos cambiados. Se conserva: https://$domain/login${reset}"; }
+ if len(pw)<8: raise SystemExit('Contraseña demasiado corta')
+ salt=secrets.token_bytes(16);h=hashlib.scrypt(pw.encode(),salt=salt,n=2**14,r=8,p=1);d['admin_password_hash']='scrypt$'+base64.urlsafe_b64encode(salt).decode()+'$'+base64.urlsafe_b64encode(h).decode()
+json.dump(d,open(p,'w'),indent=2,ensure_ascii=False);os.chmod(p,0o600)
+PY2
+ WEB_DOMAIN="$domain"; write_domain_config "$domain"; make_temp_cert "$domain"; patch_haproxy "$domain" || return 1; ensure_cert "$domain" || return 1; systemctl restart "$SERVICE"; echo -e "${green}✔ Datos actualizados.${reset}"; echo -e "${cyan}✔ Panel: https://$domain/login${reset}"; }
+
 show_logs(){ root_check; journalctl -u "$SERVICE" -f -n 80 --no-pager; }
-remove_web(){ root_check; systemctl stop "$SERVICE" 2>/dev/null || true; systemctl disable "$SERVICE" 2>/dev/null || true; systemctl stop "$ACME_SERVICE" 2>/dev/null || true; systemctl disable "$ACME_SERVICE" 2>/dev/null || true; systemctl daemon-reload; echo -e "${green}✔ Servicios detenidos y deshabilitados.${reset}"; echo -e "${cyan}✔ Archivos conservados en $WEB y datos conservados.${reset}"; }
-menu(){ root_check; while true; do clear; echo -e "${cyan}╔══════════════════════════════════════════════════════════════╗${reset}"; echo -e "${cyan}║${reset}             KEVINTECH WEB INSTALLER                  ${cyan}║${reset}"; echo -e "${cyan}╚══════════════════════════════════════════════════════════════╝${reset}"; echo; echo -e "${green}[1]${reset} Instalar / Actualizar web"; echo -e "${yellow}[2]${reset} Cambiar datos de acceso"; echo -e "${cyan}[3]${reset} Ver logs"; echo -e "${red}[4]${reset} Detener web (conservar archivos)"; echo "[0] Salir"; echo; read -rp "Opción: " op; case "$op" in 1) install_or_update; read -rp "ENTER para continuar..." _;; 2) change_data; read -rp "ENTER para continuar..." _;; 3) show_logs;; 4) read -rp "Escribe DETENER para confirmar: " x; [[ "$x" == DETENER ]] && remove_web; read -rp "ENTER para continuar..." _;; 0) exit 0;; *) echo "Opción inválida"; sleep 1;; esac; done; }
+remove_web(){
+ root_check
+ systemctl stop "$SERVICE" 2>/dev/null || true; systemctl disable "$SERVICE" 2>/dev/null || true
+ systemctl stop "$ACME_SERVICE" 2>/dev/null || true; systemctl disable "$ACME_SERVICE" 2>/dev/null || true
+ rm -f "/etc/systemd/system/$SERVICE" "/etc/systemd/system/$ACME_SERVICE" "$HOOK" "$PEM" "$DOMAIN_FILE"
+ local old_domain=""; [[ -f "$DATA/config.json" ]] && old_domain="$(python3 - "$DATA/config.json" <<'PY2'
+import json,sys
+try: print(json.load(open(sys.argv[1])).get('server_domain',''))
+except: print('')
+PY2
+)"
+ if [[ -n "$old_domain" ]] && command -v certbot >/dev/null 2>&1; then certbot delete --cert-name "$old_domain" --non-interactive >/dev/null 2>&1 || true; fi
+ if [[ -f "$HAPROXY" ]]; then HAPROXY="$HAPROXY" PEM="$PEM" python3 - <<'PY2'
+from pathlib import Path
+import os,subprocess,shutil
+p=Path(os.environ['HAPROXY']);s=p.read_text(errors='ignore');bak=str(p)+'.kevintech-web-remove.bak';shutil.copy2(p,bak)
+lines=s.splitlines(True);out=[];skip=False
+for line in lines:
+ st=line.strip()
+ if st in ('backend kevintech_web','backend acme_backend'): skip=True;continue
+ if skip:
+  if line and not line[0].isspace() and st: skip=False
+  else: continue
+ if any(x in line for x in ['acl acl_panel_sni ','use_backend kevintech_web if acl_panel_sni','acl acl_acme path_beg /.well-known/acme-challenge/','use_backend acme_backend if acl_acme','crt '+os.environ['PEM']]): continue
+ out.append(line)
+p.write_text(''.join(out));r=subprocess.run(['haproxy','-c','-f',str(p)],capture_output=True,text=True)
+if r.returncode: shutil.copy2(bak,p); print(r.stdout+r.stderr)
+else: subprocess.run(['systemctl','reload','haproxy'],check=False)
+PY2
+ fi
+ systemctl daemon-reload; rm -rf "$WEB"
+ echo -e "${green}✔ KevinTech Web desinstalada completamente.${reset}"; echo -e "${cyan}✔ Servicios, HAProxy, certificado y archivos de la web eliminados.${reset}"; echo -e "${cyan}✔ No se tocaron usuarios/, protocolos/, herramientas/ ni telegram/.${reset}"
+}
+
+menu(){ root_check; while true; do clear; echo -e "${cyan}╔══════════════════════════════════════════════════════════════╗${reset}"; echo -e "${cyan}║${reset}             KEVINTECH WEB INSTALLER                  ${cyan}║${reset}"; echo -e "${cyan}╚══════════════════════════════════════════════════════════════╝${reset}"; echo; echo -e "${green}[1]${reset} Instalar / Actualizar web"; echo -e "${yellow}[2]${reset} Cambiar datos de acceso"; echo -e "${cyan}[3]${reset} Ver logs"; echo -e "${red}[4]${reset} Detener web (conservar archivos)"; echo "[0] Salir"; echo; read -rp "Opción: " op; case "$op" in 1) install_or_update; read -rp "ENTER para continuar..." _;; 2) change_data; read -rp "ENTER para continuar..." _;; 3) show_logs;; 4) read -rp "Escribe DESINSTALAR para confirmar: " x; [[ "$x" == DESINSTALAR ]] && remove_web; read -rp "ENTER para continuar..." _;; 0) exit 0;; *) echo "Opción inválida"; sleep 1;; esac; done; }
 case "${1:-menu}" in install|update) install_or_update;; change) change_data;; logs) show_logs;; remove|stop) remove_web;; menu) menu;; *) echo "Uso: $0 {install|update|change|logs|stop|menu}"; exit 1;; esac

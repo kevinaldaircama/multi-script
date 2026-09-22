@@ -237,22 +237,28 @@ def consume_pass(c,token,user_id):
     if not row:return None
     c.execute('DELETE FROM ad_tokens WHERE token=?',(token,));c.commit();return row
 
+def render_template(name, **values):
+    path = WEB / 'templates' / name
+    try:
+        html = path.read_text(encoding='utf-8')
+    except Exception:
+        return '<!doctype html><html><body>Template missing: %s</body></html>' % html_escape(name)
+    for k,v in values.items():
+        html = html.replace('{{'+k+'}}', str(v))
+    return html
+
 def page(title, body, user=None):
-    nav = ''
+    nav=''
     if user:
-        nav = '<a href="%s/dashboard">Panel</a><a href="%s/profile">Perfil</a><a href="%s/online">Online</a><a href="%s/referrals">Referidos</a>' % (PREFIX, PREFIX, PREFIX, PREFIX)
-        if user.get('role') == 'admin': nav = '<a href="%s/admin">Admin</a><a href="%s/console">Consola</a>' % (PREFIX, PREFIX)
-        nav += '<a href="%s/logout">Salir</a>' % PREFIX
-    else: nav = '<a href="%s/login">Ingresar</a><a href="%s/register">Registrarse</a>' % (PREFIX, PREFIX)
-    template = WEB / 'templates' / 'base.html'
-    try: html = template.read_text(encoding='utf-8')
-    except Exception: html = '<!doctype html><html><head><title>{{TITLE}}</title></head><body>{{NAV}}{{BODY}}</body></html>'
-    return html.replace('{{TITLE}}', html_escape(title)).replace('{{NAV}}', nav).replace('{{BODY}}', body)
+        nav='<a href="%s/dashboard">Panel</a><a href="%s/profile">Perfil</a><a href="%s/online">Online</a><a href="%s/referrals">Referidos</a>'%(PREFIX,PREFIX,PREFIX,PREFIX)
+        if user.get('role')=='admin': nav='<a href="%s/admin">Admin</a><a href="%s/console">Consola</a>'%(PREFIX,PREFIX)
+        nav += '<a href="%s/logout">Salir</a>'%PREFIX
+    else: nav='<a href="%s/login">Ingresar</a><a href="%s/register">Registrarse</a>'%(PREFIX,PREFIX)
+    return render_template('base.html', TITLE=html_escape(title), NAV=nav, BODY=body)
 
-def form_page(title,action,fields,button='Continuar',extra=''):
-    fs=''.join('<label>%s</label><input class="input" name="%s" type="%s" %s>'%(lab,name,typ,attrs) for name,lab,typ,attrs in fields)
-    return page(title,'<div class="card form"><h2>%s</h2><form method="post" action="%s"><input type="hidden" name="csrf" value="%s">%s%s<button class="btn primary" type="submit">%s</button></form></div>'%(title,action,html_escape(CSRF_PLACEHOLDER),fs,extra,button))
-
+def tpl(name, user=None, title='', **values):
+    body=render_template(name, **values)
+    return page(title, body, user)
 
 def html_escape(s):
     return str(s).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
@@ -351,8 +357,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
 
     def login_page(self,msg=''):
-        body='<div class="card form"><h2>Ingresar</h2>%s<form method="post"><label>Usuario</label><input class="input" name="username" required><label>Contraseña</label><input class="input" name="password" type="password" required><button class="btn primary">Ingresar</button></form><p class="muted">También puedes iniciar como administrador con las credenciales configuradas en el instalador.</p><a href="%s/register">Crear cuenta</a></div>'%(msg,PREFIX)
-        return self.send(200,body=page('Ingreso',body))
+        return self.send(200,body=tpl('login.html',title='Ingreso',MSG=msg))
 
     def login_post(self,d):
         user=self.val(d,'username');pw=self.val(d,'password');c=db(); admin=cfg(); ok=False; role=''
@@ -366,8 +371,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def register_page(self,msg=''):
         q=parse_qs(urlparse(self.path).query); ref=html_escape(q.get('ref',[''])[0])
-        body='<div class="card form"><h2>Crear cuenta web</h2>%s<form method="post"><label>Nombre</label><input class="input" name="name" required><label>Usuario</label><input class="input" name="username" required pattern="[A-Za-z0-9_.-]{3,32}"><label>Contraseña</label><input class="input" name="password" type="password" minlength="6" required><label>Código de referido (opcional)</label><input class="input" name="ref" value="%s"><button class="btn primary">Registrarme</button></form><p><a href="%s/login">Ya tengo cuenta</a></p></div>'%(msg,ref,PREFIX)
-        return self.send(200,body=page('Registro',body))
+        return self.send(200,body=tpl('register.html',title='Registro',MSG=msg,REF=ref))
 
     def register_post(self,d):
         name=self.val(d,'name');user=self.val(d,'username');pw=self.val(d,'password');ref=self.val(d,'ref')
@@ -387,15 +391,13 @@ class Handler(BaseHTTPRequestHandler):
         if u['role']=='admin':return self.admin(u)
         c=db(); accounts=c.execute('SELECT * FROM accounts WHERE user_id=? ORDER BY id DESC',(u['id'],)).fetchall(); online=sum(len(account_online(x['username'])) for x in accounts); pts=u['referral_points']
         cards=''.join('<div class="card"><h3>👤 %s</h3><p class="muted">Tipo: %s · Expira: %s</p><p>Online: <b class="oktxt">%s</b></p><p><span class="tag">Límite %s IP</span></p><a class="btn" href="%s/account?id=%s">Ver</a> <a class="btn primary" href="%s/ads?action=renew&account=%s">Renovar</a> <a class="btn danger" href="%s/ads?action=delete&account=%s">Eliminar</a></div>'%(html_escape(a['username']),html_escape(a['type']),html_escape(a['expiration'] or '—'),len(account_online(a['username'])),a['ip_limit'],PREFIX,a['id'],PREFIX,a['id'],PREFIX,a['id']) for a in accounts)
-        c.close()
-        body='<div class="hero"><h1>Mi panel</h1><p class="muted">Crea y administra tus cuentas desde el navegador.</p></div><div class="grid"><div class="card"><div class="stat">%d</div><div class="muted">Cuentas</div></div><div class="card"><div class="stat">%d</div><div class="muted">Conexiones online</div></div><div class="card"><div class="stat">%d</div><div class="muted">Puntos de referido</div></div></div><br><div class="grid"><div class="card"><h3>Crear cuenta</h3><p class="muted">La operación puede requerir anuncios según la configuración.</p><a class="btn primary" href="%s/ads?action=create">➕ Crear</a></div><div class="card"><h3>Referidos</h3><p>Comparte tu código: <code>%s</code></p><a class="btn" href="%s/referrals">Ver programa</a></div></div><br><h2>Mis cuentas</h2><div class="grid">%s</div>'%(len(accounts),online,pts,PREFIX,html_escape(u['referral_code']),PREFIX,cards or '<div class="card">No tienes cuentas todavía.</div>')
-        return self.send(200,body=page('Panel',body,u))
+        c.close();return self.send(200,body=tpl('dashboard.html',u,'Panel',COUNT=len(accounts),ONLINE=online,POINTS=pts,REFERRAL_CODE=html_escape(u['referral_code']),ACCOUNTS=cards or '<div class="card">No tienes cuentas todavía.</div>'))
 
     def profile(self,u):
         if not u:return self.redirect('/login')
         if u['role']=='admin':return self.admin_settings(u)
-        body='<div class="card form"><h2>Mi perfil</h2><p><b>Nombre:</b> %s</p><p><b>Usuario:</b> %s</p><p><b>Registrado:</b> %s</p><p><b>Referidos:</b> %s</p><p><b>Código:</b> <code>%s</code></p><hr><form method="post"><label>Nuevo nombre</label><input class="input" name="name" value="%s"><label>Nueva contraseña</label><input class="input" name="password" type="password" minlength="6"><button class="btn primary">Guardar cambios</button></form></div>'%(html_escape(u['name']),html_escape(u['username']),u['created_at'],u['referral_points'],html_escape(u['referral_code']),html_escape(u['name']))
-        return self.send(200,body=page('Perfil',body,u))
+        body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=u['created_at'],POINTS=u['referral_points'],CODE=html_escape(u['referral_code']))
+        return self.send(200,body=body)
 
     def profile_post(self,u,d):
         if not u or u['role']!='user':return self.send(403,body='403')
@@ -409,16 +411,16 @@ class Handler(BaseHTTPRequestHandler):
         c=db(); rows=all_online() if u['role']=='admin' else []
         if u['role']=='user':
             names={r['username'] for r in c.execute('SELECT username FROM accounts WHERE user_id=?',(u['id'],)).fetchall()}; rows=[x for x in all_online() if x[0] in names]
-        body='<div class="card"><h2>🟢 Usuarios online</h2><table class="table"><tr><th>Usuario</th><th>IP</th></tr>%s</table></div>'%''.join('<tr><td>%s</td><td>%s</td></tr>'%(html_escape(a),html_escape(b)) for a,b in rows) or '<tr><td colspan="2">No hay conexiones SSH activas.</td></tr>'
-        c.close();return self.send(200,body=page('Online',body,u))
+        rows_html=''.join('<tr><td>%s</td><td>%s</td></tr>'%(html_escape(a),html_escape(b)) for a,b in rows) or '<tr><td colspan="2">No hay conexiones SSH activas.</td></tr>'
+        c.close();return self.send(200,body=tpl('online.html',u,'Online',ROWS=rows_html))
 
     def referrals(self,u):
         if not u or u['role']!='user':return self.redirect('/login')
         c=db();accounts=c.execute('SELECT id,username,expiration FROM accounts WHERE user_id=? ORDER BY username',(u['id'],)).fetchall();c.close()
         opts=''.join('<option value="%s">%s</option>'%(a['id'],html_escape(a['username'])) for a in accounts)
         redeem='<div class="card form"><h3>🎁 Canjear referidos</h3><p>Con 3 puntos puedes añadir 7 días a una cuenta.</p><form method="post" action="%s/referrals/redeem"><select class="input" name="account_id" required>%s</select><button class="btn primary">Canjear 3 puntos</button></form></div>'%(PREFIX,opts) if accounts else '<div class="card"><h3>🎁 Recompensa</h3><p class="muted">Crea una cuenta para poder canjear puntos.</p></div>'
-        body='<div class="grid"><div class="card"><div class="stat">%s</div><div class="muted">Puntos</div></div><div class="card"><h3>Tu enlace</h3><input class="input" readonly value="%s/register?ref=%s"><p class="muted">Cada registro válido con tu código suma un punto.</p></div></div><br>%s'%(u['referral_points'],PREFIX,html_escape(u['referral_code']),redeem)
-        return self.send(200,body=page('Referidos',body,u))
+        body=tpl('referrals.html',u,'Referidos',POINTS=u['referral_points'],LINK='%s/register?ref=%s'%(PREFIX,html_escape(u['referral_code'])),REDEEM=redeem)
+        return self.send(200,body=body)
 
     def referral_redeem(self,u,d):
         if not u or u['role']!='user':return self.redirect('/login')
@@ -438,8 +440,8 @@ class Handler(BaseHTTPRequestHandler):
         c=db(); a=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.id=?',(aid,)).fetchone()
         if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
         pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close()
-        body='<div class="card"><h2>👤 %s</h2><p>Tipo: <b>%s</b></p><p>Contraseña: <code>%s</code></p><p>Expira: <b>%s</b></p><p>Límite: <b>%s</b> IP</p><p>Online: <b class="oktxt">%d</b> %s</p><a class="btn primary" href="%s/ads?action=renew&account=%s">Renovar</a> <a class="btn" href="%s/dashboard">Volver</a></div>'%(html_escape(a['username']),html_escape(a['type']),html_escape(pw),html_escape(a['expiration'] or '—'),a['ip_limit'],len(ips),', '.join(html_escape(x) for x in ips) if ips else '',PREFIX,a['id'],PREFIX)
-        return self.send(200,body=page('Cuenta',body,u))
+        body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else '',ID=a['id'])
+        return self.send(200,body=body)
 
     def account_create(self,u,d):
         if not u or u['role']!='user':return self.send(403,body='403')
@@ -498,28 +500,25 @@ class Handler(BaseHTTPRequestHandler):
         q=parse_qs(urlparse(self.path).query); action=q.get('action',[''])[0]; token=q.get('token',[''])[0]; adpass=q.get('adpass',[''])[0]
         if token:
             c=db();row=get_ad(c,token,u['id']);c.close()
-            if not row:return self.send(400,body=page('Publicidad','<div class="notice bad">Este anuncio expiró. Vuelve a intentar la operación.</div>',u))
-            n=ad_required(row['action']); zone=html_escape(str(cfg().get('monetag_zone','11217882'))); provider=cfg().get('ad_provider','monetag')
-            complete='%s/ads/complete'%PREFIX; nexturl='%s/dashboard'%PREFIX
-            if row['account_id']:nexturl='%s/account?id=%s'%(PREFIX,row['account_id'])
-            body='''<div class="card" style="max-width:520px;margin:auto;text-align:center"><h2>💰 Anuncio %s</h2><p class="muted">Completa la publicidad para continuar con: <b>%s</b>.</p><button id="ad" class="btn primary">▶ Ver anuncio</button><p id="status" class="muted"></p><form id="done" method="post" action="%s"><input type="hidden" name="token" value="%s"></form></div><script src="https://libtl.com/sdk.js" data-zone="%s" data-sdk="show_%s"></script><script>const b=document.getElementById('ad'),s=document.getElementById('status');b.onclick=async()=>{b.disabled=true;s.textContent='Cargando publicidad...';try{const fn=window['show_%s'];if(typeof fn!== 'function')throw Error('SDK no disponible');await fn();s.textContent='Anuncio completado';document.getElementById('done').submit()}catch(e){s.textContent='No se pudo cargar el anuncio. Intenta nuevamente.';b.disabled=false}}</script>'''%(n,html_escape(row['action']),complete,html_escape(token),zone,zone,zone)
-            return self.send(200,body=page('Publicidad',body,u))
+            if not row:return self.send(400,body=tpl('message.html',u,'Publicidad',MESSAGE='<div class="notice bad">Este anuncio expiró. Vuelve a intentar la operación.</div>'))
+            n=ad_required(row['action']); zone=html_escape(str(cfg().get('monetag_zone','11217882'))); complete='%s/ads/complete'%PREFIX
+            return self.send(200,body=tpl('ad_watch.html',u,'Publicidad',COUNT=n,ACTION=html_escape(row['action']),COMPLETE=complete,TOKEN=html_escape(token),ZONE=zone))
         if action=='delete':
             try:aid=int(q.get('account',['0'])[0])
             except:aid=0
-            c=db();a=c.execute('SELECT * FROM accounts WHERE id=? AND user_id=?',(aid,u['id'])).fetchone();passrow=get_ad(c,adpass,u['id']) if adpass else None;c.close()
+            c=db();a=c.execute('SELECT * FROM accounts WHERE id=? AND user_id=?',(aid,u['id'])).fetchone();c.close()
             if not a:return self.send(404,body='Cuenta no encontrada')
-            body='<div class="card form"><h2>🗑️ Eliminar cuenta</h2><p>Cuenta: <b>%s</b></p><p class="muted">La eliminación es permanente.</p><form method="post" action="%s/account/delete"><input type="hidden" name="id" value="%s"><input type="hidden" name="ad_token" value="%s"><button class="btn danger">Eliminar cuenta</button></form></div>'%(html_escape(a['username']),PREFIX,aid,html_escape(adpass))
+            body=tpl('ad_delete.html',u,'Publicidad',USERNAME=html_escape(a['username']),PREFIX=PREFIX,ID=aid,ADPASS=html_escape(adpass))
         elif action=='create':
             c=db();passrow=get_ad(c,adpass,u['id']) if adpass else None;c.close(); payload=json.loads(passrow['payload']) if passrow else {}
-            body='<div class="card form"><h2>➕ Crear cuenta</h2><form method="post" action="%s/account/create"><input type="hidden" name="ad_token" value="%s"><label>Usuario</label><input class="input" name="username" value="%s" required pattern="[a-z][a-z0-9_-]{2,31}"><label>Contraseña</label><input class="input" name="password" value="%s" type="text" required minlength="4"><label>Días</label><input class="input" name="days" type="number" value="%s" min="1" max="3650"><label>Límite IP</label><input class="input" name="limit" type="number" value="%s" min="0" max="100"><button class="btn primary">Crear cuenta</button></form></div>'%(PREFIX,html_escape(adpass),html_escape(payload.get('username','')),html_escape(payload.get('password','')),html_escape(payload.get('days','7')),html_escape(payload.get('limit','1')))
+            body=tpl('ad_create.html',u,'Publicidad',PREFIX=PREFIX,ADPASS=html_escape(adpass),USERNAME=html_escape(payload.get('username','')),PASSWORD=html_escape(payload.get('password','')),DAYS=html_escape(payload.get('days','7')),LIMIT=html_escape(payload.get('limit','1')))
         else:
             try:aid=int(q.get('account',['0'])[0])
             except:aid=0
             c=db();a=c.execute('SELECT * FROM accounts WHERE id=? AND user_id=?',(aid,u['id'])).fetchone();c.close()
             if not a:return self.send(404,body='Cuenta no encontrada')
-            body='<div class="card form"><h2>♻️ Renovar cuenta</h2><p>Cuenta: <b>%s</b></p><form method="post" action="%s/account/renew"><input type="hidden" name="id" value="%s"><input type="hidden" name="ad_token" value="%s"><label>Días</label><input class="input" name="days" type="number" value="7" min="1" max="3650"><button class="btn primary">Renovar cuenta</button></form></div>'%(html_escape(a['username']),PREFIX,aid,html_escape(adpass))
-        return self.send(200,body=page('Publicidad',body,u))
+            body=tpl('ad_renew.html',u,'Publicidad',PREFIX=PREFIX,USERNAME=html_escape(a['username']),ID=aid,ADPASS=html_escape(adpass))
+        return self.send(200,body=body)
 
     def ad_complete(self,u,d):
         if not u or u['role']!='user':return self.send(403,body='403')
@@ -540,13 +539,13 @@ class Handler(BaseHTTPRequestHandler):
     def admin(self,u):
         if not u or u['role']!='admin':return self.redirect('/login')
         c=db();nu=c.execute('SELECT COUNT(*) n FROM users').fetchone()['n'];na=c.execute('SELECT COUNT(*) n FROM accounts').fetchone()['n'];online=len(all_online()); users=c.execute('SELECT id,username,name,created_at,referral_points,active FROM users ORDER BY id DESC LIMIT 100').fetchall(); accounts=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 100').fetchall();c.close()
-        body='<div class="hero"><h1>Centro de administración</h1><p class="muted">Administración web y acceso a la consola del VPS.</p></div><div class="grid"><div class="card"><div class="stat">%s</div><div class="muted">Usuarios web</div></div><div class="card"><div class="stat">%s</div><div class="muted">Cuentas</div></div><div class="card"><div class="stat">%s</div><div class="muted">Online</div></div></div><br><div class="grid"><div class="card"><h3>⚙️ Configuración</h3><a class="btn" href="%s/admin/settings">Datos admin y Ads</a></div><div class="card"><h3>🖥️ Consola</h3><a class="btn primary" href="%s/console">Abrir terminal web</a></div><div class="card"><h3>🧰 Sistema</h3><p class="small">Desde la consola puedes ejecutar los menús existentes de usuarios, protocolos y herramientas sin modificar sus archivos.</p></div></div><br><div class="card"><h3>Usuarios registrados</h3><table class="table"><tr><th>Usuario</th><th>Nombre</th><th>Referidos</th><th>Estado</th></tr>%s</table></div><br><div class="card"><h3>Cuentas</h3><table class="table"><tr><th>Cuenta</th><th>Propietario</th><th>Tipo</th><th>Expira</th><th>Online</th></tr>%s</table></div>'%(nu,na,online,PREFIX,PREFIX,''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(html_escape(x['username']),html_escape(x['name']),x['referral_points'],'Activo' if x['active'] else 'Bloqueado') for x in users),''.join('<tr><td><a href="%s/account?id=%s">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(PREFIX,x['id'],html_escape(x['username']),html_escape(x['owner']),html_escape(x['type']),html_escape(x['expiration'] or '—'),len(account_online(x['username'])) ) for x in accounts))
-        return self.send(200,body=page('Admin',body,u))
+        users_html=''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(html_escape(x['username']),html_escape(x['name']),x['referral_points'],'Activo' if x['active'] else 'Bloqueado') for x in users)
+        accounts_html=''.join('<tr><td><a href="%s/account?id=%s">%s</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(PREFIX,x['id'],html_escape(x['username']),html_escape(x['owner']),html_escape(x['type']),html_escape(x['expiration'] or '—'),len(account_online(x['username']))) for x in accounts)
+        return self.send(200,body=tpl('admin.html',u,'Admin',USERS=nu,ACCOUNTS=na,ONLINE=online,USERS_ROWS=users_html,ACCOUNT_ROWS=accounts_html))
 
     def admin_settings(self,u):
         if not u or u['role']!='admin':return self.redirect('/login')
-        c=cfg();body='<div class="card form"><h2>⚙️ Datos del administrador</h2><form method="post"><label>Usuario admin</label><input class="input" name="admin_username" value="%s"><label>Nueva contraseña (vacío = no cambiar)</label><input class="input" name="admin_password" type="password"><hr><h3>Ads</h3><label><input type="checkbox" name="ads_enabled" %s> Activar anuncios</label><label>Proveedor</label><select class="input" name="ad_provider"><option value="monetag" %s>Monetag</option></select><label>Zone ID</label><input class="input" name="monetag_zone" value="%s"><label>Ads para crear</label><input class="input" name="ad_create" type="number" min="0" max="20" value="%s"><label>Ads para eliminar</label><input class="input" name="ad_delete" type="number" min="0" max="20" value="%s"><label>Ads para renovar</label><input class="input" name="ad_renew" type="number" min="0" max="20" value="%s"><button class="btn primary">Guardar</button></form><hr><p class="small">El instalador recomienda comenzar con Monetag porque este proyecto ya trae su integración Web/Telegram preparada. Puedes cambiar proveedor/SDK en una actualización posterior.</p></div>'%(html_escape(c.get('admin_username','admin')),'checked' if c.get('ads_enabled',True) else '', 'selected' if c.get('ad_provider','monetag')=='monetag' else '',html_escape(c.get('monetag_zone','11217882')),c.get('ads',{}).get('create',3),c.get('ads',{}).get('delete',1),c.get('ads',{}).get('renew',3))
-        return self.send(200,body=page('Configuración',body,u))
+        c=cfg();return self.send(200,body=tpl('admin_settings.html',u,'Configuración',USERNAME=html_escape(c.get('admin_username','admin')),ADS_CHECKED='checked' if c.get('ads_enabled',True) else '',PROVIDER_CHECKED='selected' if c.get('ad_provider','monetag')=='monetag' else '',ZONE=html_escape(c.get('monetag_zone','11217882')),CREATE=c.get('ads',{}).get('create',3),DELETE=c.get('ads',{}).get('delete',1),RENEW=c.get('ads',{}).get('renew',3)))
 
     def admin_settings_post(self,u,d):
         if not u or u['role']!='admin':return self.send(403,body='403')
@@ -559,8 +558,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def console(self,u):
         if not u or u['role']!='admin':return self.redirect('/login')
-        body="""<div class="card"><h2>🖥️ Consola VPS</h2><p class="muted">Solo administradores. Ejecuta comandos con el mismo usuario del servicio (root). No compartas estas credenciales.</p><div id="out" class="terminal">KevinTech Web Console\nListo.\n</div><div class="cmdrow"><input id="cmd" class="input" placeholder="Escribe un comando..."><button class="btn primary" onclick="run()">Ejecutar</button></div></div><script>async function run(){let x=document.getElementById('cmd'),o=document.getElementById('out'),c=x.value.trim();if(!c)return;o.textContent+='\n# '+c+'\nEjecutando...\n';x.value='';let r=await fetch('%s/console',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({command:c})});o.textContent=await r.text();o.scrollTop=o.scrollHeight}</script>"""%PREFIX
-        return self.send(200,body=page('Consola',body,u))
+        return self.send(200,body=tpl('console.html',u,'Consola',PREFIX=PREFIX))
 
     def console_post(self,u,d):
         if not u or u['role']!='admin':return self.send(403,body='403')
