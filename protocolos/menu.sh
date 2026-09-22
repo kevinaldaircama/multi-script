@@ -723,7 +723,7 @@ process_option() {
             ;;
             17)
 
-            run_module "$BASE/web/install.sh"
+            run_module "$BASE/web/installer.sh"
 
             ;;
 
