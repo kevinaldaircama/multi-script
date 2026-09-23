@@ -13,7 +13,7 @@ DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
- 'monetization':{'monetag':'','ad_counts':{'create_normal':3,'create_v2ray':2,'create_ovpn':2,'ref_renew':1,'renew':5,'expiry_renew':7}},
+ 'monetization':{'monetag':'','ad_counts':{'create_normal':3,'create_v2ray':2,'ref_renew':1,'renew':5,'expiry_renew':7}},
  'auto_update':{'enabled':False,'last_version':'','notified_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
@@ -387,8 +387,8 @@ def users_menu(uid):
  return rows
 USERS=users_menu
 
-CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔐 SSH OVPN','callback_data':'create:ovpn'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
-PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'openvpn':('OpenVPN','openvpn.sh','openvpn','1194/UDP,2200/TCP,443/TCP','1','10'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
+CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
+PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
 SVCS={k:v[2] for k,v in PROTO.items()}
 TOOLS=[[{'text':'🔥 Firewall','callback_data':'tool:firewall'},{'text':'🚀 Optimizar','callback_data':'tool:optimizar'}],[{'text':'🚫 Ads','callback_data':'tool:ads'},{'text':'🚫 Torrent','callback_data':'tool:torrent'}],[{'text':'📈 Speedtest','callback_data':'tool:speed'},{'text':'🔎 Scanner','callback_data':'tool:scanner'}],[{'text':'📁 Archivos','callback_data':'tool:files'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]]
@@ -398,7 +398,7 @@ def module(name):
   if p.exists():return p
  return None
 def installed(k):
- s=SVCS[k];paths={'openssh':['/usr/sbin/sshd'],'dropbear':['/usr/sbin/dropbear'],'openvpn':['/usr/sbin/openvpn'],'v2ray':['/usr/local/bin/xray','/usr/bin/xray','/etc/xray'],'checkuser':['/etc/systemd/system/checkuser.service'],'slowdns':['/etc/slowdns','/usr/local/bin/dnstt-server'],'badvpn':['/usr/local/bin/badvpn-udpgw'],'ssl':['/usr/sbin/haproxy'],'udpcustom':['/usr/local/bin/udp-custom'],'zivpn':['/etc/zivpn']}
+ s=SVCS[k];paths={'openssh':['/usr/sbin/sshd'],'dropbear':['/usr/sbin/dropbear'],'v2ray':['/usr/local/bin/xray','/usr/bin/xray','/etc/xray'],'checkuser':['/etc/systemd/system/checkuser.service'],'slowdns':['/etc/slowdns','/usr/local/bin/dnstt-server'],'badvpn':['/usr/local/bin/badvpn-udpgw'],'ssl':['/usr/sbin/haproxy'],'udpcustom':['/usr/local/bin/udp-custom'],'zivpn':['/etc/zivpn']}
  if any(Path(x).exists() for x in paths.get(k,[])):return True
  return sh(f'systemctl cat {q(s)} >/dev/null 2>&1',3)[0]==0
 
@@ -555,33 +555,6 @@ def v2ray_account_message(c,d):
  link='vmess://'+base64.b64encode(raw.encode()).decode()
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
 
-def ovpn_account_message(c,d):
- username=d['user'];pw=d.get('pass','');exp=d.get('expiration','No disponible')
- cfg=BASE/'config.conf';domain=''
- if cfg.exists():
-  for l in cfg.read_text(errors='ignore').splitlines():
-   if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('\"').strip("'")
- host=domain or (subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or '0.0.0.0').strip()
- # El enlace OVPN usa el dominio configurado en SERVER_DOMAIN (HAProxy).
- # Cada cuenta apunta a su propio archivo .zip: https://DOMINIO/USUARIO.zip
- # Si el flujo ya proporciona ovpn_link, se respeta para no romper instalaciones existentes.
- ovpn_link=str(d.get('ovpn_link') or f'https://{host}/{urllib.parse.quote(username)}.zip').strip()
- sub_base=str(d.get('sub_base') or f'https://{host}/ssh/sub').strip().rstrip('/')
- sub_link=sub_base+'?id='+urllib.parse.quote(username)
- return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>SSH OVPN Account</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>domino:</b> {e(host)}
-<b>Username</b> : <code>{e(username)}</code>
-<b>Password</b> : <code>{e(pw)}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>OpenVPN Link</b> : {e(ovpn_link)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>Sub Link</b> : {e(sub_link)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>Expiration</b> : {e(exp)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-
 def account_message(c,d,renew=False):
  u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
@@ -613,7 +586,6 @@ def account_message(c,d,renew=False):
 • SSH: <code>22</code>
 • Dropbear: <code>143,90,109</code>
 • SSL Tunnel: <code>8080,443,80</code>
-• OpenVPN: <code>1194,2200,443</code>
 • BadVPN: <code>7300,7200</code>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -694,12 +666,12 @@ def ad_configurations():
  return items
 
 # Cantidad de anuncios configurable por acción.
-# Valores por defecto: normal=3, V2Ray=2, OVPN=2, canje=1, renovar=5, vencimiento=7.
+# Valores por defecto: normal=3, V2Ray=2, canje=1, renovar=5, vencimiento=7.
 def ad_count_for(action,extra=None):
  d=db();counts=d.get('monetization',{}).get('ad_counts',{})
  kind=(extra or {}).get('kind','')
  key=action
- if action=='create':key='create_'+('v2ray' if kind=='v2ray' else 'ovpn' if kind=='ovpn' else 'normal')
+ if action=='create':key='create_v2ray' if kind=='v2ray' else 'create_normal'
  try:return max(1,int(counts.get(key,DEFAULT['monetization']['ad_counts'].get(key,1))))
  except:return 1
 
@@ -941,11 +913,9 @@ def process_text(c,t,chat_type=None):
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:renew')
  if f=='create' and step=='p':
   dat['pass']=t
-  if dat.get('kind')=='ovpn':
-   st['s']='days';return send(c,'📅 <b>Fecha de expiración</b> (DD/MM/YYYY):')
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
  if f in ('create','renew') and step=='days':
-  if f=='create' and dat.get('kind') in ('v2ray','ovpn'):
+  if f=='create' and dat.get('kind')=='v2ray':
    try:
     ex=datetime.datetime.strptime(t.strip(),'%d/%m/%Y').date()
     if ex<datetime.date.today():return send(c,'❌ La fecha de expiración no puede estar vencida. Usa DD/MM/YYYY.')
@@ -1016,10 +986,10 @@ def cb(c,m,u,i,x,chat_type=None):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
   return edit(c,m,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
- if x in ('create:normal','create:v2ray','create:ovpn'):
+ if x in ('create:normal','create:v2ray'):
   if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado.')
   if not allowed(u):return send(c,'🔒 Acceso privado.')
-  kind='v2ray' if x.endswith('v2ray') else 'ovpn' if x.endswith('ovpn') else 'normal'
+  kind='v2ray' if x.endswith('v2ray') else 'normal'
   return start_create(c,kind)
  if x=='renew':
   if not is_owner(u):return ans(i,'Solo el SUPER ADMIN puede renovar manualmente.')
@@ -1084,15 +1054,7 @@ def cb(c,m,u,i,x,chat_type=None):
      save_db(d)
      add_history(c,'Cuenta creada',dat['user']+' (V2Ray)');return send(c,v2ray_account_message(c,dat))
     return send(c,'🔴 <b>No se pudo crear la cuenta V2Ray</b>\n<pre>'+e(o)+'</pre>')
-   if dat.get('kind')=='ovpn':
     rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
-    if rc==0:
-     (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
-     d=db();row=d['users'][str(c)];row.setdefault('accounts',[]).append(u0);row.setdefault('ovpn_accounts',[]).append(u0);save_db(d)
-     add_history(c,'Cuenta creada',u0+' (OVPN)')
-     return send(c,ovpn_account_message(c,dat))
-    return send(c,'🔴 <b>No se pudo crear la cuenta OVPN</b>\n<pre>'+e(o)+'</pre>')
-   rc,o=sh(f'useradd -e {q(exp)} -M -s /usr/sbin/nologin {q(u0)} && printf "%s\\n" {q(u0+":"+dat["pass"])} | chpasswd',12)
    if rc==0:
     (BASE/'limits').mkdir(exist_ok=True);(BASE/'limits'/u0).write_text('0' if dat.get('limit') in ('Ilimitado',0,'0') else str(dat.get('limit')))
     d=db();d['users'][str(c)].setdefault('accounts',[]).append(u0)
@@ -1171,11 +1133,10 @@ def cb(c,m,u,i,x,chat_type=None):
   text=(f'⚙️ <b>CONFIGURAR ADS</b>\n\n'
         f'👤 Crear cuenta normal: <b>{counts.get("create_normal",3)}</b>\n'
         f'🚀 Crear cuenta V2Ray: <b>{counts.get("create_v2ray",2)}</b>\n'
-        f'🔐 Crear cuenta OVPN: <b>{counts.get("create_ovpn",2)}</b>\n'
         f'🎁 Canjear 7 días: <b>{counts.get("ref_renew",1)}</b>\n'
         f'♻️ Renovar cuenta: <b>{counts.get("renew",5)}</b>\n'
         f'⏳ Aviso de vencimiento → renovar: <b>{counts.get("expiry_renew",7)}</b>')
-  return edit(c,m,text,[[{'text':'👤 Normal','callback_data':'ads_config_select:create_normal'},{'text':'🚀 V2Ray','callback_data':'ads_config_select:create_v2ray'}],[{'text':'🔐 OVPN','callback_data':'ads_config_select:create_ovpn'},{'text':'🎁 Canje','callback_data':'ads_config_select:ref_renew'}],[{'text':'♻️ Renovar','callback_data':'ads_config_select:renew'},{'text':'⏳ Vencimiento','callback_data':'ads_config_select:expiry_renew'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
+  return edit(c,m,text,[[{'text':'👤 Normal','callback_data':'ads_config_select:create_normal'},{'text':'🚀 V2Ray','callback_data':'ads_config_select:create_v2ray'}],[{'text':'🎁 Canje','callback_data':'ads_config_select:ref_renew'}],[{'text':'♻️ Renovar','callback_data':'ads_config_select:renew'},{'text':'⏳ Vencimiento','callback_data':'ads_config_select:expiry_renew'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
  if x.startswith('ads_config_select:'):
   key=x.split(':',1)[1];STATE[c]={'f':'ads_config','s':'value','d':{'key':key}}
   return send(c,f'⚙️ <b>CONFIGURAR ADS</b>\n\nCantidad de anuncios para <code>{e(key)}</code> (1-50):',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
@@ -1245,12 +1206,71 @@ def quota_text(d):
  qx=d['quotas'];return f'''📅 <b>CUOTAS Y LÍMITES</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El Super Admin puede ajustar estos valores desde este menú.'''
 
 def backup_text(d):
- s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo siempre se entrega como <b>documento JSON</b> al super admin. Para restaurar, envía un documento JSON válido.'''
+ s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo se entrega como <b>JSON completo</b> e incluye los datos del bot y sus archivos de configuración. La restauración es <b>sin pérdida</b>: integra lo respaldado sin borrar datos existentes que no estén en el archivo.'''
 
  d=db();d['backup_schedule']={'mode':mode,'next_at':time.time()};save_db(d);return send(c,'🟢 <b>Respaldo configurado</b>\n\n'+{'once':'Se enviará una sola vez.','daily':'Se enviará diariamente.','7d':'Se enviará cada 7 días.','15d':'Se enviará cada 15 días.','30d':'Se enviará cada 30 días.'}.get(mode,'Se enviará una sola vez.'),[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
 
+BACKUP_SCHEMA=2
+BACKUP_FILES=('bot.py','monetization.html','.env','../config.conf','version.txt')
+
+def _read_file_for_backup(path):
+ try:
+  p=Path(path)
+  if not p.exists() or not p.is_file(): return None
+  raw=p.read_bytes()
+  import base64
+  return {'encoding':'base64','content':base64.b64encode(raw).decode('ascii')}
+ except Exception as ex:
+  log('BACKUP FILE '+str(path)+' '+repr(ex));return None
+
+def _backup_snapshot():
+ import base64
+ files={}
+ paths={
+  'bot.py':TD/'bot.py',
+  'monetization.html':TD/'monetization.html',
+  '.env':ENV,
+  'config.conf':BASE/'config.conf',
+  'version.txt':TD/'version.txt',
+ }
+ for name,path in paths.items():
+  item=_read_file_for_backup(path)
+  if item is not None: files[name]=item
+ return {
+  'backup_schema':BACKUP_SCHEMA,
+  'backup_type':'kevintech_telegram_full',
+  'created_at':datetime.datetime.now().isoformat(timespec='seconds'),
+  'database':db(),
+  'files':files,
+  'notes':'Respaldo completo del bot en JSON. La restauración es no destructiva: conserva claves y datos que existan en el VPS y no estén en el respaldo.',
+ }
+
 def backup_now():
- BACK.mkdir(parents=True,exist_ok=True);fn=BACK/'kevintech_backup.json';fn.write_text(json.dumps(db(),indent=2,ensure_ascii=False));os.chmod(fn,0o600);return fn
+ BACK.mkdir(parents=True,exist_ok=True)
+ fn=BACK/f'kevintech_backup_{time.strftime("%Y%m%d_%H%M%S")}.json'
+ tmp=fn.with_suffix('.json.tmp')
+ tmp.write_text(json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False),encoding='utf-8')
+ os.chmod(tmp,0o600);tmp.replace(fn)
+ # Also keep a stable latest backup without deleting older backups.
+ latest=BACK/'kevintech_backup.json'
+ latest.write_text(fn.read_text(encoding='utf-8'),encoding='utf-8');os.chmod(latest,0o600)
+ return fn
+
+def _merge_without_loss(current, incoming):
+ # Dictionaries are merged recursively. Lists are unioned by JSON value so newer
+ # data is retained instead of being discarded during restore. Scalars from the
+ # backup replace the current value when the backup explicitly contains them.
+ if isinstance(current,dict) and isinstance(incoming,dict):
+  out=json.loads(json.dumps(current,ensure_ascii=False))
+  for k,v in incoming.items():
+   out[k]=_merge_without_loss(out[k],v) if k in out else json.loads(json.dumps(v,ensure_ascii=False))
+  return out
+ if isinstance(current,list) and isinstance(incoming,list):
+  out=json.loads(json.dumps(current,ensure_ascii=False))
+  for item in incoming:
+   if item not in out: out.append(json.loads(json.dumps(item,ensure_ascii=False)))
+  return out
+ return json.loads(json.dumps(incoming,ensure_ascii=False))
 
 def backup_scheduler():
  while True:
@@ -1481,16 +1501,41 @@ _original_process=process_text
 def restore_document(c,msg):
  if not is_owner(c):return
  doc=msg.get('document',{});name=doc.get('file_name','')
- st=STATE.get(c)
  if not name.lower().endswith('.json'):return send(c,'❌ Solo se acepta un archivo JSON.')
  try:
-  z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path'];token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('"');url=f'https://api.telegram.org/file/bot{token}/{fp}';raw=urllib.request.urlopen(url,timeout=30).read();new=json.loads(raw.decode())
-  if not isinstance(new,dict) or 'quotas' not in new or 'users' not in new:raise ValueError('JSON incompatible')
-  BACK.mkdir(parents=True,exist_ok=True);(BACK/'restore_before.json').write_text(DB.read_text() if DB.exists() else '{}');current=db(); preserved={k:current.get(k) for k in ('backup_schedule','security','monetization','ad_tokens','ad_pending','ad_completed','ad_sequences')}
-  for k,v in preserved.items():
-   if k not in new:new[k]=v
-  save_db(new);send(c,'🟢 <b>Restauración completada.</b>\n\n♻️ El VPS se reiniciará para aplicar la restauración.');time.sleep(2);sh('reboot',10)
- except Exception as er:log('RESTORE '+repr(er));send(c,'🔴 No se pudo restaurar el JSON.')
+  z=api('getFile',{'file_id':doc['file_id']});fp=z['result']['file_path']
+  token=ENV.read_text().split('BOT_TOKEN=',1)[1].splitlines()[0].strip().strip('\"')
+  url=f'https://api.telegram.org/file/bot{token}/{fp}'
+  raw=urllib.request.urlopen(url,timeout=30).read();payload=json.loads(raw.decode())
+  if not isinstance(payload,dict):raise ValueError('JSON incompatible')
+  incoming=payload.get('database',payload)
+  if not isinstance(incoming,dict) or 'users' not in incoming or 'quotas' not in incoming:
+   raise ValueError('JSON incompatible')
+  BACK.mkdir(parents=True,exist_ok=True)
+  # Safety snapshot before any restore. It is also a full JSON backup.
+  before=BACK/f'restore_before_{time.strftime("%Y%m%d_%H%M%S")}.json'
+  before.write_text(json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False),encoding='utf-8');os.chmod(before,0o600)
+  current=db();merged=_merge_without_loss(current,incoming)
+  save_db(merged)
+  # Restore backed-up runtime files only when they are present in the JSON.
+  import base64
+  paths={'bot.py':TD/'bot.py','monetization.html':TD/'monetization.html','.env':ENV,'config.conf':BASE/'config.conf','version.txt':TD/'version.txt'}
+  for fname,item in (payload.get('files') or {}).items():
+   # Source code is included in the backup for completeness, but never restored
+   # from an old backup; otherwise a legacy backup could reintroduce removed features.
+   if fname in ('bot.py',):
+    continue
+   target=paths.get(fname)
+   if not target or not isinstance(item,dict) or item.get('encoding')!='base64':continue
+   try:
+    data=base64.b64decode(item.get('content',''),validate=True)
+    target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
+    os.chmod(target,0o600 if target.name=='.env' else 0o700 if target.name=='bot.py' else 0o600)
+   except Exception as ex:log('RESTORE FILE '+fname+' '+repr(ex))
+  send(c,'🟢 <b>Restauración completa y sin pérdida.</b>\n\n📦 Datos, usuarios, cuentas, referidos, cuotas, seguridad, monetización, anuncios, administradores y demás configuración fueron integrados.\n\n♻️ Se conservó un respaldo previo antes de restaurar. El VPS se reiniciará para aplicar los archivos restaurados.')
+  time.sleep(2);sh('systemctl restart kevintech-telegram.service',20)
+ except Exception as er:
+  log('RESTORE '+repr(er));send(c,'🔴 No se pudo restaurar el JSON. No se aplicó ningún cambio.')
 
 def ssh_connections_by_user():
  rc,out=sh("ss -tnp state established '( sport = :22 )' 2>/dev/null",8)
