@@ -57,7 +57,17 @@ def load_db():
  return d
 
 def save_db(d):
- DB.write_text(json.dumps(d,indent=2,ensure_ascii=False)); os.chmod(DB,0o600)
+ # Atomic + durable write: never leave data.json half-written if the VPS
+ # restarts or the process is interrupted during a save.
+ DB.parent.mkdir(parents=True,exist_ok=True)
+ tmp=DB.with_suffix('.json.tmp')
+ payload=json.dumps(d,indent=2,ensure_ascii=False)
+ with open(tmp,'w',encoding='utf-8') as f:
+  f.write(payload)
+  f.flush()
+  os.fsync(f.fileno())
+ os.chmod(tmp,0o600)
+ tmp.replace(DB)
 
 def env():
  global API,OWNER
@@ -1205,6 +1215,35 @@ def admin_menu(c,m):return edit(c,m,'👥 <b>ADMINISTRADORES</b>',ADMIN_MENU)
 def quota_text(d):
  qx=d['quotas'];return f'''📅 <b>CUOTAS Y LÍMITES</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El Super Admin puede ajustar estos valores desde este menú.'''
 
+def configure_backup(c,mode):
+ mode=str(mode).strip().lower()
+ intervals={'daily':86400,'7d':7*86400,'15d':15*86400,'30d':30*86400,'once':0}
+ labels={'daily':'diariamente','7d':'cada 7 días','15d':'cada 15 días','30d':'cada 30 días','once':'solo una vez'}
+ if mode not in intervals:
+  return send(c,'❌ Periodo de respaldo inválido.')
+ try:
+  # Generate a backup immediately so the selected period never leaves the
+  # administrator without a current copy. Recurring modes are scheduled
+  # from this moment and remain active after the bot restarts.
+  fn=backup_now()
+  if mode=='once':
+   d=db()
+   d['backup_schedule']={'mode':'once','next_at':0}
+   save_db(d)
+   send_document(c,fn,'💾 <b>Respaldo único de KevinTech</b>')
+   return send(c,'🟢 <b>Respaldo guardado.</b>\n\nSe enviará solo una vez.',[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+  d=db()
+  d['backup_schedule']={'mode':mode,'next_at':time.time()+intervals[mode]}
+  save_db(d)
+  try:
+   send_document(c,fn,'💾 <b>Primer respaldo de la programación</b>')
+  except Exception as er:
+   log('BACKUP FIRST SEND '+repr(er))
+  return send(c,'🟢 <b>Respaldo programado.</b>\n\n📅 Se enviará <b>'+labels[mode]+'</b>.\n\nEl respaldo actual ya fue guardado y el próximo se generará automáticamente sin borrar los anteriores.',[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
+ except Exception as er:
+  log('BACKUP CONFIG '+repr(er))
+  return send(c,'🔴 No se pudo configurar el respaldo. Revisa el log del bot.')
+
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo se entrega como <b>JSON completo</b> e incluye los datos del bot y sus archivos de configuración. La restauración es <b>sin pérdida</b>: integra lo respaldado sin borrar datos existentes que no estén en el archivo.'''
 
@@ -1247,13 +1286,25 @@ def _backup_snapshot():
 
 def backup_now():
  BACK.mkdir(parents=True,exist_ok=True)
- fn=BACK/f'kevintech_backup_{time.strftime("%Y%m%d_%H%M%S")}.json'
+ stamp=time.strftime("%Y%m%d_%H%M%S")
+ fn=BACK/f'kevintech_backup_{stamp}.json'
  tmp=fn.with_suffix('.json.tmp')
- tmp.write_text(json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False),encoding='utf-8')
- os.chmod(tmp,0o600);tmp.replace(fn)
- # Also keep a stable latest backup without deleting older backups.
+ payload=json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False)
+ with open(tmp,'w',encoding='utf-8') as f:
+  f.write(payload)
+  f.flush()
+  os.fsync(f.fileno())
+ os.chmod(tmp,0o600)
+ tmp.replace(fn)
+ # Keep a stable latest backup without deleting older dated backups.
  latest=BACK/'kevintech_backup.json'
- latest.write_text(fn.read_text(encoding='utf-8'),encoding='utf-8');os.chmod(latest,0o600)
+ ltmp=latest.with_suffix('.json.tmp')
+ with open(ltmp,'w',encoding='utf-8') as f:
+  f.write(payload)
+  f.flush()
+  os.fsync(f.fileno())
+ os.chmod(ltmp,0o600)
+ ltmp.replace(latest)
  return fn
 
 def _merge_without_loss(current, incoming):
@@ -1275,18 +1326,28 @@ def _merge_without_loss(current, incoming):
 def backup_scheduler():
  while True:
   try:
-   d=db();s=d.get('backup_schedule',{});mode=s.get('mode','once');next_at=float(s.get('next_at',0) or 0)
-   if mode!='once' and next_at<=time.time() or mode=='once' and next_at and next_at<=time.time():
-    fn=backup_now();
-    try:send_document(OWNER,fn,'💾 <b>Respaldo automático de KevinTech</b>')
-    except Exception as er:log('BACKUP SEND '+repr(er))
-    if mode=='daily':delta=86400
-    elif mode=='7d':delta=7*86400
-    elif mode=='15d':delta=15*86400
-    elif mode=='30d':delta=30*86400
-    else:delta=0
-    d=db();d['backup_schedule']['next_at']=time.time()+delta if delta else 0;save_db(d)
-  except Exception as er:log('BACKUP SCHED '+repr(er))
+   d=db()
+   s=d.get('backup_schedule',{})
+   mode=s.get('mode','once')
+   next_at=float(s.get('next_at',0) or 0)
+   intervals={'daily':86400,'7d':7*86400,'15d':15*86400,'30d':30*86400}
+   delta=intervals.get(mode,0)
+   now=time.time()
+   if delta and next_at and next_at<=now:
+    fn=backup_now()
+    try:
+     send_document(OWNER,fn,'💾 <b>Respaldo automático de KevinTech</b>')
+    except Exception as er:
+     log('BACKUP SEND '+repr(er))
+    # Advance from the previous schedule so a delayed VPS does not create
+    # repeated backups every minute.
+    while next_at<=now:
+     next_at+=delta
+    d=db()
+    d['backup_schedule']={'mode':mode,'next_at':next_at}
+    save_db(d)
+  except Exception as er:
+   log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
 SETTINGS=[[{'text':'👥 Administradores','callback_data':'admins'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
