@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # KevinTech Telegram Bot - panel de usuarios + super admin
-import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime,io,secrets
+import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime,io,secrets,sqlite3,shutil
 from pathlib import Path
 
 BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
-DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
+DB=TD/'bot.db'; LEGACY_DB=TD/'data.json'; BACK=TD/'backups'; STATE={}; CHAT_TYPES={}; API=''; OWNER=0; BOT_USERNAME=''
 
 
 DEFAULT_MONETIZATION_HTML=r"""<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KevinTech System</title><script src="https://telegram.org/js/telegram-web-app.js"></script><script src="https://libtl.com/sdk.js" data-zone="11217882" data-sdk="show_11217882"></script><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#05070d;color:#fff;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}.background{position:fixed;inset:0}.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,220,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,220,255,.08) 1px,transparent 1px);background-size:42px 42px;transform:perspective(500px) rotateX(55deg) scale(1.8);transform-origin:center bottom}.particles span{position:absolute;width:4px;height:4px;border-radius:50%;background:#00e5ff;opacity:.6;animation:float 5s infinite}.particles span:nth-child(1){left:15%;top:25%}.particles span:nth-child(2){left:78%;top:20%}.particles span:nth-child(3){left:35%;top:70%}.particles span:nth-child(4){left:65%;top:75%}.particles span:nth-child(5){left:25%;top:50%}.particles span:nth-child(6){left:85%;top:55%}@keyframes float{50%{transform:translateY(-22px);opacity:1}}.app{width:min(92vw,430px);position:relative}.panel{padding:30px 22px;border:1px solid rgba(0,229,255,.28);border-radius:28px;background:rgba(7,10,18,.9);box-shadow:0 0 55px rgba(0,229,255,.1);text-align:center}.logo-area{height:120px;position:relative;display:flex;align-items:center;justify-content:center}.logo{width:78px;height:78px;border:2px solid #00e5ff;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;letter-spacing:2px;box-shadow:0 0 30px rgba(0,229,255,.35)}.ring{position:absolute;border:1px solid rgba(0,229,255,.22);border-radius:50%;animation:spin 8s linear infinite}.one{width:104px;height:104px}.two{width:128px;height:70px;transform:rotate(35deg)}.three{width:145px;height:145px}@keyframes spin{to{transform:rotate(360deg)}}.mini-title{font-size:12px;letter-spacing:3px;color:#8ea0b8;text-transform:uppercase}h1{font-size:28px;margin:8px 0 12px}h1 span{color:#00e5ff}.description{color:#aeb8c7;line-height:1.55;font-size:14px}.status{display:inline-flex;align-items:center;gap:8px;margin:10px 0 20px;padding:8px 12px;border-radius:99px;background:rgba(0,229,255,.07);font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;background:#00ff8c;box-shadow:0 0 10px #00ff8c}.button-wrap{position:relative}.glow{position:absolute;inset:4px;border-radius:18px;filter:blur(15px);background:rgba(0,229,255,.28)}button{position:relative;width:100%;border:1px solid rgba(0,229,255,.6);border-radius:18px;padding:16px;background:#09131d;color:#fff;font-weight:800;letter-spacing:1px;font-size:15px;cursor:pointer}button:disabled{opacity:.7}.loader{display:none;width:15px;height:15px;border:2px solid #789;border-top-color:#00e5ff;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:-2px}.footer{margin-top:22px;color:#68768a;font-size:12px}.footer a{color:#00e5ff;text-decoration:none}#error-msg{display:none}.error-icon{font-size:38px}.continue{margin-top:10px}.error-msg{}.particles span{background:#00e5ff}</style></head><body><div class="background"><div class="grid"></div><div class="particles"><span></span><span></span><span></span><span></span><span></span><span></span></div></div><main class="app"><section class="panel"><div class="logo-area"><div class="ring one"></div><div class="ring two"></div><div class="ring three"></div><div class="logo">KT</div></div><div id="loading"><div class="mini-title">KevinTech System</div><h1><span>Acceso Premium</span></h1><p class="description">Estás a un paso de continuar. Mira un pequeño anuncio para mantener este servicio disponible gratuitamente.</p><div class="status"><span class="status-dot"></span>Sistema disponible</div><div class="button-wrap"><div class="glow"></div><button id="playBtn"><span id="loader" class="loader"></span><span id="btnText">▶ &nbsp; VER ANUNCIO</span></button></div></div><div id="error-msg"><div class="error-icon">⚠️</div><div class="mini-title">KevinTech System</div><h1>Anuncio no disponible</h1><p class="description">En este momento no hay publicidad disponible para tu región.</p><button class="continue" onclick="sendSuccessAndClose()">✓ CONTINUAR</button></div><div class="footer"><p>© KevinTech Multi Script</p><p><a href="https://youtube.com/@kevinaldaircama" target="_blank">YouTube</a>&nbsp;•&nbsp;<a href="https://whatsapp.com/channel/0029VaGmNBB4Y9lvO2Ppem2l" target="_blank">WhatsApp</a></p></div></section></main><script>const tg=window.Telegram.WebApp;tg.ready();tg.expand();const playBtn=document.getElementById('playBtn'),btnText=document.getElementById('btnText'),loader=document.getElementById('loader'),loading=document.getElementById('loading'),errorMsg=document.getElementById('error-msg');const params=new URLSearchParams(location.search),token=params.get('token')||'';const botBase=__BOT_URL_JSON__;const sdkCode=__SDK_CODE_JSON__;const rewardCode=__REWARD_CODE_JSON__;function sendSuccessAndClose(){const payload=JSON.stringify({type:'adcompleted',token:token});try{if(tg&&typeof tg.sendData==='function'&&token){tg.sendData(payload);setTimeout(()=>tg.close(),250);return}}catch(e){}const url=botBase+(botBase.includes('?')?'&':'?')+'start=adcompleted_'+encodeURIComponent(token);try{tg.openTelegramLink(url);setTimeout(()=>tg.close(),400)}catch(e){location.href=url}}function showError(){loading.style.display='none';errorMsg.style.display='block'}function inject(code){if(!code)return;const box=document.createElement('div');box.innerHTML=code;[...box.querySelectorAll('script')].forEach(old=>{const n=document.createElement('script');[...old.attributes].forEach(a=>n.setAttribute(a.name,a.value));n.textContent=old.textContent;document.body.appendChild(n)});return box}async function play(){playBtn.disabled=true;loader.style.display='inline-block';btnText.textContent='CARGANDO ANUNCIO...';try{inject(sdkCode);inject(rewardCode);await new Promise(r=>setTimeout(r,350));let fn=Object.keys(window).find(k=>/^show_\d+$/.test(k)&&typeof window[k]==='function');if(!fn)throw new Error('SDK');await window[fn]();loader.style.display='none';btnText.textContent='✓ COMPLETADO';setTimeout(sendSuccessAndClose,600)}catch(err){loader.style.display='none';showError()}}playBtn.addEventListener('click',play);</script></body></html>"""
@@ -24,11 +24,64 @@ DEFAULT={
 def log(s):
  LOG.parent.mkdir(parents=True,exist_ok=True); LOG.open('a').write(time.strftime('[%F %T] ')+str(s)+'\n')
 
+def _sql_conn():
+ TD.mkdir(parents=True,exist_ok=True)
+ con=sqlite3.connect(str(DB),timeout=30)
+ con.execute('PRAGMA journal_mode=WAL')
+ con.execute('PRAGMA synchronous=FULL')
+ con.execute('PRAGMA foreign_keys=ON')
+ con.execute('CREATE TABLE IF NOT EXISTS bot_data (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+ return con
+
+def _sql_write(d):
+ con=_sql_conn()
+ try:
+  with con:
+   con.execute('BEGIN')
+   con.execute('DELETE FROM bot_data')
+   for k,v in d.items():
+    con.execute('INSERT INTO bot_data(key,value) VALUES(?,?)',(str(k),json.dumps(v,ensure_ascii=False)))
+  return True
+ finally:
+  con.close()
+
+def _sql_read():
+ con=_sql_conn()
+ try:
+  rows=con.execute('SELECT key,value FROM bot_data').fetchall()
+  if not rows:return None
+  d={}
+  for k,v in rows:
+   try:d[k]=json.loads(v)
+   except Exception: d[k]=v
+  return d
+ finally:
+  con.close()
+
+def _migrate_legacy_json():
+ # Migration is one-time and non-destructive: the original JSON is retained.
+ if not LEGACY_DB.exists(): return None
+ try:
+  legacy=json.loads(LEGACY_DB.read_text(encoding='utf-8',errors='ignore'))
+  if not isinstance(legacy,dict): return None
+  if _sql_read() is None:
+   _sql_write(legacy)
+   migrated=LEGACY_DB.with_name('data.json.migrated')
+   if not migrated.exists():
+    shutil.copy2(LEGACY_DB,migrated)
+   log('SQL MIGRATION: data.json -> bot.db completada')
+  return legacy
+ except Exception as ex:
+  log('SQL MIGRATION ERROR '+repr(ex)); return None
+
 def load_db():
- DB.parent.mkdir(parents=True,exist_ok=True)
- if not DB.exists(): DB.write_text(json.dumps(DEFAULT,indent=2,ensure_ascii=False)); return json.loads(json.dumps(DEFAULT))
- try:d=json.loads(DB.read_text(errors='ignore'))
- except Exception:d=json.loads(json.dumps(DEFAULT))
+ TD.mkdir(parents=True,exist_ok=True)
+ d=_sql_read()
+ if d is None:
+  d=_migrate_legacy_json()
+ if d is None:
+  d=json.loads(json.dumps(DEFAULT))
+  _sql_write(d)
  for k,v in DEFAULT.items():
   if k not in d:d[k]=json.loads(json.dumps(v))
  if not isinstance(d.get('auto_update'),dict):d['auto_update']=json.loads(json.dumps(DEFAULT['auto_update']))
@@ -37,7 +90,6 @@ def load_db():
   if not isinstance(d.get(k),dict):d[k]={}
  if not isinstance(d.get('quotas'),dict):d['quotas']=json.loads(json.dumps(DEFAULT['quotas']))
  for k,v in DEFAULT['quotas'].items():d['quotas'].setdefault(k,v)
- # Compatibilidad: conservar cualquier configuración existente.
  if not isinstance(d.get('security'),dict):d['security']=json.loads(json.dumps(DEFAULT['security']))
  for k,v in DEFAULT['security'].items():d['security'].setdefault(k,json.loads(json.dumps(v)) if isinstance(v,dict) else v)
  if not isinstance(d.get('monetization'),dict):d['monetization']=json.loads(json.dumps(DEFAULT['monetization']))
@@ -51,23 +103,15 @@ def load_db():
  if not isinstance(d.get('ad_tokens'),dict):d['ad_tokens']={}
  if not isinstance(d.get('chat_messages'),dict):d['chat_messages']={}
  if not isinstance(d.get('ad_pending'),dict):d['ad_pending']={}
- now=time.time();
- d['ad_pending']={k:v for k,v in d['ad_pending'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
- d['ad_tokens']={k:v for k,v in d['ad_tokens'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
+ now=time.time(); d['ad_pending']={k:v for k,v in d['ad_pending'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}; d['ad_tokens']={k:v for k,v in d['ad_tokens'].items() if isinstance(v,dict) and float(v.get('expires',0) or 0)>now}
+ # Persist schema/default additions back to SQL.
+ _sql_write(d)
  return d
 
 def save_db(d):
- # Atomic + durable write: never leave data.json half-written if the VPS
- # restarts or the process is interrupted during a save.
- DB.parent.mkdir(parents=True,exist_ok=True)
- tmp=DB.with_suffix('.json.tmp')
- payload=json.dumps(d,indent=2,ensure_ascii=False)
- with open(tmp,'w',encoding='utf-8') as f:
-  f.write(payload)
-  f.flush()
-  os.fsync(f.fileno())
- os.chmod(tmp,0o600)
- tmp.replace(DB)
+ # SQLite transaction + WAL makes updates durable and resistant to partial writes.
+ _sql_write(d)
+ os.chmod(DB,0o600)
 
 def env():
  global API,OWNER
@@ -1216,33 +1260,21 @@ def quota_text(d):
  qx=d['quotas'];return f'''📅 <b>CUOTAS Y LÍMITES</b>\n\n👥 Público: <b>{qx["public_days"]} días</b> · <b>{qx["public_devices"]} dispositivos/IP</b>\n👨‍💼 Administradores: <b>{qx["admin_days"]} días</b> · <b>{qx["admin_devices"]} dispositivos/IP</b>\n🚀 V2Ray: utiliza automáticamente la cuota pública.\n\n👑 El Super Admin puede ajustar estos valores desde este menú.'''
 
 def configure_backup(c,mode):
- mode=str(mode).strip().lower()
- intervals={'daily':86400,'7d':7*86400,'15d':15*86400,'30d':30*86400,'once':0}
- labels={'daily':'diariamente','7d':'cada 7 días','15d':'cada 15 días','30d':'cada 30 días','once':'solo una vez'}
- if mode not in intervals:
+ mode=str(mode or 'once')
+ if mode not in ('once','daily','7d','15d','30d'):
   return send(c,'❌ Periodo de respaldo inválido.')
+ d=db()
+ # Generate one backup immediately so the selected schedule never starts empty.
  try:
-  # Generate a backup immediately so the selected period never leaves the
-  # administrator without a current copy. Recurring modes are scheduled
-  # from this moment and remain active after the bot restarts.
   fn=backup_now()
-  if mode=='once':
-   d=db()
-   d['backup_schedule']={'mode':'once','next_at':0}
-   save_db(d)
-   send_document(c,fn,'💾 <b>Respaldo único de KevinTech</b>')
-   return send(c,'🟢 <b>Respaldo guardado.</b>\n\nSe enviará solo una vez.',[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
-  d=db()
-  d['backup_schedule']={'mode':mode,'next_at':time.time()+intervals[mode]}
-  save_db(d)
-  try:
-   send_document(c,fn,'💾 <b>Primer respaldo de la programación</b>')
-  except Exception as er:
-   log('BACKUP FIRST SEND '+repr(er))
-  return send(c,'🟢 <b>Respaldo programado.</b>\n\n📅 Se enviará <b>'+labels[mode]+'</b>.\n\nEl respaldo actual ya fue guardado y el próximo se generará automáticamente sin borrar los anteriores.',[[{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'}],[{'text':'🔙 Ajustes','callback_data':'settings'}]])
- except Exception as er:
-  log('BACKUP CONFIG '+repr(er))
-  return send(c,'🔴 No se pudo configurar el respaldo. Revisa el log del bot.')
+  try: send_document(c,fn,'💾 <b>Respaldo creado</b>\n\nEl respaldo inicial ya fue guardado en SQLite y enviado.')
+  except Exception as ex: log('BACKUP CONFIG SEND '+repr(ex))
+ except Exception as ex:
+  log('BACKUP CONFIG '+repr(ex)); return send(c,'🔴 No se pudo crear el respaldo inicial.')
+ d['backup_schedule']={'mode':mode,'next_at':time.time() + ({'daily':86400,'7d':7*86400,'15d':15*86400,'30d':30*86400}.get(mode,0))}
+ save_db(d)
+ label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}[mode]
+ return send(c,f'🟢 <b>Respaldo configurado: {label}</b>\n\nLos datos quedan guardados en <b>SQLite (bot.db)</b>. El respaldo inicial no reemplaza ni elimina los datos anteriores.')
 
 def backup_text(d):
  s=d.get('backup_schedule',{});mode=s.get('mode','once');label={'once':'Solo una vez','daily':'Diario','7d':'Cada 7 días','15d':'Cada 15 días','30d':'Cada 30 días'}.get(mode,'Solo una vez');return f'''💾 <b>RESPALDOS Y RESTAURACIÓN</b>\n\n📌 Configuración actual: <b>{label}</b>\n\nPuedes generar un respaldo manual o programarlo. El archivo se entrega como <b>JSON completo</b> e incluye los datos del bot y sus archivos de configuración. La restauración es <b>sin pérdida</b>: integra lo respaldado sin borrar datos existentes que no estén en el archivo.'''
@@ -1280,31 +1312,21 @@ def _backup_snapshot():
   'backup_type':'kevintech_telegram_full',
   'created_at':datetime.datetime.now().isoformat(timespec='seconds'),
   'database':db(),
+  'database_engine':'sqlite3',
+  'database_file':'bot.db',
   'files':files,
-  'notes':'Respaldo completo del bot en JSON. La restauración es no destructiva: conserva claves y datos que existan en el VPS y no estén en el respaldo.',
+  'notes':'Respaldo completo del bot. Los datos principales se almacenan en SQLite (bot.db). El JSON se conserva dentro del respaldo para facilitar la restauración.',
  }
 
 def backup_now():
  BACK.mkdir(parents=True,exist_ok=True)
- stamp=time.strftime("%Y%m%d_%H%M%S")
- fn=BACK/f'kevintech_backup_{stamp}.json'
+ fn=BACK/f'kevintech_backup_{time.strftime("%Y%m%d_%H%M%S")}.json'
  tmp=fn.with_suffix('.json.tmp')
- payload=json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False)
- with open(tmp,'w',encoding='utf-8') as f:
-  f.write(payload)
-  f.flush()
-  os.fsync(f.fileno())
- os.chmod(tmp,0o600)
- tmp.replace(fn)
- # Keep a stable latest backup without deleting older dated backups.
+ tmp.write_text(json.dumps(_backup_snapshot(),indent=2,ensure_ascii=False),encoding='utf-8')
+ os.chmod(tmp,0o600);tmp.replace(fn)
+ # Also keep a stable latest backup without deleting older backups.
  latest=BACK/'kevintech_backup.json'
- ltmp=latest.with_suffix('.json.tmp')
- with open(ltmp,'w',encoding='utf-8') as f:
-  f.write(payload)
-  f.flush()
-  os.fsync(f.fileno())
- os.chmod(ltmp,0o600)
- ltmp.replace(latest)
+ latest.write_text(fn.read_text(encoding='utf-8'),encoding='utf-8');os.chmod(latest,0o600)
  return fn
 
 def _merge_without_loss(current, incoming):
@@ -1326,28 +1348,18 @@ def _merge_without_loss(current, incoming):
 def backup_scheduler():
  while True:
   try:
-   d=db()
-   s=d.get('backup_schedule',{})
-   mode=s.get('mode','once')
-   next_at=float(s.get('next_at',0) or 0)
-   intervals={'daily':86400,'7d':7*86400,'15d':15*86400,'30d':30*86400}
-   delta=intervals.get(mode,0)
-   now=time.time()
-   if delta and next_at and next_at<=now:
-    fn=backup_now()
-    try:
-     send_document(OWNER,fn,'💾 <b>Respaldo automático de KevinTech</b>')
-    except Exception as er:
-     log('BACKUP SEND '+repr(er))
-    # Advance from the previous schedule so a delayed VPS does not create
-    # repeated backups every minute.
-    while next_at<=now:
-     next_at+=delta
-    d=db()
-    d['backup_schedule']={'mode':mode,'next_at':next_at}
-    save_db(d)
-  except Exception as er:
-   log('BACKUP SCHED '+repr(er))
+   d=db();s=d.get('backup_schedule',{});mode=s.get('mode','once');next_at=float(s.get('next_at',0) or 0)
+   if mode!='once' and next_at<=time.time() or mode=='once' and next_at and next_at<=time.time():
+    fn=backup_now();
+    try:send_document(OWNER,fn,'💾 <b>Respaldo automático de KevinTech</b>')
+    except Exception as er:log('BACKUP SEND '+repr(er))
+    if mode=='daily':delta=86400
+    elif mode=='7d':delta=7*86400
+    elif mode=='15d':delta=15*86400
+    elif mode=='30d':delta=30*86400
+    else:delta=0
+    d=db();d['backup_schedule']['next_at']=time.time()+delta if delta else 0;save_db(d)
+  except Exception as er:log('BACKUP SCHED '+repr(er))
   time.sleep(60)
 
 SETTINGS=[[{'text':'👥 Administradores','callback_data':'admins'}],[{'text':'🚫 Banear usuario','callback_data':'bans'},{'text':'💾 Respaldos y restauración','callback_data':'backup_restore'},{'text':'💰 Monetización','callback_data':'monetization'}],[{'text':'👥 Personas registradas','callback_data':'people'},{'text':'📢 Mensaje a usuarios','callback_data':'message_users'}],[{'text':'📅 Cuotas','callback_data':'quotas'},{'text':'♻️ Reiniciar VPS','callback_data':'restart_vps'}],[{'text':'🛡️ Seguridad','callback_data':'security'},{'text':'🛠 Herramientas','callback_data':'tools'}],[{'text':'🔄 Actualizar sistema','callback_data':'system_update'}],[{'text':'🔙 Inicio','callback_data':'home'}]]
