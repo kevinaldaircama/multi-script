@@ -7,7 +7,7 @@
 #
 # Archivo : /etc/kevintech/protocolos/menu.sh
 # Config  : /etc/kevintech/config.conf
-# Versión : 3.1 Premium
+# Versión : 3.2 Premium
 #
 # ==============================================================
 
@@ -22,7 +22,7 @@ CONFIG="$BASE/config.conf"
 PROTOCOL_DIR="$BASE/protocolos"
 TOOLS_DIR="$BASE/herramientas"
 
-VERSION="3.1"
+VERSION="3.2"
 PANEL_NAME="KEVINTECH MULTI SCRIPT"
 
 # ==============================================================
@@ -59,7 +59,9 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 if [[ ! -d "$BASE" ]]; then
+
     mkdir -p "$BASE"
+
 fi
 
 if [[ ! -f "$CONFIG" ]]; then
@@ -86,22 +88,26 @@ source "$CONFIG" 2>/dev/null
 separator() {
 
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
 }
 
 line() {
 
     echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
+
 }
 
 pause() {
 
     echo
     read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+
 }
 
 valid_number() {
 
     [[ "$1" =~ ^[0-9]+$ ]]
+
 }
 
 # ==============================================================
@@ -111,6 +117,7 @@ valid_number() {
 module_exists() {
 
     [[ -f "$1" ]]
+
 }
 
 run_module() {
@@ -124,6 +131,7 @@ run_module() {
         pause
 
         return 1
+
     fi
 
     if ! module_exists "$FILE"; then
@@ -140,6 +148,7 @@ run_module() {
         pause
 
         return 1
+
     fi
 
     if [[ ! -x "$FILE" ]]; then
@@ -177,10 +186,12 @@ run_module() {
     fi
 
     pause
+
 }
 
 # ==============================================================
 # ESTADO DE PROTOCOLOS
+# ==============================================================
 #
 # IMPORTANTE:
 # SOLO SE UTILIZA config.conf
@@ -188,7 +199,6 @@ run_module() {
 # ON  = configurado/activado
 # OFF = apagado/desactivado
 #
-# Ya NO muestra ONLINE / STOPPED / CONFIG
 # ==============================================================
 
 status_config() {
@@ -210,6 +220,7 @@ status_config() {
             ;;
 
     esac
+
 }
 
 status_service() {
@@ -224,6 +235,7 @@ status_service() {
     # ----------------------------------------------------------
 
     status_config "$CONFIG_STATUS"
+
 }
 
 # ==============================================================
@@ -233,6 +245,7 @@ status_service() {
 get_hostname() {
 
     hostname 2>/dev/null || echo "Servidor"
+
 }
 
 get_ip() {
@@ -244,6 +257,7 @@ get_ip() {
     [[ -z "$IP" ]] && IP="N/A"
 
     echo "$IP"
+
 }
 
 get_ram() {
@@ -252,6 +266,7 @@ get_ram() {
         awk '/^Mem:/ {
             printf "%s / %s", $3, $2
         }'
+
 }
 
 get_ram_percent() {
@@ -265,6 +280,7 @@ get_ram_percent() {
                 print "0"
 
         }'
+
 }
 
 get_cpu() {
@@ -293,6 +309,7 @@ get_cpu() {
     [[ "$CPU" =~ ^[0-9]+$ ]] || CPU=0
 
     echo "$CPU"
+
 }
 
 get_disk_percent() {
@@ -308,6 +325,7 @@ get_disk_percent() {
     [[ "$DISK" =~ ^[0-9]+$ ]] || DISK=0
 
     echo "$DISK"
+
 }
 
 get_disk_used() {
@@ -316,34 +334,40 @@ get_disk_used() {
         awk 'NR==2 {
             print $3 "/" $2
         }'
+
 }
 
 get_uptime() {
 
     uptime -p 2>/dev/null |
         sed 's/^up //'
+
 }
 
 get_processes() {
 
     ps -e --no-headers 2>/dev/null |
         wc -l
+
 }
 
 get_online() {
 
     who 2>/dev/null |
         wc -l
+
 }
 
 get_kernel() {
 
     uname -r 2>/dev/null || echo "N/A"
+
 }
 
 get_arch() {
 
     uname -m 2>/dev/null || echo "N/A"
+
 }
 
 # ==============================================================
@@ -376,6 +400,7 @@ progress_bar() {
     done
 
     echo "$BAR"
+
 }
 
 # ==============================================================
@@ -456,6 +481,7 @@ show_header() {
         "$DISK_USED"
 
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
 }
 
 # ==============================================================
@@ -489,8 +515,8 @@ get_statuses() {
         "${SLOWDNS:-OFF}")
 
     XRAY_STATUS=$(status_service \
-    "xray" \
-    "${XRAY:-OFF}")
+        "xray" \
+        "${XRAY:-OFF}")
 
     OPENVPN_STATUS=$(status_service \
         "openvpn-server@server" \
@@ -509,6 +535,15 @@ get_statuses() {
 
     BADVPN_STATUS=$(status_config \
         "${BADVPN:-OFF}")
+
+    # ----------------------------------------------------------
+    # SQUID
+    # ----------------------------------------------------------
+
+    SQUID_STATUS=$(status_service \
+        "squid" \
+        "${SQUID:-OFF}")
+
 }
 
 # ==============================================================
@@ -586,23 +621,31 @@ show_protocol_menu() {
     printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP      %b\n" \
         "$BHTTP_STATUS"
 
+    # ----------------------------------------------------------
+    # FILA 7 - SQUID
+    # ----------------------------------------------------------
+
+    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🌐 Squid      %b\n" \
+        "$SQUID_STATUS"
+
     echo
 
     # ==========================================================
     # ADMINISTRACIÓN DEL SISTEMA
-    # ==============================================================
+    # ==========================================================
 
     echo -e "${BLUE}${BOLD}  🛠️  ADMINISTRACIÓN DEL SISTEMA${RESET}"
 
     line
 
-    printf "  ${GREEN}${BOLD}[13]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[14]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[14]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[15]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[15]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[16]${RESET} 🤖 Bot Telegram\n"
-    printf "${GREEN}${BOLD}[17]${RESET} 🌐web universal\n"
-    
+    printf "  ${GREEN}${BOLD}[16]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[17]${RESET} 🤖 Bot Telegram\n"
+
+    printf "  ${GREEN}${BOLD}[18]${RESET} 🌐 Web Universal\n"
+
     echo
 
     line
@@ -614,6 +657,7 @@ show_protocol_menu() {
     echo -e "${GRAY}  KevinTech Multi Script • Privanox VPN • v${VERSION}${RESET}"
 
     echo
+
 }
 
 # ==============================================================
@@ -698,30 +742,45 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # SQUID
+        # ======================================================
+
         13)
+
+            run_module "$PROTOCOL_DIR/squid.sh"
+
+            ;;
+
+        # ======================================================
+        # ADMINISTRACIÓN
+        # ======================================================
+
+        14)
 
             run_module "$TOOLS_DIR/menu.sh"
 
             ;;
 
-        14)
+        15)
 
             run_module "$TOOLS_DIR/reiniciar.sh"
 
             ;;
 
-        15)
+        16)
 
             run_module "$TOOLS_DIR/firewall.sh"
 
             ;;
 
-        16)
+        17)
 
             run_module "$BASE/telegram/install.sh"
 
             ;;
-            17)
+
+        18)
 
             run_module "$BASE/web/installer.sh"
 
@@ -757,6 +816,7 @@ process_option() {
             ;;
 
     esac
+
 }
 
 # ==============================================================
@@ -785,7 +845,8 @@ while true; do
 
     show_protocol_menu
 
-    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
+    read -rp \
+        "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
 
     process_option "$OP"
 
