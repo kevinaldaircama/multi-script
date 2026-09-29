@@ -7,7 +7,7 @@
 #
 # Archivo : /etc/kevintech/protocolos/menu.sh
 # Config  : /etc/kevintech/config.conf
-# Versión : 3.2 Premium
+# Versión : 3.3 Premium
 #
 # ==============================================================
 
@@ -22,7 +22,7 @@ CONFIG="$BASE/config.conf"
 PROTOCOL_DIR="$BASE/protocolos"
 TOOLS_DIR="$BASE/herramientas"
 
-VERSION="3.2"
+VERSION="3.3"
 PANEL_NAME="KEVINTECH MULTI SCRIPT"
 
 # ==============================================================
@@ -59,9 +59,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 if [[ ! -d "$BASE" ]]; then
-
     mkdir -p "$BASE"
-
 fi
 
 if [[ ! -f "$CONFIG" ]]; then
@@ -152,9 +150,7 @@ run_module() {
     fi
 
     if [[ ! -x "$FILE" ]]; then
-
         chmod +x "$FILE" 2>/dev/null
-
     fi
 
     clear
@@ -192,14 +188,6 @@ run_module() {
 # ==============================================================
 # ESTADO DE PROTOCOLOS
 # ==============================================================
-#
-# IMPORTANTE:
-# SOLO SE UTILIZA config.conf
-#
-# ON  = configurado/activado
-# OFF = apagado/desactivado
-#
-# ==============================================================
 
 status_config() {
 
@@ -229,9 +217,7 @@ status_service() {
     local CONFIG_STATUS="${2:-OFF}"
 
     # ----------------------------------------------------------
-    # NO SE CONSULTA SYSTEMD
-    #
-    # El estado visual depende solamente de config.conf
+    # El estado visual depende de config.conf
     # ----------------------------------------------------------
 
     status_config "$CONFIG_STATUS"
@@ -388,15 +374,11 @@ progress_bar() {
     local BAR=""
 
     for ((i=0; i<FILLED; i++)); do
-
         BAR+="█"
-
     done
 
     for ((i=FILLED; i<SIZE; i++)); do
-
         BAR+="░"
-
     done
 
     echo "$BAR"
@@ -530,6 +512,14 @@ get_statuses() {
         "bhttp" \
         "${BHTTP:-OFF}")
 
+    # ----------------------------------------------------------
+    # HCR
+    # ----------------------------------------------------------
+
+    HCR_STATUS=$(status_service \
+        "hcr-server" \
+        "${HCR:-OFF}")
+
     ZIPVPN_STATUS=$(status_config \
         "${ZIPVPN:-OFF}")
 
@@ -622,11 +612,14 @@ show_protocol_menu() {
         "$BHTTP_STATUS"
 
     # ----------------------------------------------------------
-    # FILA 7 - SQUID
+    # FILA 7
     # ----------------------------------------------------------
 
-    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🌐 Squid      %b\n" \
+    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🌐 Squid      %b    " \
         "$SQUID_STATUS"
+
+    printf "${MAGENTA}${BOLD}[14]${RESET} 🛡️ HCR        %b\n" \
+        "$HCR_STATUS"
 
     echo
 
@@ -638,13 +631,13 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[14]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[15]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[15]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[16]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[16]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[17]${RESET} 🤖 Bot Telegram\n"
+    printf "  ${GREEN}${BOLD}[17]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[18]${RESET} 🤖 Bot Telegram\n"
 
-    printf "  ${GREEN}${BOLD}[18]${RESET} 🌐 Web Universal\n"
+    printf "  ${GREEN}${BOLD}[19]${RESET} 🌐 Web Universal\n"
 
     echo
 
@@ -753,34 +746,44 @@ process_option() {
             ;;
 
         # ======================================================
-        # ADMINISTRACIÓN
+        # HCR
         # ======================================================
 
         14)
+
+            run_module "$PROTOCOL_DIR/hcr.sh"
+
+            ;;
+
+        # ======================================================
+        # ADMINISTRACIÓN
+        # ======================================================
+
+        15)
 
             run_module "$TOOLS_DIR/menu.sh"
 
             ;;
 
-        15)
+        16)
 
             run_module "$TOOLS_DIR/reiniciar.sh"
 
             ;;
 
-        16)
+        17)
 
             run_module "$TOOLS_DIR/firewall.sh"
 
             ;;
 
-        17)
+        18)
 
             run_module "$BASE/telegram/install.sh"
 
             ;;
 
-        18)
+        19)
 
             run_module "$BASE/web/installer.sh"
 
