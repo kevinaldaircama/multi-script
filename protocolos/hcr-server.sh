@@ -1,382 +1,731 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-PATH="/usr/sbin:/usr/bin:/sbin:/bin"
-LC_ALL="C"
-LANG="C"
-export PATH LC_ALL LANG
+# ============================================================
+# KEVINTECH MULTI SCRIPT
+# HCR SERVER
+# ============================================================
+
+BASE="/etc/kevintech"
+CONFIG="$BASE/config.conf"
+PROTOCOL_DIR="$BASE/protocolos"
 
 SERVICE_NAME="hcr-server"
-SYSTEMD_DIR="/etc/systemd/system"
-PORT="8080"
-PORT_SET="false"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+
+HCR_DIR="$PROTOCOL_DIR"
+HCR_BINARY="$HCR_DIR/hcr-server"
+HCR_CERT_DIR="$HCR_DIR/hcr-certs"
+HCR_CERT="$HCR_CERT_DIR/fullchain.pem"
+HCR_KEY="$HCR_CERT_DIR/privkey.pem"
+
+HCR_PORT="${HCR_PORT:-8080}"
+HCR_TRANSPORT="${HCR_TRANSPORT:-auto}"
+
 MAX_DOWNLOAD_FRAME="6144"
 DOWNLOAD_POLL_TIMEOUT="8s"
-TRANSPORT="auto"
-TRANSPORT_SET="false"
-ACTION="install"
 
-TEMP_UNIT=""
+# ============================================================
+# COLORES
+# ============================================================
 
-fail() {
-	echo "Error: $*" >&2
-	exit 1
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+WHITE='\033[1;37m'
+RESET='\033[0m'
+BOLD='\033[1m'
+
+# ============================================================
+# FUNCIONES
+# ============================================================
+
+pause() {
+    echo
+    read -rp "Presiona ENTER para continuar..."
 }
 
-command -v readlink >/dev/null 2>&1 || fail "readlink was not found."
-SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(dirname -- "${SCRIPT_PATH}")"
-BINARY_PATH="${SCRIPT_DIR}/hcr-server"
-TLS_CERT_PATH="${SCRIPT_DIR}/fullchain.pem"
-TLS_KEY_PATH="${SCRIPT_DIR}/privkey.pem"
-UNIT_SOURCE_PATH="${SCRIPT_DIR}/${SERVICE_NAME}.service"
-UNIT_LINK_PATH="${SYSTEMD_DIR}/${SERVICE_NAME}.service"
-
-usage() {
-	cat <<'EOF'
-Install HCR Server as a systemd service from one self-contained directory.
-
-Usage:
-  sudo ./install.sh [--port <1-65535>] [--transport <tls|plain|auto>]
-  sudo ./install.sh --uninstall
-  ./install.sh --help
-
-Options:
-  --port <number>     Listener port. Default: 8080
-  --transport <mode>  Server transport. Default: auto
-                      tls   accepts TLS only
-                      plain accepts non-TLS HCR only
-                      auto  accepts TLS and non-TLS HCR on the same port
-  --uninstall         Stop and unlink the service without deleting this directory
-  -h, --help          Show this help
-
-Required next to install.sh:
-  hcr-server          Binary for the current Linux architecture
-  fullchain.pem       Required by tls and auto
-  privkey.pem         Required by tls and auto
-
-The generated hcr-server.service also stays next to this script. Only systemd
-symlinks are created outside this directory. The installer does not create
-binary backups or rollback files.
-EOF
+error_msg() {
+    echo -e "${RED}✘ $1${RESET}"
 }
 
-parse_args() {
-	while [ "$#" -gt 0 ]; do
-		case "$1" in
-			--port)
-				[ "$#" -ge 2 ] || fail "--port requires a value."
-				PORT="$2"
-				PORT_SET="true"
-				shift 2
-				;;
-			--transport)
-				[ "$#" -ge 2 ] || fail "--transport requires a value."
-				TRANSPORT="$2"
-				TRANSPORT_SET="true"
-				shift 2
-				;;
-			--uninstall)
-				ACTION="uninstall"
-				shift
-				;;
-			-h|--help)
-				usage
-				exit 0
-				;;
-			*) fail "Unknown option: $1" ;;
-		esac
-	done
-	case "${TRANSPORT}" in
-		tls|plain|auto) ;;
-		*) fail "--transport must be tls, plain, or auto." ;;
-	esac
-	case "${PORT}" in
-		""|*[!0-9]*) fail "--port must be a number between 1 and 65535." ;;
-	esac
-	# Basis sepuluh dipaksa: nilai berawalan nol seperti 0080 akan ditafsirkan sebagai oktal.
-	if [ "$((10#${PORT}))" -lt 1 ] || [ "$((10#${PORT}))" -gt 65535 ]; then
-		fail "--port must be a number between 1 and 65535."
-	fi
-	PORT="$((10#${PORT}))"
-	if [ "${ACTION}" = "uninstall" ]; then
-		[ "${TRANSPORT_SET}" = "false" ] || fail "--transport cannot be combined with --uninstall."
-		[ "${PORT_SET}" = "false" ] || fail "--port cannot be combined with --uninstall."
-	fi
+success_msg() {
+    echo -e "${GREEN}✔ $1${RESET}"
 }
 
-require_command() {
-	command -v "$1" >/dev/null 2>&1 || fail "$1 was not found."
+info_msg() {
+    echo -e "${CYAN}➜ $1${RESET}"
 }
 
-require_environment() {
-	[ "$(id -u)" -eq 0 ] || fail "Run this installer as root."
-	[ "$(uname -s)" = "Linux" ] || fail "This installer supports Linux only."
-	for command_name in stat systemctl systemd-analyze flock ln mv mktemp sleep; do
-		require_command "${command_name}"
-	done
-	if [ "${ACTION}" = "install" ] && {
-		[ "${TRANSPORT}" = "tls" ] || [ "${TRANSPORT}" = "auto" ];
-	}; then
-		require_command openssl
-	fi
-	systemctl show --property=Version --value >/dev/null 2>&1 ||
-		fail "The systemd system manager is not available."
-	if [[ ! "${SCRIPT_DIR}" =~ ^/[-A-Za-z0-9._/@+:]+$ ]]; then
-		fail "The installer directory contains unsupported characters: ${SCRIPT_DIR}"
-	fi
+warning_msg() {
+    echo -e "${YELLOW}⚠ $1${RESET}"
 }
 
-acquire_install_lock() {
-	exec 9<"${SYSTEMD_DIR}" || fail "The systemd unit directory could not be opened for locking."
-	flock -n 9 || fail "Another HCR Server installer is already running."
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-mode_is_writable_by_others() {
-	(( (8#$1 & 8#022) != 0 ))
+load_config() {
+    if [[ -f "$CONFIG" ]]; then
+        # shellcheck disable=SC1090
+        source "$CONFIG"
+    fi
+
+    HCR_PORT="${HCR_PORT:-8080}"
+    HCR_TRANSPORT="${HCR_TRANSPORT:-auto}"
+    HCR="${HCR:-OFF}"
 }
 
-validate_secure_directory() {
-	local current="${SCRIPT_DIR}"
-	local mode
-	while :; do
-		[ -d "${current}" ] && [ ! -L "${current}" ] ||
-			fail "Path component must be a real directory: ${current}"
-		[ "$(stat -c '%u' -- "${current}")" = "0" ] ||
-			fail "Path component must be owned by root: ${current}"
-		mode="$(stat -c '%a' -- "${current}")"
-		mode_is_writable_by_others "${mode}" &&
-			fail "Path component must not be group- or world-writable: ${current}"
-		[ "${current}" = "/" ] && break
-		current="$(dirname -- "${current}")"
-	done
+save_config_value() {
+    local key="$1"
+    local value="$2"
+
+    touch "$CONFIG"
+
+    if grep -qE "^${key}=" "$CONFIG"; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$CONFIG"
+    else
+        echo "${key}=${value}" >> "$CONFIG"
+    fi
 }
 
-validate_root_file() {
-	local executable="$1"
-	local label="$2"
-	local path="$3"
-	local mode
-	[ -f "${path}" ] && [ ! -L "${path}" ] ||
-		fail "${label} must be a regular file: ${path}"
-	[ "$(stat -c '%u' -- "${path}")" = "0" ] ||
-		fail "${label} must be owned by root: ${path}"
-	mode="$(stat -c '%a' -- "${path}")"
-	mode_is_writable_by_others "${mode}" &&
-		fail "${label} must not be group- or world-writable: ${path}"
-	if [ "${executable}" = "true" ] && [ ! -x "${path}" ]; then
-		fail "${label} must be executable: ${path}"
-	fi
+validate_port() {
+    local port="$1"
+
+    [[ "$port" =~ ^[0-9]+$ ]] || return 1
+
+    (( port >= 1 && port <= 65535 )) || return 1
+
+    return 0
 }
 
-validate_unit_link() {
-	if [ -L "${UNIT_LINK_PATH}" ]; then
-		[ "$(readlink -- "${UNIT_LINK_PATH}")" = "${UNIT_SOURCE_PATH}" ] ||
-			fail "A different ${SERVICE_NAME}.service symlink already exists."
-	elif [ -e "${UNIT_LINK_PATH}" ]; then
-		fail "A non-symlink unit already exists: ${UNIT_LINK_PATH}"
-	fi
+validate_transport() {
+    case "$1" in
+        tls|plain|auto)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
-loaded_fragment_path() {
-	systemctl show --property=FragmentPath --value "${SERVICE_NAME}.service" 2>/dev/null || true
+binary_version() {
+    if [[ -x "$HCR_BINARY" ]]; then
+        "$HCR_BINARY" -version 2>/dev/null || true
+    fi
 }
 
-validate_loaded_fragment() {
-	case "$1" in
-		""|"${UNIT_SOURCE_PATH}"|"${UNIT_LINK_PATH}") ;;
-		*) fail "systemd loaded ${SERVICE_NAME}.service from an unexpected unit: $1" ;;
-	esac
+check_binary() {
+    if [[ ! -f "$HCR_BINARY" ]]; then
+        error_msg "No se encontró el binario:"
+        echo "  $HCR_BINARY"
+        return 1
+    fi
+
+    if [[ ! -x "$HCR_BINARY" ]]; then
+        chmod +x "$HCR_BINARY"
+    fi
+
+    if ! "$HCR_BINARY" -version >/dev/null 2>&1; then
+        error_msg "El binario hcr-server no es válido o no soporta -version."
+        return 1
+    fi
+
+    return 0
 }
 
-validate_binary_identity() {
-	local path="$1"
-	local output
-	output="$("${path}" -version 2>/dev/null)" ||
-		fail "The binary does not support -version."
-	[[ "${output}" =~ ^hcr-server\ version\ [0-9]+\.[0-9]+\.[0-9]+(\ -\ Patch\ [1-9][0-9]*)?$ ]] ||
-		fail "The binary returned an unexpected version string."
+check_tls() {
+    if [[ "$HCR_TRANSPORT" != "tls" && "$HCR_TRANSPORT" != "auto" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "$HCR_CERT" ]]; then
+        error_msg "No existe el certificado TLS:"
+        echo "  $HCR_CERT"
+        return 1
+    fi
+
+    if [[ ! -f "$HCR_KEY" ]]; then
+        error_msg "No existe la clave TLS:"
+        echo "  $HCR_KEY"
+        return 1
+    fi
+
+    if ! command_exists openssl; then
+        error_msg "OpenSSL no está instalado."
+        return 1
+    fi
+
+    if ! openssl x509 -in "$HCR_CERT" -noout >/dev/null 2>&1; then
+        error_msg "El certificado TLS no es válido."
+        return 1
+    fi
+
+    if ! openssl pkey -in "$HCR_KEY" -passin pass: -noout >/dev/null 2>&1; then
+        error_msg "La clave privada TLS no es válida o requiere contraseña."
+        return 1
+    fi
+
+    local cert_key
+    local private_key
+
+    cert_key="$(openssl x509 -in "$HCR_CERT" -pubkey -noout 2>/dev/null)"
+    private_key="$(openssl pkey -in "$HCR_KEY" -passin pass: -pubout 2>/dev/null)"
+
+    if [[ "$cert_key" != "$private_key" ]]; then
+        error_msg "El certificado y la clave TLS no coinciden."
+        return 1
+    fi
+
+    chmod 600 "$HCR_KEY"
+
+    return 0
 }
 
-validate_tls_pair() {
-	local certificate_public_key
-	local private_public_key
-	openssl x509 -in "${TLS_CERT_PATH}" -noout >/dev/null 2>&1 ||
-		fail "The TLS certificate could not be parsed."
-	certificate_public_key="$(openssl x509 -in "${TLS_CERT_PATH}" -pubkey -noout 2>/dev/null)" ||
-		fail "The TLS certificate public key could not be read."
-	private_public_key="$(openssl pkey -in "${TLS_KEY_PATH}" -passin pass: -pubout 2>/dev/null)" ||
-		fail "The TLS private key could not be parsed without a passphrase."
-	[ "${certificate_public_key}" = "${private_public_key}" ] ||
-		fail "The TLS certificate and private key do not match."
+create_directories() {
+    mkdir -p "$HCR_CERT_DIR"
+
+    chmod 755 "$HCR_DIR"
+    chmod 700 "$HCR_CERT_DIR"
 }
 
-validate_binary() {
-	validate_root_file true "HCR binary" "${BINARY_PATH}"
-	validate_binary_identity "${BINARY_PATH}"
-}
+create_service() {
 
-validate_bundle() {
-	local key_mode
-	validate_secure_directory
-	validate_root_file true "Installer" "${SCRIPT_PATH}"
-	validate_binary
-	if [ -e "${UNIT_SOURCE_PATH}" ] || [ -L "${UNIT_SOURCE_PATH}" ]; then
-		validate_root_file false "Generated systemd unit" "${UNIT_SOURCE_PATH}"
-	fi
-	if [ "${TRANSPORT}" = "tls" ] || [ "${TRANSPORT}" = "auto" ]; then
-		validate_root_file false "TLS certificate" "${TLS_CERT_PATH}"
-		validate_root_file false "TLS private key" "${TLS_KEY_PATH}"
-		key_mode="$(stat -c '%a' -- "${TLS_KEY_PATH}")"
-		(( (8#${key_mode} & 8#077) == 0 )) ||
-			fail "TLS private key must not be accessible by group or other users."
-		validate_tls_pair
-	fi
-}
+    local tls_arguments=""
 
-render_unit() {
-	local tls_arguments=""
-	if [ "${TRANSPORT}" = "tls" ] || [ "${TRANSPORT}" = "auto" ]; then
-		tls_arguments=" --tls-cert ${TLS_CERT_PATH} --tls-key ${TLS_KEY_PATH}"
-	fi
-	TEMP_UNIT="$(mktemp "${SCRIPT_DIR}/.${SERVICE_NAME}.XXXXXX.service")"
-	chmod 0600 "${TEMP_UNIT}"
-	cat >"${TEMP_UNIT}" <<EOF
+    if [[ "$HCR_TRANSPORT" == "tls" || "$HCR_TRANSPORT" == "auto" ]]; then
+        tls_arguments=" --tls-cert $HCR_CERT --tls-key $HCR_KEY"
+    fi
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=HCR relay
-Documentation=file:${SCRIPT_DIR}/README.md
+Description=KEVINTECH HCR Server
+Documentation=file:${HCR_DIR}/README.md
 Wants=network-online.target
 After=network-online.target ssh.service sshd.service
+
 StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Service]
 Type=exec
+
 User=root
 Group=root
-WorkingDirectory=${SCRIPT_DIR}
-ExecStart=${BINARY_PATH} --listen :${PORT} --target 127.0.0.1:22 --transport ${TRANSPORT}${tls_arguments} --max-download-frame ${MAX_DOWNLOAD_FRAME} --download-poll-timeout ${DOWNLOAD_POLL_TIMEOUT}
+
+WorkingDirectory=${HCR_DIR}
+
+ExecStart=${HCR_BINARY} --listen :${HCR_PORT} --target 127.0.0.1:22 --transport ${HCR_TRANSPORT}${tls_arguments} --max-download-frame ${MAX_DOWNLOAD_FRAME} --download-poll-timeout ${DOWNLOAD_POLL_TIMEOUT}
+
 Restart=on-failure
 RestartSec=5s
+
 TimeoutStopSec=15s
 KillSignal=SIGTERM
+
 UMask=0077
+
 NoNewPrivileges=true
+
 CapabilityBoundingSet=
 AmbientCapabilities=
+
 PrivateTmp=true
 PrivateDevices=true
+
 ProtectSystem=strict
 ProtectHome=read-only
 ProtectControlGroups=true
+
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
+
 MemoryDenyWriteExecute=false
-ReadOnlyPaths=${SCRIPT_DIR}
+
+ReadOnlyPaths=${HCR_DIR}
+
 LimitNOFILE=4096
 LimitCORE=0
+
 TasksMax=512
 MemoryMax=384M
+
 StandardOutput=journal
 StandardError=journal
+
 SyslogIdentifier=hcr-server
 
 [Install]
 WantedBy=multi-user.target
 EOF
-	chmod 0644 "${TEMP_UNIT}"
-	systemd-analyze verify "${TEMP_UNIT}"
+
+    chmod 644 "$SERVICE_FILE"
+
+    if command_exists systemd-analyze; then
+        if ! systemd-analyze verify "$SERVICE_FILE" >/dev/null 2>&1; then
+            error_msg "La configuración de systemd tiene errores."
+            systemd-analyze verify "$SERVICE_FILE" || true
+            return 1
+        fi
+    fi
+
+    return 0
 }
 
-cleanup() {
-	local exit_code=$?
-	trap - EXIT
-	set +e
-	[ -n "${TEMP_UNIT}" ] && rm -f -- "${TEMP_UNIT}"
-	exit "${exit_code}"
+install_hcr() {
+
+    clear
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║        INSTALAR HCR SERVER               ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    load_config
+
+    if [[ $EUID -ne 0 ]]; then
+        error_msg "Debes ejecutar este módulo como root."
+        pause
+        return
+    fi
+
+    if ! command_exists systemctl; then
+        error_msg "systemctl no está disponible."
+        pause
+        return
+    fi
+
+    if ! check_binary; then
+        echo
+        warning_msg "Coloca el binario aquí:"
+        echo "  $HCR_BINARY"
+        echo
+        echo "El binario debe ser compatible con la arquitectura de tu VPS."
+        pause
+        return
+    fi
+
+    echo
+    echo -e "${WHITE}Puerto actual:${RESET} ${GREEN}${HCR_PORT}${RESET}"
+    read -rp "Nuevo puerto [ENTER = ${HCR_PORT}]: " NEW_PORT
+
+    if [[ -n "$NEW_PORT" ]]; then
+        if ! validate_port "$NEW_PORT"; then
+            error_msg "Puerto inválido. Usa un valor entre 1 y 65535."
+            pause
+            return
+        fi
+
+        HCR_PORT="$NEW_PORT"
+    fi
+
+    echo
+    echo "Transporte:"
+    echo "  1) TLS"
+    echo "  2) Plain"
+    echo "  3) Auto"
+    echo
+
+    local transport_option
+
+    case "$HCR_TRANSPORT" in
+        tls) transport_option=1 ;;
+        plain) transport_option=2 ;;
+        *) transport_option=3 ;;
+    esac
+
+    read -rp "Selecciona transporte [${transport_option}]: " NEW_TRANSPORT
+
+    NEW_TRANSPORT="${NEW_TRANSPORT:-$transport_option}"
+
+    case "$NEW_TRANSPORT" in
+        1)
+            HCR_TRANSPORT="tls"
+            ;;
+        2)
+            HCR_TRANSPORT="plain"
+            ;;
+        3)
+            HCR_TRANSPORT="auto"
+            ;;
+        *)
+            error_msg "Opción inválida."
+            pause
+            return
+            ;;
+    esac
+
+    create_directories
+
+    if ! check_tls; then
+        echo
+        warning_msg "Para TLS/Auto necesitas:"
+        echo "  $HCR_CERT"
+        echo "  $HCR_KEY"
+        pause
+        return
+    fi
+
+    if [[ "$HCR_TRANSPORT" == "plain" ]]; then
+        warning_msg "HCR se instalará sin TLS."
+    fi
+
+    if ! create_service; then
+        pause
+        return
+    fi
+
+    systemctl daemon-reload
+
+    systemctl enable "$SERVICE_NAME.service" >/dev/null 2>&1
+
+    systemctl reset-failed "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+
+    if ! systemctl restart "$SERVICE_NAME.service"; then
+        error_msg "HCR Server no pudo iniciar."
+        echo
+        systemctl status "$SERVICE_NAME.service" --no-pager --full || true
+        pause
+        return
+    fi
+
+    sleep 2
+
+    if ! systemctl is-active --quiet "$SERVICE_NAME.service"; then
+        error_msg "HCR Server no quedó activo."
+        systemctl status "$SERVICE_NAME.service" --no-pager --full || true
+        pause
+        return
+    fi
+
+    save_config_value "HCR" "ON"
+    save_config_value "HCR_PORT" "$HCR_PORT"
+    save_config_value "HCR_TRANSPORT" "$HCR_TRANSPORT"
+
+    echo
+    success_msg "HCR Server instalado correctamente."
+    echo
+    echo -e "${WHITE}Puerto:${RESET}     ${GREEN}${HCR_PORT}${RESET}"
+    echo -e "${WHITE}Transporte:${RESET} ${GREEN}${HCR_TRANSPORT}${RESET}"
+    echo -e "${WHITE}Servicio:${RESET}   ${GREEN}${SERVICE_NAME}${RESET}"
+
+    if [[ "$HCR_TRANSPORT" != "plain" ]]; then
+        echo -e "${WHITE}TLS:${RESET}         ${GREEN}ACTIVO${RESET}"
+    fi
+
+    pause
 }
 
-verify_service_health() {
-	local initial_pid
-	initial_pid="$(systemctl show --property=MainPID --value "${SERVICE_NAME}.service")"
-	[[ "${initial_pid}" =~ ^[1-9][0-9]*$ ]] || fail "The service did not report a running process."
-	sleep 3
-	systemctl is-active --quiet "${SERVICE_NAME}.service" ||
-		fail "The service did not remain active during the startup check."
-	[ "$(systemctl show --property=MainPID --value "${SERVICE_NAME}.service")" = "${initial_pid}" ] ||
-		fail "The service restarted during the startup check."
+start_hcr() {
+
+    if ! systemctl start "$SERVICE_NAME.service"; then
+        error_msg "No se pudo iniciar HCR Server."
+        return 1
+    fi
+
+    save_config_value "HCR" "ON"
+
+    success_msg "HCR Server iniciado."
 }
 
-install_service() {
-	validate_unit_link
-	validate_loaded_fragment "$(loaded_fragment_path)"
-	render_unit
-	mv -f -- "${TEMP_UNIT}" "${UNIT_SOURCE_PATH}"
-	TEMP_UNIT=""
-	[ -L "${UNIT_LINK_PATH}" ] || ln -s -- "${UNIT_SOURCE_PATH}" "${UNIT_LINK_PATH}"
-	systemctl daemon-reload
-	systemctl enable "${SERVICE_NAME}.service"
-	systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-	if ! systemctl restart "${SERVICE_NAME}.service"; then
-		systemctl status --no-pager --full "${SERVICE_NAME}.service" || true
-		fail "The service failed to start."
-	fi
-	systemctl is-active --quiet "${SERVICE_NAME}.service" ||
-		fail "The service did not remain active after startup."
-	[ "$(systemctl show --property=WorkingDirectory --value "${SERVICE_NAME}.service")" = "${SCRIPT_DIR}" ] ||
-		fail "systemd reported an unexpected WorkingDirectory."
-	verify_service_health
-	echo "HCR Server was installed successfully."
-	echo "Bundle directory: ${SCRIPT_DIR}"
-	echo "Systemd unit: ${UNIT_SOURCE_PATH}"
-	echo "Transport: ${TRANSPORT}"
-	echo "Port: ${PORT}"
+stop_hcr() {
+
+    if ! systemctl stop "$SERVICE_NAME.service"; then
+        error_msg "No se pudo detener HCR Server."
+        return 1
+    fi
+
+    save_config_value "HCR" "OFF"
+
+    success_msg "HCR Server detenido."
 }
 
-uninstall_service() {
-	local fragment
-	local owned="false"
-	validate_secure_directory
-	validate_root_file true "Installer" "${SCRIPT_PATH}"
-	if [ -e "${UNIT_SOURCE_PATH}" ]; then
-		validate_root_file false "Generated systemd unit" "${UNIT_SOURCE_PATH}"
-	fi
-	validate_unit_link
-	fragment="$(loaded_fragment_path)"
-	validate_loaded_fragment "${fragment}"
-	[ -L "${UNIT_LINK_PATH}" ] && owned="true"
-	if [ "${fragment}" = "${UNIT_SOURCE_PATH}" ] || [ "${fragment}" = "${UNIT_LINK_PATH}" ]; then
-		owned="true"
-	fi
-	if [ "${owned}" = "false" ]; then
-		echo "HCR Server is not linked from this directory. Nothing was removed."
-		return
-	fi
-	systemctl disable --now "${SERVICE_NAME}.service"
-	if [ -L "${UNIT_LINK_PATH}" ]; then
-		[ "$(readlink -- "${UNIT_LINK_PATH}")" = "${UNIT_SOURCE_PATH}" ] ||
-			fail "The unit symlink changed during uninstall."
-		rm -f -- "${UNIT_LINK_PATH}"
-	fi
-	systemctl daemon-reload
-	systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-	echo "HCR Server was uninstalled."
-	echo "Runtime files were preserved in: ${SCRIPT_DIR}"
+restart_hcr() {
+
+    if ! systemctl restart "$SERVICE_NAME.service"; then
+        error_msg "No se pudo reiniciar HCR Server."
+        return 1
+    fi
+
+    save_config_value "HCR" "ON"
+
+    success_msg "HCR Server reiniciado."
 }
 
-main() {
-	trap cleanup EXIT
-	parse_args "$@"
-	require_environment
-	acquire_install_lock
-	if [ "${ACTION}" = "uninstall" ]; then
-		uninstall_service
-	else
-		validate_bundle
-		install_service
-	fi
+status_hcr() {
+
+    clear
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║          ESTADO HCR SERVER               ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    load_config
+
+    echo
+    echo -e "${WHITE}Configuración${RESET}"
+    echo "──────────────────────────────────────────"
+    echo "Estado config : $HCR"
+    echo "Puerto        : $HCR_PORT"
+    echo "Transporte    : $HCR_TRANSPORT"
+    echo "Binario       : $HCR_BINARY"
+    echo
+
+    if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+        echo -e "Servicio      : ${GREEN}● ACTIVO${RESET}"
+    else
+        echo -e "Servicio      : ${RED}● INACTIVO${RESET}"
+    fi
+
+    echo
+    systemctl status "$SERVICE_NAME.service" --no-pager --full || true
+
+    echo
+    pause
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-	main "$@"
+logs_hcr() {
+
+    clear
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║             LOGS HCR SERVER              ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    journalctl -u "$SERVICE_NAME.service" -n 80 --no-pager
+
+    echo
+    pause
+}
+
+configure_hcr() {
+
+    clear
+
+    load_config
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║          CONFIGURAR HCR SERVER            ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    echo "Puerto actual: $HCR_PORT"
+    read -rp "Nuevo puerto [ENTER = mantener]: " NEW_PORT
+
+    if [[ -n "$NEW_PORT" ]]; then
+        if ! validate_port "$NEW_PORT"; then
+            error_msg "Puerto inválido."
+            pause
+            return
+        fi
+
+        HCR_PORT="$NEW_PORT"
+    fi
+
+    echo
+    echo "Transporte actual: $HCR_TRANSPORT"
+    echo
+    echo "1) TLS"
+    echo "2) Plain"
+    echo "3) Auto"
+    echo
+
+    read -rp "Nueva opción [ENTER = mantener]: " OPTION
+
+    if [[ -n "$OPTION" ]]; then
+        case "$OPTION" in
+            1) HCR_TRANSPORT="tls" ;;
+            2) HCR_TRANSPORT="plain" ;;
+            3) HCR_TRANSPORT="auto" ;;
+            *)
+                error_msg "Opción inválida."
+                pause
+                return
+                ;;
+        esac
+    fi
+
+    save_config_value "HCR_PORT" "$HCR_PORT"
+    save_config_value "HCR_TRANSPORT" "$HCR_TRANSPORT"
+
+    if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+        if create_service; then
+            systemctl daemon-reload
+            systemctl restart "$SERVICE_NAME.service"
+        fi
+    fi
+
+    success_msg "Configuración guardada."
+
+    echo
+    echo "Puerto: $HCR_PORT"
+    echo "Transporte: $HCR_TRANSPORT"
+
+    pause
+}
+
+uninstall_hcr() {
+
+    clear
+
+    echo -e "${RED}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║         DESINSTALAR HCR SERVER           ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    warning_msg "Esto detendrá y eliminará el servicio hcr-server."
+    echo
+    read -rp "¿Continuar? [s/N]: " CONFIRM
+
+    [[ "$CONFIRM" =~ ^[sS]$ ]] || return
+
+    systemctl disable --now "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+
+    rm -f "$SERVICE_FILE"
+
+    systemctl daemon-reload
+
+    systemctl reset-failed "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+
+    save_config_value "HCR" "OFF"
+
+    success_msg "HCR Server desinstalado."
+
+    echo
+    info_msg "El binario y los certificados fueron conservados."
+    echo "Directorio:"
+    echo "  $HCR_DIR"
+
+    pause
+}
+
+# ============================================================
+# INSTALACIÓN AUTOMÁTICA
+# ============================================================
+
+auto_install() {
+
+    load_config
+
+    if [[ $EUID -ne 0 ]]; then
+        error_msg "Debes ejecutar como root."
+        return 1
+    fi
+
+    if ! check_binary; then
+        return 1
+    fi
+
+    create_directories
+
+    if ! check_tls; then
+        return 1
+    fi
+
+    create_service || return 1
+
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME.service" >/dev/null 2>&1
+    systemctl restart "$SERVICE_NAME.service"
+
+    sleep 2
+
+    if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+        save_config_value "HCR" "ON"
+        save_config_value "HCR_PORT" "$HCR_PORT"
+        save_config_value "HCR_TRANSPORT" "$HCR_TRANSPORT"
+
+        success_msg "HCR Server instalado automáticamente."
+        return 0
+    fi
+
+    error_msg "HCR Server no quedó activo."
+    return 1
+}
+
+# ============================================================
+# MENÚ
+# ============================================================
+
+show_menu() {
+
+    clear
+
+    load_config
+
+    local STATUS
+
+    if systemctl is-active --quiet "$SERVICE_NAME.service" 2>/dev/null; then
+        STATUS="${GREEN}● ACTIVO${RESET}"
+    else
+        STATUS="${RED}● INACTIVO${RESET}"
+    fi
+
+    echo -e "${CYAN}${BOLD}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║          🔐 HCR SERVER                   ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+
+    echo
+    echo -e " Estado: $STATUS"
+    echo -e " Puerto: ${GREEN}${HCR_PORT}${RESET}"
+    echo -e " Modo:   ${GREEN}${HCR_TRANSPORT}${RESET}"
+
+    echo
+    echo -e "${WHITE}┌──────────────────────────────────────────┐${RESET}"
+    echo -e "${WHITE}│${RESET} [1] 🚀 Instalar / Actualizar           ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [2] ▶️  Iniciar                         ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [3] ⏹️  Detener                         ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [4] 🔄 Reiniciar                        ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [5] 📊 Estado                           ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [6] 📜 Ver Logs                         ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [7] ⚙️  Configurar                      ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [8] 🗑️  Desinstalar                     ${WHITE}│${RESET}"
+    echo -e "${WHITE}│${RESET} [0] ↩️  Volver                          ${WHITE}│${RESET}"
+    echo -e "${WHITE}└──────────────────────────────────────────┘${RESET}"
+
+    echo
+    read -rp "Selecciona una opción: " OPTION
+
+    case "$OPTION" in
+        1) install_hcr ;;
+        2) start_hcr; pause ;;
+        3) stop_hcr; pause ;;
+        4) restart_hcr; pause ;;
+        5) status_hcr ;;
+        6) logs_hcr ;;
+        7) configure_hcr ;;
+        8) uninstall_hcr ;;
+        0) return ;;
+        *) error_msg "Opción inválida."; pause ;;
+    esac
+}
+
+# ============================================================
+# AUTO
+# ============================================================
+
+if [[ "${1:-}" == "--auto" ]]; then
+    auto_install
+    exit $?
 fi
+
+# ============================================================
+# EJECUCIÓN
+# ============================================================
+
+show_menu
