@@ -1,44 +1,44 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ==============================================================
-#                 🔥 KEVINTECH HCR 🔥
-#              HCR SERVER - PROTOCOLO
+#                 🛡️ KEVINTECH MULTI SCRIPT
+#                       HCR MANAGER
 # ==============================================================
 #
-# HCR funciona como entrada independiente hacia SSH.
+# Archivo : /etc/kevintech/protocolos/hcr.sh
+# Módulo  : HCR
+# Puerto  : ALEATORIO
+# Backend : SSH LOCAL
 #
-# Puerto externo : ALEATORIO
-# Backend        : 127.0.0.1:22
+# USUARIOS:
+# HCR utiliza directamente las cuentas creadas por:
+# /etc/kevintech/usuarios/add.sh
 #
-# Los usuarios y contraseñas son los mismos usuarios
-# creados por KEVINTECH / usuarios/add.sh.
-#
-# NO crea una base de usuarios independiente.
+# NO crea una base de usuarios propia.
+# NO modifica otros protocolos.
+# NO modifica otros puertos.
 #
 # ==============================================================
 
-set -uo pipefail
+set -o pipefail
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-HCR_DIR="/opt/hcr"
-HCR_BIN="$HCR_DIR/hcr-server"
-HCR_UNIT="hcr-server.service"
+STATE="$BASE/hcr.conf"
+DIR="/usr/local/lib/hcr"
+BIN="$DIR/hcr-server"
 
-HCR_PORT=""
-HCR_BACKEND_HOST="127.0.0.1"
-HCR_BACKEND_PORT="22"
+UNIT="/etc/systemd/system/hcr.service"
+SERVICE="hcr"
+
+HCR_MIN_PORT=10000
+HCR_MAX_PORT=60000
 
 HCR_URL_BASE="https://raw.githubusercontent.com/JotchuaDevz/BHTTP-LIBS/refs/heads/main"
 
-# ==============================================================
-# COLORES
-# ==============================================================
-
 RESET="\e[0m"
 BOLD="\e[1m"
-
 CYAN="\e[1;96m"
 BLUE="\e[1;94m"
 GREEN="\e[1;92m"
@@ -49,21 +49,22 @@ WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 
 # ==============================================================
-# INTERFAZ
+# CONFIGURACIÓN
+# ==============================================================
+
+mkdir -p "$BASE"
+
+[[ -f "$CONFIG" ]] && source "$CONFIG" 2>/dev/null || true
+[[ -f "$STATE" ]] && source "$STATE" 2>/dev/null || true
+
+HCR_PORT="${HCR_PORT:-}"
+
+# ==============================================================
+# FUNCIONES GENERALES
 # ==============================================================
 
 line() {
     echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
-}
-
-header() {
-    clear
-
-    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${WHITE}${BOLD}                    🔥 KEVINTECH HCR 🔥                    ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${GRAY}                  HCR SERVER PROTOCOL                      ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
 }
 
 pause() {
@@ -71,266 +72,188 @@ pause() {
     read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
 }
 
-ok() {
-    echo -e "${GREEN}✔ $*${RESET}"
+header() {
+    clear
+
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║                    HCR MANAGER                              ║${RESET}"
+    echo -e "${CYAN}${BOLD}║                  KEVINTECH MULTI SCRIPT                     ║${RESET}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 }
 
-err() {
-    echo -e "${RED}✘ $*${RESET}"
-}
+need_root() {
 
-info() {
-    echo -e "${CYAN}➜ $*${RESET}"
-}
+    if [[ $EUID -ne 0 ]]; then
 
-warn() {
-    echo -e "${YELLOW}⚠ $*${RESET}"
-}
+        echo -e "${RED}${BOLD}✘ Este módulo requiere permisos de root.${RESET}"
 
-# ==============================================================
-# CONFIGURACIÓN
-# ==============================================================
-
-load_config() {
-
-    HCR_PORT=""
-
-    if [[ -f "$CONFIG" ]]; then
-
-        set +u
-
-        # shellcheck disable=SC1090
-        source "$CONFIG" 2>/dev/null || true
-
-        set -u
-
+        return 1
     fi
 
-    HCR_PORT="${HCR_PORT:-}"
+    return 0
 }
 
-set_config() {
+valid_port() {
 
-    local KEY="$1"
-    local VALUE="$2"
-
-    mkdir -p "$BASE"
-
-    touch "$CONFIG"
-
-    if grep -qE "^${KEY}=" "$CONFIG"; then
-
-        sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" "$CONFIG"
-
-    else
-
-        echo "${KEY}=${VALUE}" >> "$CONFIG"
-
-    fi
-}
-
-remove_config() {
-
-    local KEY="$1"
-
-    [[ -f "$CONFIG" ]] || return 0
-
-    sed -i "/^${KEY}=/d" "$CONFIG"
+    [[ "$1" =~ ^[0-9]+$ ]] &&
+    (( 1 <= 10#$1 && 10#$1 <= 65535 ))
 }
 
 # ==============================================================
-# COMPROBAR PUERTO
+# DETECTAR PUERTO EN USO
 # ==============================================================
 
-port_in_use() {
+port_used() {
 
     local PORT="$1"
 
     if command -v ss >/dev/null 2>&1; then
 
         ss -H -ltn 2>/dev/null |
-            awk '{print $4}' |
-            grep -Eq "(:|\.)${PORT}$"
+            awk -v p=":$PORT" '
+                $4 ~ p"$" {
+                    found=1
+                }
+                END {
+                    exit found ? 0 : 1
+                }
+            '
 
         return $?
 
     fi
 
-    if command -v lsof >/dev/null 2>&1; then
+    if command -v netstat >/dev/null 2>&1; then
 
-        lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1
+        netstat -ltn 2>/dev/null |
+            awk -v p=":$PORT" '
+                $4 ~ p"$" {
+                    found=1
+                }
+                END {
+                    exit found ? 0 : 1
+                }
+            '
 
         return $?
-
     fi
 
     return 1
 }
 
 # ==============================================================
-# PUERTO ALEATORIO
+# ELEGIR PUERTO ALEATORIO
 # ==============================================================
 
-generate_random_port() {
+random_port() {
 
     local PORT
-    local ATTEMPTS=0
+    local INTENTOS=0
 
-    while true; do
+    while (( INTENTOS < 100 )); do
 
-        ATTEMPTS=$((ATTEMPTS + 1))
+        PORT=$(shuf -i "${HCR_MIN_PORT}-${HCR_MAX_PORT}" -n 1 2>/dev/null)
 
-        if (( ATTEMPTS > 100 )); then
+        [[ -z "$PORT" ]] && continue
 
-            err "No se pudo encontrar un puerto libre."
+        if ! port_used "$PORT"; then
 
-            return 1
-        fi
-
-        # Rango alto para reducir posibilidades de conflicto
-        PORT=$((RANDOM % 50000 + 10000))
-
-        # Evitar puertos conocidos del sistema
-        case "$PORT" in
-            10022|1080|3128|8080|8088|8443|8888|10000)
-                continue
-                ;;
-        esac
-
-        if ! port_in_use "$PORT"; then
-
-            HCR_PORT="$PORT"
+            echo "$PORT"
 
             return 0
-
         fi
 
+        ((INTENTOS++))
+
     done
+
+    return 1
 }
 
 # ==============================================================
-# VALIDAR PUERTO GUARDADO
+# OBTENER PUERTO HCR
 # ==============================================================
 
-validate_saved_port() {
+get_hcr_port() {
 
-    load_config
+    if valid_port "${HCR_PORT:-}" &&
+       ! port_used "$HCR_PORT"; then
 
-    if [[ ! "$HCR_PORT" =~ ^[0-9]+$ ]]; then
-        return 1
-    fi
-
-    if (( HCR_PORT < 1024 || HCR_PORT > 65535 )); then
-        return 1
-    fi
-
-    # Si HCR está activo, su propio puerto puede aparecer ocupado.
-    if systemctl is-active --quiet "$HCR_UNIT" 2>/dev/null; then
-        return 0
-    fi
-
-    if port_in_use "$HCR_PORT"; then
-        return 1
-    fi
-
-    return 0
-}
-
-# ==============================================================
-# ASIGNAR PUERTO
-# ==============================================================
-
-assign_port() {
-
-    load_config
-
-    if validate_saved_port; then
-
-        info "Usando puerto HCR existente: $HCR_PORT"
+        echo "$HCR_PORT"
 
         return 0
     fi
 
-    info "Buscando puerto aleatorio libre..."
+    HCR_PORT="$(random_port)" || {
 
-    generate_random_port || return 1
+        echo -e "${RED}✘ No se encontró un puerto libre.${RESET}"
 
-    set_config "HCR_PORT" "$HCR_PORT"
+        return 1
+    }
 
-    ok "Puerto HCR asignado: $HCR_PORT"
+    save_state
 
-    return 0
+    echo "$HCR_PORT"
+}
+
+# ==============================================================
+# GUARDAR ESTADO
+# ==============================================================
+
+save_state() {
+
+    mkdir -p "$BASE"
+
+    cat > "$STATE" <<EOF
+# =========================================================
+# KEVINTECH HCR
+# =========================================================
+
+HCR_PORT=$HCR_PORT
+EOF
+
+    chmod 600 "$STATE"
+}
+
+# ==============================================================
+# ACTUALIZAR CONFIG PRINCIPAL
+# ==============================================================
+
+set_config_hcr() {
+
+    [[ -f "$CONFIG" ]] || touch "$CONFIG"
+
+    if grep -qE '^HCR=' "$CONFIG"; then
+
+        sed -i "s/^HCR=.*/HCR=$1/" "$CONFIG"
+
+    else
+
+        echo "HCR=$1" >> "$CONFIG"
+    fi
 }
 
 # ==============================================================
 # ARQUITECTURA
 # ==============================================================
 
-detect_arch() {
+get_arch() {
 
     case "$(uname -m)" in
 
         x86_64|amd64)
-            HCR_ARCH="amd64"
+            echo "amd64"
             ;;
 
         aarch64|arm64)
-            HCR_ARCH="arm64"
+            echo "arm64"
             ;;
 
         *)
-            err "Arquitectura no soportada: $(uname -m)"
             return 1
             ;;
-
     esac
-
-    HCR_FILENAME="hcr-server-linux-${HCR_ARCH}"
-    HCR_URL="${HCR_URL_BASE}/${HCR_FILENAME}"
-
-    return 0
-}
-
-# ==============================================================
-# DEPENDENCIAS
-# ==============================================================
-
-install_dependencies() {
-
-    local NEED=()
-
-    command -v curl >/dev/null 2>&1 || NEED+=("curl")
-    command -v wget >/dev/null 2>&1 || NEED+=("wget")
-    command -v ss >/dev/null 2>&1 || NEED+=("iproute2")
-    command -v systemctl >/dev/null 2>&1 || NEED+=("systemd")
-
-    if (( ${#NEED[@]} == 0 )); then
-        ok "Dependencias disponibles."
-        return 0
-    fi
-
-    info "Instalando dependencias: ${NEED[*]}"
-
-    apt-get update -qq >/dev/null 2>&1 || {
-        err "No se pudo actualizar APT."
-        return 1
-    }
-
-    apt-get install -y \
-        curl \
-        wget \
-        iproute2 \
-        systemd \
-        >/dev/null 2>&1 || {
-
-        err "No se pudieron instalar las dependencias."
-
-        return 1
-    }
-
-    ok "Dependencias instaladas."
-
-    return 0
 }
 
 # ==============================================================
@@ -339,72 +262,54 @@ install_dependencies() {
 
 download_hcr() {
 
-    detect_arch || return 1
+    local ARCH
+    ARCH="$(get_arch)" || {
 
-    mkdir -p "$HCR_DIR"
+        echo -e "${RED}✘ Arquitectura no soportada.${RESET}"
 
-    info "Arquitectura detectada: $HCR_ARCH"
-    info "Descargando HCR..."
+        return 1
+    }
 
-    local TMP="/tmp/hcr-server-download"
+    mkdir -p "$DIR"
 
-    rm -f "$TMP"
+    local FILENAME
+    FILENAME="hcr-server-linux-${ARCH}"
+
+    local URL
+    URL="${HCR_URL_BASE}/${FILENAME}"
+
+    echo -e "${CYAN}▸ Descargando HCR para ${ARCH}...${RESET}"
 
     if command -v curl >/dev/null 2>&1; then
 
-        if ! curl -fL \
-            --connect-timeout 15 \
+        curl -fsSL \
+            --connect-timeout 10 \
             --max-time 300 \
             --retry 2 \
-            -o "$TMP" \
-            "$HCR_URL"; then
-
-            err "No se pudo descargar HCR."
-
-            rm -f "$TMP"
-
-            return 1
-        fi
+            -o "$BIN" \
+            "$URL"
 
     else
 
-        if ! wget \
-            -q \
-            --timeout=30 \
+        wget -q \
+            --timeout=20 \
             --tries=3 \
-            -O "$TMP" \
-            "$HCR_URL"; then
-
-            err "No se pudo descargar HCR."
-
-            rm -f "$TMP"
-
-            return 1
-        fi
-
+            -O "$BIN" \
+            "$URL"
     fi
 
-    if [[ ! -s "$TMP" ]]; then
+    if [[ ! -s "$BIN" ]]; then
 
-        err "El archivo HCR descargado está vacío."
+        echo -e "${RED}✘ No se pudo descargar HCR.${RESET}"
 
-        rm -f "$TMP"
+        rm -f "$BIN"
 
         return 1
     fi
 
-    mv -f "$TMP" "$HCR_BIN"
+    chmod 755 "$BIN"
 
-    chmod 755 "$HCR_BIN"
-
-    if [[ ! -x "$HCR_BIN" ]]; then
-
-        err "El binario HCR no es ejecutable."
-
-        return 1
-    fi
-
-    ok "HCR descargado correctamente."
+    echo -e "${GREEN}✔ HCR descargado correctamente.${RESET}"
 
     return 0
 }
@@ -415,29 +320,37 @@ download_hcr() {
 
 create_service() {
 
-    load_config
+    local SSH_PORT_CURRENT
 
-    if [[ -z "$HCR_PORT" ]]; then
+    SSH_PORT_CURRENT="22"
 
-        err "No se ha definido el puerto HCR."
+    if [[ -f "$CONFIG" ]]; then
 
-        return 1
+        if grep -qE '^SSH_PORT=' "$CONFIG"; then
+
+            SSH_PORT_CURRENT="$(
+                awk -F= '/^SSH_PORT=/ {
+                    print $2
+                    exit
+                }' "$CONFIG"
+            )"
+        fi
     fi
 
-    info "Creando servicio independiente HCR..."
+    valid_port "$SSH_PORT_CURRENT" || SSH_PORT_CURRENT="22"
 
-    cat > "/etc/systemd/system/$HCR_UNIT" <<EOF
+    cat > "$UNIT" <<EOF
 [Unit]
 Description=KevinTech HCR Server
-After=network-online.target
+After=network-online.target ssh.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$HCR_DIR
+WorkingDirectory=$DIR
 
-ExecStart=$HCR_BIN --listen :$HCR_PORT --target $HCR_BACKEND_HOST:$HCR_BACKEND_PORT --transport plain
+ExecStart=$BIN --listen :$HCR_PORT --target 127.0.0.1:$SSH_PORT_CURRENT --transport plain
 
 Restart=always
 RestartSec=3
@@ -447,35 +360,28 @@ TimeoutStopSec=10
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kevintech-hcr
+SyslogIdentifier=hcr
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    chmod 644 "/etc/systemd/system/$HCR_UNIT"
+    chmod 644 "$UNIT"
 
     systemctl daemon-reload
 
-    systemctl enable "$HCR_UNIT" >/dev/null 2>&1
-
-    ok "Servicio HCR creado."
-
-    return 0
+    echo -e "${GREEN}✔ Servicio HCR creado.${RESET}"
+    echo -e "${GRAY}  HCR : 0.0.0.0:$HCR_PORT${RESET}"
+    echo -e "${GRAY}  SSH : 127.0.0.1:$SSH_PORT_CURRENT${RESET}"
 }
 
 # ==============================================================
 # FIREWALL
 # ==============================================================
 
-open_firewall() {
+firewall_add() {
 
-    load_config
-
-    if ! command -v iptables >/dev/null 2>&1; then
-        warn "iptables no está disponible. Se omite firewall."
-        return 0
-    fi
+    command -v iptables >/dev/null 2>&1 || return 0
 
     iptables -C INPUT \
         -p tcp \
@@ -488,37 +394,24 @@ open_firewall() {
         --dport "$HCR_PORT" \
         -j ACCEPT \
         2>/dev/null || true
-
-    ok "Puerto TCP $HCR_PORT permitido."
 }
 
-# ==============================================================
-# FIREWALL - ELIMINAR
-# ==============================================================
+firewall_remove() {
 
-close_firewall() {
+    command -v iptables >/dev/null 2>&1 || return 0
 
-    load_config
+    while iptables -C INPUT \
+        -p tcp \
+        --dport "$HCR_PORT" \
+        -j ACCEPT \
+        2>/dev/null; do
 
-    [[ "$HCR_PORT" =~ ^[0-9]+$ ]] || return 0
-
-    if command -v iptables >/dev/null 2>&1; then
-
-        while iptables -C INPUT \
+        iptables -D INPUT \
             -p tcp \
             --dport "$HCR_PORT" \
             -j ACCEPT \
-            2>/dev/null; do
-
-            iptables -D INPUT \
-                -p tcp \
-                --dport "$HCR_PORT" \
-                -j ACCEPT \
-                2>/dev/null || break
-
-        done
-
-    fi
+            2>/dev/null || break
+    done
 }
 
 # ==============================================================
@@ -527,111 +420,93 @@ close_firewall() {
 
 install_hcr() {
 
+    need_root || return 1
+
     header
 
-    echo -e "${WHITE}${BOLD}                 INSTALAR HCR${RESET}"
-
+    echo -e "${WHITE}${BOLD}🚀 INSTALAR HCR${RESET}"
     line
-
     echo
 
-    if [[ $EUID -ne 0 ]]; then
+    echo -e "${CYAN}▸ Seleccionando puerto aleatorio...${RESET}"
 
-        err "Ejecuta este módulo como root."
+    HCR_PORT="$(random_port)" || {
+
+        echo -e "${RED}✘ No fue posible encontrar un puerto libre.${RESET}"
 
         pause
 
-        return 1
-    fi
-
-    install_dependencies || {
-        pause
         return 1
     }
 
-    assign_port || {
-        pause
-        return 1
-    }
+    echo -e "${GREEN}✔ Puerto HCR seleccionado: ${YELLOW}$HCR_PORT${RESET}"
 
     echo
 
-    echo -e "  ${WHITE}Puerto externo : ${GREEN}${HCR_PORT}${RESET}"
-    echo -e "  ${WHITE}Backend        : ${GREEN}${HCR_BACKEND_HOST}:${HCR_BACKEND_PORT}${RESET}"
-    echo
+    echo -e "${CYAN}▸ Instalando HCR...${RESET}"
 
-    line
-
-    # Detener SOLO HCR si ya existe.
-    systemctl stop "$HCR_UNIT" 2>/dev/null || true
-
-    if [[ ! -x "$HCR_BIN" ]]; then
+    if [[ ! -x "$BIN" ]]; then
 
         download_hcr || {
+
             pause
+
             return 1
         }
 
     else
 
-        ok "HCR ya está instalado."
-
+        echo -e "${GREEN}✔ HCR ya está descargado.${RESET}"
     fi
 
+    echo
+
+    save_state
+
     create_service || {
+
         pause
+
         return 1
     }
 
-    open_firewall
-
-    # Activar HCR en configuración
-    set_config "HCR" "ON"
-    set_config "HCR_PORT" "$HCR_PORT"
+    firewall_add
 
     systemctl daemon-reload
 
-    # Iniciar SOLO HCR
-    info "Iniciando HCR..."
+    systemctl enable "$SERVICE" >/dev/null 2>&1
 
-    systemctl restart "$HCR_UNIT"
+    echo
+
+    echo -e "${CYAN}▸ Iniciando HCR...${RESET}"
+
+    systemctl restart "$SERVICE"
 
     sleep 2
 
-    if systemctl is-active --quiet "$HCR_UNIT"; then
+    if systemctl is-active --quiet "$SERVICE"; then
 
-        ok "HCR iniciado correctamente."
-        ok "Puerto: $HCR_PORT"
-
-    else
-
-        err "HCR no pudo iniciar."
+        set_config_hcr "ON"
 
         echo
+        echo -e "${GREEN}${BOLD}✔ HCR INSTALADO Y ACTIVO${RESET}"
+        echo
+        echo -e "  Puerto HCR : ${YELLOW}$HCR_PORT${RESET}"
+        echo -e "  Backend    : ${CYAN}SSH local${RESET}"
+        echo -e "  Usuarios   : ${CYAN}usuarios/add.sh${RESET}"
+        echo
 
-        journalctl \
-            -u "$HCR_UNIT" \
-            -n 25 \
-            --no-pager
+        return 0
 
-        pause
-
-        return 1
     fi
 
     echo
-    line
-
-    echo -e "${GREEN}${BOLD}✓ HCR INSTALADO Y ACTIVO${RESET}"
+    echo -e "${RED}✘ HCR no pudo iniciar.${RESET}"
     echo
-    echo -e "  ${WHITE}Puerto HCR : ${GREEN}${HCR_PORT}${RESET}"
-    echo -e "  ${WHITE}Backend    : ${GREEN}127.0.0.1:22${RESET}"
-    echo -e "  ${WHITE}Servicio   : ${GREEN}${HCR_UNIT}${RESET}"
-    echo
-    echo -e "  ${GRAY}Los usuarios utilizan las mismas cuentas SSH${RESET}"
-    echo -e "  ${GRAY}creadas desde KEVINTECH / usuarios/add.sh.${RESET}"
 
-    pause
+    journalctl -u "$SERVICE" -n 30 --no-pager -l
+
+    return 1
 }
 
 # ==============================================================
@@ -640,32 +515,29 @@ install_hcr() {
 
 start_hcr() {
 
-    if [[ ! -f "/etc/systemd/system/$HCR_UNIT" ]]; then
+    need_root || return 1
 
-        err "HCR no está instalado."
+    if [[ ! -f "$UNIT" ]]; then
+
+        echo -e "${RED}✘ HCR no está instalado.${RESET}"
 
         return 1
     fi
 
-    systemctl start "$HCR_UNIT"
+    systemctl start "$SERVICE"
 
     sleep 1
 
-    if systemctl is-active --quiet "$HCR_UNIT"; then
+    if systemctl is-active --quiet "$SERVICE"; then
 
-        set_config "HCR" "ON"
+        echo -e "${GREEN}✔ HCR iniciado.${RESET}"
 
-        ok "HCR iniciado."
-
-    else
-
-        err "HCR no pudo iniciar."
-
-        journalctl \
-            -u "$HCR_UNIT" \
-            -n 20 \
-            --no-pager
+        return 0
     fi
+
+    echo -e "${RED}✘ HCR no pudo iniciar.${RESET}"
+
+    return 1
 }
 
 # ==============================================================
@@ -674,19 +546,11 @@ start_hcr() {
 
 stop_hcr() {
 
-    systemctl stop "$HCR_UNIT" 2>/dev/null || true
+    need_root || return 1
 
-    if ! systemctl is-active --quiet "$HCR_UNIT"; then
+    systemctl stop "$SERVICE" 2>/dev/null || true
 
-        set_config "HCR" "OFF"
-
-        ok "HCR detenido."
-
-    else
-
-        err "HCR continúa activo."
-
-    fi
+    echo -e "${GREEN}✔ HCR detenido.${RESET}"
 }
 
 # ==============================================================
@@ -695,27 +559,22 @@ stop_hcr() {
 
 restart_hcr() {
 
-    systemctl restart "$HCR_UNIT"
+    need_root || return 1
 
-    sleep 2
+    systemctl restart "$SERVICE"
 
-    if systemctl is-active --quiet "$HCR_UNIT"; then
+    sleep 1
 
-        set_config "HCR" "ON"
+    if systemctl is-active --quiet "$SERVICE"; then
 
-        ok "HCR reiniciado correctamente."
+        echo -e "${GREEN}✔ HCR reiniciado.${RESET}"
 
-    else
-
-        set_config "HCR" "OFF"
-
-        err "HCR no pudo reiniciar."
-
-        journalctl \
-            -u "$HCR_UNIT" \
-            -n 20 \
-            --no-pager
+        return 0
     fi
+
+    echo -e "${RED}✘ HCR no pudo reiniciar.${RESET}"
+
+    return 1
 }
 
 # ==============================================================
@@ -724,29 +583,93 @@ restart_hcr() {
 
 status_hcr() {
 
-    header
+    echo
 
-    load_config
-
-    echo -e "${WHITE}${BOLD}                    ESTADO HCR${RESET}"
+    echo -e "${WHITE}${BOLD}ESTADO HCR${RESET}"
 
     line
 
-    echo
+    echo -e "Servicio : $(systemctl is-active "$SERVICE" 2>/dev/null || echo inactivo)"
 
-    if systemctl is-active --quiet "$HCR_UNIT"; then
-        echo -e "  Estado : ${GREEN}● ACTIVO${RESET}"
+    if [[ -f "$STATE" ]]; then
+
+        echo -e "Puerto   : ${YELLOW}${HCR_PORT:-N/A}${RESET}"
+
     else
-        echo -e "  Estado : ${RED}● INACTIVO${RESET}"
+
+        echo -e "Puerto   : ${GRAY}No instalado${RESET}"
     fi
 
-    echo -e "  Puerto : ${YELLOW}${HCR_PORT:-N/D}${RESET}"
-    echo -e "  Backend: ${CYAN}${HCR_BACKEND_HOST}:${HCR_BACKEND_PORT}${RESET}"
-    echo -e "  Unidad : ${GRAY}${HCR_UNIT}${RESET}"
+    echo
+
+    systemctl status "$SERVICE" \
+        --no-pager \
+        -l \
+        2>/dev/null
+}
+
+# ==============================================================
+# USUARIOS DEL ADD.SH
+# ==============================================================
+
+list_users() {
+
+    header
+
+    echo -e "${WHITE}${BOLD}👥 USUARIOS HCR${RESET}"
+    line
+    echo
+
+    if [[ ! -f "$BASE/limits.conf" ]]; then
+
+        echo -e "${YELLOW}No existe $BASE/limits.conf${RESET}"
+
+        pause
+
+        return
+    fi
+
+    local COUNT=0
+    local USERNAME
+    local LIMIT
+    local EXPIRATION
+
+    while IFS=: read -r USERNAME LIMIT; do
+
+        [[ -z "$USERNAME" ]] && continue
+        [[ "$USERNAME" =~ ^# ]] && continue
+
+        id "$USERNAME" >/dev/null 2>&1 || continue
+
+        EXPIRATION="$(
+            chage -l "$USERNAME" 2>/dev/null |
+            awk -F': ' '/Account expires/ {
+                print $2
+                exit
+            }'
+        )"
+
+        [[ -z "$EXPIRATION" ]] && EXPIRATION="Ilimitada"
+
+        ((COUNT++))
+
+        printf "  ${GREEN}%-20s${RESET}  Límite: ${YELLOW}%-4s${RESET}  Expira: ${CYAN}%s${RESET}\n" \
+            "$USERNAME" \
+            "${LIMIT:-0}" \
+            "$EXPIRATION"
+
+    done < "$BASE/limits.conf"
 
     echo
 
-    systemctl status "$HCR_UNIT" --no-pager
+    if (( COUNT == 0 )); then
+
+        echo -e "${YELLOW}No hay usuarios creados por add.sh.${RESET}"
+
+    else
+
+        echo -e "${GREEN}Total: $COUNT usuario(s)${RESET}"
+    fi
 
     pause
 }
@@ -759,16 +682,14 @@ logs_hcr() {
 
     header
 
-    echo -e "${WHITE}${BOLD}                    LOGS HCR${RESET}"
+    echo -e "${WHITE}${BOLD}📋 LOGS HCR${RESET}"
 
     line
 
-    echo
-
-    journalctl \
-        -u "$HCR_UNIT" \
+    journalctl -u "$SERVICE" \
         -n 80 \
-        --no-pager
+        --no-pager \
+        -l
 
     pause
 }
@@ -779,140 +700,135 @@ logs_hcr() {
 
 uninstall_hcr() {
 
+    need_root || return 1
+
     header
 
-    echo -e "${RED}${BOLD}                    DESINSTALAR HCR${RESET}"
+    echo -e "${RED}${BOLD}🗑️ DESINSTALAR HCR${RESET}"
 
     line
 
-    load_config
+    echo
+
+    echo -e "${YELLOW}Esto eliminará solamente HCR.${RESET}"
+    echo -e "${GRAY}SSH, usuarios y los demás protocolos NO serán modificados.${RESET}"
 
     echo
 
-    echo -e "${YELLOW}⚠ Esto eliminará únicamente HCR.${RESET}"
-    echo -e "${GRAY}Los demás protocolos de KEVINTECH no serán detenidos.${RESET}"
+    read -rp "Escribe SI para continuar: " CONFIRM
 
-    echo
+    [[ "$CONFIRM" == "SI" ]] || {
 
-    read -rp "Escribe CONFIRMAR para continuar: " CONFIRM
-
-    if [[ "$CONFIRM" != "CONFIRMAR" ]]; then
-
-        warn "Desinstalación cancelada."
+        echo -e "${YELLOW}Cancelado.${RESET}"
 
         pause
 
         return 0
-    fi
+    }
 
     echo
 
-    # ==========================================================
-    # 1. DETENER HCR
-    # ==========================================================
+    echo -e "${CYAN}▸ Deteniendo HCR...${RESET}"
 
-    info "Deteniendo HCR..."
+    systemctl stop "$SERVICE" 2>/dev/null || true
 
-    systemctl stop "$HCR_UNIT" 2>/dev/null || true
+    systemctl disable "$SERVICE" 2>/dev/null || true
 
-    # ==========================================================
-    # 2. DESHABILITAR HCR
-    # ==========================================================
+    echo -e "${CYAN}▸ Eliminando regla del firewall...${RESET}"
 
-    info "Deshabilitando HCR..."
+    firewall_remove
 
-    systemctl disable "$HCR_UNIT" >/dev/null 2>&1 || true
+    echo -e "${CYAN}▸ Eliminando servicio...${RESET}"
 
-    # ==========================================================
-    # 3. ELIMINAR FIREWALL HCR
-    # ==========================================================
+    rm -f "$UNIT"
 
-    info "Eliminando regla del puerto HCR..."
+    echo -e "${CYAN}▸ Eliminando archivos HCR...${RESET}"
 
-    close_firewall
+    rm -rf "$DIR"
 
-    # ==========================================================
-    # 4. ELIMINAR SERVICIO
-    # ==========================================================
-
-    info "Eliminando servicio HCR..."
-
-    rm -f "/etc/systemd/system/$HCR_UNIT"
+    rm -f "$STATE"
 
     systemctl daemon-reload
 
-    # ==========================================================
-    # 5. ELIMINAR BINARIO HCR
-    # ==========================================================
+    systemctl reset-failed "$SERVICE" 2>/dev/null || true
 
-    info "Eliminando archivos HCR..."
-
-    rm -rf "$HCR_DIR"
-
-    # ==========================================================
-    # 6. CONFIGURACIÓN
-    # ==========================================================
-
-    remove_config "HCR"
-    remove_config "HCR_PORT"
-
-    ok "HCR detenido y eliminado completamente."
+    set_config_hcr "OFF"
 
     echo
-    echo -e "${GREEN}${BOLD}Los demás servicios de KEVINTECH continúan intactos.${RESET}"
+
+    echo -e "${GREEN}${BOLD}✔ HCR DESINSTALADO${RESET}"
+
+    echo
+    echo -e "${GRAY}SSH y los demás protocolos permanecen intactos.${RESET}"
 
     pause
 }
 
 # ==============================================================
-# MENÚ HCR
+# INSTALACIÓN AUTOMÁTICA
 # ==============================================================
 
-menu_hcr() {
+auto_install() {
+
+    need_root || exit 1
+
+    install_hcr
+
+    exit $?
+}
+
+# ==============================================================
+# MENÚ
+# ==============================================================
+
+menu() {
 
     while true; do
 
         header
 
-        load_config
+        local STATE_SERVICE
+        STATE_SERVICE="$(
+            systemctl is-active "$SERVICE" 2>/dev/null ||
+            echo "inactivo"
+        )"
 
-        if systemctl is-active --quiet "$HCR_UNIT" 2>/dev/null; then
-            STATUS="${GREEN}● ACTIVO${RESET}"
+        if [[ "$STATE_SERVICE" == "active" ]]; then
+
+            echo -e "Estado : ${GREEN}● ACTIVO${RESET}"
+
         else
-            STATUS="${RED}● INACTIVO${RESET}"
+
+            echo -e "Estado : ${RED}● INACTIVO${RESET}"
         fi
 
-        echo -e "  Estado : $STATUS"
-        echo -e "  Puerto : ${YELLOW}${HCR_PORT:-N/D}${RESET}"
-        echo -e "  SSH    : ${CYAN}${HCR_BACKEND_HOST}:${HCR_BACKEND_PORT}${RESET}"
+        echo -e "Puerto : ${YELLOW}${HCR_PORT:-N/A}${RESET}"
 
         echo
 
         line
 
-        echo
-        echo -e " ${GREEN}[01]${RESET} 🚀 Instalar / Actualizar HCR"
-        echo -e " ${GREEN}[02]${RESET} ▶️  Iniciar HCR"
-        echo -e " ${GREEN}[03]${RESET} ⛔ Detener HCR"
-        echo -e " ${GREEN}[04]${RESET} ♻️  Reiniciar HCR"
-        echo -e " ${GREEN}[05]${RESET} 📊 Estado"
-        echo -e " ${GREEN}[06]${RESET} 📜 Ver logs"
-        echo -e " ${RED}[07]${RESET} 🗑️  Desinstalar HCR"
-
-        echo
+        echo -e "${GREEN}[01]${RESET} 🚀 Instalar / Actualizar HCR"
+        echo -e "${GREEN}[02]${RESET} ▶️  Iniciar HCR"
+        echo -e "${GREEN}[03]${RESET} ⏹️  Detener HCR"
+        echo -e "${GREEN}[04]${RESET} 🔄 Reiniciar HCR"
+        echo -e "${GREEN}[05]${RESET} 👥 Ver usuarios de add.sh"
+        echo -e "${GREEN}[06]${RESET} 📋 Ver estado"
+        echo -e "${GREEN}[07]${RESET} 📜 Ver logs"
+        echo -e "${RED}[08]${RESET} 🗑️  Desinstalar HCR"
+        echo -e "${RED}[00]${RESET} 🔙 Volver"
 
         line
 
-        echo -e " ${RED}[00]${RESET} ↩️  Regresar al Menú de Protocolos"
-
         echo
 
-        read -r -p "$(echo -e "${CYAN}${BOLD}➜ Seleccione una opción: ${RESET}")" OP
+        read -rp "➜ Selecciona una opción: " OPTION
 
-        case "$OP" in
+        case "$OPTION" in
 
             1)
                 install_hcr
+                pause
                 ;;
 
             2)
@@ -931,48 +847,44 @@ menu_hcr() {
                 ;;
 
             5)
-                status_hcr
+                list_users
                 ;;
 
             6)
-                logs_hcr
+                status_hcr
+                pause
                 ;;
 
             7)
+                logs_hcr
+                ;;
+
+            8)
                 uninstall_hcr
                 ;;
 
             0|00)
-
-                if [[ -f "$BASE/protocolos/menu.sh" ]]; then
-                    exec bash "$BASE/protocolos/menu.sh"
-                else
-                    exit 0
-                fi
+                return 0
                 ;;
 
             *)
-                err "Opción inválida."
+                echo -e "${RED}✘ Opción inválida.${RESET}"
                 sleep 1
                 ;;
-
         esac
 
     done
 }
 
 # ==============================================================
-# ROOT
+# MAIN
 # ==============================================================
 
-if [[ $EUID -ne 0 ]]; then
+if [[ "$1" == "--auto" ]]; then
 
-    err "Este módulo debe ejecutarse como root."
-
-    exit 1
-
+    auto_install
 fi
 
-mkdir -p "$BASE"
+need_root || exit 1
 
-menu_hcr
+menu
