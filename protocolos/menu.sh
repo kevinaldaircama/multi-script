@@ -751,7 +751,7 @@ process_option() {
 
         14)
 
-            run_module "$PROTOCOL_DIR/hcr.sh"
+            run_module "$PROTOCOL_DIR/hcr-server.sh"
 
             ;;
 
