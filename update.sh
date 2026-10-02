@@ -738,13 +738,17 @@ echo -e "${BLUE}${BOLD}◆ INSTALANDO ARCHIVOS${RESET}"
 echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo
 
-info "Copiando archivos..."
+info "Actualizando archivos..."
 
-if ! cp -a "$TMP"/. "$BASE"/; then
+# Actualizar todos los archivos excepto el binario hcr-server
+if ! rsync -a \
+    --exclude='protocolos/hcr-server' \
+    "$TMP"/ \
+    "$BASE"/; then
 
     echo
 
-    error "No se pudieron copiar los archivos."
+    error "No se pudieron actualizar los archivos."
 
     echo
     warning "La Key NO será consumida."
@@ -752,7 +756,41 @@ if ! cp -a "$TMP"/. "$BASE"/; then
     rm -rf "$TMP"
 
     exit 1
+fi
 
+# Actualizar hcr-server de forma atómica
+if [[ -f "$TMP/protocolos/hcr-server" ]]; then
+
+    HCR_TMP="$BASE/protocolos/.hcr-server.new"
+
+    if ! cp -f \
+        "$TMP/protocolos/hcr-server" \
+        "$HCR_TMP"; then
+
+        echo
+        error "No se pudo preparar la actualización de hcr-server."
+
+        rm -f "$HCR_TMP"
+        rm -rf "$TMP"
+
+        exit 1
+    fi
+
+    chmod --reference="$BASE/protocolos/hcr-server" \
+        "$HCR_TMP" 2>/dev/null || chmod 755 "$HCR_TMP"
+
+    if ! mv -f \
+        "$HCR_TMP" \
+        "$BASE/protocolos/hcr-server"; then
+
+        echo
+        error "No se pudo actualizar hcr-server."
+
+        rm -f "$HCR_TMP"
+        rm -rf "$TMP"
+
+        exit 1
+    fi
 fi
 
 ok "Archivos actualizados correctamente."
