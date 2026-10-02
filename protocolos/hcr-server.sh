@@ -247,23 +247,9 @@ install_hcr() {
         return
     fi
 
-    local OLD_PORT
-    OLD_PORT="$(get_port)"
+    local PORT="8880"
 
-    echo -e "${WHITE}Puerto actual:${RESET} ${YELLOW}${OLD_PORT}${RESET}"
-    echo
-
-    read -rp "$(echo -e "${CYAN}Puerto HCR [ENTER=${OLD_PORT}]: ${RESET}")" PORT
-
-    [[ -z "$PORT" ]] && PORT="$OLD_PORT"
-
-    if ! [[ "$PORT" =~ ^[0-9]+$ ]] ||
-       (( PORT < 1 || PORT > 65535 )); then
-
-        error_msg "Puerto inválido."
-        pause
-        return
-    fi
+echo -e "${WHITE}Puerto HCR:${RESET} ${GREEN}${PORT}${RESET}"
 
     save_port "$PORT"
 
