@@ -513,12 +513,12 @@ get_statuses() {
         "${BHTTP:-OFF}")
 
     # ----------------------------------------------------------
-    # HCR
-    # ----------------------------------------------------------
+# HCR
+# ----------------------------------------------------------
 
-    HCR_STATUS=$(status_service \
-        "hcr-server" \
-        "${HCR:-OFF}")
+HCR_STATUS=$(systemctl is-active --quiet hcr-server 2>/dev/null \
+    && echo -e "${GREEN}● ON${RESET}" \
+    || echo -e "${GRAY}● OFF${RESET}")
 
     ZIPVPN_STATUS=$(status_config \
         "${ZIPVPN:-OFF}")
