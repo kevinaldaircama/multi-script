@@ -192,8 +192,9 @@ while true; do
         "Cambiar contraseña Root"
 
     printf "  ${GREEN}${BOLD}[07]${RESET} 🔎 %-35s\n" \
-        "Scanner Host / Dominio"
-
+        "generador de payloads"
+printf "  ${GREEN}${BOLD}[08]${RESET} 🔎 %-35s\n" \
+        "generador de payloads"
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar al Menú de Protocolos${RESET}"
@@ -232,6 +233,8 @@ while true; do
 
         7)
             run_tool "$BASE/herramientas/scanner.sh"
+8)
+            run_tool "$BASE/herramientas/generador de payloads.sh"
             ;;
 
         0)
