@@ -231,7 +231,7 @@ while true; do
 
     option 9  "🔄" "Actualizar KevinTech"
     option 10 "📊" "Información del Servidor"
-    option 11 "📊" "Información del Servidor"
+    option 11 "📊" "menu de hwid"
 
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
@@ -327,7 +327,7 @@ while true; do
             pause
             ;;
 11)
-            run_module "backup.sh"
+            run_module "hwid/menu.sh"
             ;;
 
 
