@@ -1,175 +1,395 @@
 #!/bin/bash
 
-# ╔══════════════════════════════════════╗
-# ║     KEVIN TECH - PAYLOAD GENERATOR   ║
-# ╚══════════════════════════════════════╝
+# ==============================================================
+#                 🛡️ KEVINTECH MULTI SCRIPT
+#                    PAYLOAD GENERATOR
+# ==============================================================
+# Archivo: /etc/kevintech/herramientas/generador de payloads.sh
+# ==============================================================
 
-clear
+VERSION="2.0"
 
-while true; do
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "        ⚡ GENERADOR DE PAYLOADS"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# ==============================================================
+# COLORES
+# ==============================================================
+
+RESET="\033[0m"
+BOLD="\033[1m"
+
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+MAGENTA="\033[35m"
+CYAN="\033[36m"
+WHITE="\033[37m"
+
+# ==============================================================
+# LIMPIAR PANTALLA
+# No depende del comando "clear"
+# ==============================================================
+
+limpiar() {
+    printf '\033c'
+}
+
+# ==============================================================
+# PAUSA
+# ==============================================================
+
+pausa() {
     echo
-    echo "1) HTTP GET"
-    echo "2) HTTP POST"
-    echo "3) WebSocket"
-    echo "4) TCP"
-    echo "5) UDP"
-    echo "6) Payload personalizado"
-    echo "7) Salir"
+    read -rp "Presiona ENTER para continuar..."
+}
+
+# ==============================================================
+# CABECERA
+# ==============================================================
+
+cabecera() {
+    limpiar
+
+    echo -e "${CYAN}${BOLD}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "              🛡️ KEVINTECH MULTI SCRIPT"
+    echo "                 ⚡ PAYLOAD GENERATOR"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${RESET}"
+}
+
+# ==============================================================
+# TITULO
+# ==============================================================
+
+titulo() {
+    echo -e "${CYAN}${BOLD}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "                 $1"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${RESET}"
+}
+
+# ==============================================================
+# RESULTADO
+# ==============================================================
+
+mostrar_payload() {
+    local tipo="$1"
+    local payload="$2"
+
     echo
-    read -rp "Selecciona una opción: " OPC
+    echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}${BOLD}║              📦 PAYLOAD GENERADO                ║${RESET}"
+    echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
 
-    case "$OPC" in
+    echo
+    echo -e "${YELLOW}Tipo:${RESET} ${WHITE}${tipo}${RESET}"
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-        1)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "             HTTP GET"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -rp "Host: " HOST
-            read -rp "Ruta: " PATH
+    printf '%s\n' "$payload"
 
-            [ -z "$PATH" ] && PATH="/"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
 
-            PAYLOAD="GET ${PATH} HTTP/1.1
+# ==============================================================
+# VALIDAR HOST
+# ==============================================================
+
+validar_host() {
+    if [ -z "$1" ]; then
+        echo -e "${RED}❌ El Host no puede estar vacío.${RESET}"
+        return 1
+    fi
+
+    return 0
+}
+
+# ==============================================================
+# HTTP GET
+# ==============================================================
+
+http_get() {
+    cabecera
+    titulo "🌐 HTTP GET"
+
+    echo -e "${WHITE}Genera una petición HTTP GET.${RESET}"
+    echo
+
+    read -rp "🌐 Host: " HOST
+    validar_host "$HOST" || {
+        pausa
+        return
+    }
+
+    read -rp "📁 Ruta [/]: " RUTA
+
+    [ -z "$RUTA" ] && RUTA="/"
+
+    # Añadir "/" automáticamente si el usuario escribe "api"
+    case "$RUTA" in
+        /*) ;;
+        *) RUTA="/$RUTA" ;;
+    esac
+
+    PAYLOAD="GET ${RUTA} HTTP/1.1
 Host: ${HOST}
 User-Agent: KevinTech
 Connection: keep-alive"
 
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s\n' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
+    mostrar_payload "HTTP GET" "$PAYLOAD"
 
-        2)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "             HTTP POST"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -rp "Host: " HOST
-            read -rp "Ruta: " PATH
-            read -rp "Datos: " DATA
+    pausa
+}
 
-            [ -z "$PATH" ] && PATH="/"
+# ==============================================================
+# HTTP POST
+# ==============================================================
 
-            PAYLOAD="POST ${PATH} HTTP/1.1
+http_post() {
+    cabecera
+    titulo "📨 HTTP POST"
+
+    echo -e "${WHITE}Genera una petición HTTP POST.${RESET}"
+    echo
+
+    read -rp "🌐 Host: " HOST
+    validar_host "$HOST" || {
+        pausa
+        return
+    }
+
+    read -rp "📁 Ruta [/]: " RUTA
+    [ -z "$RUTA" ] && RUTA="/"
+
+    case "$RUTA" in
+        /*) ;;
+        *) RUTA="/$RUTA" ;;
+    esac
+
+    read -rp "📝 Datos POST: " DATA
+
+    LENGTH=${#DATA}
+
+    PAYLOAD="POST ${RUTA} HTTP/1.1
 Host: ${HOST}
-Content-Type: application/x-www-form-urlencoded
-Content-Length: ${#DATA}
 User-Agent: KevinTech
+Content-Type: application/x-www-form-urlencoded
+Content-Length: ${LENGTH}
 Connection: keep-alive
 
 ${DATA}"
 
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s\n' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
+    mostrar_payload "HTTP POST" "$PAYLOAD"
 
-        3)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "             WEBSOCKET"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -rp "Host: " HOST
-            read -rp "Ruta: " PATH
+    pausa
+}
 
-            [ -z "$PATH" ] && PATH="/"
+# ==============================================================
+# WEBSOCKET
+# ==============================================================
 
-            PAYLOAD="GET ${PATH} HTTP/1.1
+websocket() {
+    cabecera
+    titulo "🔌 WEBSOCKET"
+
+    echo -e "${WHITE}Genera los encabezados de una solicitud WebSocket.${RESET}"
+    echo
+
+    read -rp "🌐 Host: " HOST
+    validar_host "$HOST" || {
+        pausa
+        return
+    }
+
+    read -rp "📁 Ruta [/]: " RUTA
+    [ -z "$RUTA" ] && RUTA="/"
+
+    case "$RUTA" in
+        /*) ;;
+        *) RUTA="/$RUTA" ;;
+    esac
+
+    PAYLOAD="GET ${RUTA} HTTP/1.1
 Host: ${HOST}
 Upgrade: websocket
 Connection: Upgrade
 Sec-WebSocket-Version: 13
 User-Agent: KevinTech"
 
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s\n' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
+    mostrar_payload "WebSocket" "$PAYLOAD"
 
-        4)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "                TCP"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -rp "Host: " HOST
-            read -rp "Puerto: " PORT
-            read -rp "Mensaje: " DATA
+    pausa
+}
 
-            PAYLOAD="TCP://${HOST}:${PORT}
-${DATA}"
+# ==============================================================
+# TCP
+# ==============================================================
 
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s\n' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
+tcp_payload() {
+    cabecera
+    titulo "🔗 TCP"
 
-        5)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "                UDP"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            read -rp "Host: " HOST
-            read -rp "Puerto: " PORT
-            read -rp "Mensaje: " DATA
-
-            PAYLOAD="UDP://${HOST}:${PORT}
-${DATA}"
-
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s\n' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
-
-        6)
-            clear
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "        PAYLOAD PERSONALIZADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Escribe tu payload."
-            echo "Para terminar utiliza una línea con FIN."
-            echo
-
-            PAYLOAD=""
-
-            while IFS= read -r LINEA; do
-                [ "$LINEA" = "FIN" ] && break
-                PAYLOAD="${PAYLOAD}${LINEA}"$'\n'
-            done
-
-            echo
-            echo "📦 PAYLOAD GENERADO"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            printf '%s' "$PAYLOAD"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            ;;
-
-        7)
-            clear
-            exit 0
-            ;;
-
-        *)
-            echo
-            echo "❌ Opción inválida."
-            sleep 2
-            ;;
-    esac
-
+    echo -e "${WHITE}Genera una plantilla de datos TCP.${RESET}"
     echo
-    read -rp "Presiona ENTER para continuar..."
-    clear
-done
+
+    read -rp "🌐 Host: " HOST
+    validar_host "$HOST" || {
+        pausa
+        return
+    }
+
+    read -rp "🔢 Puerto: " PORT
+    read -rp "📝 Datos: " DATA
+
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo -e "${RED}❌ Puerto inválido.${RESET}"
+        pausa
+        return
+    fi
+
+    PAYLOAD="TCP://${HOST}:${PORT}
+${DATA}"
+
+    mostrar_payload "TCP" "$PAYLOAD"
+
+    pausa
+}
+
+# ==============================================================
+# UDP
+# ==============================================================
+
+udp_payload() {
+    cabecera
+    titulo "📡 UDP"
+
+    echo -e "${WHITE}Genera una plantilla de datos UDP.${RESET}"
+    echo
+
+    read -rp "🌐 Host: " HOST
+    validar_host "$HOST" || {
+        pausa
+        return
+    }
+
+    read -rp "🔢 Puerto: " PORT
+    read -rp "📝 Datos: " DATA
+
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo -e "${RED}❌ Puerto inválido.${RESET}"
+        pausa
+        return
+    fi
+
+    PAYLOAD="UDP://${HOST}:${PORT}
+${DATA}"
+
+    mostrar_payload "UDP" "$PAYLOAD"
+
+    pausa
+}
+
+# ==============================================================
+# PERSONALIZADO
+# ==============================================================
+
+personalizado() {
+    cabecera
+    titulo "🛠️ PAYLOAD PERSONALIZADO"
+
+    echo -e "${WHITE}Escribe el contenido del payload.${RESET}"
+    echo -e "${YELLOW}Escribe FIN en una línea independiente para terminar.${RESET}"
+    echo
+
+    PAYLOAD=""
+
+    while IFS= read -r LINEA; do
+        [ "$LINEA" = "FIN" ] && break
+        PAYLOAD="${PAYLOAD}${LINEA}"$'\n'
+    done
+
+    if [ -z "$PAYLOAD" ]; then
+        echo -e "${RED}❌ No introdujiste ningún payload.${RESET}"
+        pausa
+        return
+    fi
+
+    mostrar_payload "Personalizado" "$PAYLOAD"
+
+    pausa
+}
+
+# ==============================================================
+# MENÚ PRINCIPAL
+# ==============================================================
+
+payloads() {
+    while true; do
+
+        cabecera
+
+        echo -e "${WHITE}${BOLD}Herramientas disponibles:${RESET}"
+        echo
+
+        echo -e " ${CYAN}[1]${RESET} 🌐 HTTP GET"
+        echo -e " ${CYAN}[2]${RESET} 📨 HTTP POST"
+        echo -e " ${CYAN}[3]${RESET} 🔌 WebSocket"
+        echo -e " ${CYAN}[4]${RESET} 🔗 TCP"
+        echo -e " ${CYAN}[5]${RESET} 📡 UDP"
+        echo -e " ${CYAN}[6]${RESET} 🛠️  Payload personalizado"
+        echo -e " ${RED}[0]${RESET} 🚪 Salir"
+
+        echo
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+        read -rp "➜ Selecciona una opción: " OPCION
+
+        case "$OPCION" in
+
+            1)
+                http_get
+                ;;
+
+            2)
+                http_post
+                ;;
+
+            3)
+                websocket
+                ;;
+
+            4)
+                tcp_payload
+                ;;
+
+            5)
+                udp_payload
+                ;;
+
+            6)
+                personalizado
+                ;;
+
+            0)
+                limpiar
+                echo -e "${GREEN}✓ Saliendo del Generador de Payloads...${RESET}"
+                echo
+                exit 0
+                ;;
+
+            *)
+                echo
+                echo -e "${RED}❌ Opción inválida.${RESET}"
+                sleep 1
+                ;;
+
+        esac
+    done
+}
+
+# ==============================================================
+# INICIO
+# ==============================================================
+
+payloads
