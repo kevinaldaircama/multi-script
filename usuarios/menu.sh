@@ -231,7 +231,7 @@ while true; do
 
     option 9  "🔄" "Actualizar KevinTech"
     option 10 "📊" "Información del Servidor"
-    option 11 "📊" "menu de hwid"
+    option 11 "✉️" "menu de hwid-dispositivos"
 
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
