@@ -39,6 +39,7 @@ if [[ $EUID -ne 0 ]]; then
     echo
     echo -e "${WHITE}Este panel requiere permisos de root.${RESET}"
     echo
+
     exit 1
 fi
 
@@ -192,9 +193,11 @@ while true; do
         "Cambiar contraseña Root"
 
     printf "  ${GREEN}${BOLD}[07]${RESET} 🔎 %-35s\n" \
-        "generador de payloads"
-printf "  ${GREEN}${BOLD}[08]${RESET} 🔎 %-35s\n" \
-        "generador de payloads"
+        "Scanner"
+
+    printf "  ${GREEN}${BOLD}[08]${RESET} ⚡ %-35s\n" \
+        "Generador de Payloads"
+
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
     echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  ${WHITE}Regresar al Menú de Protocolos${RESET}"
@@ -233,7 +236,9 @@ printf "  ${GREEN}${BOLD}[08]${RESET} 🔎 %-35s\n" \
 
         7)
             run_tool "$BASE/herramientas/scanner.sh"
-8)
+            ;;
+
+        8)
             run_tool "$BASE/herramientas/generador de payloads.sh"
             ;;
 
