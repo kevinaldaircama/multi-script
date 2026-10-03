@@ -32,10 +32,6 @@ line() {
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
 }
 
-title() {
-    echo -e "${CYAN}║${RESET} ${MAGENTA}${BOLD}$1${RESET}"
-}
-
 pause() {
     echo
     read -rp "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
@@ -46,12 +42,16 @@ run_module() {
     local file="$1"
 
     if [[ ! -f "$BASE/usuarios/$file" ]]; then
+
         echo
         echo -e "${RED}✘ Módulo no encontrado:${RESET}"
         echo -e "${GRAY}$BASE/usuarios/$file${RESET}"
+
         pause
         return
     fi
+
+    chmod +x "$BASE/usuarios/$file" 2>/dev/null
 
     bash "$BASE/usuarios/$file"
 
@@ -177,9 +177,207 @@ option() {
         "$1" "$2" "$3"
 }
 
-# =========================
+# =========================================================
+# SUBMENÚ CREAR CUENTA
+# =========================================================
+
+menu_crear() {
+
+    while true; do
+
+        clear
+
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}👤 CREAR CUENTA${RESET}                    ${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}  [01]${RESET} 👤 Crear Cuenta Normal"
+        echo -e "${GREEN}${BOLD}  [02]${RESET} 🔐 Crear Cuenta HWID"
+        echo
+        echo -e "${RED}${BOLD}  [00]${RESET} ↩️ Regresar"
+        echo
+
+        read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" op
+
+        case "$op" in
+
+            1)
+                run_module "add.sh"
+                ;;
+
+            2)
+                run_module "hwid/add.sh"
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                echo
+                echo -e "${RED}✘ Opción inválida${RESET}"
+                sleep 1
+                ;;
+
+        esac
+
+    done
+}
+
+# =========================================================
+# SUBMENÚ RENOVAR / EDITAR
+# =========================================================
+
+menu_editar() {
+
+    while true; do
+
+        clear
+
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${RESET}          ${MAGENTA}${BOLD}♻️ RENOVAR / EDITAR CUENTA${RESET}             ${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}  [01]${RESET} ✏️ Editar / Renovar Cuenta"
+        echo -e "${GREEN}${BOLD}  [02]${RESET} 🔐 Cambiar HWID"
+        echo -e "${GREEN}${BOLD}  [03]${RESET} 🔄 Renovar HWID"
+        echo -e "${GREEN}${BOLD}  [04]${RESET} ⏳ Límite HWID"
+        echo
+        echo -e "${RED}${BOLD}  [00]${RESET} ↩️ Regresar"
+        echo
+
+        read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" op
+
+        case "$op" in
+
+            1)
+                run_module "edit.sh"
+                ;;
+
+            2)
+                run_module "hwid/change.sh"
+                ;;
+
+            3)
+                run_module "hwid/renew.sh"
+                ;;
+
+            4)
+                run_module "hwid/limit.sh"
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                echo
+                echo -e "${RED}✘ Opción inválida${RESET}"
+                sleep 1
+                ;;
+
+        esac
+
+    done
+}
+
+# =========================================================
+# SUBMENÚ BLOQUEAR
+# =========================================================
+
+menu_bloquear() {
+
+    while true; do
+
+        clear
+
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${RESET}              ${MAGENTA}${BOLD}🔒 BLOQUEAR CUENTA${RESET}                 ${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}  [01]${RESET} 🔒 Bloquear / Desbloquear Cuenta"
+        echo -e "${GREEN}${BOLD}  [02]${RESET} 🔐 Bloquear HWID"
+        echo
+        echo -e "${RED}${BOLD}  [00]${RESET} ↩️ Regresar"
+        echo
+
+        read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" op
+
+        case "$op" in
+
+            1)
+                run_module "block.sh"
+                ;;
+
+            2)
+                run_module "hwid/bloqueos"
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                echo
+                echo -e "${RED}✘ Opción inválida${RESET}"
+                sleep 1
+                ;;
+
+        esac
+
+    done
+}
+
+# =========================================================
+# SUBMENÚ LISTAS
+# =========================================================
+
+menu_listas() {
+
+    while true; do
+
+        clear
+
+        echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${RESET}               ${MAGENTA}${BOLD}📋 LISTA DE USUARIOS${RESET}               ${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+        echo
+        echo -e "${GREEN}${BOLD}  [01]${RESET} 👤 Lista de Usuarios"
+        echo -e "${GREEN}${BOLD}  [02]${RESET} 🔐 Lista de Usuarios HWID"
+        echo
+        echo -e "${RED}${BOLD}  [00]${RESET} ↩️ Regresar"
+        echo
+
+        read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" op
+
+        case "$op" in
+
+            1)
+                run_module "list.sh"
+                ;;
+
+            2)
+                run_module "hwid/list.sh"
+                ;;
+
+            0)
+                return
+                ;;
+
+            *)
+                echo
+                echo -e "${RED}✘ Opción inválida${RESET}"
+                sleep 1
+                ;;
+
+        esac
+
+    done
+}
+
+# =========================================================
 # VERIFICAR ROOT
-# =========================
+# =========================================================
 
 if [[ $EUID -ne 0 ]]; then
 
@@ -197,9 +395,9 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# =========================
+# =========================================================
 # MENÚ PRINCIPAL
-# =========================
+# =========================================================
 
 while true; do
 
@@ -211,7 +409,7 @@ while true; do
     echo -e "${BLUE}${BOLD}  🔐 GESTIÓN DE USUARIOS SSH${RESET}"
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
 
-    option 1  "👤" "Crear Usuario SSH"
+    option 1  "👤" "Crear Cuenta"
     option 2  "🗑️" "Eliminar Usuario"
     option 3  "♻️" "Renovar / Editar Usuario"
     option 4  "📋" "Lista de Usuarios"
@@ -234,7 +432,6 @@ while true; do
 
     echo
     echo -e "${GRAY}  ─────────────────────────────────────────────────────────${RESET}"
-
     echo -e "  ${RED}${BOLD}[00]${RESET} 🚪 ${WHITE}Volver al Menú Principal${RESET}"
 
     echo
@@ -245,37 +442,73 @@ while true; do
 
     case "$op" in
 
+        # =========================
+        # CREAR CUENTA
+        # =========================
+
         1)
-            run_module "add.sh"
+            menu_crear
             ;;
+
+        # =========================
+        # ELIMINAR
+        # =========================
 
         2)
             run_module "delete.sh"
             ;;
 
+        # =========================
+        # RENOVAR / EDITAR
+        # =========================
+
         3)
-            run_module "edit.sh"
+            menu_editar
             ;;
 
+        # =========================
+        # LISTAS
+        # =========================
+
         4)
-            run_module "list.sh"
+            menu_listas
             ;;
+
+        # =========================
+        # ONLINE
+        # =========================
 
         5)
             run_module "online.sh"
             ;;
 
+        # =========================
+        # BANNER
+        # =========================
+
         6)
             run_module "banner.sh"
             ;;
 
+        # =========================
+        # BLOQUEAR
+        # =========================
+
         7)
-            run_module "block.sh"
+            menu_bloquear
             ;;
+
+        # =========================
+        # BACKUP
+        # =========================
 
         8)
             run_module "backup.sh"
             ;;
+
+        # =========================
+        # ACTUALIZAR
+        # =========================
 
         9)
 
@@ -295,6 +528,10 @@ while true; do
 
             pause
             ;;
+
+        # =========================
+        # INFORMACIÓN
+        # =========================
 
         10)
 
@@ -326,6 +563,10 @@ while true; do
             pause
             ;;
 
+        # =========================
+        # SALIR
+        # =========================
+
         0)
 
             clear
@@ -343,7 +584,6 @@ while true; do
             ;;
 
         *)
-
             echo
             echo -e "  ${RED}${BOLD}✘ Opción inválida${RESET}"
             sleep 1
