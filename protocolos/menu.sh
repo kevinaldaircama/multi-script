@@ -671,7 +671,7 @@ process_option() {
 
         2|02)
 
-            run_module "$PROTOCOL_DIR/zipvpn.sh"
+            run_module "$PROTOCOL_DIR/zivpn.sh"
 
             ;;
 
