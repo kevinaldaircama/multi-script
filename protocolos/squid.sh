@@ -1,708 +1,234 @@
 #!/bin/bash
 
-# ==============================================================
-#              KEVINTECH MULTI SCRIPT
-#                    SQUID PROXY
-# ==============================================================
-# Versión: 1.2 Premium
-# Puerto: 3128
-# Autenticación: PAM
-# Usuarios: cuentas del sistema / usuarios SSH
-# ==============================================================
+#==================================================
+# kevintech Network Premium
+# Squid Proxy Manager — Proxy HTTP (puerto 3128)
+# Gestión: instalar · desinstalar · estado · reiniciar
+#==================================================
 
-RESET="\e[0m"
-BOLD="\e[1m"
-
-CYAN="\e[1;96m"
-BLUE="\e[1;94m"
-GREEN="\e[1;92m"
-YELLOW="\e[1;93m"
-MAGENTA="\e[1;95m"
-RED="\e[1;91m"
-WHITE="\e[1;97m"
-GRAY="\e[1;90m"
-
-# ==============================================================
-# CONFIGURACIÓN
-# ==============================================================
-
+# ── i18n shim (auto) ───────────────────────────────
+if ! declare -F trx >/dev/null 2>&1; then trx() { printf '%s' "$1"; }; fi
+# ─────────────────────────────────────────────────────────
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
 
-SQUID_PORT="3128"
+[[ -f "$CONFIG" ]] || { echo "❌ No existe $CONFIG"; exit 1; }
+source "$CONFIG"
+
+
+# Sistema de animación/progreso + detección de estado
+[[ -f "$BASE/lib/anim.sh" ]] && source "$BASE/lib/anim.sh"
+
+CYAN="${MV_CYN:-\e[1;96m}"
+GREEN="${MV_GRN:-\e[1;92m}"
+RED="${MV_RED:-\e[1;91m}"
+YELLOW="${MV_YLW:-\e[1;93m}"
+WHITE="${MV_WHT:-\e[1;97m}"
+RESET="${MV_R:-\e[0m}"
+
+SQUID_PORT="${SQUID_PORT:-3128}"
 SQUID_CONF="/etc/squid/squid.conf"
-PAM_CONF="/etc/pam.d/squid"
 
-SERVICE="squid"
+# Navegación
+[[ -f "$BASE/lib/nav.sh" ]] && source "$BASE/lib/nav.sh"
 
-SQUID_VERSION="1.2 Premium"
+#--------------------------------------------------
+# Puerto real configurado en squid (si existe)
+#--------------------------------------------------
+get_squid_port() {
+    grep -oE '^[[:space:]]*http_port[[:space:]]+[0-9]+' "$SQUID_CONF" 2>/dev/null | grep -oE '[0-9]+' | head -1
+}
 
-mkdir -p "$BASE"
-touch "$CONFIG"
-
-[[ -f "$CONFIG" ]] && source "$CONFIG"
-
-# ==============================================================
-# ROOT
-# ==============================================================
-
-if [[ $EUID -ne 0 ]]; then
-
+#--------------------------------------------------
+# Instalar
+#--------------------------------------------------
+install_squid() {
     clear
+mv_brand_header "INSTALAR SQUID"
+    anim_step "Instalando squid"
+    anim_run "apt update" apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y squid 2>&1 | tail -2
 
-    echo
-    echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${RED}${BOLD}║                    ACCESO DENEGADO                         ║${RESET}"
-    echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
+    if command -v squid >/dev/null 2>&1 || systemctl list-unit-files 2>/dev/null | grep -q "^squid.service"; then
+        systemctl enable squid >/dev/null 2>&1
+        svc_restart_anim squid "Arrancando Squid"
 
-    echo -e "${WHITE}Squid requiere permisos de root.${RESET}"
-    echo
+        # Puerto real
+        PORT_REAL=$(get_squid_port)
+        [[ -z "$PORT_REAL" ]] && PORT_REAL="$SQUID_PORT"
 
-    exit 1
-fi
-
-# ==============================================================
-# FUNCIONES VISUALES
-# ==============================================================
-
-line() {
-    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
-}
-
-separator() {
-    echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
-}
-
-ok() {
-    echo -e "${GREEN}${BOLD}✔${RESET} ${WHITE}$1${RESET}"
-}
-
-error_msg() {
-    echo -e "${RED}${BOLD}✘${RESET} ${WHITE}$1${RESET}"
-}
-
-warning() {
-    echo -e "${YELLOW}${BOLD}⚠${RESET} ${WHITE}$1${RESET}"
-}
-
-info() {
-    echo -e "${CYAN}➜${RESET} ${WHITE}$1${RESET}"
-}
-
-pause() {
-
-    echo
-
-    read -rp \
-        "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
-}
-
-# ==============================================================
-# ESTADO
-# ==============================================================
-
-service_active() {
-
-    systemctl is-active --quiet "$SERVICE" 2>/dev/null
-
-}
-
-# ==============================================================
-# CABECERA
-# ==============================================================
-
-show_header() {
-
-    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                 ${MAGENTA}🌐 SQUID PROXY MANAGER${RESET}                ${CYAN}${BOLD}║${RESET}"
-    echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════════════╣${RESET}"
-
-    if service_active; then
-
-        echo -e "${CYAN}║${RESET}  ${WHITE}Estado:${RESET}       ${GREEN}${BOLD}● ACTIVO${RESET}"
-
-    else
-
-        echo -e "${CYAN}║${RESET}  ${WHITE}Estado:${RESET}       ${RED}${BOLD}● INACTIVO${RESET}"
-
-    fi
-
-    echo -e "${CYAN}║${RESET}  ${WHITE}Puerto:${RESET}       ${YELLOW}${SQUID_PORT}${RESET}"
-    echo -e "${CYAN}║${RESET}  ${WHITE}Autenticación:${RESET} ${GREEN}PAM${RESET}"
-    echo -e "${CYAN}║${RESET}  ${WHITE}Usuarios:${RESET}     ${GREEN}Sistema / SSH${RESET}"
-    echo -e "${CYAN}║${RESET}  ${WHITE}Versión:${RESET}      ${MAGENTA}${SQUID_VERSION}${RESET}"
-
-    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-}
-
-# ==============================================================
-# GUARDAR ESTADO EN CONFIG
-# ==============================================================
-
-set_squid_status() {
-
-    local STATUS="$1"
-
-    if grep -q '^SQUID=' "$CONFIG" 2>/dev/null; then
-
-        sed -i "s/^SQUID=.*/SQUID=$STATUS/" "$CONFIG"
-
-    else
-
-        echo "SQUID=$STATUS" >> "$CONFIG"
-
-    fi
-}
-
-# ==============================================================
-# BUSCAR PAM HELPER
-# ==============================================================
-
-buscar_pam_helper() {
-
-    local HELPER=""
-
-    local PATHS=(
-        "/usr/lib/squid/basic_pam_auth"
-        "/usr/lib/squid/basic_pam_auth"
-        "/usr/libexec/squid/basic_pam_auth"
-    )
-
-    for FILE in "${PATHS[@]}"; do
-
-        if [[ -x "$FILE" ]]; then
-
-            HELPER="$FILE"
-            break
-
+        # Abrir firewall
+        iptables -C INPUT -p tcp --dport "$PORT_REAL" -j ACCEPT 2>/dev/null \
+            || iptables -A INPUT -p tcp --dport "$PORT_REAL" -j ACCEPT
+        if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+            ufw allow "$PORT_REAL/tcp" >/dev/null 2>&1
         fi
 
-    done
+        sed -i '/^SQUID=/d' "$CONFIG"
+        echo "SQUID=ON" >> "$CONFIG"
+        sed -i '/^SQUID_PORT=/d' "$CONFIG"
+        echo "SQUID_PORT=$PORT_REAL" >> "$CONFIG"
+        source "$CONFIG"
 
-    if [[ -z "$HELPER" ]] &&
-       command -v basic_pam_auth >/dev/null 2>&1; then
-
-        HELPER="$(command -v basic_pam_auth)"
-
+        echo ""
+        echo -e "${GREEN}✅ Squid instalado (puerto $PORT_REAL).${RESET}"
+        echo -e "${WHITE}   Usa el proxy como: IP-$PORT_REAL (HTTP)${RESET}"
+    else
+        echo -e "${RED}❌ Error instalando Squid.${RESET}"
     fi
-
-    echo "$HELPER"
+    sleep 3
 }
 
-# ==============================================================
-# INSTALAR DEPENDENCIAS
-# ==============================================================
-
-instalar_dependencias() {
-
-    info "Actualizando repositorios..."
-
-    export DEBIAN_FRONTEND=noninteractive
-
-    if ! apt-get update -qq; then
-
-        error_msg "No fue posible actualizar los repositorios."
-
-        return 1
-
-    fi
-
-    info "Instalando Squid..."
-
-    if ! apt-get install -y squid >/dev/null 2>&1; then
-
-        error_msg "No fue posible instalar Squid."
-
-        return 1
-
-    fi
-
-    ok "Squid instalado."
-
-    return 0
-}
-
-# ==============================================================
-# CONFIGURAR PAM
-# ==============================================================
-
-configurar_pam() {
-
-    info "Configurando autenticación PAM..."
-
-    cat > "$PAM_CONF" <<'EOF'
-# =========================================================
-# KEVINTECH MULTI SCRIPT
-# SQUID PAM AUTHENTICATION
-# =========================================================
-
-auth       include common-auth
-account    include common-account
-EOF
-
-    chmod 644 "$PAM_CONF"
-
-    ok "Autenticación PAM configurada."
-}
-
-# ==============================================================
-# CONFIGURAR SQUID
-# ==============================================================
-
-configurar_squid() {
-
-    local PAM_HELPER
-
-    PAM_HELPER="$(buscar_pam_helper)"
-
-    if [[ -z "$PAM_HELPER" ]]; then
-
-        error_msg "No se encontró basic_pam_auth."
-
-        echo
-        echo -e "${YELLOW}El paquete de Squid instalado no contiene${RESET}"
-        echo -e "${YELLOW}el helper necesario para autenticación PAM.${RESET}"
-        echo
-
-        return 1
-    fi
-
-    configurar_pam
-
-    # Backup de configuración existente
-
-    if [[ -f "$SQUID_CONF" ]]; then
-
-        cp "$SQUID_CONF" \
-           "${SQUID_CONF}.backup" 2>/dev/null
-
-    fi
-
-    cat > "$SQUID_CONF" <<EOF
-# =========================================================
-# KEVINTECH MULTI SCRIPT PREMIUM
-# SQUID PROXY
-# =========================================================
-
-http_port $SQUID_PORT
-
-visible_hostname KevinTech-Squid
-
-# =========================================================
-# AUTENTICACIÓN PAM
-# =========================================================
-
-auth_param basic program $PAM_HELPER squid
-
-auth_param basic children 5
-
-auth_param basic realm KevinTech-Proxy
-
-auth_param basic credentialsttl 2 hours
-
-auth_param basic casesensitive off
-
-acl usuarios_validos proxy_auth REQUIRED
-
-# =========================================================
-# PUERTOS
-# =========================================================
-
-acl SSL_ports port 443
-
-acl Safe_ports port 80
-acl Safe_ports port 21
-acl Safe_ports port 443
-acl Safe_ports port 70
-acl Safe_ports port 210
-acl Safe_ports port 280
-acl Safe_ports port 488
-acl Safe_ports port 591
-acl Safe_ports port 777
-acl Safe_ports port 1025-65535
-
-# =========================================================
-# ACCESO
-# =========================================================
-
-http_access deny !Safe_ports
-
-http_access deny CONNECT !SSL_ports
-
-http_access allow usuarios_validos
-
-http_access deny all
-
-# =========================================================
-# PRIVACIDAD
-# =========================================================
-
-via off
-
-forwarded_for delete
-
-request_header_access Via deny all
-
-request_header_access X-Forwarded-For deny all
-
-# =========================================================
-# CACHE
-# =========================================================
-
-cache deny all
-
-# =========================================================
-# LOG
-# =========================================================
-
-access_log /var/log/squid/access.log
-
-cache_log /var/log/squid/cache.log
-EOF
-
-    info "Comprobando configuración..."
-
-    if ! squid -k parse >/dev/null 2>&1; then
-
-        error_msg "La configuración de Squid contiene errores."
-
-        echo
-
-        squid -k parse 2>&1
-
-        return 1
-
-    fi
-
-    ok "Configuración de Squid correcta."
-
-    return 0
-}
-
-# ==============================================================
-# INICIAR SERVICIO
-# ==============================================================
-
-iniciar_squid() {
-
-    info "Habilitando servicio..."
-
-    systemctl daemon-reload
-
-    systemctl enable "$SERVICE" >/dev/null 2>&1
-
-    info "Iniciando Squid..."
-
-    if ! systemctl restart "$SERVICE"; then
-
-        set_squid_status "OFF"
-
-        error_msg "Squid no pudo iniciar."
-
-        echo
-
-        journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null
-
-        return 1
-
-    fi
-
-    sleep 2
-
-    if service_active; then
-
-        set_squid_status "ON"
-
-        ok "Squid está activo."
-
-        return 0
-
-    fi
-
-    set_squid_status "OFF"
-
-    error_msg "Squid no quedó activo."
-
-    echo
-
-    journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null
-
-    return 1
-}
-
-# ==============================================================
-# INSTALAR / ACTUALIZAR
-# ==============================================================
-
-instalar_squid() {
-
+#--------------------------------------------------
+# Desinstalar
+#--------------------------------------------------
+remove_squid() {
     clear
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${WHITE}          🗑 ELIMINAR SQUID${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+    read -rp "$(trx '¿Eliminar Squid? (s/n): ')" R
+    [[ ! "$R" =~ ^[Ss]$ ]] && return
 
-    echo
-    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                  ${GREEN}🌐 SQUID PROXY${RESET}                     ${CYAN}${BOLD}║${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                 ${GRAY}INSTALL / UPDATE${RESET}                    ${CYAN}${BOLD}║${RESET}"
-    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
+    anim_step "Desinstalando Squid"
+    anim_run "Detener y deshabilitar" bash -c "systemctl stop squid 2>/dev/null; systemctl disable squid 2>/dev/null"
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y squid >/dev/null 2>&1
 
-    echo -e "${WHITE}Configuración:${RESET}"
-    echo
-    echo -e "  ${GRAY}•${RESET} Puerto        : ${GREEN}${SQUID_PORT}${RESET}"
-    echo -e "  ${GRAY}•${RESET} Autenticación : ${GREEN}PAM${RESET}"
-    echo -e "  ${GRAY}•${RESET} Usuarios      : ${GREEN}Sistema / SSH${RESET}"
-    echo -e "  ${GRAY}•${RESET} Proxy         : ${GREEN}Squid${RESET}"
-    echo
+    sed -i '/^SQUID=/d' "$CONFIG"
+    echo "SQUID=OFF" >> "$CONFIG"
+    sed -i '/^SQUID_PORT=/d' "$CONFIG"
+    source "$CONFIG"
 
-    separator
-
-    if ! instalar_dependencias; then
-
-        pause
-        return 1
-
-    fi
-
-    echo
-
-    if ! configurar_squid; then
-
-        pause
-        return 1
-
-    fi
-
-    echo
-
-    if ! iniciar_squid; then
-
-        pause
-        return 1
-
-    fi
-
-    echo
-
-    echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${GREEN}${BOLD}║              ✔ SQUID INSTALADO CORRECTAMENTE              ║${RESET}"
-    echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    echo -e "  ${WHITE}Puerto:${RESET}       ${GREEN}${SQUID_PORT}${RESET}"
-    echo -e "  ${WHITE}Estado:${RESET}       ${GREEN}● ACTIVO${RESET}"
-    echo -e "  ${WHITE}Autenticación:${RESET} ${GREEN}PAM${RESET}"
-    echo -e "  ${WHITE}Usuarios:${RESET}     ${GREEN}cuentas del sistema${RESET}"
-    echo
-
-    echo -e "${GRAY}Squid utiliza las mismas cuentas creadas por tu sistema SSH.${RESET}"
-    echo -e "${GRAY}No mantiene una base de usuarios independiente.${RESET}"
-
-    pause
+    echo ""
+    echo "$(trx '✅ Squid eliminado.')"
+    sleep 3
 }
 
-# ==============================================================
-# LOG
-# ==============================================================
+#--------------------------------------------------
+# Reiniciar
+#--------------------------------------------------
+restart_squid() {
+    svc_restart_anim squid "Reiniciando Squid"
+    sleep 3
+}
 
-ver_log() {
-
+#--------------------------------------------------
+# Cambiar puerto
+#--------------------------------------------------
+change_port() {
     clear
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${WHITE}          🔀 CAMBIAR PUERTO SQUID${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+    read -rp "$(trx ' Nuevo puerto HTTP: ')" NP
+    [[ "$NP" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ Puerto inválido.${RESET}"; sleep 2; return; }
 
-    echo
-    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                   ${MAGENTA}📋 SQUID SERVER LOG${RESET}               ${CYAN}${BOLD}║${RESET}"
-    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
+    sed -i "s|^[[:space:]]*http_port[[:space:]]*[0-9]*|http_port $NP|" "$SQUID_CONF" 2>/dev/null
+    # Si no existía http_port, agregarlo
+    grep -q '^http_port' "$SQUID_CONF" 2>/dev/null || {
+        sed -i '1i http_port '"$NP" "$SQUID_CONF"
+    }
 
-    if ! systemctl list-unit-files \
-        | grep -q "^${SERVICE}.service"; then
+    systemctl restart squid
 
-        warning "Squid todavía no está instalado."
-        pause
-        return
+    # Abrir nuevo puerto en firewall, cerrar el anterior
+    iptables -C INPUT -p tcp --dport "$NP" -j ACCEPT 2>/dev/null \
+        || iptables -A INPUT -p tcp --dport "$NP" -j ACCEPT
+    iptables -D INPUT -p tcp --dport "$SQUID_PORT" -j ACCEPT 2>/dev/null
 
+    sed -i '/^SQUID_PORT=/d' "$CONFIG"
+    echo "SQUID_PORT=$NP" >> "$CONFIG"
+    source "$CONFIG"
+
+    if systemctl is-active --quiet squid; then
+        echo -e "${GREEN}✅ Puerto cambiado a $NP y abierto en firewall.${RESET}"
+        echo -e "${WHITE}   Proxy: IP-$NP (HTTP)${RESET}"
+    else
+        echo -e "${RED}❌ Squid no levantó con el nuevo puerto. Revisa /etc/squid/squid.conf${RESET}"
     fi
-
-    echo -e "${GRAY}Mostrando las últimas 100 líneas...${RESET}"
-    echo
-
-    line
-
-    journalctl -u "$SERVICE" \
-        -n 100 \
-        --no-pager \
-        --full
-
-    line
-
-    echo
-    echo -e "${GRAY}También puedes consultar:${RESET}"
-    echo -e "${WHITE}/var/log/squid/access.log${RESET}"
-    echo -e "${WHITE}/var/log/squid/cache.log${RESET}"
-
-    pause
+    sleep 3
 }
 
-# ==============================================================
-# DESINSTALAR
-# ==============================================================
-
-desinstalar_squid() {
-
+#--------------------------------------------------
+# Estado
+#--------------------------------------------------
+status_squid() {
     clear
-
-    echo
-    echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${RED}${BOLD}║${RESET}                ${RED}🗑 DESINSTALAR SQUID${RESET}                  ${RED}${BOLD}║${RESET}"
-    echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo
-
-    if ! dpkg -s squid >/dev/null 2>&1; then
-
-        warning "Squid no está instalado."
-
-        pause
-        return
-
-    fi
-
-    echo -e "${YELLOW}Se eliminará:${RESET}"
-    echo
-    echo -e "  ${GRAY}•${RESET} Paquete Squid"
-    echo -e "  ${GRAY}•${RESET} Servicio Squid"
-    echo -e "  ${GRAY}•${RESET} Configuración PAM de Squid"
-    echo
-
-    echo -e "${GRAY}Las cuentas SSH del sistema NO serán eliminadas.${RESET}"
-    echo
-
-    read -rp \
-        "$(echo -e "${YELLOW}${BOLD}¿Confirmar desinstalación? [s/N]: ${RESET}")" CONFIRM
-
-    case "${CONFIRM,,}" in
-
-        s|si|sí|y|yes)
-
-            echo
-
-            info "Deteniendo Squid..."
-
-            systemctl disable --now "$SERVICE" \
-                >/dev/null 2>&1 || true
-
-            info "Eliminando Squid..."
-
-            if apt-get remove -y squid >/dev/null 2>&1; then
-
-                rm -f "$PAM_CONF"
-
-                set_squid_status "OFF"
-
-                echo
-
-                echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-                echo -e "${GREEN}${BOLD}║              ✔ SQUID DESINSTALADO                          ║${RESET}"
-                echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-            else
-
-                error_msg "No fue posible eliminar Squid."
-
-            fi
-
-            ;;
-
-        *)
-
-            echo
-
-            warning "Operación cancelada."
-
-            ;;
-
-    esac
-
-    pause
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${WHITE}          📊 ESTADO SQUID${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+    systemctl status squid --no-pager 2>/dev/null | head -12
+    echo ""
+    echo -e " Puerto HTTP configurado : ${GREEN}$(get_squid_port || echo "$SQUID_PORT")${RESET}"
+    echo ""
+    read -n1 -r -p "$(trx 'Presione una tecla...')"
 }
 
-# ==============================================================
-# MODO AUTOMÁTICO
-# ==============================================================
+#==================================================
+# Modo CLI (automatización/headless)
+#==================================================
+case "${1:-}" in
+    --install) install_squid; exit $? ;;
+    ""|*) ;;
+esac
 
-if [[ "$1" == "--auto" ]]; then
-
-    instalar_squid
-
-    exit $?
-
-fi
-
-# ==============================================================
-# MENÚ PRINCIPAL
-# ==============================================================
-
+#==================================================
+# Menú Principal
+#==================================================
 while true; do
 
-    clear
+clear
+source "$CONFIG"
 
-    show_header
+if systemctl is-active --quiet squid; then
+    STATUS="${GREEN}🟢 ACTIVO${RESET}"
+else
+    STATUS="${RED}🔴 DETENIDO${RESET}"
+fi
 
-    echo
-    echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN SQUID${RESET}"
+mv_header "🌐 Squid Proxy" "$(trx 'Proxy HTTP · puerto ')$(get_squid_port || echo "$SQUID_PORT")" "v6.2"
+kevintech_contacts 2>/dev/null || true
 
-    line
+echo -e " Estado : $STATUS"
+echo ""
 
-    echo -e "  ${GREEN}${BOLD}[01]${RESET}  🚀 ${WHITE}Instalar / Actualizar${RESET}"
-    echo -e "  ${GREEN}${BOLD}[02]${RESET}  📋 ${WHITE}Ver Log${RESET}"
-    echo -e "  ${RED}${BOLD}[03]${RESET}  🗑️  ${WHITE}Desinstalar${RESET}"
+if [[ "$SQUID" == "ON" ]]; then
+    LBL=("Desinstalar Squid" "Reiniciar Servicio" "Cambiar Puerto" "Ver Estado")
+else
+    LBL=("Instalar Squid")
+fi
+SEL=$(nav_pick "► Opción:" "${LBL[@]}" "↩ Regresar") || SEL=0
+[[ $SEL -eq $((${#LBL[@]}+1)) ]] && SEL=0
+OP="$SEL"
 
-    echo
-    separator
-
-    echo -e "  ${RED}${BOLD}[00]${RESET}  ↩️  ${WHITE}Regresar${RESET}"
-
-    echo
-    echo -e "${GRAY}  KevinTech Multi Script • Squid Proxy • ${SQUID_VERSION}${RESET}"
-    echo
-
-    read -rp \
-        "$(echo -e "${CYAN}${BOLD}  ➜ Selecciona una opción: ${RESET}")" OPCION
-
-    case "$OPCION" in
-
-        1|01)
-
-            instalar_squid
-
-            ;;
-
-        2|02)
-
-            ver_log
-
-            ;;
-
-        3|03)
-
-            desinstalar_squid
-
-            ;;
-
-        0|00)
-
-            clear
-            exit 0
-
-            ;;
-
-        *)
-
-            echo
-            error_msg "Opción inválida."
-            sleep 1
-
-            ;;
-
-    esac
+case "$OP" in
+1)
+    if [[ "$SQUID" == "ON" ]]; then
+        remove_squid
+    else
+        install_squid
+    fi
+;;
+2)
+    [[ "$SQUID" == "ON" ]] && restart_squid
+;;
+3)
+    [[ "$SQUID" == "ON" ]] && change_port
+;;
+4)
+    [[ "$SQUID" == "ON" ]] && status_squid
+;;
+0)
+    exec bash "$BASE/protocolos/menu.sh"
+;;
+*)
+    echo ""
+    echo "$(trx '❌ Opción inválida.')"
+    sleep 2
+;;
+esac
 
 done
