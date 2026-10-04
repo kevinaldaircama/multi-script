@@ -1,36 +1,30 @@
 #!/bin/bash
 
-#=========================================================
-# KevinTech Multi Script Premium
-# Módulo: Squid Proxy
-# Versión: 1.1 Premium
-#
-# FUNCIONES:
-# - Squid Proxy puerto 3128
-# - Utiliza usuarios creados por usuarios/add.sh
-# - Autenticación mediante PAM
-# - Misma contraseña utilizada por SSH
-# - Sin base de usuarios duplicada
-# - Integración config.conf
-#=========================================================
+# ==============================================================
+#              KEVINTECH MULTI SCRIPT
+#                    SQUID PROXY
+# ==============================================================
+# Versión: 1.2 Premium
+# Puerto: 3128
+# Autenticación: PAM
+# Usuarios: cuentas del sistema / usuarios SSH
+# ==============================================================
 
-#========================#
-#         COLORES
-#========================#
+RESET="\e[0m"
+BOLD="\e[1m"
 
-GREEN='\e[1;92m'
-RED='\e[1;91m'
-YELLOW='\e[1;93m'
-BLUE='\e[1;94m'
-CYAN='\e[1;96m'
-MAGENTA='\e[1;95m'
-WHITE='\e[1;97m'
-GRAY='\e[1;90m'
-RESET='\e[0m'
+CYAN="\e[1;96m"
+BLUE="\e[1;94m"
+GREEN="\e[1;92m"
+YELLOW="\e[1;93m"
+MAGENTA="\e[1;95m"
+RED="\e[1;91m"
+WHITE="\e[1;97m"
+GRAY="\e[1;90m"
 
-#========================#
-#      CONFIGURACIÓN
-#========================#
+# ==============================================================
+# CONFIGURACIÓN
+# ==============================================================
 
 BASE="/etc/kevintech"
 CONFIG="$BASE/config.conf"
@@ -41,20 +35,59 @@ PAM_CONF="/etc/pam.d/squid"
 
 SERVICE="squid"
 
-mkdir -p "$BASE"
+SQUID_VERSION="1.2 Premium"
 
+mkdir -p "$BASE"
 touch "$CONFIG"
 
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
-#=========================================================
-# FUNCIONES
-#=========================================================
+# ==============================================================
+# ROOT
+# ==============================================================
+
+if [[ $EUID -ne 0 ]]; then
+
+    clear
+
+    echo
+    echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}${BOLD}║                    ACCESO DENEGADO                         ║${RESET}"
+    echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    echo -e "${WHITE}Squid requiere permisos de root.${RESET}"
+    echo
+
+    exit 1
+fi
+
+# ==============================================================
+# FUNCIONES VISUALES
+# ==============================================================
 
 line() {
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+}
 
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+separator() {
+    echo -e "${GRAY}──────────────────────────────────────────────────────────────${RESET}"
+}
 
+ok() {
+    echo -e "${GREEN}${BOLD}✔${RESET} ${WHITE}$1${RESET}"
+}
+
+error_msg() {
+    echo -e "${RED}${BOLD}✘${RESET} ${WHITE}$1${RESET}"
+}
+
+warning() {
+    echo -e "${YELLOW}${BOLD}⚠${RESET} ${WHITE}$1${RESET}"
+}
+
+info() {
+    echo -e "${CYAN}➜${RESET} ${WHITE}$1${RESET}"
 }
 
 pause() {
@@ -62,37 +95,50 @@ pause() {
     echo
 
     read -rp \
-        "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
+        "$(echo -e "${GRAY}Presiona ENTER para continuar...${RESET}")"
+}
+
+# ==============================================================
+# ESTADO
+# ==============================================================
+
+service_active() {
+
+    systemctl is-active --quiet "$SERVICE" 2>/dev/null
 
 }
 
-msg_ok() {
+# ==============================================================
+# CABECERA
+# ==============================================================
 
-    echo -e "${GREEN}✔ $1${RESET}"
+show_header() {
 
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                 ${MAGENTA}🌐 SQUID PROXY MANAGER${RESET}                ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    if service_active; then
+
+        echo -e "${CYAN}║${RESET}  ${WHITE}Estado:${RESET}       ${GREEN}${BOLD}● ACTIVO${RESET}"
+
+    else
+
+        echo -e "${CYAN}║${RESET}  ${WHITE}Estado:${RESET}       ${RED}${BOLD}● INACTIVO${RESET}"
+
+    fi
+
+    echo -e "${CYAN}║${RESET}  ${WHITE}Puerto:${RESET}       ${YELLOW}${SQUID_PORT}${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Autenticación:${RESET} ${GREEN}PAM${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Usuarios:${RESET}     ${GREEN}Sistema / SSH${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Versión:${RESET}      ${MAGENTA}${SQUID_VERSION}${RESET}"
+
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
 }
 
-msg_error() {
-
-    echo -e "${RED}✘ $1${RESET}"
-
-}
-
-msg_info() {
-
-    echo -e "${CYAN}➜ $1${RESET}"
-
-}
-
-msg_warn() {
-
-    echo -e "${YELLOW}⚠ $1${RESET}"
-
-}
-
-#=========================================================
-# CONFIG.CONF
-#=========================================================
+# ==============================================================
+# GUARDAR ESTADO EN CONFIG
+# ==============================================================
 
 set_squid_status() {
 
@@ -107,49 +153,35 @@ set_squid_status() {
         echo "SQUID=$STATUS" >> "$CONFIG"
 
     fi
-
 }
 
-#=========================================================
-# INSTALAR DEPENDENCIAS
-#=========================================================
-
-instalar_dependencias() {
-
-    msg_info "Instalando Squid..."
-
-    export DEBIAN_FRONTEND=noninteractive
-
-    apt-get update -qq
-
-    if ! apt-get install -y squid >/dev/null 2>&1; then
-
-        msg_error "No fue posible instalar Squid."
-
-        return 1
-
-    fi
-
-    return 0
-}
-
-#=========================================================
-# BUSCAR BASIC PAM AUTH
-#=========================================================
+# ==============================================================
+# BUSCAR PAM HELPER
+# ==============================================================
 
 buscar_pam_helper() {
 
     local HELPER=""
 
-    if [[ -x "/usr/lib/squid/basic_pam_auth" ]]; then
+    local PATHS=(
+        "/usr/lib/squid/basic_pam_auth"
+        "/usr/lib/squid/basic_pam_auth"
+        "/usr/libexec/squid/basic_pam_auth"
+    )
 
-        HELPER="/usr/lib/squid/basic_pam_auth"
+    for FILE in "${PATHS[@]}"; do
 
-    elif [[ -x "/usr/lib/squid/basic_pam_auth" ]]; then
+        if [[ -x "$FILE" ]]; then
 
-        HELPER="/usr/lib/squid/basic_pam_auth"
+            HELPER="$FILE"
+            break
 
-    elif command -v basic_pam_auth >/dev/null 2>&1; then
+        fi
+
+    done
+
+    if [[ -z "$HELPER" ]] &&
+       command -v basic_pam_auth >/dev/null 2>&1; then
 
         HELPER="$(command -v basic_pam_auth)"
 
@@ -158,19 +190,52 @@ buscar_pam_helper() {
     echo "$HELPER"
 }
 
-#=========================================================
+# ==============================================================
+# INSTALAR DEPENDENCIAS
+# ==============================================================
+
+instalar_dependencias() {
+
+    info "Actualizando repositorios..."
+
+    export DEBIAN_FRONTEND=noninteractive
+
+    if ! apt-get update -qq; then
+
+        error_msg "No fue posible actualizar los repositorios."
+
+        return 1
+
+    fi
+
+    info "Instalando Squid..."
+
+    if ! apt-get install -y squid >/dev/null 2>&1; then
+
+        error_msg "No fue posible instalar Squid."
+
+        return 1
+
+    fi
+
+    ok "Squid instalado."
+
+    return 0
+}
+
+# ==============================================================
 # CONFIGURAR PAM
-#=========================================================
+# ==============================================================
 
 configurar_pam() {
 
-    msg_info "Configurando autenticación PAM..."
+    info "Configurando autenticación PAM..."
 
     cat > "$PAM_CONF" <<'EOF'
-#=========================================================
-# KevinTech Multi Script
-# Squid PAM Authentication
-#=========================================================
+# =========================================================
+# KEVINTECH MULTI SCRIPT
+# SQUID PAM AUTHENTICATION
+# =========================================================
 
 auth       include common-auth
 account    include common-account
@@ -178,13 +243,12 @@ EOF
 
     chmod 644 "$PAM_CONF"
 
-    msg_ok "Autenticación PAM configurada."
-
+    ok "Autenticación PAM configurada."
 }
 
-#=========================================================
+# ==============================================================
 # CONFIGURAR SQUID
-#=========================================================
+# ==============================================================
 
 configurar_squid() {
 
@@ -194,45 +258,40 @@ configurar_squid() {
 
     if [[ -z "$PAM_HELPER" ]]; then
 
-        msg_error "No se encontró basic_pam_auth."
+        error_msg "No se encontró basic_pam_auth."
 
         echo
-
-        echo -e "${YELLOW}El paquete de Squid instalado no incluye${RESET}"
-        echo -e "${YELLOW}el helper PAM necesario para autenticar${RESET}"
-        echo -e "${YELLOW}usuarios del sistema.${RESET}"
+        echo -e "${YELLOW}El paquete de Squid instalado no contiene${RESET}"
+        echo -e "${YELLOW}el helper necesario para autenticación PAM.${RESET}"
+        echo
 
         return 1
-
     fi
 
     configurar_pam
 
+    # Backup de configuración existente
+
     if [[ -f "$SQUID_CONF" ]]; then
 
-        cp "$SQUID_CONF" "${SQUID_CONF}.backup" 2>/dev/null
+        cp "$SQUID_CONF" \
+           "${SQUID_CONF}.backup" 2>/dev/null
 
     fi
 
     cat > "$SQUID_CONF" <<EOF
-#=========================================================
-# KevinTech Multi Script Premium
+# =========================================================
+# KEVINTECH MULTI SCRIPT PREMIUM
 # SQUID PROXY
-# Puerto: $SQUID_PORT
-# Autenticación: usuarios del sistema
-#=========================================================
-
-#---------------------------------------------------------
-# PUERTO
-#---------------------------------------------------------
+# =========================================================
 
 http_port $SQUID_PORT
 
 visible_hostname KevinTech-Squid
 
-#---------------------------------------------------------
+# =========================================================
 # AUTENTICACIÓN PAM
-#---------------------------------------------------------
+# =========================================================
 
 auth_param basic program $PAM_HELPER squid
 
@@ -246,9 +305,9 @@ auth_param basic casesensitive off
 
 acl usuarios_validos proxy_auth REQUIRED
 
-#---------------------------------------------------------
-# PUERTOS SEGUROS
-#---------------------------------------------------------
+# =========================================================
+# PUERTOS
+# =========================================================
 
 acl SSL_ports port 443
 
@@ -263,9 +322,9 @@ acl Safe_ports port 591
 acl Safe_ports port 777
 acl Safe_ports port 1025-65535
 
-#---------------------------------------------------------
-# REGLAS
-#---------------------------------------------------------
+# =========================================================
+# ACCESO
+# =========================================================
 
 http_access deny !Safe_ports
 
@@ -275,9 +334,9 @@ http_access allow usuarios_validos
 
 http_access deny all
 
-#---------------------------------------------------------
+# =========================================================
 # PRIVACIDAD
-#---------------------------------------------------------
+# =========================================================
 
 via off
 
@@ -287,25 +346,26 @@ request_header_access Via deny all
 
 request_header_access X-Forwarded-For deny all
 
-#---------------------------------------------------------
+# =========================================================
 # CACHE
-#---------------------------------------------------------
+# =========================================================
 
 cache deny all
 
-#---------------------------------------------------------
+# =========================================================
 # LOG
-#---------------------------------------------------------
+# =========================================================
 
 access_log /var/log/squid/access.log
 
 cache_log /var/log/squid/cache.log
-
 EOF
+
+    info "Comprobando configuración..."
 
     if ! squid -k parse >/dev/null 2>&1; then
 
-        msg_error "La configuración de Squid contiene errores."
+        error_msg "La configuración de Squid contiene errores."
 
         echo
 
@@ -315,30 +375,46 @@ EOF
 
     fi
 
-    msg_ok "Configuración de Squid correcta."
+    ok "Configuración de Squid correcta."
 
     return 0
 }
 
-#=========================================================
-# INICIAR SQUID
-#=========================================================
+# ==============================================================
+# INICIAR SERVICIO
+# ==============================================================
 
 iniciar_squid() {
+
+    info "Habilitando servicio..."
 
     systemctl daemon-reload
 
     systemctl enable "$SERVICE" >/dev/null 2>&1
 
-    systemctl restart "$SERVICE"
+    info "Iniciando Squid..."
+
+    if ! systemctl restart "$SERVICE"; then
+
+        set_squid_status "OFF"
+
+        error_msg "Squid no pudo iniciar."
+
+        echo
+
+        journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null
+
+        return 1
+
+    fi
 
     sleep 2
 
-    if systemctl is-active --quiet "$SERVICE"; then
+    if service_active; then
 
         set_squid_status "ON"
 
-        msg_ok "Squid está activo."
+        ok "Squid está activo."
 
         return 0
 
@@ -346,34 +422,43 @@ iniciar_squid() {
 
     set_squid_status "OFF"
 
-    msg_error "Squid no pudo iniciar."
+    error_msg "Squid no quedó activo."
 
     echo
 
-    journalctl -u "$SERVICE" -n 15 --no-pager 2>/dev/null
+    journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null
 
     return 1
 }
 
-#=========================================================
-# INSTALAR SQUID
-#=========================================================
+# ==============================================================
+# INSTALAR / ACTUALIZAR
+# ==============================================================
 
 instalar_squid() {
 
     clear
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}              🌐 SQUID PROXY KEVINTECH                     ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${WHITE}                 INSTALACIÓN                               ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
     echo
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                  ${GREEN}🌐 SQUID PROXY${RESET}                     ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                 ${GRAY}INSTALL / UPDATE${RESET}                    ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    echo -e "${WHITE}Configuración:${RESET}"
+    echo
+    echo -e "  ${GRAY}•${RESET} Puerto        : ${GREEN}${SQUID_PORT}${RESET}"
+    echo -e "  ${GRAY}•${RESET} Autenticación : ${GREEN}PAM${RESET}"
+    echo -e "  ${GRAY}•${RESET} Usuarios      : ${GREEN}Sistema / SSH${RESET}"
+    echo -e "  ${GRAY}•${RESET} Proxy         : ${GREEN}Squid${RESET}"
+    echo
+
+    separator
 
     if ! instalar_dependencias; then
 
         pause
-
         return 1
 
     fi
@@ -383,7 +468,6 @@ instalar_squid() {
     if ! configurar_squid; then
 
         pause
-
         return 1
 
     fi
@@ -393,269 +477,146 @@ instalar_squid() {
     if ! iniciar_squid; then
 
         pause
-
         return 1
 
     fi
 
     echo
 
-    msg_ok "Squid instalado correctamente."
-
+    echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${GREEN}${BOLD}║              ✔ SQUID INSTALADO CORRECTAMENTE              ║${RESET}"
+    echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
 
-    echo -e "${WHITE}Puerto:${RESET} ${GREEN}$SQUID_PORT${RESET}"
-
-    echo -e "${WHITE}Usuario:${RESET} ${GREEN}usuario creado en add.sh${RESET}"
-
-    echo -e "${WHITE}Contraseña:${RESET} ${GREEN}misma contraseña SSH${RESET}"
-
+    echo -e "  ${WHITE}Puerto:${RESET}       ${GREEN}${SQUID_PORT}${RESET}"
+    echo -e "  ${WHITE}Estado:${RESET}       ${GREEN}● ACTIVO${RESET}"
+    echo -e "  ${WHITE}Autenticación:${RESET} ${GREEN}PAM${RESET}"
+    echo -e "  ${WHITE}Usuarios:${RESET}     ${GREEN}cuentas del sistema${RESET}"
     echo
 
-    echo -e "${GRAY}Squid no crea usuarios propios.${RESET}"
-
-    echo -e "${GRAY}Utiliza las cuentas del sistema mediante PAM.${RESET}"
+    echo -e "${GRAY}Squid utiliza las mismas cuentas creadas por tu sistema SSH.${RESET}"
+    echo -e "${GRAY}No mantiene una base de usuarios independiente.${RESET}"
 
     pause
 }
 
-#=========================================================
-# INICIAR
-#=========================================================
+# ==============================================================
+# LOG
+# ==============================================================
 
-op_iniciar() {
+ver_log() {
 
     clear
 
-    if ! systemctl start "$SERVICE" >/dev/null 2>&1; then
+    echo
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                   ${MAGENTA}📋 SQUID SERVER LOG${RESET}               ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 
-        msg_error "No fue posible iniciar Squid."
+    if ! systemctl list-unit-files \
+        | grep -q "^${SERVICE}.service"; then
 
+        warning "Squid todavía no está instalado."
         pause
-
         return
 
     fi
 
-    set_squid_status "ON"
+    echo -e "${GRAY}Mostrando las últimas 100 líneas...${RESET}"
+    echo
 
-    msg_ok "Squid iniciado."
+    line
+
+    journalctl -u "$SERVICE" \
+        -n 100 \
+        --no-pager \
+        --full
+
+    line
+
+    echo
+    echo -e "${GRAY}También puedes consultar:${RESET}"
+    echo -e "${WHITE}/var/log/squid/access.log${RESET}"
+    echo -e "${WHITE}/var/log/squid/cache.log${RESET}"
 
     pause
 }
 
-#=========================================================
-# DETENER
-#=========================================================
-
-op_detener() {
-
-    clear
-
-    systemctl stop "$SERVICE" >/dev/null 2>&1
-
-    set_squid_status "OFF"
-
-    msg_ok "Squid detenido."
-
-    pause
-}
-
-#=========================================================
-# REINICIAR
-#=========================================================
-
-op_reiniciar() {
-
-    clear
-
-    systemctl restart "$SERVICE" >/dev/null 2>&1
-
-    sleep 2
-
-    if systemctl is-active --quiet "$SERVICE"; then
-
-        set_squid_status "ON"
-
-        msg_ok "Squid reiniciado correctamente."
-
-    else
-
-        set_squid_status "OFF"
-
-        msg_error "Squid no pudo reiniciarse."
-
-    fi
-
-    pause
-}
-
-#=========================================================
-# USUARIOS DEL SISTEMA
-#=========================================================
-
-listar_usuarios() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}              👤 USUARIOS PARA SQUID                      ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-
-    echo -e "${GRAY}Estos usuarios son los creados desde usuarios/add.sh.${RESET}"
-
-    echo
-
-    USERS=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd)
-
-    if [[ -z "$USERS" ]]; then
-
-        msg_warn "No existen usuarios SSH."
-
-        pause
-
-        return
-
-    fi
-
-    echo -e "${GREEN}Usuarios disponibles:${RESET}"
-
-    echo
-
-    while read -r USER; do
-
-        [[ -z "$USER" ]] && continue
-
-        FECHA=$(chage -l "$USER" 2>/dev/null |
-            awk -F': ' '/Account expires/ {
-                print $2
-                exit
-            }')
-
-        [[ -z "$FECHA" ]] && FECHA="N/D"
-
-        echo -e " ${GREEN}👤${RESET} ${WHITE}$USER${RESET} ${GRAY}| Expira: $FECHA${RESET}"
-
-    done <<< "$USERS"
-
-    echo
-
-    echo -e "${GRAY}La contraseña no se muestra ni se almacena aquí.${RESET}"
-
-    echo -e "${GRAY}Squid la valida directamente mediante PAM.${RESET}"
-
-    pause
-}
-
-#=========================================================
-# VER ESTADO
-#=========================================================
-
-ver_estado() {
-
-    clear
-
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}                 📊 ESTADO SQUID                          ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
-    echo
-
-    echo -e "${WHITE}Servicio:${RESET}"
-
-    if systemctl is-active --quiet "$SERVICE"; then
-
-        echo -e " ${GREEN}● ACTIVO${RESET}"
-
-    else
-
-        echo -e " ${RED}● DETENIDO${RESET}"
-
-    fi
-
-    echo
-
-    echo -e "${WHITE}Puerto:${RESET}"
-
-    if ss -H -ltn 2>/dev/null |
-        awk -v PORT=":$SQUID_PORT" '$4 ~ PORT"$"' |
-        grep -q .; then
-
-        echo -e " ${GREEN}● $SQUID_PORT ESCUCHANDO${RESET}"
-
-    else
-
-        echo -e " ${RED}● $SQUID_PORT NO ESTÁ ESCUCHANDO${RESET}"
-
-    fi
-
-    echo
-
-    echo -e "${WHITE}KevinTech:${RESET}"
-
-    if grep -q '^SQUID=ON' "$CONFIG" 2>/dev/null; then
-
-        echo -e " ${GREEN}● SQUID=ON${RESET}"
-
-    else
-
-        echo -e " ${GRAY}● SQUID=OFF${RESET}"
-
-    fi
-
-    echo
-
-    echo -e "${WHITE}Autenticación:${RESET}"
-
-    echo -e " ${GREEN}● Usuarios del sistema / PAM${RESET}"
-
-    echo
-
-    pause
-}
-
-#=========================================================
+# ==============================================================
 # DESINSTALAR
-#=========================================================
+# ==============================================================
 
 desinstalar_squid() {
 
     clear
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${RED}                 🗑 DESINSTALAR SQUID                      ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+    echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}${BOLD}║${RESET}                ${RED}🗑 DESINSTALAR SQUID${RESET}                  ${RED}${BOLD}║${RESET}"
+    echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
 
+    if ! dpkg -s squid >/dev/null 2>&1; then
+
+        warning "Squid no está instalado."
+
+        pause
+        return
+
+    fi
+
+    echo -e "${YELLOW}Se eliminará:${RESET}"
+    echo
+    echo -e "  ${GRAY}•${RESET} Paquete Squid"
+    echo -e "  ${GRAY}•${RESET} Servicio Squid"
+    echo -e "  ${GRAY}•${RESET} Configuración PAM de Squid"
+    echo
+
+    echo -e "${GRAY}Las cuentas SSH del sistema NO serán eliminadas.${RESET}"
     echo
 
     read -rp \
-        "$(echo -e "${YELLOW}¿Deseas desinstalar Squid? [s/N]: ${RESET}")" RESPUESTA
+        "$(echo -e "${YELLOW}${BOLD}¿Confirmar desinstalación? [s/N]: ${RESET}")" CONFIRM
 
-    case "${RESPUESTA,,}" in
+    case "${CONFIRM,,}" in
 
         s|si|sí|y|yes)
 
-            systemctl stop "$SERVICE" >/dev/null 2>&1
+            echo
 
-            systemctl disable "$SERVICE" >/dev/null 2>&1
+            info "Deteniendo Squid..."
 
-            apt-get remove -y squid >/dev/null 2>&1
+            systemctl disable --now "$SERVICE" \
+                >/dev/null 2>&1 || true
 
-            rm -f "$PAM_CONF"
+            info "Eliminando Squid..."
 
-            rm -f "${SQUID_CONF}.backup"
+            if apt-get remove -y squid >/dev/null 2>&1; then
 
-            set_squid_status "OFF"
+                rm -f "$PAM_CONF"
 
-            msg_ok "Squid fue desinstalado."
+                set_squid_status "OFF"
+
+                echo
+
+                echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+                echo -e "${GREEN}${BOLD}║              ✔ SQUID DESINSTALADO                          ║${RESET}"
+                echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
+            else
+
+                error_msg "No fue posible eliminar Squid."
+
+            fi
 
             ;;
 
         *)
 
-            msg_warn "Operación cancelada."
+            echo
+
+            warning "Operación cancelada."
 
             ;;
 
@@ -664,9 +625,9 @@ desinstalar_squid() {
     pause
 }
 
-#=========================================================
+# ==============================================================
 # MODO AUTOMÁTICO
-#=========================================================
+# ==============================================================
 
 if [[ "$1" == "--auto" ]]; then
 
@@ -676,50 +637,36 @@ if [[ "$1" == "--auto" ]]; then
 
 fi
 
-#=========================================================
-# MENÚ
-#=========================================================
+# ==============================================================
+# MENÚ PRINCIPAL
+# ==============================================================
 
 while true; do
 
     clear
 
-    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${MAGENTA}              🌐 KEVINTECH SQUID PROXY                    ${CYAN}║${RESET}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    show_header
 
     echo
-
-    echo -e "${WHITE}Puerto:${RESET} ${GREEN}$SQUID_PORT${RESET}"
-
-    if systemctl is-active --quiet "$SERVICE"; then
-
-        echo -e "${WHITE}Estado:${RESET} ${GREEN}● ACTIVO${RESET}"
-
-    else
-
-        echo -e "${WHITE}Estado:${RESET} ${RED}● DETENIDO${RESET}"
-
-    fi
+    echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN SQUID${RESET}"
 
     line
 
-    echo -e "${GREEN}[01]${WHITE} 📦 Instalar Squid"
-    echo -e "${GREEN}[02]${WHITE} ▶️  Iniciar Squid"
-    echo -e "${GREEN}[03]${WHITE} ⏹️  Detener Squid"
-    echo -e "${GREEN}[04]${WHITE} 🔄 Reiniciar Squid"
-    echo -e "${GREEN}[05]${WHITE} 👤 Ver usuarios de add.sh"
-    echo -e "${GREEN}[06]${WHITE} 📊 Ver estado"
-    echo -e "${RED}[07]${WHITE} 🗑️  Desinstalar Squid"
+    echo -e "  ${GREEN}${BOLD}[01]${RESET}  🚀 ${WHITE}Instalar / Actualizar${RESET}"
+    echo -e "  ${GREEN}${BOLD}[02]${RESET}  📋 ${WHITE}Ver Log${RESET}"
+    echo -e "  ${RED}${BOLD}[03]${RESET}  🗑️  ${WHITE}Desinstalar${RESET}"
 
     echo
+    separator
 
-    echo -e "${RED}[00]${WHITE} ↩️  Regresar"
+    echo -e "  ${RED}${BOLD}[00]${RESET}  ↩️  ${WHITE}Regresar${RESET}"
 
+    echo
+    echo -e "${GRAY}  KevinTech Multi Script • Squid Proxy • ${SQUID_VERSION}${RESET}"
     echo
 
     read -rp \
-        "$(echo -e "${YELLOW}Opción: ${RESET}")" OPCION
+        "$(echo -e "${CYAN}${BOLD}  ➜ Selecciona una opción: ${RESET}")" OPCION
 
     case "$OPCION" in
 
@@ -731,35 +678,11 @@ while true; do
 
         2|02)
 
-            op_iniciar
+            ver_log
 
             ;;
 
         3|03)
-
-            op_detener
-
-            ;;
-
-        4|04)
-
-            op_reiniciar
-
-            ;;
-
-        5|05)
-
-            listar_usuarios
-
-            ;;
-
-        6|06)
-
-            ver_estado
-
-            ;;
-
-        7|07)
 
             desinstalar_squid
 
@@ -768,15 +691,14 @@ while true; do
         0|00)
 
             clear
-
             exit 0
 
             ;;
 
         *)
 
-            msg_error "Opción inválida."
-
+            echo
+            error_msg "Opción inválida."
             sleep 1
 
             ;;
