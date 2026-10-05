@@ -28,6 +28,18 @@ source "$CONFIG"
 
 
 #==================================================
+# COLORES
+#==================================================
+
+CYAN="${MV_CYN:-\e[1;96m}"
+GREEN="${MV_GRN:-\e[1;92m}"
+RED="${MV_RED:-\e[1;91m}"
+YELLOW="${MV_YLW:-\e[1;93m}"
+WHITE="${MV_WHT:-\e[1;97m}"
+GRAY="${MV_GRY:-\e[1;90m}"
+RESET="${MV_R:-\e[0m}"
+
+#==================================================
 # FUNCIONES INTERNAS — SIN LIBRERÍAS EXTERNAS
 #==================================================
 
@@ -79,26 +91,22 @@ mv_header() {
 
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "${WHITE}        ${TITLE}${RESET}"
-
-    [[ -n "$SUBTITLE" ]] && \
-        echo -e "${GRAY}   ${SUBTITLE}${RESET}"
-
-    [[ -n "$VERSION" ]] && \
-        echo -e "${GRAY}        ${VERSION}${RESET}"
-
+    [[ -n "$SUBTITLE" ]] && echo -e "${GRAY}   ${SUBTITLE}${RESET}"
+    [[ -n "$VERSION" ]] && echo -e "${GRAY}        ${VERSION}${RESET}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
-movivip_contacts() {
+mv_brand_header() {
+    mv_header "$1" "kevintech XHTTP_S" "v6.2"
+}
+
+kevintech_contacts() {
     return 0
 }
 
-CYAN="${MV_CYN:-\e[1;96m}"
-GREEN="${MV_GRN:-\e[1;92m}"
-RED="${MV_RED:-\e[1;91m}"
-YELLOW="${MV_YLW:-\e[1;93m}"
-WHITE="${MV_WHT:-\e[1;97m}"
-RESET="${MV_R:-\e[0m}"
+#==================================================
+# CONFIGURACIÓN XHTTP
+#==================================================
 
 SERVICE="xhttp"
 DIR="/etc/xhttp"
@@ -696,7 +704,7 @@ do
         "$(trx 'SSH-XHTTP TLS / HTTP2')" \
         "v6.2"
 
-    movivip_contacts 2>/dev/null || true
+    kevintech_contacts 2>/dev/null || true
 
     echo ""
     echo -e " ${WHITE}Estado      :${RESET} $STATUS"
