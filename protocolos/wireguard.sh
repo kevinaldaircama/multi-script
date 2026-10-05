@@ -196,28 +196,26 @@ mv_brand_header "WIREGUARD · NUEVO PEER"
     NAME=$(echo "$NAME" | tr -c 'a-zA-Z0-9._-' '_')
     [[ -f "$PEERS_DIR/$NAME.conf" ]] && {
         echo -e " ${GOLD}⚠ Ya existe un peer '$NAME'${RESET}"; sleep 2; return; }
-    IPNEW=$(next_ip) || { echo -e "${RED}❌ Pool agotado (253 peers)${RESET}"; sleep 2; return; }
+        IPNEW=$(next_ip) || {
+        echo -e "${RED}❌ Pool agotado (253 peers)${RESET}"
+        sleep 2
+        return
+    }
 
-            echo -e "${YELLOW}← $(trx 'Cancelado')${RESET}"
-            return 1
-        fi
-        DUR_TS_EXP="${DUR_TS:-0}"
-        DUR_MOSTRAR_EXP="${DUR_MOSTRAR:-♾️ Ilimitado}"
+    #==================================================
+    # DURACIÓN DEL PEER
+    #==================================================
+
+    read -rp "$(trx '📅 Duración en días (Enter = ilimitado): ')" D
+
+    if [[ -n "$D" && "$D" =~ ^[0-9]+$ && "$D" -gt 0 ]]; then
+        DUR_TS_EXP=$(date -d "+${D} days" +%s)
+        DUR_MOSTRAR_EXP=$(date -d "+${D} days" +"%d/%m/%Y %H:%M" 2>/dev/null)
     else
-       #==================================================
-# DURACIÓN DEL PEER
-#==================================================
+        DUR_TS_EXP=0
+        DUR_MOSTRAR_EXP="♾️ Ilimitado"
+    fi
 
-read -rp "$(trx '📅 Duración en días (Enter = ilimitado): ')" D
-
-if [[ -n "$D" && "$D" =~ ^[0-9]+$ && "$D" -gt 0 ]]; then
-    DUR_TS_EXP=$(date -d "+${D} days" +%s)
-    DUR_MOSTRAR_EXP=$(date -d "+${D} days" +"%d/%m/%Y %H:%M" 2>/dev/null)
-else
-    DUR_TS_EXP=0
-    DUR_MOSTRAR_EXP="♾️ Ilimitado"
-fi
- 
     server_up || return
     umask 077
     PPRIV=$(wg genkey); PPUB=$(echo "$PPRIV" | wg pubkey)
