@@ -751,7 +751,7 @@ process_option() {
 
         13)
 
-            run_module "$PROTOCOL_DIR/xhttp"
+            run_module "$PROTOCOL_DIR/xhttp.sh"
 
             ;;
 
