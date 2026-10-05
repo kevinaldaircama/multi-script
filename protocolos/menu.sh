@@ -619,7 +619,9 @@ show_protocol_menu() {
         "$SQUID_STATUS"
 
     printf "${MAGENTA}${BOLD}[14]${RESET} 🛡️ HCR        %b\n" \
-        "$HCR_STATUS"
+        "$XHTPP_STATUS"
+printf "${MAGENTA}${BOLD}[15]${RESET} 🛡️ XHTPP     %b\n" \
+        "$XHTPP_STATUS"
 
     echo
 
@@ -631,13 +633,13 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[15]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[16]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[16]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[17]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[17]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[18]${RESET} 🤖 Bot Telegram\n"
+    printf "  ${GREEN}${BOLD}[18]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[19]${RESET} 🤖 Bot Telegram\n"
 
-    printf "  ${GREEN}${BOLD}[19]${RESET} 🌐 Web Universal\n"
+    printf "  ${GREEN}${BOLD}[20]${RESET} 🌐 Web Universal\n"
 
     echo
 
@@ -754,36 +756,41 @@ process_option() {
             run_module "$PROTOCOL_DIR/hcr-server.sh"
 
             ;;
+15)
+
+            run_module "$PROTOCOL_DIR/xhttp.sh"
+
+            ;;
 
         # ======================================================
         # ADMINISTRACIÓN
         # ======================================================
 
-        15)
+        16)
 
             run_module "$TOOLS_DIR/menu.sh"
 
             ;;
 
-        16)
+        17)
 
             run_module "$TOOLS_DIR/reiniciar.sh"
 
             ;;
 
-        17)
+        18)
 
             run_module "$TOOLS_DIR/firewall.sh"
 
             ;;
 
-        18)
+        19)
 
             run_module "$BASE/telegram/install.sh"
 
             ;;
 
-        19)
+        20)
 
             run_module "$BASE/web/installer.sh"
 
