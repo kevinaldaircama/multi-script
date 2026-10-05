@@ -1,21 +1,106 @@
 MIT License
 
-Copyright (c) 2026 Kevin Tech Tutorials
+KEVIN TECH TUTORIALS
+LICENCIA DE USO Y DISTRIBUCIÓN
+KEVINTECH MULTI SCRIPT
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Copyright © 2026 Kevin Tech Tutorials
+Todos los derechos reservados.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. PROPIEDAD
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+KEVINTECH MULTI SCRIPT, incluyendo su código fuente, scripts,
+módulos, instaladores, actualizadores, estructura, diseño y
+documentación, es propiedad de Kevin Tech Tutorials.
+
+El uso del software no transfiere la propiedad ni los derechos
+de autor a ninguna otra persona.
+
+2. USO PERMITIDO
+
+Se permite utilizar el instalador de KEVINTECH MULTI SCRIPT
+para instalar y utilizar el software en servidores propios o
+servidores para los cuales el usuario tenga autorización.
+
+También se permite utilizar el software instalado para fines
+personales, educativos o comerciales.
+
+3. PROHIBICIONES
+
+Sin autorización expresa de Kevin Tech Tutorials, queda
+prohibido:
+
+• Reclamar la autoría del código.
+• Presentar KEVINTECH MULTI SCRIPT como un proyecto propio.
+• Eliminar, ocultar o modificar los avisos de copyright.
+• Cambiar el nombre del proyecto para presentarlo como propio.
+• Redistribuir el código fuente completo como si fuera propio.
+• Publicar copias modificadas atribuyéndose la autoría original.
+• Vender el código fuente o una copia del proyecto como creación
+  propia.
+• Registrar el proyecto o sus partes como propiedad intelectual
+  de otra persona.
+• Eliminar la identificación de Kevin Tech Tutorials del software.
+
+4. MODIFICACIONES
+
+El usuario puede realizar modificaciones locales necesarias para
+adaptar el software a su propio servidor.
+
+Las modificaciones realizadas por terceros no les otorgan la
+autoría sobre el proyecto original.
+
+Toda versión modificada que sea publicada o distribuida deberá
+mantener claramente la atribución:
+
+"Basado en KEVINTECH MULTI SCRIPT — Kevin Tech Tutorials"
+
+5. INSTALADOR
+
+El instalador puede ser utilizado para instalar KEVINTECH MULTI
+SCRIPT en servidores autorizados.
+
+El uso del instalador no concede derechos de propiedad sobre el
+código fuente, la marca, el nombre del proyecto ni la estructura
+original.
+
+6. ATRIBUCIÓN
+
+Toda copia, versión modificada, fork o distribución autorizada
+deberá conservar visible la siguiente atribución:
+
+"KEVINTECH MULTI SCRIPT
+Desarrollado por Kevin Tech Tutorials"
+
+7. SIN TRANSFERENCIA DE PROPIEDAD
+
+El permiso de uso concedido mediante esta licencia no constituye
+una venta, cesión ni transferencia de los derechos de autor del
+software.
+
+8. RESERVA DE DERECHOS
+
+Todos los derechos no concedidos expresamente en esta licencia
+quedan reservados por Kevin Tech Tutorials.
+
+9. RESPONSABILIDAD
+
+El software se proporciona "tal cual", sin garantía de
+funcionamiento, disponibilidad o compatibilidad con todos los
+servidores o sistemas.
+
+10. VIGENCIA
+
+Esta licencia entra en vigor desde el momento de su distribución
+y se aplica a todas las copias del software que estén sujetas a
+ella.
+
+------------------------------------------------------------
+
+KEVINTECH MULTI SCRIPT
+© 2026 Kevin Tech Tutorials
+Todos los derechos reservados.
+
+Uso permitido.
+Autoría no transferible.
+------------------------------------------------------------
