@@ -1619,40 +1619,285 @@ if [[ "${1:-}" == "--auto" ]]; then
 fi
 
 # ==============================================================
-# MENÚ KEVINTECH
+#                    MENÚ KEVINTECH BHTTP
 # ==============================================================
-mostrar_menu(){
+
+mostrar_menu() {
+
     clear
-    echo -e "${CYAN}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                                                              ║"
-    echo "║                 🌐 KEVINTECH BHTTP 🌐                       ║"
-    echo "║                                                              ║"
-    echo "║                    PREMIUM PROTOCOL                         ║"
-    echo "║                                                              ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${RESET}"
-    echo -e "${GRAY}  BHTTP • DTProto compatible • 3 archivos originales${RESET}"
+
+    local ESTADO=""
+
+    if systemctl is-active --quiet bhttp 2>/dev/null; then
+        ESTADO="${GREEN}● ACTIVO${RESET}"
+    elif systemctl is-active --quiet proto-server 2>/dev/null; then
+        ESTADO="${GREEN}● ACTIVO${RESET}"
+    else
+        ESTADO="${RED}● INACTIVO${RESET}"
+    fi
+
     echo
-    echo -e "${WHITE}  ⚙️ ADMINISTRACIÓN BHTTP${RESET}"; line
-    echo -e "  ${GREEN}${BOLD}[01]${RESET} 🚀 Instalar / Actualizar"
-    echo -e "  ${GREEN}${BOLD}[02]${RESET} ⚙️  Activar / Configurar"
-    echo -e "  ${GREEN}${BOLD}[03]${RESET} 🧪 Probe real BHP1"
-    echo -e "  ${GREEN}${BOLD}[04]${RESET} 🔎 Diagnóstico"
-    echo -e "  ${GREEN}${BOLD}[05]${RESET} 📜 Ver logs"
-    echo -e "  ${MAGENTA}${BOLD}[06]${RESET} 📂 Ver archivos"
-    echo -e "  ${RED}${BOLD}[07]${RESET} 🗑️  Desinstalar"
-    echo; line
-    echo -e "  ${RED}${BOLD}[00]${RESET} ↩️  Salir"
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                  ${MAGENTA}🌐 KEVINTECH BHTTP${RESET}                  ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                    ${GRAY}PREMIUM PROTOCOL${RESET}                 ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╠══════════════════════════════════════════════════════════════╣${RESET}"
+
+    echo -e "${CYAN}║${RESET}  ${WHITE}Estado:${RESET}       ${ESTADO}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Puerto:${RESET}       ${YELLOW}8088${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Protocolo:${RESET}    ${GREEN}BHTTP${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Transporte:${RESET}   ${GREEN}DTProto${RESET}"
+
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+
     echo
-    echo -e "${GRAY}  Herramientas: $DIR${RESET}"
+    echo -e "${BLUE}${BOLD}  ⚙️ ADMINISTRACIÓN BHTTP${RESET}"
+    line
+
+    echo -e "  ${GREEN}${BOLD}[01]${RESET}  🚀 ${WHITE}Instalar / Actualizar${RESET}"
+    echo -e "  ${GREEN}${BOLD}[02]${RESET}  📜 ${WHITE}Ver Log${RESET}"
+    echo -e "  ${RED}${BOLD}[03]${RESET}  🗑️  ${WHITE}Desinstalar${RESET}"
+
+    echo
+    line
+
+    echo -e "  ${RED}${BOLD}[00]${RESET}  ↩️  ${WHITE}Regresar${RESET}"
+
+    echo
+    echo -e "${GRAY}  KevinTech Multi Script • BHTTP • Premium${RESET}"
     echo
 }
-instalar(){ clear; echo -e "${CYAN}${BOLD}🚀 INSTALAR / ACTUALIZAR BHTTP${RESET}"; echo; bash "$INSTALL" --puerto 8088; pause; }
-activar(){ clear; echo -e "${CYAN}${BOLD}⚙️ ACTIVAR / CONFIGURAR BHTTP${RESET}"; echo; bash "$ACTIVAR"; pause; }
-probe(){ clear; echo -e "${CYAN}${BOLD}🧪 PRUEBA REAL BHTTP${RESET}"; echo; bash "$PROBE" 127.0.0.1 8088 --fast; pause; }
-diagnostico(){ clear; echo -e "${CYAN}${BOLD}🔎 DIAGNÓSTICO BHTTP${RESET}"; echo; line; echo -e "${WHITE}Archivos${RESET}"; for f in "$INSTALL" "$ACTIVAR" "$PROBE"; do [[ -x "$f" ]] && echo -e "  $(basename "$f") : ${GREEN}✔ INSTALADO${RESET}" || echo -e "  $(basename "$f") : ${RED}✘ FALTA${RESET}"; done; echo; echo -e "${WHITE}Servicios${RESET}"; line; systemctl is-active --quiet bhttp 2>/dev/null && echo -e "  bhttp.service : ${GREEN}● ONLINE${RESET}" || echo -e "  bhttp.service : ${RED}● OFFLINE${RESET}"; systemctl is-active --quiet proto-server 2>/dev/null && echo -e "  proto-server   : ${GREEN}● ONLINE${RESET}" || echo -e "  proto-server   : ${GRAY}● no activo${RESET}"; echo; echo -e "${WHITE}Puertos${RESET}"; line; ss -ltnp 2>/dev/null | grep -E ':8088|:80|:443|:8080|:8443' || echo "  No hay listeners BHTTP conocidos."; pause; }
-logs(){ clear; echo -e "${CYAN}${BOLD}📜 BHTTP LOGS${RESET}"; echo; journalctl -u bhttp -n 80 --no-pager -l 2>/dev/null; if systemctl cat proto-server >/dev/null 2>&1; then echo; line; journalctl -u proto-server -n 80 --no-pager -l; fi; pause; }
-archivos(){ clear; echo -e "${CYAN}${BOLD}📂 ARCHIVOS BHTTP${RESET}"; echo; echo "  $INSTALL"; echo "  $ACTIVAR"; echo "  $PROBE"; echo; echo "Servidor: /usr/local/lib/bhttp/bhttp-server.py"; echo "Servicio: /etc/systemd/system/bhttp.service"; echo "Config DTProto: /etc/config.json"; pause; }
-desinstalar(){ clear; echo -e "${RED}${BOLD}🗑️ DESINSTALAR BHTTP${RESET}"; echo; read -rp "¿Confirmar? [s/N]: " R; case "${R,,}" in s|si|sí|y|yes) bash "$INSTALL" --desinstalar; rm -f "$INSTALL" "$ACTIVAR" "$PROBE" ;; *) echo "Operación cancelada." ;; esac; pause; }
-while true; do mostrar_menu; read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP; case "$OP" in 1|01) instalar;; 2|02) activar;; 3|03) probe;; 4|04) diagnostico;; 5|05) logs;; 6|06) archivos;; 7|07) desinstalar;; 0|00) clear; exit 0;; *) echo -e "${RED}✘ Opción inválida.${RESET}"; sleep 1;; esac; done
+
+
+# ==============================================================
+# INSTALAR / ACTUALIZAR
+# ==============================================================
+
+instalar_bhttp() {
+
+    clear
+
+    echo
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}             ${GREEN}🚀 BHTTP INSTALL / UPDATE${RESET}                 ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    echo -e "${WHITE}Configuración predeterminada:${RESET}"
+    echo
+    echo -e "  ${GRAY}•${RESET} Puerto       : ${GREEN}8088${RESET}"
+    echo -e "  ${GRAY}•${RESET} Protocolo    : ${GREEN}BHTTP${RESET}"
+    echo -e "  ${GRAY}•${RESET} Transporte    : ${GREEN}DTProto${RESET}"
+    echo
+
+    line
+
+    echo
+    info "Instalando / actualizando BHTTP..."
+    echo
+
+    bash "$INSTALL" --puerto 8088
+
+    local RC=$?
+
+    echo
+
+    if [[ "$RC" -eq 0 ]]; then
+
+        if [[ -f "$BASE/config.conf" ]]; then
+
+            if grep -q '^BHTTP=' "$BASE/config.conf"; then
+                sed -i 's/^BHTTP=.*/BHTTP=ON/' "$BASE/config.conf"
+            else
+                echo "BHTTP=ON" >> "$BASE/config.conf"
+            fi
+
+        fi
+
+        echo
+        echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${GREEN}${BOLD}║${RESET}             ✔ BHTTP INSTALADO / ACTUALIZADO             ${GREEN}${BOLD}║${RESET}"
+        echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+        echo
+
+        echo -e "  ${WHITE}Estado:${RESET}   ${GREEN}● ACTIVO${RESET}"
+        echo -e "  ${WHITE}Puerto:${RESET}   ${GREEN}8088${RESET}"
+        echo
+
+    else
+
+        echo
+        echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${RED}${BOLD}║${RESET}                ✘ ERROR EN BHTTP                           ${RED}${BOLD}║${RESET}"
+        echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+        echo
+
+        echo -e "${WHITE}Código de salida:${RESET} ${RED}${RC}${RESET}"
+
+    fi
+
+    pause
+}
+
+
+# ==============================================================
+# LOG
+# ==============================================================
+
+mostrar_log_bhttp() {
+
+    clear
+
+    echo
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                  ${MAGENTA}📜 BHTTP SERVER LOG${RESET}                ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    if systemctl cat bhttp >/dev/null 2>&1; then
+
+        echo -e "${WHITE}Servicio:${RESET} ${GREEN}bhttp.service${RESET}"
+        echo
+        line
+        echo
+
+        journalctl -u bhttp -n 100 --no-pager -l
+
+    elif systemctl cat proto-server >/dev/null 2>&1; then
+
+        echo -e "${WHITE}Servicio:${RESET} ${GREEN}proto-server.service${RESET}"
+        echo
+        line
+        echo
+
+        journalctl -u proto-server -n 100 --no-pager -l
+
+    else
+
+        echo -e "${YELLOW}⚠ BHTTP todavía no está instalado.${RESET}"
+        echo
+
+    fi
+
+    echo
+    line
+    echo
+    echo -e "${GRAY}Mostrando las últimas 100 líneas.${RESET}"
+
+    pause
+}
+
+
+# ==============================================================
+# DESINSTALAR
+# ==============================================================
+
+desinstalar_bhttp() {
+
+    clear
+
+    echo
+    echo -e "${RED}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}${BOLD}║${RESET}               ${RED}🗑️ DESINSTALAR BHTTP${RESET}                   ${RED}${BOLD}║${RESET}"
+    echo -e "${RED}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo
+
+    echo -e "${YELLOW}⚠ Esta acción eliminará el servicio BHTTP.${RESET}"
+    echo
+    echo -e "${WHITE}Se conservarán los scripts originales:${RESET}"
+    echo -e "  ${GRAY}•${RESET} bhttp-install.sh"
+    echo -e "  ${GRAY}•${RESET} bhttp-activar.sh"
+    echo -e "  ${GRAY}•${RESET} bhttp-probe.sh"
+    echo
+
+    read -rp "$(echo -e "${YELLOW}${BOLD}¿Confirmar desinstalación? [s/N]: ${RESET}")" CONFIRM
+
+    case "${CONFIRM,,}" in
+
+        s|si|sí|y|yes)
+
+            echo
+            info "Deteniendo BHTTP..."
+
+            bash "$INSTALL" --desinstalar
+
+            local RC=$?
+
+            if [[ "$RC" -eq 0 ]]; then
+
+                if [[ -f "$BASE/config.conf" ]]; then
+
+                    if grep -q '^BHTTP=' "$BASE/config.conf"; then
+                        sed -i 's/^BHTTP=.*/BHTTP=OFF/' "$BASE/config.conf"
+                    fi
+
+                fi
+
+                echo
+                echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+                echo -e "${GREEN}${BOLD}║${RESET}                 ✔ BHTTP DESINSTALADO                     ${GREEN}${BOLD}║${RESET}"
+                echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+                echo
+
+                echo -e "${GRAY}Los scripts de administración fueron conservados.${RESET}"
+
+            else
+
+                echo
+                error_msg "No se pudo desinstalar BHTTP."
+                echo -e "${GRAY}Código: ${RC}${RESET}"
+
+            fi
+
+            ;;
+
+        *)
+
+            echo
+            warning "Operación cancelada."
+
+            ;;
+
+    esac
+
+    pause
+}
+
+
+# ==============================================================
+# MENÚ PRINCIPAL
+# ==============================================================
+
+while true; do
+
+    mostrar_menu
+
+    read -rp "$(echo -e "${CYAN}${BOLD}  ➜ Seleccione una opción: ${RESET}")" OP
+
+    case "$OP" in
+
+        1|01)
+            instalar_bhttp
+            ;;
+
+        2|02)
+            mostrar_log_bhttp
+            ;;
+
+        3|03)
+            desinstalar_bhttp
+            ;;
+
+        0|00)
+            clear
+            return 0 2>/dev/null || exit 0
+            ;;
+
+        *)
+            echo
+            error_msg "Opción inválida."
+            sleep 1
+            ;;
+
+    esac
+
+done
