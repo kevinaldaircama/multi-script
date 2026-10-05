@@ -523,6 +523,13 @@ get_statuses() {
         && echo -e "${GREEN}● ON${RESET}" \
         || echo -e "${GRAY}● OFF${RESET}")
 
+    # ----------------------------------------------------------
+    # WIREGUARD
+    # ----------------------------------------------------------
+
+    WG_STATUS=$(status_config \
+        "${WG:-OFF}")
+
     ZIPVPN_STATUS=$(status_config \
         "${ZIPVPN:-OFF}")
 
@@ -608,7 +615,7 @@ show_protocol_menu() {
     # FILA 6
     # ----------------------------------------------------------
 
-    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️ Hysteria   %b    " \
+    printf "${GREEN}${BOLD}[11]${RESET} 🛡️ Hysteria   %b    " \
         "$HYSTERIA_STATUS"
 
     printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP      %b\n" \
@@ -628,8 +635,11 @@ show_protocol_menu() {
     # FILA 8
     # ----------------------------------------------------------
 
-    printf "  ${MAGENTA}${BOLD}[15]${RESET} 🛡️ HCR        %b\n" \
+    printf "  ${MAGENTA}${BOLD}[15]${RESET} 🛡️ HCR        %b    " \
         "$HCR_STATUS"
+
+    printf "${MAGENTA}${BOLD}[16]${RESET} 🛡️ WireGuard  %b\n" \
+        "$WG_STATUS"
 
     echo
 
@@ -641,13 +651,13 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[16]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[17]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[17]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[18]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[18]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[19]${RESET} 🤖 Bot Telegram\n"
+    printf "  ${GREEN}${BOLD}[19]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[20]${RESET} 🤖 Bot Telegram\n"
 
-    printf "  ${GREEN}${BOLD}[20]${RESET} 🌐 Web Universal\n"
+    printf "  ${GREEN}${BOLD}[21]${RESET} 🌐 Web Universal\n"
 
     echo
 
@@ -776,34 +786,44 @@ process_option() {
             ;;
 
         # ======================================================
-        # ADMINISTRACIÓN
+        # WIREGUARD
         # ======================================================
 
         16)
+
+            run_module "$PROTOCOL_DIR/wireguard.sh"
+
+            ;;
+
+        # ======================================================
+        # ADMINISTRACIÓN
+        # ======================================================
+
+        17)
 
             run_module "$TOOLS_DIR/menu.sh"
 
             ;;
 
-        17)
+        18)
 
             run_module "$TOOLS_DIR/reiniciar.sh"
 
             ;;
 
-        18)
+        19)
 
             run_module "$TOOLS_DIR/firewall.sh"
 
             ;;
 
-        19)
+        20)
 
             run_module "$BASE/telegram/install.sh"
 
             ;;
 
-        20)
+        21)
 
             run_module "$BASE/web/installer.sh"
 
