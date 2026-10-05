@@ -27,8 +27,71 @@ CONFIG="$BASE/config.conf"
 source "$CONFIG"
 
 
-# Sistema de animación/progreso + detección de estado
-[[ -f "$BASE/lib/anim.sh" ]] && source "$BASE/lib/anim.sh"
+#==================================================
+# FUNCIONES INTERNAS — SIN LIBRERÍAS EXTERNAS
+#==================================================
+
+anim_init() {
+    return 0
+}
+
+anim_step() {
+    echo ""
+    echo -e "${CYAN}➜ $1${RESET}"
+}
+
+anim_run() {
+    local LABEL="$1"
+    shift
+
+    echo -ne "${CYAN}➜ ${LABEL}...${RESET} "
+
+    if "$@" >/dev/null 2>&1; then
+        echo -e "${GREEN}OK${RESET}"
+        return 0
+    else
+        echo -e "${RED}ERROR${RESET}"
+        return 1
+    fi
+}
+
+svc_restart_anim() {
+    local SERVICE_NAME="$1"
+    local LABEL="$2"
+
+    echo -ne "${CYAN}➜ ${LABEL}...${RESET} "
+
+    systemctl restart "$SERVICE_NAME" >/dev/null 2>&1
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo -e "${GREEN}OK${RESET}"
+        return 0
+    else
+        echo -e "${RED}ERROR${RESET}"
+        return 1
+    fi
+}
+
+mv_header() {
+    local TITLE="${1:-KEVINTECH}"
+    local SUBTITLE="${2:-}"
+    local VERSION="${3:-}"
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${WHITE}        ${TITLE}${RESET}"
+
+    [[ -n "$SUBTITLE" ]] && \
+        echo -e "${GRAY}   ${SUBTITLE}${RESET}"
+
+    [[ -n "$VERSION" ]] && \
+        echo -e "${GRAY}        ${VERSION}${RESET}"
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+movivip_contacts() {
+    return 0
+}
 
 CYAN="${MV_CYN:-\e[1;96m}"
 GREEN="${MV_GRN:-\e[1;92m}"
@@ -596,9 +659,6 @@ show_info(){
 # Menú Principal
 #==================================================
 
-# Navegación con flechitas
-[[ -f "$BASE/lib/nav.sh" ]] && source "$BASE/lib/nav.sh"
-
 # ── CLI headless: bash xhttp.sh --install [puerto1] [puerto2]
 if [[ "${1:-}" == "--install" ]]; then
     [[ -n "${2:-}" ]] && export XHTTP_PORT="$2" XHTTP_FORCE_STANDALONE=1
@@ -655,15 +715,14 @@ do
     # MENÚ
     #==================================================
 
-    LBL=(
-        "🚀 Instalar / Actualizar"
-        "📜 Ver Log"
-        "🗑️ Desinstalar"
-    )
+    echo -e "${CYAN}  [1]${RESET} 🚀 Instalar / Actualizar"
+echo -e "${CYAN}  [2]${RESET} 📜 Ver Log"
+echo -e "${CYAN}  [3]${RESET} 🗑️ Desinstalar"
+echo ""
+echo -e "${RED}  [0]${RESET} ↩️ Regresar"
+echo ""
 
-    SEL=$(nav_pick "► Opción:" "${LBL[@]}" "↩ Regresar") || SEL=0
-
-    [[ $SEL -eq 4 ]] && SEL=0
+read -rp "$(echo -e "${CYAN}  ➜ Seleccione una opción: ${RESET}")" SEL
 
     case "$SEL" in
 
