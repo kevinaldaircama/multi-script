@@ -610,54 +610,87 @@ fi
 
 while true
 do
-
     clear
 
     source "$CONFIG"
 
+    # Estado del servicio
     if systemctl is-active --quiet xhttp; then
         STATUS="${GREEN}🟢 ACTIVO${RESET}"
     else
         STATUS="${RED}🔴 DETENIDO${RESET}"
     fi
 
-    mv_header "🚀 XHTTP_S Manager" "$(trx 'SSH-XHTTP TLS/HTTP2 · 443/8080')" "v6.2"
-    kevintech_contacts 2>/dev/null || true
+    # Estado HAProxy
+    if systemctl is-active --quiet haproxy 2>/dev/null; then
+        HAPROXY_STATUS="${GREEN}🟢 ACTIVO${RESET}"
+    else
+        HAPROXY_STATUS="${RED}🔴 INACTIVO${RESET}"
+    fi
 
-    echo -e " Estado      : $STATUS"
-    echo -e " Puertos     : $XHTTP_PORT / $XHTTP_PORT2"
+    #==================================================
+    # CABECERA PREMIUM
+    #==================================================
+
+    mv_header "🚀 XHTTP_S MANAGER" \
+        "$(trx 'SSH-XHTTP TLS / HTTP2')" \
+        "v6.2"
+
+    movivip_contacts 2>/dev/null || true
+
+    echo ""
+    echo -e " ${WHITE}Estado      :${RESET} $STATUS"
+    echo -e " ${WHITE}Puertos     :${RESET} ${CYAN}$XHTTP_PORT / $XHTTP_PORT2${RESET}"
+    echo -e " ${WHITE}HAProxy     :${RESET} $HAPROXY_STATUS"
+
+    if [[ "$HAPROXY_ON" == "1" ]]; then
+        echo -e " ${WHITE}Modo        :${RESET} ${CYAN}Integrado${RESET}"
+    else
+        echo -e " ${WHITE}Modo        :${RESET} ${CYAN}Standalone${RESET}"
+    fi
 
     echo ""
 
-    if [[ "$XHTTP" == "ON" ]]; then
-        LBL=("Desinstalar XHTTP_S" "Reiniciar Servicio" "Ver Estado" "Ver Datos de Conexión")
-    else
-        LBL=("Instalar XHTTP_S")
-    fi
-    SEL=$(nav_pick "► Opción:" "${LBL[@]}" "↩ Regresar") || SEL=0
-    [[ $SEL -eq $((${#LBL[@]}+1)) ]] && SEL=0
-    OP="$SEL"
+    #==================================================
+    # MENÚ
+    #==================================================
 
-    case "$OP" in
+    LBL=(
+        "🚀 Instalar / Actualizar"
+        "📜 Ver Log"
+        "🗑️ Desinstalar"
+    )
+
+    SEL=$(nav_pick "► Opción:" "${LBL[@]}" "↩ Regresar") || SEL=0
+
+    [[ $SEL -eq 4 ]] && SEL=0
+
+    case "$SEL" in
 
         1)
-            if [[ "$XHTTP" == "ON" ]]; then
-                remove_xhttp
-            else
-                install_xhttp
-            fi
+            install_xhttp
         ;;
 
         2)
-            [[ "$XHTTP" == "ON" ]] && restart_xhttp
+            clear
+
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+            echo -e "${WHITE}          📜 LOG XHTTP_S${RESET}"
+            echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+            echo ""
+
+            if systemctl cat xhttp.service >/dev/null 2>&1; then
+                journalctl -u xhttp -n 80 --no-pager
+            else
+                echo -e "${YELLOW}⚠ XHTTP_S todavía no está instalado.${RESET}"
+            fi
+
+            echo ""
+            read -n1 -r -p "$(trx 'Presione una tecla para continuar...')"
         ;;
 
         3)
-            [[ "$XHTTP" == "ON" ]] && status_xhttp
-        ;;
-
-        4)
-            [[ "$XHTTP" == "ON" ]] && show_info
+            remove_xhttp
         ;;
 
         0)
