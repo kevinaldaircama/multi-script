@@ -7,7 +7,7 @@
 #
 # Archivo : /etc/kevintech/protocolos/menu.sh
 # Config  : /etc/kevintech/config.conf
-# Versión : 3.3 Premium
+# Versión : 3.4 Premium
 #
 # ==============================================================
 
@@ -22,7 +22,7 @@ CONFIG="$BASE/config.conf"
 PROTOCOL_DIR="$BASE/protocolos"
 TOOLS_DIR="$BASE/herramientas"
 
-VERSION="3.3"
+VERSION="3.4"
 PANEL_NAME="KEVINTECH MULTI SCRIPT"
 
 # ==============================================================
@@ -215,10 +215,6 @@ status_service() {
 
     local SERVICE="$1"
     local CONFIG_STATUS="${2:-OFF}"
-
-    # ----------------------------------------------------------
-    # El estado visual depende de config.conf
-    # ----------------------------------------------------------
 
     status_config "$CONFIG_STATUS"
 
@@ -513,12 +509,19 @@ get_statuses() {
         "${BHTTP:-OFF}")
 
     # ----------------------------------------------------------
-# HCR
-# ----------------------------------------------------------
+    # XHTTP
+    # ----------------------------------------------------------
 
-HCR_STATUS=$(systemctl is-active --quiet hcr-server 2>/dev/null \
-    && echo -e "${GREEN}● ON${RESET}" \
-    || echo -e "${GRAY}● OFF${RESET}")
+    XHTTP_STATUS=$(status_config \
+        "${XHTTP:-OFF}")
+
+    # ----------------------------------------------------------
+    # HCR
+    # ----------------------------------------------------------
+
+    HCR_STATUS=$(systemctl is-active --quiet hcr-server 2>/dev/null \
+        && echo -e "${GREEN}● ON${RESET}" \
+        || echo -e "${GRAY}● OFF${RESET}")
 
     ZIPVPN_STATUS=$(status_config \
         "${ZIPVPN:-OFF}")
@@ -615,13 +618,18 @@ show_protocol_menu() {
     # FILA 7
     # ----------------------------------------------------------
 
-    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🌐 Squid      %b    " \
+    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🚀 XHTTP      %b    " \
+        "$XHTTP_STATUS"
+
+    printf "${MAGENTA}${BOLD}[14]${RESET} 🌐 Squid      %b\n" \
         "$SQUID_STATUS"
 
-    printf "${MAGENTA}${BOLD}[14]${RESET} 🛡️ HCR        %b\n" \
-        "$XHTPP_STATUS"
-printf "${MAGENTA}${BOLD}[15]${RESET} 🛡️ XHTPP     %b\n" \
-        "$XHTPP_STATUS"
+    # ----------------------------------------------------------
+    # FILA 8
+    # ----------------------------------------------------------
+
+    printf "  ${MAGENTA}${BOLD}[15]${RESET} 🛡️ HCR        %b\n" \
+        "$HCR_STATUS"
 
     echo
 
@@ -673,7 +681,7 @@ process_option() {
 
         2|02)
 
-            run_module "$PROTOCOL_DIR/zivpn.sh"
+            run_module "$PROTOCOL_DIR/zipvpn.sh"
 
             ;;
 
@@ -738,10 +746,20 @@ process_option() {
             ;;
 
         # ======================================================
-        # SQUID
+        # XHTTP
         # ======================================================
 
         13)
+
+            run_module "$PROTOCOL_DIR/xhttp"
+
+            ;;
+
+        # ======================================================
+        # SQUID
+        # ======================================================
+
+        14)
 
             run_module "$PROTOCOL_DIR/squid.sh"
 
@@ -751,14 +769,9 @@ process_option() {
         # HCR
         # ======================================================
 
-        14)
+        15)
 
             run_module "$PROTOCOL_DIR/hcr-server.sh"
-
-            ;;
-15)
-
-            run_module "$PROTOCOL_DIR/xhttp.sh"
 
             ;;
 
