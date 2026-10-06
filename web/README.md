@@ -1,12 +1,22 @@
-# KevinTech Web Panel
+# KevinTech Web Panel v3.6
 
-- Un solo instalador: `installer.sh`.
-- URL pública: `https://TU_DOMINIO/login`.
-- Backend: `127.0.0.1:18080`.
-- Opción 1: instalación nueva si no existe; actualización si ya existe, conservando credenciales y dominio.
-- Opción 2: cambia usuario, contraseña y dominio; ENTER conserva cada valor.
-- Opción 3: logs.
-- Opción 4: desinstala la web, servicios, integración HAProxy, certificado y archivos de la web.
-- Después de desinstalar, opción 1 vuelve a pedir todos los datos y hace una instalación nueva.
-- No toca `usuarios/`, `protocolos/`, `herramientas/` ni `telegram/`.
-- Todas las páginas HTML están separadas en `templates/*.html`.
+Panel web del KevinTech Multi Script.
+
+## Instalación
+
+Usa únicamente `installer.sh`. El instalador antiguo fue eliminado para evitar confusión.
+
+## Rutas principales
+
+- `/login` — acceso
+- `/register` — registro
+- `/dashboard` — panel
+- `/protocols` — estado de protocolos
+- `/online` — usuarios online
+- `/referrals` — referidos
+- `/profile` — perfil
+- `/admin` — administración
+- `/admin/settings` — configuración
+- `/console` — consola
+
+La interfaz usa las rutas reales de `server.py`; no depende de una SPA `/api/*` inexistente.

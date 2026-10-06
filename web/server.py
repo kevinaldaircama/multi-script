@@ -245,14 +245,15 @@ def render_template(name, **values):
         return '<!doctype html><html><body>Template missing: %s</body></html>' % html_escape(name)
     for k,v in values.items():
         html = html.replace('{{'+k+'}}', str(v))
+    html = html.replace('{{PREFIX}}', PREFIX)
     return html
 
 def page(title, body, user=None):
     nav=''
     if user:
-        nav='<a href="%s/dashboard">Panel</a><a href="%s/profile">Perfil</a><a href="%s/online">Online</a><a href="%s/referrals">Referidos</a>'%(PREFIX,PREFIX,PREFIX,PREFIX)
-        if user.get('role')=='admin': nav='<a href="%s/admin">Admin</a><a href="%s/console">Consola</a>'%(PREFIX,PREFIX)
-        nav += '<a href="%s/logout">Salir</a>'%PREFIX
+        nav='<a href="%s/dashboard">📊 Panel</a><a href="%s/protocols">⚙️ Protocolos</a><a href="%s/profile">👤 Perfil</a><a href="%s/online">🟢 Online</a><a href="%s/referrals">🎁 Referidos</a>'%(PREFIX,PREFIX,PREFIX,PREFIX,PREFIX)
+        if user.get('role')=='admin': nav='<a href="%s/admin">🛡️ Admin</a><a href="%s/protocols">⚙️ Protocolos</a><a href="%s/console">⌨️ Consola</a><a href="%s/admin/settings">⚙️ Configuración</a>'%(PREFIX,PREFIX,PREFIX,PREFIX)
+        nav += '<a class="nav-exit" href="%s/logout">↪ Salir</a>'%PREFIX
     else: nav='<a href="%s/login">Ingresar</a><a href="%s/register">Registrarse</a>'%(PREFIX,PREFIX)
     return render_template('base.html', TITLE=html_escape(title), NAV=nav, BODY=body)
 
@@ -328,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect('/login')
         if p=='/ads': return self.ads_page(u)
         if p=='/dashboard': return self.dashboard(u)
+        if p=='/protocols': return self.protocols(u)
         if p=='/profile': return self.profile(u)
         if p=='/online': return self.online(u)
         if p=='/referrals': return self.referrals(u)
@@ -392,6 +394,40 @@ class Handler(BaseHTTPRequestHandler):
         c=db(); accounts=c.execute('SELECT * FROM accounts WHERE user_id=? ORDER BY id DESC',(u['id'],)).fetchall(); online=sum(len(account_online(x['username'])) for x in accounts); pts=u['referral_points']
         cards=''.join('<div class="card"><h3>👤 %s</h3><p class="muted">Tipo: %s · Expira: %s</p><p>Online: <b class="oktxt">%s</b></p><p><span class="tag">Límite %s IP</span></p><a class="btn" href="%s/account?id=%s">Ver</a> <a class="btn primary" href="%s/ads?action=renew&account=%s">Renovar</a> <a class="btn danger" href="%s/ads?action=delete&account=%s">Eliminar</a></div>'%(html_escape(a['username']),html_escape(a['type']),html_escape(a['expiration'] or '—'),len(account_online(a['username'])),a['ip_limit'],PREFIX,a['id'],PREFIX,a['id'],PREFIX,a['id']) for a in accounts)
         c.close();return self.send(200,body=tpl('dashboard.html',u,'Panel',COUNT=len(accounts),ONLINE=online,POINTS=pts,REFERRAL_CODE=html_escape(u['referral_code']),ACCOUNTS=cards or '<div class="card">No tienes cuentas todavía.</div>'))
+
+    def protocols(self,u):
+        if not u:
+            return self.redirect('/login')
+        services = [
+            ('OpenSSH','ssh','🔐'),
+            ('Dropbear','dropbear_custom','🚪'),
+            ('HAProxy / SSL','haproxy','🔒'),
+            ('SlowDNS','dnstt','🌐'),
+            ('Xray','xray','☁️'),
+            ('OpenVPN','openvpn-server@server','🔐'),
+            ('Hysteria','hysteria1-server','🛡️'),
+            ('BHTTP','bhttp','🌐'),
+            ('XHTTP','xhttp','🚀'),
+            ('Squid','squid','🌐'),
+            ('HCR','hcr-server','🛡️'),
+            ('WireGuard','wg-quick@wg0','🛡️'),
+            ('BTUN','btun','⚡'),
+            ('Shadowsocks','shadowsocks-libev-server@8388','🕶️'),
+            ('SOCKS5','sockd','🔐'),
+            ('3X-UI','x-ui','🖥️'),
+            ('VayDNS','vaydns','🔐'),
+            ('Slipstream','slipstream','🚀'),
+            ('DNSDist','dnsdist','🌐'),
+        ]
+        rows=[]
+        for name,svc,icon in services:
+            try:
+                active=subprocess.run(['systemctl','is-active','--quiet',svc],timeout=3).returncode==0
+            except Exception:
+                active=False
+            rows.append('<div class="service-card"><div class="service-icon">%s</div><div class="service-main"><strong>%s</strong><span class="muted">%s</span></div><span class="status %s">%s</span></div>'%(icon,html_escape(name),html_escape(svc),'on' if active else 'off','ACTIVO' if active else 'DETENIDO'))
+        body=tpl('protocols.html',u,'Protocolos',ROWS=''.join(rows),COUNT=len(services))
+        return self.send(200,body=body)
 
     def profile(self,u):
         if not u:return self.redirect('/login')
