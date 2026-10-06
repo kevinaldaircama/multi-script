@@ -7,7 +7,7 @@
 #
 # Archivo : /etc/kevintech/protocolos/menu.sh
 # Config  : /etc/kevintech/config.conf
-# Versión : 3.4 Premium
+# Versión : 3.5 Premium
 #
 # ==============================================================
 
@@ -22,7 +22,7 @@ CONFIG="$BASE/config.conf"
 PROTOCOL_DIR="$BASE/protocolos"
 TOOLS_DIR="$BASE/herramientas"
 
-VERSION="3.4"
+VERSION="3.5"
 PANEL_NAME="KEVINTECH MULTI SCRIPT"
 
 # ==============================================================
@@ -186,6 +186,48 @@ run_module() {
 }
 
 # ==============================================================
+# BUSCAR MÓDULO ALTERNATIVO
+# ==============================================================
+# Sirve para soportar hysteria.sh / histeria.sh
+
+run_module_first() {
+
+    local FILE
+    local FOUND=""
+
+    for FILE in "$@"; do
+
+        if [[ -f "$FILE" ]]; then
+            FOUND="$FILE"
+            break
+        fi
+
+    done
+
+    if [[ -z "$FOUND" ]]; then
+
+        echo
+        echo -e "${RED}${BOLD}✘ MÓDULO NO ENCONTRADO${RESET}"
+        echo
+
+        echo -e "${WHITE}Se buscaron:${RESET}"
+
+        for FILE in "$@"; do
+            echo -e "  ${YELLOW}$FILE${RESET}"
+        done
+
+        echo
+
+        pause
+
+        return 1
+    fi
+
+    run_module "$FOUND"
+
+}
+
+# ==============================================================
 # ESTADO DE PROTOCOLOS
 # ==============================================================
 
@@ -216,7 +258,29 @@ status_service() {
     local SERVICE="$1"
     local CONFIG_STATUS="${2:-OFF}"
 
-    status_config "$CONFIG_STATUS"
+    if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+
+        echo -e "${GREEN}● ON${RESET}"
+
+    else
+
+        case "${CONFIG_STATUS^^}" in
+
+            ON|1|YES|TRUE)
+
+                echo -e "${YELLOW}● CFG${RESET}"
+
+                ;;
+
+            *)
+
+                echo -e "${GRAY}● OFF${RESET}"
+
+                ;;
+
+        esac
+
+    fi
 
 }
 
@@ -512,29 +576,9 @@ get_statuses() {
     # XHTTP
     # ----------------------------------------------------------
 
-    XHTTP_STATUS=$(status_config \
+    XHTTP_STATUS=$(status_service \
+        "xhttp" \
         "${XHTTP:-OFF}")
-
-    # ----------------------------------------------------------
-    # HCR
-    # ----------------------------------------------------------
-
-    HCR_STATUS=$(systemctl is-active --quiet hcr-server 2>/dev/null \
-        && echo -e "${GREEN}● ON${RESET}" \
-        || echo -e "${GRAY}● OFF${RESET}")
-
-    # ----------------------------------------------------------
-    # WIREGUARD
-    # ----------------------------------------------------------
-
-    WG_STATUS=$(status_config \
-        "${WG:-OFF}")
-
-    ZIPVPN_STATUS=$(status_config \
-        "${ZIPVPN:-OFF}")
-
-    BADVPN_STATUS=$(status_config \
-        "${BADVPN:-OFF}")
 
     # ----------------------------------------------------------
     # SQUID
@@ -544,11 +588,70 @@ get_statuses() {
         "squid" \
         "${SQUID:-OFF}")
 
+    # ----------------------------------------------------------
+    # HCR
+    # ----------------------------------------------------------
+
+    HCR_STATUS=$(status_service \
+        "hcr-server" \
+        "${HCR:-OFF}")
+
+    # ----------------------------------------------------------
+    # WIREGUARD
+    # ----------------------------------------------------------
+
+    WG_STATUS=$(status_service \
+        "wg-quick@wg0" \
+        "${WG:-OFF}")
+
+    # ----------------------------------------------------------
+    # BTUN
+    # ----------------------------------------------------------
+
+    BTUN_STATUS=$(status_service \
+        "btun" \
+        "${BTUN:-OFF}")
+
+    # ----------------------------------------------------------
+    # SHADOWSOCKS
+    # ----------------------------------------------------------
+
+    SS_PORT="${SS_PORT:-8388}"
+
+    SHADOWSOCKS_STATUS=$(status_service \
+        "shadowsocks-libev-server@${SS_PORT}" \
+        "${SHADOWSOCKS:-OFF}")
+
+    # ----------------------------------------------------------
+    # SOCKS5
+    # ----------------------------------------------------------
+
+    SOCKS5_STATUS=$(status_service \
+        "sockd" \
+        "${SOCKS5:-OFF}")
+
+    # ----------------------------------------------------------
+    # 3X-UI
+    # ----------------------------------------------------------
+
+    XUI_STATUS=$(status_service \
+        "x-ui" \
+        "${XUI:-OFF}")
+
+    # ----------------------------------------------------------
+    # ZIPVPN / BADVPN
+    # ----------------------------------------------------------
+
+    ZIPVPN_STATUS=$(status_config \
+        "${ZIPVPN:-OFF}")
+
+    BADVPN_STATUS=$(status_config \
+        "${BADVPN:-OFF}")
+
 }
 
 # ==============================================================
 # MENÚ DE PROTOCOLOS
-# 2 COLUMNAS COMPACTAS
 # ==============================================================
 
 show_protocol_menu() {
@@ -561,85 +664,105 @@ show_protocol_menu() {
 
     line
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 1
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 OpenSSH    %b    " \
+    printf "  ${GREEN}${BOLD}[01]${RESET} 🔐 OpenSSH     %b    " \
         "$OPENSSH_STATUS"
 
-    printf "${GREEN}${BOLD}[02]${RESET} 📦 ZIPVPN     %b\n" \
+    printf "${GREEN}${BOLD}[02]${RESET} 📦 ZIPVPN      %b\n" \
         "$ZIPVPN_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 2
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 Dropbear   %b    " \
+    printf "  ${GREEN}${BOLD}[03]${RESET} 🚪 Dropbear    %b    " \
         "$DROPBEAR_STATUS"
 
-    printf "${GREEN}${BOLD}[04]${RESET} 🔒 SSL/TLS    %b\n" \
+    printf "${GREEN}${BOLD}[04]${RESET} 🔒 SSL/TLS     %b\n" \
         "$SSL_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 3
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ BadVPN     %b    " \
+    printf "  ${GREEN}${BOLD}[05]${RESET} ⚡ BadVPN      %b    " \
         "$BADVPN_STATUS"
 
-    printf "${GREEN}${BOLD}[06]${RESET} 🚀 UDP Custom  %b\n" \
+    printf "${GREEN}${BOLD}[06]${RESET} 🚀 UDP Custom   %b\n" \
         "$UDP_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 4
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 SlowDNS    %b    " \
+    printf "  ${GREEN}${BOLD}[07]${RESET} 🌐 SlowDNS     %b    " \
         "$SLOWDNS_STATUS"
 
-    printf "${GREEN}${BOLD}[08]${RESET} ☁️ Xray/V2Ray %b\n" \
+    printf "${GREEN}${BOLD}[08]${RESET} ☁️ Xray/V2Ray  %b\n" \
         "$XRAY_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 5
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 CheckUser  %b    " \
+    printf "  ${GREEN}${BOLD}[09]${RESET} 👤 CheckUser   %b    " \
         "$CHECKUSER_STATUS"
 
-    printf "${GREEN}${BOLD}[10]${RESET} 🔐 OpenVPN    %b\n" \
+    printf "${GREEN}${BOLD}[10]${RESET} 🔐 OpenVPN     %b\n" \
         "$OPENVPN_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 6
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "${GREEN}${BOLD}[11]${RESET} 🛡️ Hysteria   %b    " \
+    printf "  ${GREEN}${BOLD}[11]${RESET} 🛡️ Hysteria    %b    " \
         "$HYSTERIA_STATUS"
 
-    printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP      %b\n" \
+    printf "${MAGENTA}${BOLD}[12]${RESET} 🌐 BHTTP       %b\n" \
         "$BHTTP_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 7
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🚀 XHTTP      %b    " \
+    printf "  ${MAGENTA}${BOLD}[13]${RESET} 🚀 XHTTP       %b    " \
         "$XHTTP_STATUS"
 
-    printf "${MAGENTA}${BOLD}[14]${RESET} 🌐 Squid      %b\n" \
+    printf "${MAGENTA}${BOLD}[14]${RESET} 🌐 Squid       %b\n" \
         "$SQUID_STATUS"
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # FILA 8
-    # ----------------------------------------------------------
+    # ==========================================================
 
-    printf "  ${MAGENTA}${BOLD}[15]${RESET} 🛡️ HCR        %b    " \
+    printf "  ${MAGENTA}${BOLD}[15]${RESET} 🛡️ HCR         %b    " \
         "$HCR_STATUS"
 
-    printf "${MAGENTA}${BOLD}[16]${RESET} 🛡️ WireGuard  %b\n" \
+    printf "${MAGENTA}${BOLD}[16]${RESET} 🛡️ WireGuard   %b\n" \
         "$WG_STATUS"
+
+    # ==========================================================
+    # FILA 9 — NUEVOS
+    # ==========================================================
+
+    printf "  ${MAGENTA}${BOLD}[17]${RESET} ⚡ BTUN        %b    " \
+        "$BTUN_STATUS"
+
+    printf "${MAGENTA}${BOLD}[18]${RESET} 🕶️ Shadowsocks %b\n" \
+        "$SHADOWSOCKS_STATUS"
+
+    # ==========================================================
+    # FILA 10 — NUEVOS
+    # ==========================================================
+
+    printf "  ${MAGENTA}${BOLD}[19]${RESET} 🔐 SOCKS5      %b    " \
+        "$SOCKS5_STATUS"
+
+    printf "${MAGENTA}${BOLD}[20]${RESET} 🖥️ 3X-UI        %b\n" \
+        "$XUI_STATUS"
 
     echo
 
@@ -651,13 +774,13 @@ show_protocol_menu() {
 
     line
 
-    printf "  ${GREEN}${BOLD}[17]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[18]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[21]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[22]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[19]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[20]${RESET} 🤖 Bot Telegram\n"
+    printf "  ${GREEN}${BOLD}[23]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[24]${RESET} 🤖 Bot Telegram\n"
 
-    printf "  ${GREEN}${BOLD}[21]${RESET} 🌐 Web Universal\n"
+    printf "  ${GREEN}${BOLD}[25]${RESET} 🌐 Web Universal\n"
 
     echo
 
@@ -683,11 +806,19 @@ process_option() {
 
     case "$OP" in
 
+        # ======================================================
+        # OPENSSH
+        # ======================================================
+
         1|01)
 
             run_module "$PROTOCOL_DIR/openssh.sh"
 
             ;;
+
+        # ======================================================
+        # ZIPVPN
+        # ======================================================
 
         2|02)
 
@@ -695,11 +826,19 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # DROPBEAR
+        # ======================================================
+
         3|03)
 
             run_module "$PROTOCOL_DIR/dropbear.sh"
 
             ;;
+
+        # ======================================================
+        # SSL/TLS
+        # ======================================================
 
         4|04)
 
@@ -707,11 +846,19 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # BADVPN
+        # ======================================================
+
         5|05)
 
             run_module "$PROTOCOL_DIR/badvpn.sh"
 
             ;;
+
+        # ======================================================
+        # UDP CUSTOM
+        # ======================================================
 
         6|06)
 
@@ -719,11 +866,19 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # SLOWDNS
+        # ======================================================
+
         7|07)
 
             run_module "$PROTOCOL_DIR/slowdns.sh"
 
             ;;
+
+        # ======================================================
+        # XRAY / V2RAY
+        # ======================================================
 
         8|08)
 
@@ -731,11 +886,19 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # CHECKUSER
+        # ======================================================
+
         9|09)
 
             run_module "$PROTOCOL_DIR/checkuser.sh"
 
             ;;
+
+        # ======================================================
+        # OPENVPN
+        # ======================================================
 
         10)
 
@@ -743,11 +906,21 @@ process_option() {
 
             ;;
 
+        # ======================================================
+        # HYSTERIA
+        # ======================================================
+
         11)
 
-            run_module "$PROTOCOL_DIR/histeria.sh"
+            run_module_first \
+                "$PROTOCOL_DIR/hysteria.sh" \
+                "$PROTOCOL_DIR/histeria.sh"
 
             ;;
+
+        # ======================================================
+        # BHTTP
+        # ======================================================
 
         12)
 
@@ -796,38 +969,98 @@ process_option() {
             ;;
 
         # ======================================================
-        # ADMINISTRACIÓN
+        # BTUN
         # ======================================================
 
         17)
+
+            run_module "$PROTOCOL_DIR/btun.sh"
+
+            ;;
+
+        # ======================================================
+        # SHADOWSOCKS
+        # ======================================================
+
+        18)
+
+            run_module "$PROTOCOL_DIR/shadowsocks.sh"
+
+            ;;
+
+        # ======================================================
+        # SOCKS5
+        # ======================================================
+
+        19)
+
+            run_module "$PROTOCOL_DIR/socks5.sh"
+
+            ;;
+
+        # ======================================================
+        # 3X-UI
+        # ======================================================
+
+        20)
+
+            run_module "$PROTOCOL_DIR/3x-ui.sh"
+
+            ;;
+
+        # ======================================================
+        # HERRAMIENTAS
+        # ======================================================
+
+        21)
 
             run_module "$TOOLS_DIR/menu.sh"
 
             ;;
 
-        18)
+        # ======================================================
+        # REINICIAR SERVICIOS
+        # ======================================================
+
+        22)
 
             run_module "$TOOLS_DIR/reiniciar.sh"
 
             ;;
 
-        19)
+        # ======================================================
+        # FIREWALL
+        # ======================================================
+
+        23)
 
             run_module "$TOOLS_DIR/firewall.sh"
 
             ;;
 
-        20)
+        # ======================================================
+        # BOT TELEGRAM
+        # ======================================================
+
+        24)
 
             run_module "$BASE/telegram/install.sh"
 
             ;;
 
-        21)
+        # ======================================================
+        # WEB UNIVERSAL
+        # ======================================================
+
+        25)
 
             run_module "$BASE/web/installer.sh"
 
             ;;
+
+        # ======================================================
+        # REGRESAR
+        # ======================================================
 
         0|00)
 
