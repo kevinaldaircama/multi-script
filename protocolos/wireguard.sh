@@ -63,40 +63,53 @@ anim_fail() {
     echo -e "${RED}❌ $1${RESET}"
 }
 
+#==================================================
+# DISEÑO PREMIUM KEVINTECH
+#==================================================
+
+line() {
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
 mv_brand_header() {
     local TITLE="${1:-WIREGUARD}"
 
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${WHITE}        🛡 ${TITLE}${RESET}"
-    echo -e "${GRAY}             KevinTech WireGuard${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    clear
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}          ${MAGENTA}🛡️ KEVINTECH${RESET}                  ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}          ${WHITE}${TITLE}${RESET}"
+    echo -e "${CYAN}║${RESET}          ${GRAY}VPN UDP PREMIUM${RESET}              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
 }
 
 mv_deliv_header() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${WHITE}        $1${RESET}"
-    [[ -n "$2" ]] && echo -e "${GRAY}        $2${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}          ${MAGENTA}$1${RESET}"
+    [[ -n "$2" ]] && echo -e "${CYAN}║${RESET}          ${GRAY}$2${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
 }
 
 mv_deliv_sec() {
-    echo -e "${CYAN}➜ $1${RESET}"
+    echo ""
+    echo -e "${CYAN}╭─ ${WHITE}$1${CYAN} ────────────────────────────────╮${RESET}"
 }
 
 mv_dcard_top() {
-    echo -e "${CYAN}┌──────────────────────────────────────────┐${RESET}"
+    echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
 }
 
 mv_dcard_row() {
-    printf "${CYAN}│${RESET} %s %-12s : ${WHITE}%s${RESET}\n" "$1" "$2" "$3"
+    printf "${CYAN}│${RESET} %s %-13s ${WHITE}%-24s${RESET}${CYAN}│${RESET}\n" \
+        "$1" "$2" "$3"
 }
 
 mv_dcard_bot() {
-    echo -e "${CYAN}└──────────────────────────────────────────┘${RESET}"
+    echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
 }
 
 mv_deliv_pie() {
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
 mv_tick() {
@@ -391,66 +404,167 @@ fi
 #──────────────────────────────────────────────
 # MENÚ PRINCIPAL
 #──────────────────────────────────────────────
+#==================================================
+# MENÚ PRINCIPAL WIREGUARD PREMIUM
+#==================================================
+
 while true
 do
     clear
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo -e "${MAGENTA}          🛡 WIREGUARD MANAGER v5.7${RESET}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    echo ""
 
     if systemctl is-active --quiet "wg-quick@${WG_IF}" 2>/dev/null; then
-        SRV_S="${GREEN}● SERVIDOR ACTIVO${RESET} ${GRAY}[UDP $WG_PORT] · ${WG_NET}.1/24${RESET}"
+        STATUS="${GREEN}● ACTIVO${RESET}"
     elif [[ -f "$WG_SRV_CONF" ]]; then
-        SRV_S="${RED}● DETENIDO${RESET}"
+        STATUS="${RED}● DETENIDO${RESET}"
     else
-        SRV_S="${GRAY}○ SIN INSTALAR${RESET}"
+        STATUS="${GRAY}○ NO INSTALADO${RESET}"
     fi
-    NP=$(ls "$PEERS_DIR"/*.conf 2>/dev/null | wc -l)
 
-cat <<EOF
+    NP=$(find "$PEERS_DIR" -maxdepth 1 -type f -name "*.conf" 2>/dev/null | wc -l)
 
- $SRV_S
- Peers registrados: ${WHITE}$NP${RESET}
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${RESET}          ${MAGENTA}🛡️ KEVINTECH WIREGUARD${RESET}       ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}              ${WHITE}VPN PREMIUM${RESET}               ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
 
- [1] ➮ Instalar/Iniciar Servidor
- [2] ➮ Nuevo Peer (+QR)
- [3] ➮ Listar Peers (online/idle)
- [4] ➮ Ver Config+QR de un Peer
- [5] ➮ Eliminar Peer
- [6] ➮ Detener / Iniciar Servidor
- [7] ➮ Cambiar Puerto UDP
- [8] ➮ Desinstalar
+    echo -e "${CYAN}║${RESET}  ${WHITE}Estado     :${RESET} $STATUS"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Interfaz   :${RESET} ${CYAN}$WG_IF${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Puerto UDP :${RESET} ${CYAN}$WG_PORT${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Red VPN    :${RESET} ${CYAN}${WG_NET}.0/24${RESET}"
+    echo -e "${CYAN}║${RESET}  ${WHITE}Peers      :${RESET} ${MAGENTA}$NP${RESET}"
 
- [0] ➮ Regresar
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${RESET}              ${WHITE}⚡ OPCIONES${RESET}                  ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
 
-EOF
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-    read -rp "$(trx ' ► Opcion: ')" OP
+    echo -e "${CYAN}║${RESET}  ${GREEN}[01]${RESET} 🚀 Instalar / Iniciar servidor        ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[02]${RESET} 👤 Crear Peer + QR                     ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[03]${RESET} 📋 Listar Peers                        ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[04]${RESET} 📱 Ver Config + QR                     ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[05]${RESET} 🗑️ Eliminar Peer                       ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[06]${RESET} 🔄 Detener / Iniciar                   ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[07]${RESET} 🔌 Cambiar Puerto UDP                  ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GREEN}[08]${RESET} 🧹 Desinstalar                         ${CYAN}║${RESET}"
+
+    echo -e "${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  ${GRAY}[00]${RESET} ↩️ Regresar                            ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
+
+    echo ""
+
+    read -rp "$(echo -e "${CYAN}╰─➤${RESET} ${WHITE}Opción:${RESET} ")" OP
+
     case "$OP" in
-        1) server_up && { clear; echo -e " ${GREEN}✅ WireGuard activo en UDP $WG_PORT${RESET}"; sleep 2; } ;;
-        2) add_peer ;;
-        3) list_peers ;;
-        4) show_peer_qr ;;
-        5) del_peer ;;
-        6) toggle_server ;;
-        7)
-            read -rp " ► Nuevo puerto UDP [$WG_PORT]: " NEWP
-            if [[ "$NEWP" =~ ^[0-9]+$ ]] && (( NEWP >= 1024 && NEWP <= 65535 )); then
-                WAS_ACTIVE=0; systemctl is-active --quiet "wg-quick@${WG_IF}" && WAS_ACTIVE=1
-                systemctl stop "wg-quick@${WG_IF}" 2>/dev/null
-                WG_PORT=$NEWP
-                [[ -f "$WG_SRV_CONF" ]] && {
-                    sed -i "s/^ListenPort = .*/ListenPort = $NEWP/" "$WG_SRV_CONF"
-                    sed -i "/^WG_PORT=/d" "$CONFIG"; echo "WG_PORT=$NEWP" >> "$CONFIG"
-                }
-                (( WAS_ACTIVE )) && { server_up; echo -e " ${GREEN}✅ Puerto cambiado a $NEWP${RESET}"; }
-                sleep 2
+
+        1)
+            clear
+            mv_deliv_header \
+                "🚀 INSTALANDO WIREGUARD" \
+                "KevinTech VPN Premium"
+
+            echo ""
+
+            if server_up; then
+                echo ""
+                echo -e "${GREEN}✔ WireGuard está activo${RESET}"
+                echo -e "${GRAY}  Interfaz :${RESET} ${CYAN}$WG_IF${RESET}"
+                echo -e "${GRAY}  Puerto   :${RESET} ${CYAN}UDP $WG_PORT${RESET}"
+                echo -e "${GRAY}  Red      :${RESET} ${CYAN}${WG_NET}.0/24${RESET}"
             else
-                echo -e "${RED}❌ inválido${RESET}"; sleep 2
-            fi ;;
-        8) uninstall_wg ;;
-        0) exec bash "$BASE/protocolos/menu.sh" ;;
-        *) echo -e "${RED}❌ Opcion invalida.${RESET}"; sleep 1 ;;
+                echo ""
+                echo -e "${RED}✘ No se pudo iniciar WireGuard${RESET}"
+            fi
+
+            echo ""
+            read -n1 -r -p \
+                "$(echo -e "${GRAY}Presiona una tecla para continuar...${RESET}")"
+            ;;
+
+        2)
+            add_peer
+            ;;
+
+        3)
+            list_peers
+            ;;
+
+        4)
+            show_peer_qr
+            ;;
+
+        5)
+            del_peer
+            ;;
+
+        6)
+            toggle_server
+            ;;
+
+        7)
+            clear
+
+            mv_deliv_header \
+                "🔌 PUERTO WIREGUARD" \
+                "Configuración UDP"
+
+            echo ""
+            echo -e " ${GRAY}Puerto actual:${RESET} ${CYAN}UDP $WG_PORT${RESET}"
+            echo ""
+
+            read -rp \
+                "$(echo -e "${CYAN}➜${RESET} Nuevo puerto UDP: ")" NEWP
+
+            if [[ "$NEWP" =~ ^[0-9]+$ ]] &&
+               (( NEWP >= 1024 && NEWP <= 65535 )); then
+
+                WAS_ACTIVE=0
+
+                systemctl is-active --quiet \
+                    "wg-quick@${WG_IF}" && WAS_ACTIVE=1
+
+                systemctl stop \
+                    "wg-quick@${WG_IF}" 2>/dev/null
+
+                WG_PORT="$NEWP"
+
+                if [[ -f "$WG_SRV_CONF" ]]; then
+
+                    sed -i \
+                        "s/^ListenPort = .*/ListenPort = $NEWP/" \
+                        "$WG_SRV_CONF"
+
+                    sed -i '/^WG_PORT=/d' "$CONFIG"
+                    echo "WG_PORT=$NEWP" >> "$CONFIG"
+                fi
+
+                (( WAS_ACTIVE )) && server_up
+
+                echo ""
+                echo -e "${GREEN}✔ Puerto UDP cambiado a $NEWP${RESET}"
+
+            else
+                echo ""
+                echo -e "${RED}✘ Puerto inválido${RESET}"
+            fi
+
+            echo ""
+            read -n1 -r -p \
+                "$(echo -e "${GRAY}Presiona una tecla...${RESET}")"
+            ;;
+
+        8)
+            uninstall_wg
+            ;;
+
+        00|0)
+            exec bash "$BASE/protocolos/menu.sh"
+            ;;
+
+        *)
+            echo ""
+            echo -e "${RED}✘ Opción inválida${RESET}"
+            sleep 1
+            ;;
+
     esac
 done
