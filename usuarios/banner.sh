@@ -1,64 +1,99 @@
 #!/bin/bash
 # ============================================================
-# KEVINTECH PER-USER BANNER MANAGER v5.0
+# KEVINTECH BANNER MANAGER v6.0
 # ============================================================
-# Usuarios: /etc/kevintech/limits.conf
-# Banners : /etc/ssh_banners
+# 🌐 Banner Global
+# 👤 Banner Individual
+# ⚡ Auto banner para nuevos usuarios
 #
-# - Menú principal: 4 opciones
-# - Submenús
-# - Usuarios automáticos desde limits.conf
-# - Detecta cuentas nuevas
-# - Sin dominio / servidor
-# - Banner individual por usuario
-# - No utiliza /etc/issue.net como banner global
+# Usuarios:
+#   /etc/kevintech/limits.conf
+#
+# Config:
+#   /etc/kevintech/config.conf
+#
+# Banners:
+#   /etc/ssh_banners/
+#
+# Global:
+#   /etc/ssh_banners/global.html
+#   /etc/ssh_banners/global.txt
+#
+# Individual:
+#   /etc/ssh_banners/USUARIO.html
+#   /etc/ssh_banners/USUARIO.txt
+#
+# Estado:
+#   /etc/kevintech/banner-state.conf
+#
+# NO utiliza:
+#   /etc/issue.net
 # ============================================================
 
 set -u
 
+# ============================================================
+# RUTAS
+# ============================================================
+
 BASE="/etc/kevintech"
+
 LIMITS_FILE="$BASE/limits.conf"
 CONFIG="$BASE/config.conf"
 
 BANNER_DIR="/etc/ssh_banners"
 SSHD_CONFIG="/etc/ssh/sshd_config"
+
 BACKUP_DIR="$BASE/banner-backups"
-
-START_MARK="# >>> KEVINTECH_PER_USER_BANNERS_START <<<"
-END_MARK="# >>> KEVINTECH_PER_USER_BANNERS_END <<<"
-
 STATE_FILE="$BASE/banner-state.conf"
+
+GLOBAL_HTML="$BANNER_DIR/global.html"
+GLOBAL_TXT="$BANNER_DIR/global.txt"
+
+START_MARK="# >>> KEVINTECH_BANNER_START <<<"
+END_MARK="# >>> KEVINTECH_BANNER_END <<<"
 
 # ============================================================
 # COLORES
 # ============================================================
 
-GREEN="\e[1;92m"
+BLACK="\e[30m"
 RED="\e[1;91m"
+GREEN="\e[1;92m"
 YELLOW="\e[1;93m"
 BLUE="\e[1;94m"
-CYAN="\e[1;96m"
 MAGENTA="\e[1;95m"
+CYAN="\e[1;96m"
 WHITE="\e[1;97m"
 GRAY="\e[1;90m"
 RESET="\e[0m"
+
+BOLD="\e[1m"
 
 # ============================================================
 # ROOT
 # ============================================================
 
 if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}✘ Ejecuta este script como root.${RESET}"
+
+    echo -e "${RED}✘ Este script debe ejecutarse como root.${RESET}"
+
     exit 1
+
 fi
+
+# ============================================================
+# DIRECTORIOS
+# ============================================================
 
 mkdir -p "$BANNER_DIR"
 mkdir -p "$BACKUP_DIR"
 
 chmod 700 "$BANNER_DIR"
+chmod 700 "$BACKUP_DIR"
 
 # ============================================================
-# CONFIG
+# CONFIG PRINCIPAL
 # ============================================================
 
 load_config() {
@@ -73,6 +108,7 @@ load_config() {
         set -u
 
     fi
+
 }
 
 load_config
@@ -84,6 +120,7 @@ load_config
 pause() {
 
     echo
+
     read -rp "Presiona ENTER para continuar..."
 
 }
@@ -97,11 +134,12 @@ header() {
     clear
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}║${WHITE}              KEVINTECH BANNER MANAGER              ${CYAN}║${RESET}"
-    echo -e "${CYAN}║${GRAY}                       v5.0                         ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${WHITE}           KEVINTECH BANNER MANAGER                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}                     v6.0                            ${CYAN}║${RESET}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════╣${RESET}"
-    echo -e "${CYAN}║ ${WHITE}Usuarios automáticos : ${GRAY}limits.conf${CYAN}              ║${RESET}"
-    echo -e "${CYAN}║ ${WHITE}Banner individual    : ${GRAY}ssh_banners${CYAN}               ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}🌐 Global    : ${GRAY}HTML + SSH${CYAN}                         ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}👤 Individual: ${GRAY}limits.conf${CYAN}                       ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}⚡ Automático: ${GRAY}add --auto-user${CYAN}                   ║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${RESET}"
 
     echo
@@ -109,7 +147,7 @@ header() {
 }
 
 # ============================================================
-# OBTENER USUARIOS DEL PRIMER CÓDIGO
+# USUARIOS
 # ============================================================
 
 get_users() {
@@ -123,23 +161,18 @@ get_users() {
         $1 ~ /^[a-zA-Z0-9._-]+$/ {
             print $1
         }
-    ' "$LIMITS_FILE" | sort -u
+    ' "$LIMITS_FILE" |
+    sort -u
 
 }
-
-# ============================================================
-# CONTAR USUARIOS
-# ============================================================
 
 count_users() {
 
-    get_users | wc -l | tr -d ' '
+    get_users |
+    wc -l |
+    tr -d ' '
 
 }
-
-# ============================================================
-# COMPROBAR USUARIO
-# ============================================================
 
 user_exists() {
 
@@ -161,7 +194,7 @@ user_exists() {
 }
 
 # ============================================================
-# LIMITE IP
+# DATOS USUARIO
 # ============================================================
 
 get_limit() {
@@ -169,20 +202,20 @@ get_limit() {
     local user="$1"
     local limit
 
-    limit="$(awk -F: -v u="$user" '
-        $1 == u {
-            print $2
-            exit
-        }
-    ' "$LIMITS_FILE" 2>/dev/null || true)"
+    limit="$(
+        awk -F: -v u="$user" '
+            $1 == u {
+                print $2
+                exit
+            }
+        ' "$LIMITS_FILE" 2>/dev/null || true
+    )"
 
-    [[ -n "$limit" ]] && echo "$limit" || echo "1"
+    [[ -n "$limit" ]] &&
+        echo "$limit" ||
+        echo "1"
 
 }
-
-# ============================================================
-# EXPIRACIÓN
-# ============================================================
 
 get_expire() {
 
@@ -191,29 +224,32 @@ get_expire() {
 
     if id "$user" >/dev/null 2>&1; then
 
-        expire="$(chage -l "$user" 2>/dev/null |
+        expire="$(
+            chage -l "$user" 2>/dev/null |
             awk -F: '
                 /Account expires/ {
                     gsub(/^[ \t]+/, "", $2)
                     print $2
                     exit
                 }
-            ' || true)"
+            ' || true
+        )"
 
     fi
 
-    [[ -n "$expire" ]] && echo "$expire" || echo "Nunca"
+    [[ -n "$expire" ]] &&
+        echo "$expire" ||
+        echo "Nunca"
 
 }
-
-# ============================================================
-# DÍAS RESTANTES
-# ============================================================
 
 get_days() {
 
     local user="$1"
-    local expire timestamp now days
+    local expire
+    local timestamp
+    local now
+    local days
 
     expire="$(get_expire "$user")"
 
@@ -226,11 +262,14 @@ get_days() {
 
     esac
 
-    timestamp="$(date -d "$expire 23:59:59" +%s 2>/dev/null || true)"
+    timestamp="$(
+        date -d "$expire 23:59:59" +%s 2>/dev/null || true
+    )"
 
     if [[ -z "$timestamp" ]]; then
 
         echo "Desconocido"
+
         return
 
     fi
@@ -262,7 +301,8 @@ get_connected() {
     local total
     local ips
 
-    total="$(who 2>/dev/null |
+    total="$(
+        who 2>/dev/null |
         awk -v u="$user" '
             $1 == u {
                 n++
@@ -271,9 +311,11 @@ get_connected() {
             END {
                 print n+0
             }
-        ')"
+        '
+    )"
 
-    ips="$(who 2>/dev/null |
+    ips="$(
+        who 2>/dev/null |
         awk -v u="$user" '
             $1 == u && $5 ~ /^\(/ {
                 gsub(/[()]/, "", $5)
@@ -281,9 +323,11 @@ get_connected() {
             }
         ' |
         sort -u |
-        paste -sd, -)"
+        paste -sd, -
+    )"
 
-    [[ -z "$ips" ]] && ips="Sin conexión"
+    [[ -z "$ips" ]] &&
+        ips="Sin conexión"
 
     echo "$total|$ips"
 
@@ -308,174 +352,90 @@ html_escape() {
 }
 
 # ============================================================
-# ARCHIVO DEL BANNER
+# ARCHIVOS
 # ============================================================
 
-banner_file() {
+individual_html() {
 
-    echo "$BANNER_DIR/$1.banner"
+    echo "$BANNER_DIR/$1.html"
+
+}
+
+individual_txt() {
+
+    echo "$BANNER_DIR/$1.txt"
 
 }
 
 # ============================================================
-# TIPO DE BANNER
+# ESTADO
 # ============================================================
 
-banner_type() {
+get_state_value() {
 
-    local user="$1"
-    local file
+    local key="$1"
 
-    file="$(banner_file "$user")"
+    [[ -f "$STATE_FILE" ]] || return 0
 
-    [[ -f "$file" ]] || {
-        echo "Sin banner"
-        return
-    }
-
-    if grep -q 'data-kevintech-type="custom"' "$file" 2>/dev/null; then
-
-        echo "Personalizado"
-        return
-
-    fi
-
-    if grep -q 'data-kevintech-type="template"' "$file" 2>/dev/null; then
-
-        sed -n \
-            's/.*data-kevintech-template="\([^"]*\)".*/\1/p' \
-            "$file" |
-            head -1
-
-        return
-
-    fi
-
-    echo "Configurado"
+    grep "^${key}=" "$STATE_FILE" 2>/dev/null |
+        head -1 |
+        cut -d= -f2-
 
 }
 
-# ============================================================
-# DATOS DEL USUARIO
-# ============================================================
+get_saved_announcement() {
 
-show_user_data() {
-
-    local user="$1"
-
-    local connected
-    local total
-    local ips
-
-    connected="$(get_connected "$user")"
-
-    total="${connected%%|*}"
-    ips="${connected#*|}"
-
-    echo -e "${CYAN}╭──────────────────────────────────────────────╮${RESET}"
-    echo -e "${CYAN}│ ${WHITE}👤 Usuario        : ${GREEN}$user${RESET}"
-    echo -e "${CYAN}│ ${WHITE}📅 Expiración     : ${YELLOW}$(get_expire "$user")${RESET}"
-    echo -e "${CYAN}│ ${WHITE}⏳ Días restantes : ${YELLOW}$(get_days "$user")${RESET}"
-    echo -e "${CYAN}│ ${WHITE}👥 Límite IP      : ${YELLOW}$(get_limit "$user")${RESET}"
-    echo -e "${CYAN}│ ${WHITE}🔌 Conectados     : ${GREEN}$total${RESET}"
-    echo -e "${CYAN}│ ${WHITE}🌐 IP(s)          : ${GRAY}$ips${RESET}"
-    echo -e "${CYAN}│ ${WHITE}🎨 Banner         : ${MAGENTA}$(banner_type "$user")${RESET}"
-    echo -e "${CYAN}╰──────────────────────────────────────────────╯${RESET}"
+    get_state_value "BANNER_ANNOUNCEMENT"
 
 }
 
-# ============================================================
-# RESUMEN
-# ============================================================
+get_saved_geo() {
 
-summary() {
-
-    local total
-
-    total="$(count_users)"
-
-    echo -e "${BLUE}╭──────────────────────────────────────────────╮${RESET}"
-    echo -e "${BLUE}│ ${WHITE}CUENTAS DETECTADAS : ${GREEN}$total${BLUE}                  │${RESET}"
-    echo -e "${BLUE}╰──────────────────────────────────────────────╯${RESET}"
-
-    echo
+    get_state_value "BANNER_GEO"
 
 }
 
-# ============================================================
-# LEER CONFIGURACIÓN DEL BANNER
-# ============================================================
+get_saved_support() {
 
-get_saved_mode() {
-
-    if [[ -f "$STATE_FILE" ]]; then
-
-        grep '^BANNER_MODE=' "$STATE_FILE" |
-            cut -d= -f2- |
-            head -1
-
-    fi
+    get_state_value "BANNER_SUPPORT"
 
 }
 
-get_saved_title() {
+get_saved_bot() {
 
-    if [[ -f "$STATE_FILE" ]]; then
-
-        grep '^BANNER_TITLE=' "$STATE_FILE" |
-            cut -d= -f2- |
-            head -1
-
-    fi
+    get_state_value "BANNER_BOT"
 
 }
 
-get_saved_text() {
+save_state() {
 
-    if [[ -f "$STATE_FILE" ]]; then
+    local announcement="$1"
+    local geo="$2"
+    local support="$3"
+    local bot="$4"
 
-        sed -n '/^BANNER_TEXT_START$/,/^BANNER_TEXT_END$/{
-            /^BANNER_TEXT_START$/d
-            /^BANNER_TEXT_END$/d
-            p
-        }' "$STATE_FILE"
-
-    fi
-
-}
-
-# ============================================================
-# GUARDAR CONFIGURACIÓN
-# ============================================================
-
-save_config() {
-
-    local mode="$1"
-    local title="$2"
-    local text="$3"
-
-    {
-        echo "BANNER_MODE=$mode"
-        echo "BANNER_TITLE=$title"
-        echo "BANNER_TEXT_START"
-        printf '%s\n' "$text"
-        echo "BANNER_TEXT_END"
-    } > "$STATE_FILE"
+    cat > "$STATE_FILE" <<EOF
+BANNER_ANNOUNCEMENT=$announcement
+BANNER_GEO=$geo
+BANNER_SUPPORT=$support
+BANNER_BOT=$bot
+EOF
 
     chmod 600 "$STATE_FILE"
 
 }
 
 # ============================================================
-# GENERAR BANNER
+# CREAR BANNER INDIVIDUAL HTML
 # ============================================================
 
-generate_banner() {
+generate_individual_html() {
 
     local user="$1"
-    local title="$2"
-    local text="$3"
-    local template="$4"
+    local announcement="$2"
+    local geo="$3"
+    local support="$4"
+    local bot="$5"
 
     local expire
     local days
@@ -483,11 +443,6 @@ generate_banner() {
     local connected
     local total
     local ips
-
-    local promo
-    local channel
-    local support
-    local bot
 
     expire="$(get_expire "$user")"
     days="$(get_days "$user")"
@@ -498,179 +453,376 @@ generate_banner() {
     total="${connected%%|*}"
     ips="${connected#*|}"
 
-    set +u
-
-    promo="${BANNER_PROMO_TEXT:-}"
-    channel="${BANNER_PROMO_CHANNEL:-}"
-    support="${BANNER_PROMO_SUPPORT:-}"
-    bot="${BANNER_PROMO_BOT_NAME:-}"
-
-    set -u
-
     user="$(html_escape "$user")"
-    title="$(html_escape "$title")"
+    announcement="$(html_escape "$announcement")"
+    geo="$(html_escape "$geo")"
+    support="$(html_escape "$support")"
+    bot="$(html_escape "$bot")"
+
     expire="$(html_escape "$expire")"
     days="$(html_escape "$days")"
     limit="$(html_escape "$limit")"
     ips="$(html_escape "$ips")"
-    text="$(html_escape "$text")"
-
-    promo="$(html_escape "$promo")"
-    channel="$(html_escape "$channel")"
-    support="$(html_escape "$support")"
-    bot="$(html_escape "$bot")"
-
-    local type
-
-    if [[ "$template" == "PERSONALIZADO" ]]; then
-        type="custom"
-    else
-        type="template"
-    fi
 
     cat <<EOF
-<!-- data-kevintech-type="$type" data-kevintech-template="$template" -->
+<!-- KEVINTECH INDIVIDUAL BANNER -->
 
-<html>
+<!DOCTYPE html>
+
+<html lang="es">
 
 <head>
 
 <meta charset="UTF-8">
 
-<title>KevinTech</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+<title>KevinTech SSH</title>
+
+<style>
+
+body{
+    margin:0;
+    padding:20px;
+    background:#050505;
+    color:#ffffff;
+    font-family:Arial,sans-serif;
+    text-align:center;
+}
+
+.box{
+    max-width:700px;
+    margin:auto;
+    padding:25px;
+    border-radius:20px;
+    background:linear-gradient(145deg,#090909,#151515);
+    border:2px solid #00eaff;
+    box-shadow:
+        0 0 15px #00eaff,
+        0 0 35px #7a00ff;
+}
+
+.title{
+    font-size:30px;
+    font-weight:bold;
+    color:#00eaff;
+    text-shadow:
+        0 0 10px #00eaff,
+        0 0 20px #7a00ff;
+}
+
+.subtitle{
+    color:#ff00ff;
+    font-size:18px;
+    font-weight:bold;
+}
+
+.info{
+    margin-top:20px;
+    padding:15px;
+    border-radius:15px;
+    background:#090909;
+    border:1px solid #7a00ff;
+}
+
+.row{
+    padding:7px;
+    font-size:16px;
+}
+
+.label{
+    color:#00eaff;
+    font-weight:bold;
+}
+
+.value{
+    color:#ffffff;
+}
+
+.promo{
+    margin-top:20px;
+    padding:15px;
+    border-radius:15px;
+    background:linear-gradient(90deg,#001f29,#18002b);
+    border:1px solid #00ff88;
+}
+
+.footer{
+    margin-top:20px;
+    color:#888;
+    font-size:13px;
+}
+
+</style>
 
 </head>
 
 <body>
 
-<center>
+<div class="box">
 
-<font size="5">
-<b>✦ $title ✦</b>
-</font>
+<div class="title">
+🚀 KEVINTECH SSH
+</div>
 
-<br>
-<br>
+<div class="subtitle">
+✦ CUENTA AUTORIZADA ✦
+</div>
 
-<b>╭──────────────────────────────────────────────╮</b><br>
-<b>│              KEVINTECH SSH                   │</b><br>
-<b>├──────────────────────────────────────────────┤</b><br>
-<b>│ 👤 Usuario        : $user</b><br>
-<b>│ 📅 Expiración     : $expire</b><br>
-<b>│ ⏳ Días restantes : $days</b><br>
-<b>│ 👥 Límite IP      : $limit</b><br>
-<b>│ 🔌 Conectados     : $total</b><br>
-<b>│ 🌐 IP(s)          : $ips</b><br>
-<b>╰──────────────────────────────────────────────╯</b>
+<div class="info">
 
-<br>
-<br>
+<div class="row">
+<span class="label">👤 Usuario:</span>
+<span class="value">$user</span>
+</div>
+
+<div class="row">
+<span class="label">📅 Expiración:</span>
+<span class="value">$expire</span>
+</div>
+
+<div class="row">
+<span class="label">⏳ Días restantes:</span>
+<span class="value">$days</span>
+</div>
+
+<div class="row">
+<span class="label">👥 Límite IP:</span>
+<span class="value">$limit</span>
+</div>
+
+<div class="row">
+<span class="label">🔌 Conectados:</span>
+<span class="value">$total</span>
+</div>
+
+<div class="row">
+<span class="label">🌐 IP:</span>
+<span class="value">$ips</span>
+</div>
+
+</div>
 
 EOF
 
-    if [[ -n "$text" ]]; then
+    if [[ -n "$announcement" ]]; then
 
-        echo "<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b><br>"
-        echo "<b>✦ MENSAJE ✦</b><br>"
-        echo "<b>$text</b><br>"
-        echo "<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b><br>"
+        cat <<EOF
 
-    fi
+<div class="promo">
 
-    case "$template" in
-
-        CLASICA)
-
-            echo "<br>"
-            echo "<b>KEVINTECH SSH</b><br>"
-            echo "Bienvenido. Tu cuenta está activa.<br>"
-
-            ;;
-
-        PREMIUM)
-
-            echo "<br>"
-            echo "<b>★ KEVINTECH PREMIUM ★</b><br>"
-            echo "Servicio activo y administrado por KevinTech.<br>"
-
-            ;;
-
-        MINIMAL)
-
-            echo "<br>"
-            echo "<b>KEVINTECH</b><br>"
-            echo "Cuenta autorizada.<br>"
-
-            ;;
-
-        PERSONALIZADO)
-
-            ;;
-
-    esac
-
-    [[ -n "$promo" ]] &&
-        echo "<br><b>$promo</b><br>"
-
-    [[ -n "$channel" ]] &&
-        echo "<b>Canal:</b> $channel<br>"
-
-    [[ -n "$support" ]] &&
-        echo "<b>Soporte:</b> $support<br>"
-
-    [[ -n "$bot" ]] &&
-        echo "<b>Bot:</b> $bot<br>"
-
-    cat <<'EOF'
+<div class="subtitle">
+📢 ANUNCIO
+</div>
 
 <br>
 
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+$announcement
 
-</center>
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$geo" ]]; then
+
+        cat <<EOF
+
+<div class="promo">
+
+<div class="subtitle">
+📍 UBICACIÓN
+</div>
+
+<br>
+
+$geo
+
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$support" ]]; then
+
+        cat <<EOF
+
+<div class="promo">
+
+<div class="subtitle">
+🛠️ SOPORTE
+</div>
+
+<br>
+
+$support
+
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$bot" ]]; then
+
+        cat <<EOF
+
+<div class="promo">
+
+<div class="subtitle">
+🤖 BOT / CANAL
+</div>
+
+<br>
+
+$bot
+
+</div>
+
+EOF
+
+    fi
+
+    cat <<'EOF'
+
+<div class="footer">
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<br>
+
+KEVINTECH MULTI SCRIPT
+
+<br>
+
+Sistema administrado por KevinTech
+
+</div>
+
+</div>
 
 </body>
 
 </html>
+
 EOF
 
 }
 
 # ============================================================
-# CREAR BANNER DE UN USUARIO
+# BANNER INDIVIDUAL ANSI
+# ============================================================
+
+generate_individual_txt() {
+
+    local user="$1"
+    local announcement="$2"
+    local geo="$3"
+    local support="$4"
+    local bot="$5"
+
+    local expire
+    local days
+    local limit
+    local connected
+    local total
+    local ips
+
+    expire="$(get_expire "$user")"
+    days="$(get_days "$user")"
+    limit="$(get_limit "$user")"
+
+    connected="$(get_connected "$user")"
+
+    total="${connected%%|*}"
+    ips="${connected#*|}"
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}              🚀 KEVINTECH SSH              ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${MAGENTA}             ✦ PREMIUM ACCESS ✦             ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
+
+    echo -e "${CYAN}║ ${WHITE}👤 Usuario       : ${GREEN}$user${CYAN}                  ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}📅 Expiración    : ${YELLOW}$expire${CYAN}                 ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}⏳ Días restantes: ${YELLOW}$days${CYAN}                   ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}👥 Límite IP     : ${YELLOW}$limit${CYAN}                   ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}🔌 Conectados    : ${GREEN}$total${CYAN}                   ║${RESET}"
+    echo -e "${CYAN}║ ${WHITE}🌐 IP            : ${GRAY}$ips${CYAN}                     ║${RESET}"
+
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
+
+    if [[ -n "$announcement" ]]; then
+        echo -e "${CYAN}║ ${MAGENTA}📢 ANUNCIO${RESET}${CYAN}                                  ║${RESET}"
+        echo -e "${CYAN}║ ${WHITE}$announcement${CYAN}                              ║${RESET}"
+    fi
+
+    if [[ -n "$geo" ]]; then
+        echo -e "${CYAN}║ ${BLUE}📍 UBICACIÓN:${RESET}${CYAN} $geo                         ║${RESET}"
+    fi
+
+    if [[ -n "$support" ]]; then
+        echo -e "${CYAN}║ ${GREEN}🛠️ SOPORTE:${RESET}${CYAN} $support                       ║${RESET}"
+    fi
+
+    if [[ -n "$bot" ]]; then
+        echo -e "${CYAN}║ ${MAGENTA}🤖 BOT/CANAL:${RESET}${CYAN} $bot                       ║${RESET}"
+    fi
+
+    echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${WHITE}       KEVINTECH MULTI SCRIPT                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
+
+}
+
+# ============================================================
+# CREAR BANNER INDIVIDUAL
 # ============================================================
 
 create_user_banner() {
 
     local user="$1"
-    local title="$2"
-    local text="$3"
-    local template="$4"
+    local announcement="$2"
+    local geo="$3"
+    local support="$4"
+    local bot="$5"
 
-    local file
+    local html
+    local txt
 
-    file="$(banner_file "$user")"
+    html="$(individual_html "$user")"
+    txt="$(individual_txt "$user")"
 
-    generate_banner \
+    generate_individual_html \
         "$user" \
-        "$title" \
-        "$text" \
-        "$template" > "$file"
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot" > "$html"
 
-    chmod 644 "$file"
-    chown root:root "$file"
+    generate_individual_txt \
+        "$user" \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot" > "$txt"
+
+    chmod 644 "$html" "$txt"
+    chown root:root "$html" "$txt"
 
 }
 
 # ============================================================
-# CREAR PARA TODOS
+# CREAR TODOS
 # ============================================================
 
 create_all_banners() {
 
-    local title="$1"
-    local text="$2"
-    local template="$3"
+    local announcement="$1"
+    local geo="$2"
+    local support="$3"
+    local bot="$4"
 
     local user
     local count=0
@@ -681,18 +833,19 @@ create_all_banners() {
 
         create_user_banner \
             "$user" \
-            "$title" \
-            "$text" \
-            "$template"
+            "$announcement" \
+            "$geo" \
+            "$support" \
+            "$bot"
 
-        echo -e "${GREEN}✔${RESET} $user"
+        echo -e "${GREEN}✔${RESET} Banner creado: ${WHITE}$user${RESET}"
 
-        ((count+=1))
+        count=$((count + 1))
 
     done < <(get_users)
 
     echo
-    echo -e "${GREEN}✔ Banners creados: $count${RESET}"
+    echo -e "${GREEN}✔ Total: $count banners creados.${RESET}"
 
 }
 
@@ -702,7 +855,7 @@ create_all_banners() {
 
 backup_sshd() {
 
-    [[ -f "$SSHD_CONFIG" ]] || return
+    [[ -f "$SSHD_CONFIG" ]] || return 0
 
     cp -a "$SSHD_CONFIG" \
         "$BACKUP_DIR/sshd_config.$(date +%Y%m%d-%H%M%S)"
@@ -710,12 +863,12 @@ backup_sshd() {
 }
 
 # ============================================================
-# QUITAR BLOQUE KEVINTECH
+# ELIMINAR BLOQUE KEVINTECH
 # ============================================================
 
 remove_kevintech_blocks() {
 
-    [[ -f "$SSHD_CONFIG" ]] || return
+    [[ -f "$SSHD_CONFIG" ]] || return 0
 
     awk \
         -v start="$START_MARK" \
@@ -750,6 +903,11 @@ sync_sshd() {
     local user
     local file
 
+    [[ -f "$SSHD_CONFIG" ]] || {
+        echo -e "${RED}✘ No existe $SSHD_CONFIG${RESET}"
+        return 1
+    }
+
     backup_sshd
 
     remove_kevintech_blocks
@@ -763,7 +921,7 @@ sync_sshd() {
 
             [[ -z "$user" ]] && continue
 
-            file="$(banner_file "$user")"
+            file="$(individual_txt "$user")"
 
             [[ -f "$file" ]] || continue
 
@@ -772,6 +930,18 @@ sync_sshd() {
             echo
 
         done < <(get_users)
+
+        # ----------------------------------------------------
+        # BANNER GLOBAL
+        # ----------------------------------------------------
+
+        if [[ -f "$GLOBAL_TXT" ]]; then
+
+            echo "Match All"
+            echo "    Banner $GLOBAL_TXT"
+            echo
+
+        fi
 
         echo "$END_MARK"
 
@@ -783,6 +953,7 @@ sync_sshd() {
 
             echo
             echo -e "${RED}✘ Error en sshd_config${RESET}"
+
             cat /tmp/kevintech_sshd_error
 
             return 1
@@ -800,170 +971,376 @@ sync_sshd() {
 }
 
 # ============================================================
-# SINCRONIZACIÓN AUTOMÁTICA DE CUENTAS NUEVAS
+# BANNER GLOBAL HTML
 # ============================================================
 
-auto_sync_new_users() {
+create_global_html() {
 
-    local mode
-    local title
-    local text
+    local announcement="$1"
+    local geo="$2"
+    local support="$3"
+    local bot="$4"
 
-    mode="$(get_saved_mode)"
+    announcement="$(html_escape "$announcement")"
+    geo="$(html_escape "$geo")"
+    support="$(html_escape "$support")"
+    bot="$(html_escape "$bot")"
 
-    [[ -z "$mode" ]] && return
+    cat > "$GLOBAL_HTML" <<EOF
+<!-- KEVINTECH GLOBAL BANNER -->
 
-    title="$(get_saved_title)"
-    text="$(get_saved_text)"
+<!DOCTYPE html>
 
-    case "$mode" in
+<html lang="es">
 
-        PERSONALIZADO)
+<head>
 
-            while IFS= read -r user; do
+<meta charset="UTF-8">
 
-                [[ -z "$user" ]] && continue
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-                if [[ ! -f "$(banner_file "$user")" ]]; then
+<title>KevinTech Global Banner</title>
 
-                    create_user_banner \
-                        "$user" \
-                        "$title" \
-                        "$text" \
-                        "PERSONALIZADO"
+<style>
 
-                fi
+body{
+    margin:0;
+    padding:25px;
+    background:#030303;
+    color:#ffffff;
+    font-family:Arial,sans-serif;
+    text-align:center;
+}
 
-            done < <(get_users)
+.global{
+    max-width:800px;
+    margin:auto;
+    padding:35px;
+    border-radius:25px;
+    background:
+        linear-gradient(145deg,#050505,#17002a,#001d27);
+    border:2px solid #00eaff;
+    box-shadow:
+        0 0 15px #00eaff,
+        0 0 30px #ff00ff,
+        0 0 60px #7a00ff;
+}
 
-            ;;
+h1{
+    color:#00eaff;
+    font-size:38px;
+    text-shadow:
+        0 0 10px #00eaff,
+        0 0 25px #7a00ff;
+}
 
-        CLASICA|PREMIUM|MINIMAL)
+h2{
+    color:#ff00ff;
+}
 
-            while IFS= read -r user; do
+.card{
+    margin:18px 0;
+    padding:20px;
+    border-radius:18px;
+    background:rgba(0,0,0,.55);
+    border:1px solid #00ff88;
+}
 
-                [[ -z "$user" ]] && continue
+.label{
+    color:#00eaff;
+    font-weight:bold;
+}
 
-                if [[ ! -f "$(banner_file "$user")" ]]; then
+.footer{
+    margin-top:25px;
+    color:#888;
+}
 
-                    create_user_banner \
-                        "$user" \
-                        "$title" \
-                        "$text" \
-                        "$mode"
+</style>
 
-                fi
+</head>
 
-            done < <(get_users)
+<body>
 
-            ;;
+<div class="global">
 
-    esac
+<h1>🚀 KEVINTECH</h1>
 
-    sync_sshd >/dev/null 2>&1 || true
+<h2>🔥 MULTI SCRIPT SSH 🔥</h2>
+
+EOF
+
+    if [[ -n "$announcement" ]]; then
+
+        cat >> "$GLOBAL_HTML" <<EOF
+
+<div class="card">
+
+<div class="label">
+📢 ANUNCIO
+</div>
+
+<br>
+
+$announcement
+
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$geo" ]]; then
+
+        cat >> "$GLOBAL_HTML" <<EOF
+
+<div class="card">
+
+<div class="label">
+📍 GEOLOCALIZACIÓN
+</div>
+
+<br>
+
+$geo
+
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$support" ]]; then
+
+        cat >> "$GLOBAL_HTML" <<EOF
+
+<div class="card">
+
+<div class="label">
+🛠️ SOPORTE
+</div>
+
+<br>
+
+$support
+
+</div>
+
+EOF
+
+    fi
+
+    if [[ -n "$bot" ]]; then
+
+        cat >> "$GLOBAL_HTML" <<EOF
+
+<div class="card">
+
+<div class="label">
+🤖 BOT / CANAL
+</div>
+
+<br>
+
+$bot
+
+</div>
+
+EOF
+
+    fi
+
+    cat >> "$GLOBAL_HTML" <<'EOF'
+
+<div class="footer">
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<br>
+
+KEVINTECH MULTI SCRIPT
+
+<br>
+
+Sistema administrado por KevinTech
+
+</div>
+
+</div>
+
+</body>
+
+</html>
+
+EOF
+
+    chmod 644 "$GLOBAL_HTML"
+    chown root:root "$GLOBAL_HTML"
 
 }
 
 # ============================================================
-# SELECCIONAR PLANTILLA
+# GLOBAL ANSI
 # ============================================================
 
-choose_template() {
+create_global_txt() {
 
-    echo
-    echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
-    echo -e "${CYAN}│${WHITE}              SELECCIONAR PLANTILLA        ${CYAN}│${RESET}"
-    echo -e "${CYAN}├────────────────────────────────────────────┤${RESET}"
-    echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Clásica                                ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${MAGENTA}[2]${WHITE} Premium                                ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${BLUE}[3]${WHITE} Minimal                                ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                  ${CYAN}│${RESET}"
-    echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
-    echo
+    local announcement="$1"
+    local geo="$2"
+    local support="$3"
+    local bot="$4"
 
-    local option
+    {
 
-    read -rp "❯ Opción: " option
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+        echo -e "${CYAN}║${WHITE}              🚀 KEVINTECH                  ${CYAN}║${RESET}"
+        echo -e "${CYAN}║${MAGENTA}          🔥 MULTI SCRIPT SSH 🔥            ${CYAN}║${RESET}"
+        echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
 
-    case "$option" in
-
-        1)
-            echo "CLASICA"
-            ;;
-
-        2)
-            echo "PREMIUM"
-            ;;
-
-        3)
-            echo "MINIMAL"
-            ;;
-
-        *)
-            return 1
-            ;;
-
-    esac
-
-}
-
-# ============================================================
-# LEER TEXTO PERSONALIZADO
-# ============================================================
-
-read_custom_text() {
-
-    local text=""
-    local line
-
-    echo
-    echo -e "${CYAN}Escribe tu mensaje personalizado.${RESET}"
-    echo -e "${GRAY}Puedes escribir varias líneas.${RESET}"
-    echo -e "${YELLOW}Para terminar escribe: FINBANNER${RESET}"
-    echo
-
-    while IFS= read -r line; do
-
-        [[ "$line" == "FINBANNER" ]] && break
-
-        if [[ -n "$text" ]]; then
-            text+=$'\n'
+        if [[ -n "$announcement" ]]; then
+            echo -e "${CYAN}║ ${MAGENTA}📢 ANUNCIO${RESET}${CYAN}                                  ║${RESET}"
+            echo -e "${CYAN}║ ${WHITE}$announcement${CYAN}                              ║${RESET}"
         fi
 
-        text+="$line"
+        if [[ -n "$geo" ]]; then
+            echo -e "${CYAN}║ ${BLUE}📍 GEO:${RESET}${CYAN} $geo                              ║${RESET}"
+        fi
 
-    done
+        if [[ -n "$support" ]]; then
+            echo -e "${CYAN}║ ${GREEN}🛠️ SOPORTE:${RESET}${CYAN} $support                       ║${RESET}"
+        fi
 
-    printf '%s' "$text"
+        if [[ -n "$bot" ]]; then
+            echo -e "${CYAN}║ ${MAGENTA}🤖 BOT/CANAL:${RESET}${CYAN} $bot                       ║${RESET}"
+        fi
+
+        echo -e "${CYAN}╠══════════════════════════════════════════════╣${RESET}"
+        echo -e "${CYAN}║${WHITE}       KEVINTECH MULTI SCRIPT                 ${CYAN}║${RESET}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
+
+    } > "$GLOBAL_TXT"
+
+    chmod 644 "$GLOBAL_TXT"
+    chown root:root "$GLOBAL_TXT"
 
 }
 
 # ============================================================
-# INSTALAR SUBMENÚ
+# CREAR / EDITAR GLOBAL
 # ============================================================
 
-submenu_install() {
+global_create_edit() {
+
+    header
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}            🌐 BANNER GLOBAL                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${GRAY}Este banner se mostrará para las conexiones SSH.${RESET}"
+    echo
+
+    local announcement
+    local geo
+    local support
+    local bot
+
+    read -rp "📢 Anuncio: " announcement
+    read -rp "📍 Geolocalización: " geo
+    read -rp "🛠️ Soporte: " support
+    read -rp "🤖 Bot / Canal: " bot
+
+    create_global_html \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    create_global_txt \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    save_state \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    sync_sshd
+
+    echo
+    echo -e "${GREEN}✔ Banner global creado/actualizado.${RESET}"
+    echo -e "${GRAY}HTML: $GLOBAL_HTML${RESET}"
+    echo -e "${GRAY}SSH : $GLOBAL_TXT${RESET}"
+
+    pause
+
+}
+
+# ============================================================
+# ELIMINAR GLOBAL
+# ============================================================
+
+global_delete() {
+
+    header
+
+    echo -e "${RED}⚠ ELIMINAR BANNER GLOBAL${RESET}"
+
+    echo
+    echo "Esto eliminará únicamente el banner global."
+    echo
+
+    local confirm
+
+    read -rp "¿Continuar? [s/N]: " confirm
+
+    if [[ "$confirm" =~ ^[sS]$ ]]; then
+
+        rm -f "$GLOBAL_HTML"
+        rm -f "$GLOBAL_TXT"
+
+        sync_sshd
+
+        echo
+        echo -e "${GREEN}✔ Banner global eliminado.${RESET}"
+
+    else
+
+        echo -e "${YELLOW}Cancelado.${RESET}"
+
+    fi
+
+    pause
+
+}
+
+# ============================================================
+# MENÚ GLOBAL
+# ============================================================
+
+submenu_global() {
 
     while true; do
 
         header
 
-        echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
-        echo -e "${CYAN}│${WHITE}              INSTALAR BANNER               ${CYAN}│${RESET}"
-        echo -e "${CYAN}├────────────────────────────────────────────┤${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Banner personalizado                  ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[2]${WHITE} Plantilla clásica                     ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[3]${WHITE} Plantilla premium                     ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[4]${WHITE} Plantilla minimal                     ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                ${CYAN}│${RESET}"
-        echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
+        echo -e "${CYAN}╭──────────────────────────────────────────────╮${RESET}"
+        echo -e "${CYAN}│${WHITE}              🌐 BANNER GLOBAL               ${CYAN}│${RESET}"
+        echo -e "${CYAN}├──────────────────────────────────────────────┤${RESET}"
+        echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Crear / Editar HTML                     ${CYAN}│${RESET}"
+        echo -e "${CYAN}│ ${BLUE}[2]${WHITE} Ver HTML                                ${CYAN}│${RESET}"
+        echo -e "${CYAN}│ ${RED}[3]${WHITE} Eliminar banner                         ${CYAN}│${RESET}"
+        echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                   ${CYAN}│${RESET}"
+        echo -e "${CYAN}╰──────────────────────────────────────────────╯${RESET}"
 
         echo
 
         local option
-        local title
-        local text
-        local template
 
         read -rp "❯ Opción: " option
 
@@ -971,47 +1348,25 @@ submenu_install() {
 
             1)
 
-                read -rp "Título del banner: " title
-
-                [[ -z "$title" ]] &&
-                    title="KEVINTECH SSH"
-
-                text="$(read_custom_text)"
-
-                save_config \
-                    "PERSONALIZADO" \
-                    "$title" \
-                    "$text"
-
-                echo
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "PERSONALIZADO"
-
-                sync_sshd
-
-                pause
+                global_create_edit
 
                 ;;
 
             2)
 
-                template="CLASICA"
-                title="KEVINTECH SSH"
-                text=""
+                header
 
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
+                if [[ -f "$GLOBAL_HTML" ]]; then
 
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
+                    echo -e "${GREEN}✔ Banner global encontrado:${RESET}"
+                    echo
+                    sed 's/<[^>]*>//g' "$GLOBAL_HTML"
 
-                sync_sshd
+                else
+
+                    echo -e "${YELLOW}⚠ No existe banner global.${RESET}"
+
+                fi
 
                 pause
 
@@ -1019,45 +1374,7 @@ submenu_install() {
 
             3)
 
-                template="PREMIUM"
-                title="KEVINTECH PREMIUM"
-                text=""
-
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
-
-                sync_sshd
-
-                pause
-
-                ;;
-
-            4)
-
-                template="MINIMAL"
-                title="KEVINTECH"
-                text=""
-
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
-
-                sync_sshd
-
-                pause
+                global_delete
 
                 ;;
 
@@ -1070,6 +1387,7 @@ submenu_install() {
             *)
 
                 echo -e "${RED}✘ Opción inválida.${RESET}"
+
                 sleep 1
 
                 ;;
@@ -1081,22 +1399,73 @@ submenu_install() {
 }
 
 # ============================================================
-# VER SUBMENÚ
+# CONFIGURAR BANNER INDIVIDUAL
 # ============================================================
 
-submenu_view() {
+individual_config() {
+
+    header
+
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}║${WHITE}           👤 BANNER INDIVIDUAL              ${CYAN}║${RESET}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${RESET}"
+
+    echo
+
+    echo -e "${GRAY}Solo necesitas configurar la información comercial.${RESET}"
+    echo -e "${GRAY}El resto del banner se genera automáticamente.${RESET}"
+
+    echo
+
+    local announcement
+    local geo
+    local support
+    local bot
+
+    read -rp "📢 Anuncio: " announcement
+    read -rp "📍 Geolocalización: " geo
+    read -rp "🛠️ Soporte: " support
+    read -rp "🤖 Bot / Canal: " bot
+
+    save_state \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    create_all_banners \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    sync_sshd
+
+    echo
+    echo -e "${GREEN}✔ Banner individual configurado correctamente.${RESET}"
+    echo -e "${GRAY}Los nuevos usuarios recibirán este banner automáticamente.${RESET}"
+
+    pause
+
+}
+
+# ============================================================
+# VER BANNERS
+# ============================================================
+
+view_banners() {
 
     while true; do
 
         header
 
-        echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
-        echo -e "${CYAN}│${WHITE}                VER BANNERS                 ${CYAN}│${RESET}"
-        echo -e "${CYAN}├────────────────────────────────────────────┤${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Ver todos los usuarios                ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[2]${WHITE} Ver resumen                            ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                 ${CYAN}│${RESET}"
-        echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
+        echo -e "${CYAN}╭──────────────────────────────────────────────╮${RESET}"
+        echo -e "${CYAN}│${WHITE}                👁️ VER BANNERS               ${CYAN}│${RESET}"
+        echo -e "${CYAN}├──────────────────────────────────────────────┤${RESET}"
+        echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Banner global                           ${CYAN}│${RESET}"
+        echo -e "${CYAN}│ ${GREEN}[2]${WHITE} Banners individuales                    ${CYAN}│${RESET}"
+        echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                   ${CYAN}│${RESET}"
+        echo -e "${CYAN}╰──────────────────────────────────────────────╯${RESET}"
 
         echo
 
@@ -1111,151 +1480,17 @@ submenu_view() {
             1)
 
                 header
-                summary
 
-                while IFS= read -r user; do
+                if [[ -f "$GLOBAL_HTML" ]]; then
 
-                    [[ -z "$user" ]] && continue
-
-                    echo
-                    show_user_data "$user"
+                    echo -e "${GREEN}✔ BANNER GLOBAL${RESET}"
                     echo
 
-                    file="$(banner_file "$user")"
-
-                    if [[ -f "$file" ]]; then
-
-                        echo -e "${BLUE}┌──────────── BANNER $user ─────────────┐${RESET}"
-
-                        sed '/^<!-- data-kevintech-/d' "$file"
-
-                        echo -e "${BLUE}└─────────────────────────────────────────┘${RESET}"
-
-                    else
-
-                        echo -e "${YELLOW}⚠ Sin banner instalado.${RESET}"
-
-                    fi
-
-                    echo
-                    echo -e "${GRAY}────────────────────────────────────────────────${RESET}"
-
-                done < <(get_users)
-
-                pause
-
-                ;;
-
-            2)
-
-                header
-                summary
-
-                echo -e "${WHITE}Estado de las cuentas:${RESET}"
-                echo
-
-                printf "%-20s %-10s %-18s %-15s\n" \
-                    "USUARIO" \
-                    "LÍMITE" \
-                    "EXPIRACIÓN" \
-                    "BANNER"
-
-                echo "----------------------------------------------------------------"
-
-                while IFS= read -r user; do
-
-                    [[ -z "$user" ]] && continue
-
-                    printf "%-20s %-10s %-18s %-15s\n" \
-                        "$user" \
-                        "$(get_limit "$user")" \
-                        "$(get_expire "$user")" \
-                        "$(banner_type "$user")"
-
-                done < <(get_users)
-
-                pause
-
-                ;;
-
-            0)
-
-                return
-
-                ;;
-
-            *)
-
-                echo -e "${RED}✘ Opción inválida.${RESET}"
-                sleep 1
-
-                ;;
-
-        esac
-
-    done
-
-}
-
-# ============================================================
-# ELIMINAR SUBMENÚ
-# ============================================================
-
-submenu_delete() {
-
-    while true; do
-
-        header
-
-        echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
-        echo -e "${CYAN}│${WHITE}              ELIMINAR BANNERS             ${CYAN}│${RESET}"
-        echo -e "${CYAN}├────────────────────────────────────────────┤${RESET}"
-        echo -e "${CYAN}│ ${RED}[1]${WHITE} Eliminar todos los banners           ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${YELLOW}[2]${WHITE} Eliminar configuración automática    ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${RED}[0]${WHITE} Volver                                ${CYAN}│${RESET}"
-        echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
-
-        echo
-
-        local option
-        local confirm
-        local user
-
-        read -rp "❯ Opción: " option
-
-        case "$option" in
-
-            1)
-
-                echo
-                echo -e "${RED}⚠ ATENCIÓN${RESET}"
-                echo -e "${YELLOW}Esto eliminará los banners de todas las cuentas.${RESET}"
-                echo
-
-                read -rp "¿Continuar? [s/N]: " confirm
-
-                if [[ "$confirm" =~ ^[sS]$ ]]; then
-
-                    while IFS= read -r user; do
-
-                        [[ -z "$user" ]] && continue
-
-                        rm -f "$(banner_file "$user")"
-
-                        echo -e "${GREEN}✔ Eliminado:${RESET} $user"
-
-                    done < <(get_users)
-
-                    rm -f "$STATE_FILE"
-
-                    sync_sshd
-
-                    echo
-                    echo -e "${GREEN}✔ Todos los banners fueron eliminados.${RESET}"
+                    cat "$GLOBAL_HTML"
 
                 else
 
-                    echo "Cancelado."
+                    echo -e "${YELLOW}⚠ No existe banner global.${RESET}"
 
                 fi
 
@@ -1265,12 +1500,35 @@ submenu_delete() {
 
             2)
 
-                rm -f "$STATE_FILE"
+                header
 
-                echo -e "${GREEN}✔ Configuración automática eliminada.${RESET}"
+                echo -e "${CYAN}Usuarios detectados: ${GREEN}$(count_users)${RESET}"
 
                 echo
-                echo -e "${GRAY}Los banners existentes no fueron eliminados.${RESET}"
+
+                while IFS= read -r user; do
+
+                    [[ -z "$user" ]] && continue
+
+                    file="$(individual_txt "$user")"
+
+                    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+                    echo -e "${WHITE}👤 $user${RESET}"
+                    echo
+
+                    if [[ -f "$file" ]]; then
+
+                        cat "$file"
+
+                    else
+
+                        echo -e "${YELLOW}⚠ Sin banner.${RESET}"
+
+                    fi
+
+                    echo
+
+                done < <(get_users)
 
                 pause
 
@@ -1285,6 +1543,7 @@ submenu_delete() {
             *)
 
                 echo -e "${RED}✘ Opción inválida.${RESET}"
+
                 sleep 1
 
                 ;;
@@ -1296,136 +1555,241 @@ submenu_delete() {
 }
 
 # ============================================================
-# EDITAR SUBMENÚ
+# ELIMINAR BANNERS INDIVIDUALES
 # ============================================================
 
-submenu_edit() {
+delete_individual_banners() {
+
+    header
+
+    echo -e "${RED}⚠ ELIMINAR BANNERS INDIVIDUALES${RESET}"
+
+    echo
+
+    read -rp \
+        "¿Eliminar todos los banners individuales? [s/N]: " \
+        confirm
+
+    if [[ "$confirm" =~ ^[sS]$ ]]; then
+
+        while IFS= read -r user; do
+
+            [[ -z "$user" ]] && continue
+
+            rm -f "$(individual_html "$user")"
+            rm -f "$(individual_txt "$user")"
+
+        done < <(get_users)
+
+        rm -f "$STATE_FILE"
+
+        sync_sshd
+
+        echo
+        echo -e "${GREEN}✔ Banners individuales eliminados.${RESET}"
+
+    else
+
+        echo -e "${YELLOW}Cancelado.${RESET}"
+
+    fi
+
+    pause
+
+}
+
+# ============================================================
+# AUTO USER
+# ============================================================
+# Uso:
+#
+# banner.sh --auto-user USUARIO
+#
+# El ADD debe ejecutar esto después de crear
+# el usuario y agregarlo a limits.conf.
+# ============================================================
+
+auto_user() {
+
+    local new_user="$1"
+
+    [[ -n "$new_user" ]] || exit 1
+
+    # --------------------------------------------------------
+    # Verificar usuario en limits.conf
+    # --------------------------------------------------------
+
+    if ! user_exists "$new_user"; then
+        exit 1
+    fi
+
+    # --------------------------------------------------------
+    # Leer configuración
+    # --------------------------------------------------------
+
+    local announcement
+    local geo
+    local support
+    local bot
+
+    announcement="$(get_saved_announcement)"
+    geo="$(get_saved_geo)"
+    support="$(get_saved_support)"
+    bot="$(get_saved_bot)"
+
+    # --------------------------------------------------------
+    # Si nunca se configuró banner individual
+    # --------------------------------------------------------
+
+    if [[ -z "$announcement" &&
+          -z "$geo" &&
+          -z "$support" &&
+          -z "$bot" ]]; then
+
+        exit 0
+
+    fi
+
+    # --------------------------------------------------------
+    # Crear banner
+    # --------------------------------------------------------
+
+    create_user_banner \
+        "$new_user" \
+        "$announcement" \
+        "$geo" \
+        "$support" \
+        "$bot"
+
+    # --------------------------------------------------------
+    # Actualizar SSH
+    # --------------------------------------------------------
+
+    sync_sshd >/dev/null 2>&1 || true
+
+    exit 0
+
+}
+
+# ============================================================
+# DETECTAR NUEVAS CUENTAS
+# ============================================================
+
+auto_sync_new_users() {
+
+    local announcement
+    local geo
+    local support
+    local bot
+
+    announcement="$(get_saved_announcement)"
+    geo="$(get_saved_geo)"
+    support="$(get_saved_support)"
+    bot="$(get_saved_bot)"
+
+    if [[ -z "$announcement" &&
+          -z "$geo" &&
+          -z "$support" &&
+          -z "$bot" ]]; then
+
+        return
+
+    fi
+
+    local user
+    local file
+
+    while IFS= read -r user; do
+
+        [[ -z "$user" ]] && continue
+
+        file="$(individual_txt "$user")"
+
+        if [[ ! -f "$file" ]]; then
+
+            create_user_banner \
+                "$user" \
+                "$announcement" \
+                "$geo" \
+                "$support" \
+                "$bot"
+
+        fi
+
+    done < <(get_users)
+
+}
+
+# ============================================================
+# MENÚ PRINCIPAL
+# ============================================================
+
+main_menu() {
 
     while true; do
 
         header
 
-        echo -e "${CYAN}╭────────────────────────────────────────────╮${RESET}"
-        echo -e "${CYAN}│${WHITE}               EDITAR BANNER                ${CYAN}│${RESET}"
-        echo -e "${CYAN}├────────────────────────────────────────────┤${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[1]${WHITE} Editar banner personalizado          ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[2]${WHITE} Cambiar a plantilla clásica          ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[3]${WHITE} Cambiar a plantilla premium          ${CYAN}│${RESET}"
-        echo -e "${CYAN}│ ${GREEN}[4]${WHITE} Cambiar a plantilla minimal          ${CYAN}│${RESET}"
-        echo -e "${RED}│ [0]${WHITE} Volver                                ${CYAN}│${RESET}"
-        echo -e "${CYAN}╰────────────────────────────────────────────╯${RESET}"
+        echo -e "${BLUE}╭──────────────────────────────────────────────╮${RESET}"
+        echo -e "${BLUE}│${WHITE}                MENÚ PRINCIPAL                ${BLUE}│${RESET}"
+        echo -e "${BLUE}├──────────────────────────────────────────────┤${RESET}"
+
+        echo -e "${BLUE}│ ${GREEN}[1]${WHITE} 🌐 BANNER GLOBAL                         ${BLUE}│${RESET}"
+        echo -e "${BLUE}│ ${GRAY}    Crear / Editar / Eliminar HTML          ${BLUE}│${RESET}"
+
+        echo -e "${BLUE}│ ${MAGENTA}[2]${WHITE} 👤 BANNER INDIVIDUAL                     ${BLUE}│${RESET}"
+        echo -e "${BLUE}│ ${GRAY}    Anuncio / Geo / Soporte / Bot           ${BLUE}│${RESET}"
+
+        echo -e "${BLUE}│ ${CYAN}[3]${WHITE} 👁️ VER BANNERS                           ${BLUE}│${RESET}"
+
+        echo -e "${BLUE}│ ${RED}[0]${WHITE} ❌ SALIR                                  ${BLUE}│${RESET}"
+
+        echo -e "${BLUE}╰──────────────────────────────────────────────╯${RESET}"
+
+        echo
+
+        echo -e "${GRAY}Cuentas detectadas: ${GREEN}$(count_users)${RESET}"
 
         echo
 
         local option
-        local title
-        local text
-        local template
 
-        read -rp "❯ Opción: " option
+        read -rp "  ❯ Selecciona una opción: " option
 
         case "$option" in
 
             1)
 
-                read -rp "Nuevo título: " title
-
-                [[ -z "$title" ]] &&
-                    title="KEVINTECH SSH"
-
-                text="$(read_custom_text)"
-
-                save_config \
-                    "PERSONALIZADO" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "PERSONALIZADO"
-
-                sync_sshd
-
-                pause
+                submenu_global
 
                 ;;
 
             2)
 
-                template="CLASICA"
-                title="KEVINTECH SSH"
-                text=""
-
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
-
-                sync_sshd
-
-                pause
+                individual_config
 
                 ;;
 
             3)
 
-                template="PREMIUM"
-                title="KEVINTECH PREMIUM"
-                text=""
-
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
-
-                sync_sshd
-
-                pause
-
-                ;;
-
-            4)
-
-                template="MINIMAL"
-                title="KEVINTECH"
-                text=""
-
-                save_config \
-                    "$template" \
-                    "$title" \
-                    "$text"
-
-                create_all_banners \
-                    "$title" \
-                    "$text" \
-                    "$template"
-
-                sync_sshd
-
-                pause
+                view_banners
 
                 ;;
 
             0)
 
-                return
+                clear
+
+                echo -e "${GREEN}✔ KevinTech Banner Manager cerrado.${RESET}"
+
+                exit 0
 
                 ;;
 
             *)
 
                 echo -e "${RED}✘ Opción inválida.${RESET}"
+
                 sleep 1
 
                 ;;
@@ -1437,164 +1801,23 @@ submenu_edit() {
 }
 
 # ============================================================
-# SINCRONIZACIÓN INICIAL
-# ============================================================
-
-auto_sync_new_users
-# ============================================================
-# MODO AUTOMÁTICO PARA NUEVAS CUENTAS
-# ============================================================
-# Uso:
-#   banner.sh --auto-user USUARIO
-#
-# Este modo NO muestra el menú.
-# Lee la última configuración guardada y crea
-# automáticamente el banner para el nuevo usuario.
+# AUTO USER
 # ============================================================
 
 if [[ "${1:-}" == "--auto-user" ]]; then
 
-    NEW_USER="${2:-}"
-
-    # Verificar que se recibió usuario
-    if [[ -z "$NEW_USER" ]]; then
-        exit 1
-    fi
-
-    # Verificar que el usuario exista en limits.conf
-    if ! user_exists "$NEW_USER"; then
-        exit 1
-    fi
-
-    # Leer configuración automática guardada
-    MODE="$(get_saved_mode)"
-
-    # Si todavía no se configuró ningún banner,
-    # no hacemos nada.
-    if [[ -z "$MODE" ]]; then
-        exit 0
-    fi
-
-    TITLE="$(get_saved_title)"
-    TEXT="$(get_saved_text)"
-
-    case "$MODE" in
-
-        PERSONALIZADO)
-
-            [[ -z "$TITLE" ]] && TITLE="KEVINTECH SSH"
-
-            create_user_banner \
-                "$NEW_USER" \
-                "$TITLE" \
-                "$TEXT" \
-                "PERSONALIZADO"
-
-            ;;
-
-        CLASICA)
-
-            create_user_banner \
-                "$NEW_USER" \
-                "KEVINTECH SSH" \
-                "" \
-                "CLASICA"
-
-            ;;
-
-        PREMIUM)
-
-            create_user_banner \
-                "$NEW_USER" \
-                "KEVINTECH PREMIUM" \
-                "" \
-                "PREMIUM"
-
-            ;;
-
-        MINIMAL)
-
-            create_user_banner \
-                "$NEW_USER" \
-                "KEVINTECH" \
-                "" \
-                "MINIMAL"
-
-            ;;
-
-        *)
-
-            exit 1
-
-            ;;
-
-    esac
-
-    # Actualizar Match User en sshd_config
-    sync_sshd >/dev/null 2>&1 || true
-
-    exit 0
+    auto_user "${2:-}"
 
 fi
+
 # ============================================================
-# MENÚ PRINCIPAL
+# DETECTAR CUENTAS NUEVAS AL ABRIR
 # ============================================================
 
-while true; do
+auto_sync_new_users
 
-    header
-    summary
+# ============================================================
+# INICIAR
+# ============================================================
 
-    echo -e "${CYAN}╭──────────────────────────────────────────────╮${RESET}"
-    echo -e "${CYAN}│${WHITE}                 MENÚ PRINCIPAL              ${CYAN}│${RESET}"
-    echo -e "${CYAN}├──────────────────────────────────────────────┤${RESET}"
-    echo -e "${CYAN}│ ${GREEN}[1]${WHITE}  INSTALAR BANNER                         ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${GREEN}[2]${WHITE}  VER BANNERS                             ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${RED}[3]${WHITE}  ELIMINAR BANNERS                        ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${YELLOW}[4]${WHITE}  EDITAR BANNER                            ${CYAN}│${RESET}"
-    echo -e "${CYAN}│ ${RED}[0]${WHITE}  SALIR                                    ${CYAN}│${RESET}"
-    echo -e "${CYAN}╰──────────────────────────────────────────────╯${RESET}"
-
-    echo
-
-    read -rp "  ❯ Selecciona una opción: " option
-
-    case "$option" in
-
-        1)
-            submenu_install
-            ;;
-
-        2)
-            submenu_view
-            ;;
-
-        3)
-            submenu_delete
-            ;;
-
-        4)
-            submenu_edit
-            ;;
-
-        0)
-
-            clear
-
-            echo -e "${GREEN}✔ KevinTech Banner Manager cerrado.${RESET}"
-
-            exit 0
-
-            ;;
-
-        *)
-
-            echo -e "${RED}✘ Opción inválida.${RESET}"
-
-            sleep 1
-
-            ;;
-
-    esac
-
-done
+main_menu
