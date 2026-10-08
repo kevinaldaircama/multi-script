@@ -212,8 +212,14 @@ class Handler(BaseHTTPRequestHandler):
     server_version='KevinTechWeb/2.0'
     def log_message(self,fmt,*args):pass
     def route_path(self):
-        p=urlparse(self.path).path
+        p=urlparse(self.path).path or '/'
         if PREFIX and p.startswith(PREFIX):p=p[len(PREFIX):] or '/'
+        # Normaliza rutas comunes para que /index.html y las rutas con / final
+        # no terminen en el 404 del proxy/web.
+        if p in ('/index.html','/index.htm','/home','/home/'):
+            return '/'
+        if len(p)>1 and p.endswith('/'):
+            p=p.rstrip('/')
         return p
     def send(self,status=200,ctype='text/html; charset=utf-8',body=''):
         b=body.encode() if isinstance(body,str) else body;self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(b)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(b)
@@ -286,13 +292,27 @@ class Handler(BaseHTTPRequestHandler):
         c.close()
         if not ok:return self.login_page('<div class="notice bad">Usuario o contraseña incorrectos.</div>')
         self.set_session(uid,role);return self.auth_redirect('/admin' if role=='admin' else '/dashboard')
-    def register_page(self,msg=''):return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg))
+    def register_page(self,msg=''):
+        q=parse_qs(urlparse(self.path).query);ref=self.val(q,'ref','')
+        ref=ref if re.fullmatch(r'[A-Za-z0-9_-]{4,32}',ref or '') else ''
+        return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg,REF=html_escape(ref)))
     def register_post(self,d):
-        name=self.val(d,'name');user=self.val(d,'username');pw=self.val(d,'password')
-        if not name or not safe_web_username(user) or len(pw)<6:return self.register_page('<div class="notice bad">Datos inválidos. La contraseña debe tener 6 caracteres o más.</div>')
+        name=self.val(d,'name');user=self.val(d,'username');pw=self.val(d,'password');ref=self.val(d,'ref')
+        if not name or not safe_web_username(user) or len(pw)<6:
+            return self.send(400,body=tpl('register.html',None,'Registro',MSG='<div class="notice bad">Datos inválidos. La contraseña debe tener 6 caracteres o más.</div>',REF=html_escape(ref)))
         c=db()
-        if user=='__admin_owner__' or c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>')
-        code=secrets.token_urlsafe(7);c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code) VALUES(?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code));uid=c.execute('SELECT last_insert_rowid()').fetchone()[0];c.commit();c.close();self.set_session(uid,'user');return self.auth_redirect('/dashboard')
+        if user=='__admin_owner__' or c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():
+            c.close();return self.send(400,body=tpl('register.html',None,'Registro',MSG='<div class="notice bad">Ese usuario web ya existe.</div>',REF=html_escape(ref)))
+        # El código de referido identifica al usuario que compartió el enlace.
+        referrer=c.execute('SELECT id,username FROM users WHERE referral_code=? AND active=1',(ref,)).fetchone() if ref else None
+        code=secrets.token_urlsafe(7)
+        c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by) VALUES(?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,ref if referrer else None))
+        uid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
+        # +2 para quien comparte y +1 para quien entra mediante el enlace.
+        if referrer and referrer['id']!=uid:
+            c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referrer['id'],))
+            c.execute('UPDATE users SET referral_points=referral_points+1 WHERE id=?',(uid,))
+        c.commit();c.close();self.set_session(uid,'user');return self.auth_redirect('/dashboard')
     def dashboard(self,u):
         if not u:return self.redirect('/login')
         if u['role']=='admin':return self.admin(u)
@@ -323,7 +343,13 @@ class Handler(BaseHTTPRequestHandler):
         c=db()
         if u['role']=='admin':
             rows=c.execute('SELECT username,name,referral_points,referral_renews,active FROM users ORDER BY id DESC').fetchall();c.close();h=''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(html_escape(x['username']),html_escape(x['name']),x['referral_points'],x['referral_renews']) for x in rows) or '<tr><td colspan="4">No hay usuarios.</td></tr>';return self.send(200,body=tpl('referrals.html',u,'Referidos',POINTS=sum(x['referral_points'] for x in rows),LINK='—',REDEEM='<div class="card table-wrap"><table class="table"><tr><th>Usuario</th><th>Nombre</th><th>Puntos</th><th>Renovaciones</th></tr>'+h+'</table></div>'))
-        accounts=c.execute('SELECT id,username FROM accounts WHERE user_id=? ORDER BY username',(u['id'],)).fetchall();c.close();opts=''.join('<option value="%s">%s</option>'%(a['id'],html_escape(a['username'])) for a in accounts);redeem='<div class="card form"><h3>🎁 Canjear referidos</h3><p>Con 3 puntos puedes añadir 7 días a una cuenta.</p><form method="post" action="%s/referrals/redeem"><select class="input" name="account_id" required>%s</select><button class="btn primary">Canjear 3 puntos</button></form></div>'%(PREFIX,opts) if accounts else '<div class="card">Crea una cuenta para canjear puntos.</div>';return self.send(200,body=tpl('referrals.html',u,'Referidos',POINTS=u['referral_points'],LINK='%s/register'%PREFIX,REDEEM=redeem))
+        accounts=c.execute('SELECT id,username FROM accounts WHERE user_id=? ORDER BY username',(u['id'],)).fetchall();c.close();opts=''.join('<option value="%s">%s</option>'%(a['id'],html_escape(a['username'])) for a in accounts);redeem='<div class="card form"><h3>🎁 Canjear referidos</h3><p>Con 3 puntos puedes añadir 7 días a una cuenta.</p><form method="post" action="%s/referrals/redeem"><select class="input" name="account_id" required>%s</select><button class="btn primary">Canjear 3 puntos</button></form></div>'%(PREFIX,opts) if accounts else '<div class="card">Crea una cuenta para canjear puntos.</div>'
+        domain=server_domain().strip()
+        if domain and domain not in ('localhost','127.0.0.1'):
+            link='https://'+domain+'/register?ref='+str(u['referral_code'])
+        else:
+            link='/register?ref='+str(u['referral_code'])
+        return self.send(200,body=tpl('referrals.html',u,'Referidos',POINTS=u['referral_points'],LINK=html_escape(link),REDEEM=redeem))
     def referral_redeem(self,u,d):
         if not u or u['role']!='user':return self.send(403,body='403')
         try:aid=int(self.val(d,'account_id'))
