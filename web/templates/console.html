@@ -1,7 +1,1 @@
-<div class="hero"><h1>⌨️ Consola VPS</h1><p class="muted">Solo administradores. Los comandos se ejecutan con el usuario del servicio.</p></div><div class="card"><div id="out" class="terminal">KevinTech Web Console
-Listo.
-</div><div class="cmdrow"><input id="cmd" class="input" placeholder="Ej.: systemctl status haproxy --no-pager"><button class="btn primary" onclick="run()">Ejecutar</button></div></div><script>async function run(){let x=document.getElementById('cmd'),o=document.getElementById('out'),c=x.value.trim();if(!c)return;o.textContent+='
-# '+c+'
-Ejecutando...
-';x.value='';let r=await fetch('{{PREFIX}}/console',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({command:c})});o.textContent+=await r.text()+'
-';o.scrollTop=o.scrollHeight}document.getElementById('cmd').addEventListener('keydown',e=>{if(e.key==='Enter')run()})</script>
+<div class="hero"><h1>⌨️ Consola</h1><p class="muted">Solo administrador.</p></div><div class="card"><div id="out" class="terminal">KevinTech Web Console\nEscribe un comando y pulsa Ejecutar.\n</div><form class="cmdrow" method="post" action="{{PREFIX}}/console" style="margin-top:10px"><input class="input" name="command" placeholder="Ej.: systemctl status xray --no-pager" required><button class="btn primary">Ejecutar</button></form></div>
