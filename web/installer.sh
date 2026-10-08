@@ -794,6 +794,7 @@ copy_web_files() {
 
     return 0
 }
+
 # ============================================================
 # GUARDAR CREDENCIALES
 # ============================================================
@@ -943,18 +944,16 @@ prompt_fresh() {
 
     while true; do
 
-        read -rsp \
-            "Contraseña administrador (mín. 8): " \
-            WEB_ADMIN_PASS
+    read -rsp "Contraseña administrador (mín. 8): " WEB_ADMIN_PASS
+    echo
 
-        echo
+    if [[ ${#WEB_ADMIN_PASS} -ge 8 ]]; then
+        break
+    fi
 
-        [[
-            ${#WEB_ADMIN_PASS}
-            -ge 8
-        ]] && break
+    echo -e "${yellow}La contraseña debe tener mínimo 8 caracteres.${reset}"
 
-    done
+done
 
 
     local old
