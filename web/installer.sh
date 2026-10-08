@@ -106,7 +106,7 @@ r=subprocess.run(['systemctl','reload','haproxy'],capture_output=True,text=True)
 if r.returncode: print(r.stdout+r.stderr); raise SystemExit(4)
 PY
 }
-copy_web_files(){ local src dst; src="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$WEB/templates"; for f in server.py requirements.txt version.txt README.md index.html; do if [[ -f "$src/$f" ]]; then dst="$WEB/$f"; [[ "$(readlink -f "$src/$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$src/$f" "$dst"; fi; done; for f in "$src/templates"/*.html; do [[ -f "$f" ]] || continue; dst="$WEB/templates/$(basename "$f")"; [[ "$(readlink -f "$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$f" "$dst"; done; mkdir -p "$DATA"; }
+copy_web_files(){ local src dst; src="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$WEB/templates"; for f in server.py requirements.txt version.txt README.md 404.html; do if [[ -f "$src/$f" ]]; then dst="$WEB/$f"; [[ "$(readlink -f "$src/$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$src/$f" "$dst"; fi; done; for f in "$src/templates"/*.html; do [[ -f "$f" ]] || continue; dst="$WEB/templates/$(basename "$f")"; [[ "$(readlink -f "$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$f" "$dst"; done; mkdir -p "$DATA"; }
 save_credentials(){ python3 - "$DATA/config.json" "$1" "$2" "$3" <<'PY'
 import json,sys,hashlib,base64,secrets,os
 p,u,pw,domain=sys.argv[1:]; os.makedirs(os.path.dirname(p),exist_ok=True)
