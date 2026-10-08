@@ -1,22 +1,17 @@
-# KevinTech Web Panel v3.6
+# KevinTech Web Panel v2.0.0
 
 Panel web del KevinTech Multi Script.
 
+## Cambios
+- Inicio real en `/` y página `404.html` personalizada.
+- Menú hamburguesa responsive con submenús por rol.
+- Registro sin código de referido.
+- Creación de cuentas SSH y V2Ray/VMess usando las cuotas configuradas por el administrador.
+- Eliminación de cuentas exclusiva para admin.
+- Protocolos activos/inactivos.
+- Consola exclusiva para admin.
+- Configuración de perfil, ads, ajustes generales, cuotas y contenido About.
+- Sobre nosotros, privacidad, cookies y términos editables por admin.
+
 ## Instalación
-
-Usa únicamente `installer.sh`. El instalador antiguo fue eliminado para evitar confusión.
-
-## Rutas principales
-
-- `/login` — acceso
-- `/register` — registro
-- `/dashboard` — panel
-- `/protocols` — estado de protocolos
-- `/online` — usuarios online
-- `/referrals` — referidos
-- `/profile` — perfil
-- `/admin` — administración
-- `/admin/settings` — configuración
-- `/console` — consola
-
-La interfaz usa las rutas reales de `server.py`; no depende de una SPA `/api/*` inexistente.
+Usa `installer.sh` para instalar o actualizar la carpeta web.
