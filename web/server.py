@@ -191,17 +191,18 @@ def page(title,body,user=None):
     nav=''
     if user:
         role=user.get('role')
-        nav='<div class="brand">⚡ KEVINTECH</div><button class="hamb" id="menuBtn" aria-label="Menú">☰</button><nav id="mainNav">'
-        nav+='<a href="%s/admin">🏠 Inicio</a>'%PREFIX if role=='admin' else '<a href="%s/dashboard">🏠 Inicio</a>'%PREFIX
-        nav+='<details><summary>👤 Cuentas</summary><a href="%s/account/create">➕ Crear cuenta</a>'%PREFIX
-        if role=='admin':nav+='<a href="%s/admin/accounts/delete">🗑️ Eliminar cuenta</a>'%PREFIX
-        nav+='<a href="%s/online">🟢 Online</a><a href="%s/referrals">🎁 Referido</a><a href="%s/profile">👤 Perfil</a></details>'%(PREFIX,PREFIX,PREFIX)
-        nav+='<details><summary>⚙️ Protocolos</summary><a href="%s/protocols?status=active">✅ Protocolos activos</a><a href="%s/protocols?status=inactive">⛔ Protocolos inactivos</a></details>'%(PREFIX,PREFIX)
+        home='/admin' if role=='admin' else '/dashboard'
+        nav='<div class="brand">⚡ KEVINTECH</div><button class="hamb" id="menuBtn" type="button" aria-label="Abrir menú" aria-expanded="false">☰</button><div class="menu-backdrop" id="menuBackdrop"></div><nav id="mainNav" aria-label="Menú principal">'
+        nav+='<a class="nav-main" href="%s%s">📊 Panel</a>'%(PREFIX,home)
+        nav+='<details><summary>⚙️ Protocolos</summary><div class="submenu"><a href="%s/protocols?status=active">🟢 Protocolos activos</a><a href="%s/protocols?status=inactive">🔴 Protocolos inactivos</a></div></details>'%(PREFIX,PREFIX)
         if role=='admin':
-            nav+='<a href="%s/console">⌨️ Consola</a>'%PREFIX
-            nav+='<details><summary>⚙️ Configuración</summary><a href="%s/admin/settings">👤 Perfil</a><a href="%s/admin/settings?tab=ads">📢 Ajuste de ads</a><a href="%s/admin/settings?tab=general">📝 Ajuste general</a><a href="%s/admin/settings?tab=quotas">📏 Cuotas de creación</a></details>'%(PREFIX,PREFIX,PREFIX,PREFIX)
-        nav+='<details><summary>ℹ️ About</summary><a href="%s/about">Sobre nosotros</a><a href="%s/about?section=privacy">Política de privacidad</a><a href="%s/about?section=cookies">Política de cookies</a><a href="%s/about?section=terms">Términos y condiciones</a></details>'%(PREFIX,PREFIX,PREFIX,PREFIX)
-        nav+='<a class="nav-exit" href="%s/logout">↪ Salir</a></nav>'%PREFIX
+            nav+='<a class="nav-main" href="%s/console">⌨️ Consola</a>'%PREFIX
+            nav+='<details><summary>⚙️ Configuración</summary><div class="submenu"><a href="%s/admin/settings">👤 Perfil</a><a href="%s/admin/settings?tab=ads">📢 Ajuste de ads</a><a href="%s/admin/settings?tab=general">📝 Ajuste general</a><a href="%s/admin/settings?tab=quotas">📏 Cuotas de creación</a></div></details>'%(PREFIX,PREFIX,PREFIX,PREFIX)
+        nav+='<details><summary>👤 Panel de usuario</summary><div class="submenu"><a href="%s/account/create">➕ Crear cuenta</a>'%PREFIX
+        if role=='admin':nav+='<a href="%s/admin/accounts/delete">🗑️ Eliminar cuenta</a>'%PREFIX
+        nav+='<a href="%s/online">🟢 Online</a><a href="%s/referrals">🎁 Referidos</a><a href="%s/profile">👤 Perfil</a></div></details>'%(PREFIX,PREFIX,PREFIX)
+        nav+='<details><summary>ℹ️ About</summary><div class="submenu"><a href="%s/about">Sobre nosotros</a><a href="%s/about?section=privacy">Política de privacidad</a><a href="%s/about?section=cookies">Política de cookies</a><a href="%s/about?section=terms">Términos y condiciones</a></div></details>'%(PREFIX,PREFIX,PREFIX,PREFIX)
+        nav+='<a class="nav-main nav-exit" href="%s/logout">↪ Salir</a></nav>'%PREFIX
     else:
         nav='<div class="brand">⚡ KEVINTECH</div>'
     return render_template('base.html',TITLE=html_escape(title),NAV=nav,BODY=body)
@@ -326,7 +327,16 @@ class Handler(BaseHTTPRequestHandler):
         return out
     def protocols(self,u):
         if not u:return self.redirect('/login')
-        q=parse_qs(urlparse(self.path).query);status=q.get('status',['all'])[0];rows=[x for x in self.protocol_rows() if status=='all' or (status=='active' and x[2]) or (status=='inactive' and not x[2])];html=''.join('<div class="service-card"><div class="service-icon">%s</div><div class="service-main"><strong>%s</strong><span class="muted">%s</span></div><span class="status %s">%s</span></div>'%(i,html_escape(n),'Activo' if on else 'Inactivo','on' if on else 'off','ACTIVO' if on else 'INACTIVO') for n,i,on in rows) or '<div class="card">No hay protocolos en esta categoría.</div>';return self.send(200,body=tpl('protocols.html',u,'Protocolos',COUNT=len(rows),ROWS=html,STATUS=html_escape(status)))
+        status=parse_qs(urlparse(self.path).query).get('status',['all'])[0].lower()
+        if status not in ('all','active','inactive'):status='all'
+        services=self.protocol_rows()
+        rows=[x for x in services if status=='all' or (status=='active' and x[2]) or (status=='inactive' and not x[2])]
+        html=''.join('<div class="service-card"><div class="service-icon">%s</div><div class="service-main"><strong>%s</strong><span class="muted">%s</span></div><span class="status %s">%s</span></div>'%(i,html_escape(n),'Activo' if on else 'Inactivo','on' if on else 'off','ACTIVO' if on else 'INACTIVO') for n,i,on in rows)
+        if not html:html='<div class="card"><h3>No hay protocolos %s.</h3><p class="muted">Prueba con otro filtro.</p></div>'%('activos' if status=='active' else 'inactivos' if status=='inactive' else 'disponibles')
+        active_cls='primary' if status=='active' else ''
+        inactive_cls='primary' if status=='inactive' else ''
+        all_cls='primary' if status=='all' else ''
+        return self.send(200,body=tpl('protocols.html',u,'Protocolos',COUNT=len(rows),ROWS=html,ALL_ACTIVE=all_cls,ACTIVE_ACTIVE=active_cls,INACTIVE_ACTIVE=inactive_cls))
     def profile(self,u):
         if not u:return self.redirect('/login')
         if u['role']=='admin':return self.admin_settings(u)
@@ -346,9 +356,12 @@ class Handler(BaseHTTPRequestHandler):
         accounts=c.execute('SELECT id,username FROM accounts WHERE user_id=? ORDER BY username',(u['id'],)).fetchall();c.close();opts=''.join('<option value="%s">%s</option>'%(a['id'],html_escape(a['username'])) for a in accounts);redeem='<div class="card form"><h3>🎁 Canjear referidos</h3><p>Con 3 puntos puedes añadir 7 días a una cuenta.</p><form method="post" action="%s/referrals/redeem"><select class="input" name="account_id" required>%s</select><button class="btn primary">Canjear 3 puntos</button></form></div>'%(PREFIX,opts) if accounts else '<div class="card">Crea una cuenta para canjear puntos.</div>'
         domain=server_domain().strip()
         if domain and domain not in ('localhost','127.0.0.1'):
-            link='https://'+domain+'/register?ref='+str(u['referral_code'])
+            scheme='https'
+            link=scheme+'://'+domain.rstrip('/')+'/register?ref='+str(u['referral_code'])
         else:
-            link='/register?ref='+str(u['referral_code'])
+            host=self.headers.get('Host','').split(':',1)[0].strip()
+            scheme='https' if self.headers.get('X-Forwarded-Proto','https').lower()=='https' else 'http'
+            link=(scheme+'://'+host+'/register?ref='+str(u['referral_code'])) if host else '/register?ref='+str(u['referral_code'])
         return self.send(200,body=tpl('referrals.html',u,'Referidos',POINTS=u['referral_points'],LINK=html_escape(link),REDEEM=redeem))
     def referral_redeem(self,u,d):
         if not u or u['role']!='user':return self.send(403,body='403')
