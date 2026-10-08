@@ -738,11 +738,16 @@ copy_web_files() {
 
     local src
     local dst
+    local f
 
     src="$(cd "$(dirname "$0")" && pwd)"
 
+    mkdir -p "$WEB"
     mkdir -p "$WEB/templates"
 
+    # ==========================================
+    # ARCHIVOS PRINCIPALES
+    # ==========================================
 
     for f in \
         server.py \
@@ -755,33 +760,40 @@ copy_web_files() {
 
             dst="$WEB/$f"
 
-            [[
-                "$(readlink -f "$src/$f")" ==
-                "$(readlink -f "$dst" 2>/dev/null || true)"
-            ]] || cp -f "$src/$f" "$dst"
+            cp -f "$src/$f" "$dst"
 
         fi
 
     done
 
 
-    for f in "$src/templates"/*.html; do
+    # ==========================================
+    # PLANTILLAS HTML
+    # ==========================================
 
-        [[ -f "$f" ]] || continue
+    if [[ -d "$src/templates" ]]; then
 
-        dst="$WEB/templates/$(basename "$f")"
+        for f in "$src/templates"/*.html; do
 
-        [[
-            "$(readlink -f "$f")" ==
-            "$(readlink -f "$dst" 2>/dev/null || true)"
-        ]] || cp -f "$f" "$dst"
+            [[ -f "$f" ]] || continue
 
-    done
+            dst="$WEB/templates/$(basename "$f")"
 
+            cp -f "$f" "$dst"
+
+        done
+
+    fi
+
+
+    # ==========================================
+    # DATA
+    # ==========================================
 
     mkdir -p "$DATA"
-}
 
+    return 0
+}
 # ============================================================
 # GUARDAR CREDENCIALES
 # ============================================================
