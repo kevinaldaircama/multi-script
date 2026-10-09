@@ -37,3 +37,10 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - Aviso modal de vencimiento 3 días antes.
 - Sección de planes con edición de planes y registro de solicitudes/historial. PayPal queda como método seleccionado, pero requiere credenciales e integración de comercio para procesar pagos reales.
 - Cambio de tema con un solo botón.
+
+## Actualización web 4.7
+- Alineación izquierda consistente en los títulos y textos de las secciones.
+- Datos de pago manual organizados dentro del modal de solicitud de plan.
+- Moneda local sincronizada entre Ajuste general y Configuración de planes (por defecto S/).
+- Generador de payloads con formulario web propio; ya no intenta ejecutar el script interactivo de terminal.
+- Detalles VPS y Speedtest con pantallas web; las herramientas de terminal restantes no se ejecutan automáticamente desde una visita web.
