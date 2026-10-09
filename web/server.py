@@ -273,8 +273,14 @@ class Handler(BaseHTTPRequestHandler):
  def tool_page(self,u,slug,title,admin_only=False):
   if not u:return self.redirect('/login')
   if admin_only and u.get('role')!='admin':return self.send(403,body=tpl('message.html',u,'Acceso denegado',MESSAGE='<div class="notice bad">Esta herramienta es solo para administradores.</div>'))
-  descriptions={'block-torrent':'Configuración de bloqueo de tráfico torrent.','archivo-online':'Herramienta de gestión de archivos online.','speedtest':'Prueba de velocidad de conexión.','detalles-vps':'Información básica del VPS.','block-ads':'Configuración de bloqueo de anuncios.','scanner':'Diagnóstico para dominios y sistemas autorizados.','payloads':'Generador de payloads para pruebas autorizadas.'}
-  body='<div class="hero"><h1><i class="fa-solid fa-screwdriver-wrench"></i> '+html_escape(title)+'</h1><p class="muted">'+html_escape(descriptions.get(slug,''))+'</p></div><div class="card"><p>La sección está disponible en el menú. Para ejecutar operaciones reales, debe conectarse al servicio correspondiente del VPS.</p></div>'
+  scripts={'block-torrent':'blocktorrent.sh','archivo-online':'archivoonline.sh','speedtest':'speedtest.sh','detalles-vps':'detalles.sh','block-ads':'blockads.sh','scanner':'scanner.sh','payloads':'generador de payloads.sh'}
+  script=scripts.get(slug);base='/etc/kevintech/herramientas';path=os.path.join(base,script or '')
+  if not script or not os.path.isfile(path):
+   body='<div class="hero"><h1><i class="fa-solid fa-screwdriver-wrench"></i> '+html_escape(title)+'</h1></div><div class="notice bad">No se encontró el script en '+html_escape(path)+'. Comprueba que el instalador haya copiado la carpeta herramientas a /etc/kevintech/herramientas.</div>'
+   return self.send(404,body=page(title,body,u))
+  # Only launch the preselected bundled script. Output is escaped before rendering.
+  rc,out=shell('bash '+shlex.quote(path),60)
+  body='<div class="hero"><h1><i class="fa-solid fa-screwdriver-wrench"></i> '+html_escape(title)+'</h1><p>Script del VPS: '+html_escape(script)+'</p></div><div class="card"><p>Resultado: '+('Correcto' if rc==0 else 'Código '+str(rc))+'</p><pre class="terminal">'+html_escape(out or 'El script no produjo salida.')+'</pre><a class="btn" href="'+PREFIX+'/tools/'+html_escape(slug)+'">Actualizar resultado</a></div>'
   return self.send(200,body=page(title,body,u))
  def public_index(self,u):
   st=site_settings();title=html_escape(st.get('site_title','KevinTech Multi Script'));desc=html_escape(st.get('site_description','Panel web para administrar tu VPS y tus cuentas.'))
@@ -421,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
    return self.redirect('/ad/watch?token='+token)
   return self.create_account_now(u,d)
  def create_account_now(self,u,d):
-  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);limit=int(st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']);typ=self.val(d,'type','ssh');user=self.val(d,'username').lower();pw=self.val(d,'password')
+  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);limit=int(st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']);typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'v2ray','v2rayvmess':'v2ray','ssh':'ssh'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
    max_accounts=max(0,int(st.get('quota_user_accounts',2)))
@@ -523,7 +529,7 @@ class Handler(BaseHTTPRequestHandler):
   c=cfg();st=site_settings();
   if section=='ads':body=tpl('admin_settings_ads.html',u,'Ajuste de ads',ADS_CHECKED='checked' if c.get('ads_enabled') else '',ZONE=html_escape(c.get('monetag_zone','11217882')),CREATE=c.get('ads',{}).get('create',0),DELETE=c.get('ads',{}).get('delete',0),RENEW=c.get('ads',{}).get('renew',0))
   elif section=='quotas':body=tpl('admin_settings_quotas.html',u,'Cuotas',USER_DAYS=st['quota_user_days'],USER_LIMIT=st['quota_user_limit'],USER_ACCOUNTS=st.get('quota_user_accounts',2),ADMIN_DAYS=st['quota_admin_days'],ADMIN_LIMIT=st['quota_admin_limit'],RENEW_POINTS=st.get('quota_renew_points',4))
-  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']))
+  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']))
   return self.send(200,body=body)
  def admin_settings_post(self,u,d,section):
   if not u or u['role']!='admin':return self.send(403,body='403')
@@ -536,7 +542,7 @@ class Handler(BaseHTTPRequestHandler):
    try:vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit')))),'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4'))))}
    except:return self.send(400,body='Cuotas inválidas')
    save_settings(vals);return self.redirect('/admin/settings/quotas')
-  save_settings({'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms')});return self.redirect('/admin/settings/general')
+  save_settings({'currency_symbol':self.val(d,'currency_symbol','S/')[:8] or 'S/','site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms')});return self.redirect('/admin/settings/general')
  def plans_data(self):
   c=cfg();plans=c.get('plans')
   if not isinstance(plans,list):
@@ -544,7 +550,7 @@ class Handler(BaseHTTPRequestHandler):
   return plans
  def plans(self,u):
   if not u:return self.redirect('/login')
-  plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p>'+html_escape(x.get('benefits',''))+'</p><p><b>Precio: S/ '+html_escape(x.get('price','0'))+'</b> · '+html_escape(x.get('period','mensual'))+'</p><p>Pago: '+html_escape(x.get('payment','manual'))+'</p>'+(''.join('<div class="notice"><b>'+html_escape(m.get('name',''))+'</b><p>'+html_escape(m.get('info',''))+'</p></div>' for m in cfg().get('manual_payment_methods',[])) if x.get('payment','manual')=='manual' else '')+'<form method="post" action="'+PREFIX+'/plans/buy"><input type="hidden" name="plan_id" value="'+html_escape(x.get('id',''))+'"><button class="btn primary">Solicitar plan</button></form></div>' for x in plans) or '<p>No hay planes disponibles.</p>'
+  plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p>'+html_escape(x.get('benefits',''))+'</p><p><b>Precio: S/ '+html_escape(x.get('price','0'))+'</b> · '+html_escape(x.get('period','mensual'))+'</p><p>Pago: '+html_escape(x.get('payment','manual'))+'</p>'+(''.join('<div class="notice"><b>'+html_escape(m.get('name',''))+'</b><p>'+html_escape(m.get('info',''))+'</p></div>' for m in cfg().get('manual_payment_methods',[])) if x.get('payment','manual')=='manual' else '')+'<button type="button" class="btn primary" data-plan-buy data-id="'+html_escape(x.get('id',''))+'" data-title="'+html_escape(x.get('title','Plan'))+'" data-benefits="'+html_escape(x.get('benefits',''))+'" data-price="'+html_escape(x.get('price','0'))+'" data-currency="'+html_escape(cfg().get('currency_symbol','S/'))+'" data-period="'+html_escape(x.get('period','mensual'))+'"><i class="fa-solid fa-cart-shopping"></i> Solicitar plan</button></div>' for x in plans) or '<p>No hay planes disponibles.</p>'
   return self.send(200,body=tpl('plans.html',u,'Planes',CARDS=cards))
  def plans_settings(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
@@ -602,9 +608,6 @@ class Handler(BaseHTTPRequestHandler):
   c=db();rows=c.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 100',(u['id'],)).fetchall();c.execute('UPDATE notifications SET is_read=1 WHERE user_id=?',(u['id'],));c.commit();c.close()
   cards=''.join('<div class="card"><h3>'+html_escape(x['title'])+'</h3><p>'+html_escape(x['message'])+'</p><small class="muted">'+html_escape(x['created_at'])+'</small></div>' for x in rows) or '<div class="card">No tienes notificaciones.</div>'
   modal=''
-  for x in rows:
-   if x['kind'] in ('plan_approved','plan_rejected'):
-    modal='<div class="expiry-modal" id="planNoticeModal"><div class="expiry-modal-card"><button class="modal-x" onclick="this.parentElement.parentElement.remove()">×</button><h2>'+('✅ Solicitud aceptada' if x['kind']=='plan_approved' else '❌ Solicitud rechazada')+'</h2><p>'+html_escape(x['message'])+'</p><button class="btn primary" onclick="this.parentElement.parentElement.remove()">Entendido</button></div></div>';break
   return self.send(200,body=tpl('notifications.html',u,'Notificaciones',CARDS=modal+'<div class="grid">'+cards+'</div>'))
  def plans_history_action(self,u,d):
   if not u or u.get('role')!='admin':return self.send(403,body='403')
@@ -631,13 +634,19 @@ class Handler(BaseHTTPRequestHandler):
   title='Plan aprobado' if action=='approve' else 'Plan rechazado'
   message=('Tu solicitud para el plan '+order['plan_title']+' fue aceptada. Los beneficios configurados se han aplicado a tu cuenta.' if action=='approve' else 'Tu solicitud para el plan '+order['plan_title']+' fue rechazada. No se aplicaron beneficios.')
   self.add_notification(uid,title,message,'plan_approved' if action=='approve' else 'plan_rejected')
-  return self.redirect('/plans/history')
+  return self.send(200,body=tpl('message.html',u,'Acción completada',MESSAGE='<div class="expiry-modal" style="position:relative;inset:auto;background:transparent"><div class="expiry-modal-card"><h2><i class="fa-solid '+('fa-trash' if action=='delete' else ('fa-circle-check' if action=='approve' else 'fa-circle-xmark'))+'"></i> '+html_escape('Solicitud eliminada' if action=='delete' else ('Solicitud aprobada' if action=='approve' else 'Solicitud rechazada'))+'</h2><p>'+html_escape('Solicitud eliminada.' if action=='delete' else ('Beneficios aplicados.' if action=='approve' else 'No se aplicaron beneficios.'))+'</p><a class="btn primary" href="'+PREFIX+'/plans/history">Entendido</a></div></div>'))
  def plans_buy(self,u,d):
   if not u:return self.redirect('/login')
   pid=self.val(d,'plan_id');plans=self.plans_data();plan=next((x for x in plans if x.get('id')==pid),None)
   if not plan:return self.send(404,body='Plan no encontrado')
-  c=db();c.execute('CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL)');c.execute('INSERT INTO plan_orders(user_id,plan_id,plan_title,price,payment,status,created_at) VALUES(?,?,?,?,?,?,?)',(u['id'],pid,plan['title'],plan['price'],plan.get('payment','manual'),'pendiente',datetime.now().isoformat(timespec='seconds')));c.commit();c.close()
-  return self.send(200,body=tpl('message.html',u,'Solicitud de plan',MESSAGE='<div class="notice">Solicitud registrada. Los beneficios no se activan hasta que el administrador apruebe la solicitud o el proveedor confirme el pago mediante una integración de pagos verificada.</div><a class="btn" href="'+PREFIX+'/plans/history">Ver historial</a>'))
+  payment=self.val(d,'payment_method','manual')
+  if payment not in ('manual','paypal','mercadopago'):payment='manual'
+  conf=cfg()
+  if payment=='paypal' and not (conf.get('paypal_client_id') and conf.get('paypal_secret')):return self.send(400,body=tpl('message.html',u,'PayPal no configurado',MESSAGE='<div class="notice bad">El administrador debe configurar las credenciales de PayPal y la integración de pago antes de cobrar.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
+  if payment=='mercadopago' and not conf.get('mp_access_token'):return self.send(400,body=tpl('message.html',u,'Mercado Pago no configurado',MESSAGE='<div class="notice bad">El administrador debe configurar Mercado Pago y su integración de pago antes de cobrar.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
+  if payment!='manual':return self.send(501,body=tpl('message.html',u,'Pasarela pendiente de integrar',MESSAGE='<div class="notice bad">Las credenciales están guardadas, pero falta completar la creación de checkout y la verificación del webhook del proveedor. No se ha realizado ningún cobro ni aplicado beneficios.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
+  c=db();self.plan_orders_init(c);c.execute('INSERT INTO plan_orders(user_id,plan_id,plan_title,price,payment,status,created_at) VALUES(?,?,?,?,?,?,?)',(u['id'],pid,plan['title'],plan['price'],payment,'pendiente',datetime.now().isoformat(timespec='seconds')));c.commit();c.close()
+  return self.send(200,body=tpl('message.html',u,'Solicitud de plan',MESSAGE='<div class="notice">Solicitud manual registrada. Espera a que el administrador verifique el pago y apruebe el plan.</div><a class="btn" href="'+PREFIX+'/plans/history">Ver historial</a>'))
  def plans_history(self,u):
   if not u:return self.redirect('/login')
   c=db();self.plan_orders_init(c);rows=c.execute('SELECT o.*,u.username FROM plan_orders o LEFT JOIN users u ON u.id=o.user_id '+('' if u['role']=='admin' else 'WHERE o.user_id=? ')+'ORDER BY o.id DESC',(() if u['role']=='admin' else (u['id'],))).fetchall();c.close();html=[]
