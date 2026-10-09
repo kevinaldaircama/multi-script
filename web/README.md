@@ -30,3 +30,10 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - Cuota configurable de cuentas por usuario (por defecto 2).
 - Los usuarios necesitan 3 puntos por cuenta; se descuentan 3 puntos al crearla.
 - Publicidad configurada para creación y eliminación de cuentas de usuarios; el administrador no ve anuncios y no tiene límite de cantidad de cuentas.
+
+
+## v4.3
+- Renovación de cuentas disponible en Inicio para admin; usuarios pueden renovar cuentas propias con los puntos configurados (4 por defecto) y el flujo de anuncios si está habilitado.
+- Aviso modal de vencimiento 3 días antes.
+- Sección de planes con edición de planes y registro de solicitudes/historial. PayPal queda como método seleccionado, pero requiere credenciales e integración de comercio para procesar pagos reales.
+- Cambio de tema con un solo botón.
