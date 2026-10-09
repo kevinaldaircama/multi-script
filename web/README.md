@@ -22,3 +22,11 @@ El formulario de creación no ofrece campo de propietario web ni permite editar 
 
 ## Instalación
 Usa `installer.sh` para instalar/actualizar la web en el VPS.
+
+
+## Cambios v4.2
+- Modo claro/oscuro global guardado en el navegador.
+- Preferencia de idioma por usuario (español, inglés y portugués; traducción de navegación y etiquetas principales).
+- Cuota configurable de cuentas por usuario (por defecto 2).
+- Los usuarios necesitan 3 puntos por cuenta; se descuentan 3 puntos al crearla.
+- Publicidad configurada para creación y eliminación de cuentas de usuarios; el administrador no ve anuncios y no tiene límite de cantidad de cuentas.
