@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil
+import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil, io, zipfile, socket, urllib.request, urllib.error
 from datetime import datetime, timedelta
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, quote
 
 BASE=Path('/etc/kevintech'); WEB=BASE/'web'; DATA=WEB/'data'; DB=DATA/'web.sqlite3'; CONFIG=DATA/'config.json'; KEYFILE=DATA/'.credential.key'; LOG=DATA/'web.log'
 HOST='127.0.0.1'; PORT=int(os.environ.get('KEVINTECH_WEB_PORT','18080')); PREFIX=os.environ.get('KEVINTECH_WEB_PREFIX','').strip().rstrip('/'); SESSION_TTL=86400*3; TOKEN_TTL=600
-DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.'}
+DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.','social_facebook':'','social_instagram':'','social_tiktok':'','social_whatsapp':'','contact_email':'','contact_phone':''}
 SERVICES=[('OpenSSH','ssh','🔐'),('Dropbear','dropbear_custom','🚪'),('HAProxy / SSL','haproxy','🔒'),('SlowDNS','dnstt','🌐'),('Xray / V2Ray','xray','☁️'),('OpenVPN','openvpn-server@server','🔐'),('Hysteria','hysteria1-server','🛡️'),('BHTTP','bhttp','🌐'),('XHTTP','xhttp','🚀'),('Squid','squid','🌐'),('HCR','hcr-server','🛡️'),('WireGuard','wg-quick@wg0','🛡️'),('BTUN','btun','⚡'),('Shadowsocks','shadowsocks-libev-server@8388','🕶️'),('SOCKS5','sockd','🔐'),('3X-UI','x-ui','🖥️'),('VayDNS','vaydns','🔐'),('Slipstream','slipstream','🚀'),('DNSDist','dnsdist','🌐')]
 
 def log(msg):
@@ -45,9 +45,16 @@ def decrypt_credential(value):
 def cfg():
  DATA.mkdir(parents=True,exist_ok=True)
  if not CONFIG.exists(): CONFIG.write_text(json.dumps({'admin_username':'admin','admin_password_hash':'','secret':secrets.token_hex(32),'ads_enabled':True,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':''},indent=2),encoding='utf8')
+ # SQL is the primary store for application configuration; config.json remains a compatibility mirror.
+ try:
+  con=db();row=con.execute("SELECT value FROM settings WHERE key='__app_config__'").fetchone();con.close()
+  if row:return json.loads(row['value'])
+ except Exception:pass
  try:return json.loads(CONFIG.read_text(encoding='utf8'))
  except:return {}
-def save_cfg(c):CONFIG.write_text(json.dumps(c,indent=2,ensure_ascii=False),encoding='utf8');os.chmod(CONFIG,0o600)
+def save_cfg(c):
+ payload=json.dumps(c,indent=2,ensure_ascii=False);CONFIG.write_text(payload,encoding='utf8');os.chmod(CONFIG,0o600)
+ con=db();con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(c,ensure_ascii=False),));con.commit();con.close()
 
 def db():
  DATA.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB,timeout=10); c.row_factory=sqlite3.Row; c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA foreign_keys=ON')
@@ -215,10 +222,10 @@ def page(title,body,user=None):
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-house"></i> Inicio <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/dashboard"><i class="fa-solid fa-chart-line"></i> Panel</a><a href="{PREFIX}/account/create"><i class="fa-solid fa-user-plus"></i> Crear cuenta</a>{'<a href="'+PREFIX+'/admin/users"><i class="fa-solid fa-users"></i> Usuarios</a><a href="'+PREFIX+'/admin/accounts/renew"><i class="fa-solid fa-rotate"></i> Renovar cuenta</a>' if role=='admin' else ''}<a href="{PREFIX}/online"><i class="fa-solid fa-circle-check"></i> Online</a><a href="{PREFIX}/referrals"><i class="fa-solid fa-gift"></i> Referidos</a><a href="{PREFIX}/admin/accounts/delete"><i class="fa-solid fa-trash"></i> Eliminar cuenta</a></div></div>
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gears"></i> Protocolos <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/protocols"><i class="fa-solid fa-list"></i> Todos</a><a href="{PREFIX}/protocols?status=active"><i class="fa-solid fa-circle-check"></i> Protocolos activos</a><a href="{PREFIX}/protocols?status=inactive"><i class="fa-solid fa-circle-xmark"></i> Protocolos inactivos</a></div></div>
   {'<a class="menu-item-link" href="'+PREFIX+'/console"><i class="fa-solid fa-terminal"></i> Consola</a>' if role=='admin' else ''}
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gem"></i> Planes <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/plans"><i class="fa-solid fa-gem"></i> Planes</a>{'<a href="'+PREFIX+'/plans/settings">⚙️ Configuración</a>' if role=='admin' else ''}<a href="{PREFIX}/plans/history"><i class="fa-solid fa-receipt"></i> Historial</a><a href="{PREFIX}/plans/invoice"><i class="fa-solid fa-file-invoice"></i> Factura</a></div></div>
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-screwdriver-wrench"></i> Herramientas <span>⌄</span></button><div class="submenu">{'<a href="'+PREFIX+'/tools/block-torrent"><i class="fa-solid fa-ban"></i> Block Torrent</a><a href="'+PREFIX+'/tools/archivo-online"><i class="fa-solid fa-folder-open"></i> Archivo Online</a><a href="'+PREFIX+'/tools/speedtest"><i class="fa-solid fa-gauge-high"></i> Speedtest</a><a href="'+PREFIX+'/tools/detalles-vps"><i class="fa-solid fa-server"></i> Detalles VPS</a><a href="'+PREFIX+'/tools/block-ads"><i class="fa-solid fa-shield-halved"></i> Block Ads</a>' if role=='admin' else ''}<a href="{PREFIX}/tools/scanner"><i class="fa-solid fa-magnifying-glass"></i> Scanner</a><a href="{PREFIX}/tools/payloads"><i class="fa-solid fa-bolt"></i> Generador de Payloads</a></div></div>
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false">⚙️ Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a>' if role=='admin' else ''}</div></div>
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i><i class="fa-solid fa-circle-info"></i> About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about"><i class="fa-solid fa-building"></i> Sobre nosotros</a><a href="{PREFIX}/about?section=privacy"><i class="fa-solid fa-lock"></i> Política de privacidad</a><a href="{PREFIX}/about?section=cookies"><i class="fa-solid fa-cookie-bite"></i> Política de cookies</a><a href="{PREFIX}/about?section=terms"><i class="fa-solid fa-file-contract"></i> Términos y condiciones</a></div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gem"></i> Planes <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/plans"><i class="fa-solid fa-gem"></i> Planes</a>{'<a href="'+PREFIX+'/plans/settings">⚙️ Configuración</a>' if role=='admin' else ''}<a href="{PREFIX}/plans/history"><i class="fa-solid fa-receipt"></i> Historial</a><a href="{PREFIX}/plans/invoice"><i class="fa-solid fa-file-invoice"></i> Recibos y PDF</a></div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-screwdriver-wrench"></i> Herramientas <span>⌄</span></button><div class="submenu">{'<a href="'+PREFIX+'/tools/backup"><i class="fa-solid fa-database"></i> Backup y restauración</a><a href="'+PREFIX+'/tools/block-torrent"><i class="fa-solid fa-ban"></i> Block Torrent</a><a href="'+PREFIX+'/tools/archivo-online"><i class="fa-solid fa-folder-open"></i> Archivo Online</a><a href="'+PREFIX+'/tools/speedtest"><i class="fa-solid fa-gauge-high"></i> Speedtest</a><a href="'+PREFIX+'/tools/detalles-vps"><i class="fa-solid fa-server"></i> Detalles VPS</a><a href="'+PREFIX+'/tools/block-ads"><i class="fa-solid fa-shield-halved"></i> Block Ads</a>' if role=='admin' else ''}<a href="{PREFIX}/tools/scanner"><i class="fa-solid fa-magnifying-glass"></i> Scanner</a><a href="{PREFIX}/tools/payloads"><i class="fa-solid fa-bolt"></i> Generador de Payloads</a></div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i> Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a>' if role=='admin' else ''}</div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-circle-info"></i> About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about"><i class="fa-solid fa-building"></i> Sobre nosotros</a><a href="{PREFIX}/about?section=privacy"><i class="fa-solid fa-lock"></i> Política de privacidad</a><a href="{PREFIX}/about?section=cookies"><i class="fa-solid fa-cookie-bite"></i> Política de cookies</a><a href="{PREFIX}/about?section=terms"><i class="fa-solid fa-file-contract"></i> Términos y condiciones</a><a href="{PREFIX}/about?section=social"><i class="fa-solid fa-share-nodes"></i> Redes sociales y contacto</a></div></div>
   </div><div class="theme-actions"><button type="button" class="menu-item-link" id="themeToggle"><i class="fa-solid fa-circle-half-stroke"></i> Cambiar a modo claro</button><a class="menu-item-link exit" href="{PREFIX}/logout"><i class="fa-solid fa-right-from-bracket"></i> Salir</a></div></aside>'''
  else:toggle='';sidebar=''
  lang=s.get('language_'+str(user.get('id',0)),'es') if user else 'es'
@@ -251,11 +258,27 @@ class Handler(BaseHTTPRequestHandler):
  def set_session(self,user_id,role):
   tok=secrets.token_urlsafe(32);con=db();con.execute('DELETE FROM sessions WHERE expires<?',(now(),));con.execute('INSERT INTO sessions VALUES(?,?,?,?)',(tok,user_id,role,now()+SESSION_TTL));con.commit();con.close();c=cookies.SimpleCookie();c['kt_session']=tok;c['kt_session']['path']=PREFIX or '/';c['kt_session']['httponly']=True;c['kt_session']['secure']=True;c['kt_session']['samesite']='Lax';self.extra_cookie=c.output(header='').strip()
  def read_post(self):n=int(self.headers.get('Content-Length','0'));return parse_qs(self.rfile.read(min(n,1024*1024)).decode(errors='ignore'),keep_blank_values=True)
- def val(self,d,k,default=''):return d.get(k,[default])[0].strip()
+ def read_multipart(self):
+  from email.parser import BytesParser
+  from email.policy import default
+  n=min(int(self.headers.get('Content-Length','0')),25*1024*1024);raw=self.rfile.read(n)
+  msg=BytesParser(policy=default).parsebytes(('MIME-Version: 1.0\r\nContent-Type: '+self.headers.get('Content-Type','')+'\r\n\r\n').encode()+raw)
+  out={}
+  if msg.is_multipart():
+   for part in msg.iter_parts():
+    name=part.get_param('name',header='content-disposition')
+    if not name:continue
+    payload=part.get_payload(decode=True) or b'';filename=part.get_filename()
+    if filename:out['_file_'+name]=payload;out['_filename_'+name]=filename
+    else:out[name]=[payload.decode(part.get_content_charset() or 'utf8',errors='replace').strip()]
+  return out
+ def val(self,d,k,default=''):
+  v=d.get(k,[default]);v=v[0] if isinstance(v,list) else v
+  return v.strip() if isinstance(v,str) else default
  def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
   p=self.route_path();u=self.session()
-  routes={'/login':self.login_page,'/register':self.register_page,'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u)}
+  routes={'/login':self.login_page,'/register':self.register_page,'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
   if p in ('/','/index','/index.html'):return self.public_index(u)
   if p=='/logout':
    c=self.cookies().get('kt_session');
@@ -266,31 +289,160 @@ class Handler(BaseHTTPRequestHandler):
   if p in routes:return routes[p]()
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
-  p=self.route_path();d=self.read_post();u=self.session()
-  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u)}
+  p=self.route_path();ctype=self.headers.get('Content-Type','');d=self.read_multipart() if ctype.lower().startswith('multipart/form-data') else self.read_post();u=self.session()
+  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
   if p in routes:return routes[p]()
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def tool_page(self,u,slug,title,admin_only=False):
   if not u:return self.redirect('/login')
   if admin_only and u.get('role')!='admin':return self.send(403,body=tpl('message.html',u,'Acceso denegado',MESSAGE='<div class="notice bad">Esta herramienta es solo para administradores.</div>'))
-  scripts={'block-torrent':'blocktorrent.sh','archivo-online':'archivoonline.sh','speedtest':'speedtest.sh','detalles-vps':'detalles.sh','block-ads':'blockads.sh','scanner':'scanner.sh'}
-  script=scripts.get(slug);base='/etc/kevintech/herramientas';path=os.path.join(base,script or '')
   if slug=='detalles-vps':
-   rc,out=shell("printf 'Sistema: '; . /etc/os-release; echo \"$PRETTY_NAME\"; printf 'Kernel: '; uname -r; printf 'Arquitectura: '; uname -m; printf 'Hostname: '; hostname; printf 'CPU: '; grep -m1 'model name' /proc/cpuinfo | cut -d: -f2; printf 'Núcleos: '; nproc; free -h; df -h /; uptime -p",10)
-   body='<div class="hero"><h1><i class="fa-solid fa-server"></i> Detalles del VPS</h1><p>Información del servidor</p></div><div class="card"><pre class="terminal">'+html_escape(out or 'No se pudo obtener información.')+'</pre><a class="btn" href="'+PREFIX+'/tools/detalles-vps">Actualizar</a></div>'
+   cmds=[['bash','-lc','printf "Sistema: "; . /etc/os-release; echo "$PRETTY_NAME"; printf "Kernel: "; uname -r; printf "Arquitectura: "; uname -m; printf "Hostname: "; hostname; printf "CPU: "; grep -m1 "model name" /proc/cpuinfo | cut -d: -f2; printf "Núcleos: "; nproc; free -h; df -h /; uptime -p']]
+   try:out=subprocess.run(cmds[0],capture_output=True,text=True,timeout=10).stdout
+   except Exception as e:out=str(e)
+   body='<div class="hero"><h1><i class="fa-solid fa-server"></i> Detalles del VPS</h1><p>Información actual del servidor.</p></div><div class="card"><pre class="terminal">'+html_escape(out or 'No se pudo obtener información.')+'</pre><a class="btn" href="'+PREFIX+'/tools/detalles-vps">Actualizar</a></div>'
    return self.send(200,body=page(title,body,u))
   if slug=='speedtest':
    has=shutil.which('speedtest') or shutil.which('speedtest-cli')
-   msg=('El comando speedtest está instalado. Pulsa el botón para iniciar una prueba.' if has else 'No se encontró speedtest ni speedtest-cli en el VPS. Instala una herramienta compatible y vuelve a intentarlo.')
+   msg='El comando de prueba está instalado.' if has else 'No se encontró speedtest ni speedtest-cli en el VPS.'
    body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Speedtest</h1><p>Comprueba la velocidad de conexión del VPS.</p></div><div class="card"><p>'+html_escape(msg)+'</p>'+(('<form method="post" action="'+PREFIX+'/tools/speedtest/run"><button class="btn primary">Ejecutar prueba</button></form>') if has else '')+'</div>'
    return self.send(200,body=page(title,body,u))
-  descriptions={'block-torrent':'Gestiona reglas de firewall para tráfico BitTorrent. Esta acción modifica las reglas de red del VPS.','archivo-online':'El script original solicita una ruta local para subir archivos o listar archivos. Una página web necesita un formulario seguro para elegir y transferir el archivo.','block-ads':'Gestiona entradas de bloqueo de anuncios en /etc/hosts.','scanner':'Busca subdominios y analiza servicios; usa únicamente dominios que tengas autorización para evaluar.'}
-  exists=bool(script and os.path.isfile(path))
-  body='<div class="hero"><h1><i class="fa-solid fa-screwdriver-wrench"></i> '+html_escape(title)+'</h1><p>Herramienta del VPS</p></div><div class="card"><p>'+html_escape(descriptions.get(slug,'Herramienta'))+'</p><p class="muted small">Script esperado: '+html_escape(path)+'</p>'
-  if not exists:body+='<div class="notice bad">No se encontró el script original. Comprueba que exista en /etc/kevintech/herramientas/.</div>'
-  else:body+='<div class="notice">El script original usa un menú interactivo de terminal. No se ejecuta automáticamente desde el navegador para evitar que una visita active cambios en el servidor. Esta herramienta necesita una interfaz web con acciones explícitas.</div>'
-  body+='<a class="btn" href="'+PREFIX+'/tools/'+html_escape(slug)+'">Actualizar</a></div>'
+  if slug=='block-torrent':
+   body='<div class="hero"><h1><i class="fa-solid fa-ban"></i> Block Torrent</h1><p>Aplica o retira reglas aisladas de BitTorrent sin vaciar todas las reglas del firewall.</p></div><div class="card"><div class="notice">Requiere permisos de administrador del VPS. Se modificará únicamente la cadena KEVINTECH_TORRENT.</div><form method="post" action="'+PREFIX+'/tools/run"><button class="btn primary" name="tool_action" value="torrent_block">Bloquear BitTorrent</button><button class="btn danger" name="tool_action" value="torrent_unblock" data-confirm="¿Retirar las reglas BitTorrent de KevinTech?">Desbloquear BitTorrent</button></form></div>'
+   return self.send(200,body=page(title,body,u))
+  if slug=='block-ads':
+   body='<div class="hero"><h1><i class="fa-solid fa-shield-halved"></i> Block Ads</h1><p>Administra el bloque de dominios publicitarios del archivo hosts.</p></div><div class="card"><p>Se conserva una copia de seguridad y solo se quita el bloque marcado por KevinTech.</p><form method="post" action="'+PREFIX+'/tools/run"><button class="btn primary" name="tool_action" value="ads_block">Bloquear dominios de anuncios</button><button class="btn danger" name="tool_action" value="ads_unblock" data-confirm="¿Eliminar solamente el bloque de anuncios de KevinTech?">Desbloquear anuncios</button></form></div>'
+   return self.send(200,body=page(title,body,u))
+  if slug=='archivo-online':
+   up=DATA/'uploads';up.mkdir(parents=True,exist_ok=True);files=[]
+   for f in sorted(up.iterdir(),key=lambda x:x.stat().st_mtime,reverse=True)[:100]:
+    if f.is_file():files.append('<tr><td>'+html_escape(f.name)+'</td><td>'+str(round(f.stat().st_size/1024,1))+' KB</td><td><a class="btn" href="'+PREFIX+'/tools/archive-download?name='+quote(f.name)+'">Descargar</a> <form class="inline" method="post" action="'+PREFIX+'/tools/run"><input type="hidden" name="tool_action" value="archive_share"><input type="hidden" name="name" value="'+html_escape(f.name)+'"><button class="btn" data-confirm="El archivo se enviará a un servicio externo. No compartas información sensible. ¿Continuar?">Compartir externamente</button></form></td></tr>')
+   body='<div class="hero"><h1><i class="fa-solid fa-folder-open"></i> Archivo Online</h1><p>Sube archivos desde el navegador y administra los archivos guardados.</p></div><div class="card"><form method="post" enctype="multipart/form-data" action="'+PREFIX+'/tools/archive-upload"><label>Seleccionar archivo (máximo 20 MB)</label><input class="input" type="file" name="upload" required><button class="btn primary">Subir archivo</button></form><h3>Archivos guardados</h3><div class="table-wrap"><table class="table"><thead><tr><th>Archivo</th><th>Tamaño</th><th>Acción</th></tr></thead><tbody>'+(''.join(files) or '<tr><td colspan="3">Todavía no hay archivos.</td></tr>')+'</tbody></table></div></div>'
+   return self.send(200,body=page(title,body,u))
+  if slug=='scanner':
+   body='<div class="hero"><h1><i class="fa-solid fa-magnifying-glass"></i> Scanner</h1><p>Comprobaciones pasivas de DNS y disponibilidad HTTP.</p></div><div class="card"><div class="notice">Utiliza solo dominios que poseas o para los que tengas autorización. Esta interfaz no instala herramientas ni ejecuta escaneos intrusivos.</div><form method="post" action="'+PREFIX+'/tools/run"><input type="hidden" name="tool_action" value="scanner"><label>Dominio autorizado</label><input class="input" name="domain" placeholder="ejemplo.com" pattern="[A-Za-z0-9.-]+" required><button class="btn primary">Comprobar subdominios y HTTP</button></form></div>'
+   return self.send(200,body=page(title,body,u))
+  body='<div class="hero"><h1><i class="fa-solid fa-screwdriver-wrench"></i> '+html_escape(title)+'</h1><p>Herramienta web.</p></div><div class="card"><p>Esta herramienta no ejecuta scripts interactivos de terminal desde una visita al navegador.</p></div>'
   return self.send(200,body=page(title,body,u))
+ def tool_run(self,u,d):
+  if not u:return self.redirect('/login')
+  action=self.val(d,'tool_action');admin_actions={'torrent_block','torrent_unblock','ads_block','ads_unblock','archive_share'}
+  if action in admin_actions and u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  out='';rc=0
+  try:
+   if action in ('torrent_block','torrent_unblock'):
+    if not shutil.which('iptables'):raise RuntimeError('No se encontró iptables.')
+    def ipt(args,check=False):
+     return subprocess.run(['iptables']+args,capture_output=True,text=True,timeout=10).returncode
+    if action=='torrent_block':
+     ipt(['-N','KEVINTECH_TORRENT']);ipt(['-F','KEVINTECH_TORRENT'])
+     for args in (['-p','tcp','--dport','6881:6999','-j','DROP'],['-p','udp','--dport','6881:6999','-j','DROP'],['-m','string','--algo','bm','--string','BitTorrent','-j','DROP'],['-m','string','--algo','bm','--string','peer_id=','-j','DROP']):
+      ipt(['-A','KEVINTECH_TORRENT']+args)
+     for chain in ('INPUT','OUTPUT'):
+      if ipt(['-C',chain,'-j','KEVINTECH_TORRENT'])!=0:ipt(['-I',chain,'-j','KEVINTECH_TORRENT'])
+     out='Reglas de BitTorrent activadas en la cadena aislada KEVINTECH_TORRENT.'
+    else:
+     for chain in ('INPUT','OUTPUT'):
+      while ipt(['-C',chain,'-j','KEVINTECH_TORRENT'])==0:ipt(['-D',chain,'-j','KEVINTECH_TORRENT'])
+     ipt(['-F','KEVINTECH_TORRENT']);ipt(['-X','KEVINTECH_TORRENT']);out='Reglas de KevinTech retiradas. No se vació el firewall completo.'
+   elif action in ('ads_block','ads_unblock'):
+    hosts=Path('/etc/hosts');marker='# KEVINTECH BLOCK ADS BEGIN';end='# KEVINTECH BLOCK ADS END';text=hosts.read_text(errors='replace')
+    if action=='ads_block':
+     if marker not in text:
+      bak=Path('/etc/hosts.kevintech.bak')
+      if not bak.exists():shutil.copy2(hosts,bak)
+      block='\n'+marker+'\n'+'\n'.join('0.0.0.0 '+x for x in ['ads.google.com','adservice.google.com','pagead2.googlesyndication.com','googleads.g.doubleclick.net','doubleclick.net','ad.doubleclick.net','ads.yahoo.com','ads.facebook.com','app-measurement.com','analytics.google.com'])+'\n'+end+'\n'
+      hosts.write_text(text.rstrip()+block)
+     out='Bloqueo de anuncios aplicado.'
+    else:
+     if marker in text and end in text:text=text[:text.index(marker)]+text[text.index(end)+len(end):];hosts.write_text(text)
+     out='Bloque de KevinTech retirado; las demás entradas de hosts se conservaron.'
+   elif action=='scanner':
+    domain=self.val(d,'domain').lower().strip().rstrip('.')
+    if len(domain)>253 or not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}',domain):raise ValueError('Dominio no válido.')
+    found=[];subdomains=set()
+    assetfinder=shutil.which('assetfinder');httpxbin=shutil.which('httpx')
+    if assetfinder:
+     proc=subprocess.run([assetfinder,'--subs-only',domain],capture_output=True,text=True,timeout=90)
+     if proc.returncode==0:subdomains.update(x.strip().lower() for x in proc.stdout.splitlines() if x.strip().endswith(domain))
+    for sub in ('','www','mail','api','vpn','cdn','webmail','panel','ftp'):
+     host=(sub+'.' if sub else '')+domain
+     try:
+      infos=socket.getaddrinfo(host,None);ips=sorted({x[4][0] for x in infos});found.append(host+' -> '+', '.join(ips));subdomains.add(host)
+     except Exception:pass
+    if httpxbin and subdomains:
+     try:
+      proc=subprocess.run([httpxbin,'-silent','-status-code','-ip','-tech-detect','-title'],input='\n'.join(sorted(subdomains))+'\n',capture_output=True,text=True,timeout=120)
+      if proc.stdout.strip():found.append('\nResultados HTTP / tecnologías:\n'+proc.stdout.strip())
+      elif proc.stderr.strip():found.append('httpx: '+proc.stderr.strip()[:250])
+     except Exception as e:found.append('httpx no pudo completar la prueba: '+str(e)[:150])
+    else:
+     try:
+      req=urllib.request.Request('https://'+domain,method='HEAD',headers={'User-Agent':'KevinTech-Web-Scanner/1.0'});resp=urllib.request.urlopen(req,timeout=7);found.append('HTTPS '+domain+' -> HTTP '+str(resp.status));resp.close()
+     except Exception as e:found.append('HTTPS '+domain+' -> '+str(e)[:180])
+    out='\n'.join(found) or 'No se encontraron registros DNS en los nombres probados. Para el análisis ampliado instala assetfinder y ProjectDiscovery httpx en el VPS.'
+    scan_dir=DATA/'scanner';scan_dir.mkdir(parents=True,exist_ok=True);(scan_dir/(domain.replace('.','_')+'_'+datetime.now().strftime('%Y%m%d%H%M%S')+'.txt')).write_text(out,encoding='utf8')
+   elif action=='archive_share':
+    if u.get('role')!='admin':raise PermissionError('Solo administrador')
+    name=Path(self.val(d,'name')).name;f=DATA/'uploads'/name
+    if not f.is_file():raise ValueError('Archivo no encontrado.')
+    proc=subprocess.run(['curl','-fsS','--max-time','90','--upload-file',str(f),'https://transfer.sh/'+quote(name)],capture_output=True,text=True,timeout=95)
+    if proc.returncode:raise RuntimeError(proc.stderr or 'No se pudo subir a transfer.sh.')
+    out='Archivo compartido en servicio externo. Enlace: '+proc.stdout.strip()
+   else:raise ValueError('Acción desconocida.')
+  except Exception as e:rc=1;out=str(e)
+  body='<div class="hero"><h1><i class="fa-solid fa-terminal"></i> Resultado de herramienta</h1></div><div class="card"><div class="notice '+('bad' if rc else 'oktxt')+'">'+('Error: ' if rc else 'Resultado: ') + html_escape(out).replace('\\n','<br>').replace('\n','<br>')+'</div><a class="btn primary" href="'+PREFIX+('/tools/scanner' if action=='scanner' else '/tools/'+('block-torrent' if action.startswith('torrent') else 'block-ads' if action.startswith('ads') else 'archivo-online'))+'">Volver</a></div>'
+  return self.send(200 if not rc else 400,body=page('Resultado',body,u))
+ def archive_upload(self,u,d):
+  if not u:return self.redirect('/login')
+  if u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  payload=d.get('_file_upload',b'');name=Path(d.get('_filename_upload','archivo.bin')).name
+  if not payload:return self.send(400,body=tpl('message.html',u,'Archivo',MESSAGE='<div class="notice bad">No se recibió ningún archivo.</div>'))
+  if len(payload)>20*1024*1024:return self.send(413,body='Archivo demasiado grande (máximo 20 MB).')
+  if not name or name in ('.','..'):name='archivo.bin'
+  clean=re.sub(r'[^A-Za-z0-9._ -]','_',name)[:120];folder=DATA/'uploads';folder.mkdir(parents=True,exist_ok=True);target=folder/(secrets.token_hex(4)+'_'+clean);target.write_bytes(payload);os.chmod(target,0o600)
+  return self.send(200,body=tpl('message.html',u,'Archivo cargado',MESSAGE='<div class="notice oktxt">Archivo guardado de forma privada en el VPS.</div><a class="btn primary" href="'+PREFIX+'/tools/archivo-online">Ver archivos</a>'))
+ def archive_download(self,u):
+  if not u:return self.redirect('/login')
+  if u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  name=Path(parse_qs(urlparse(self.path).query).get('name',[''])[0]).name;f=DATA/'uploads'/name
+  if not f.is_file():return self.send(404,body='Archivo no encontrado.')
+  b=f.read_bytes();self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Disposition','attachment; filename="'+name.replace('"','')+'"');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+ def backup_page(self,u):
+  if not u or u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  body='<div class="hero"><h1><i class="fa-solid fa-database"></i> Respaldar y restaurar</h1><p>La base de datos del panel es SQLite, una base de datos SQL. Puedes descargar el respaldo y restaurarlo aquí.</p></div><div class="grid"><div class="card"><h2>Crear respaldo</h2><p>Incluye base de datos SQLite, exportación SQL y configuración del panel.</p><a class="btn primary" href="'+PREFIX+'/tools/backup/download"><i class="fa-solid fa-download"></i> Descargar backup ZIP</a></div><div class="card"><h2>Restaurar respaldo</h2><div class="notice bad">Restaurar reemplaza la base de datos y configuración actuales. Descarga un backup antes de continuar.</div><form method="post" enctype="multipart/form-data" action="'+PREFIX+'/tools/backup/restore"><label>Archivo ZIP de respaldo KevinTech</label><input class="input" type="file" name="backup" accept=".zip,application/zip" required><label><input type="checkbox" name="confirm_restore" value="yes" required> Entiendo que se reemplazarán los datos actuales</label><button class="btn danger" data-confirm="¿Restaurar este backup y reemplazar los datos actuales?">Restaurar backup</button></form></div></div>'
+  return self.send(200,body=page('Backup y restauración',body,u))
+ def backup_download(self,u):
+  if not u or u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  folder=DATA;folder.mkdir(parents=True,exist_ok=True);tmp=folder/('backup_'+secrets.token_hex(4)+'.sqlite3');src=db();dst=sqlite3.connect(tmp);src.backup(dst);dst.execute('PRAGMA journal_mode=DELETE');dst.close();src.close()
+  con=sqlite3.connect(tmp);sql='\n'.join(con.iterdump());con.close();archive=io.BytesIO();conf=CONFIG.read_bytes() if CONFIG.exists() else b'{}'
+  with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+   z.write(tmp,'web.sqlite3');z.writestr('database.sql',sql);z.writestr('config.json',conf);z.writestr('README.txt','Backup KevinTech Web. Contiene información sensible. Mantener privado. Restaurar desde Herramientas > Backup.')
+  tmp.unlink(missing_ok=True);b=archive.getvalue();self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Disposition','attachment; filename="kevintech-backup-'+datetime.now().strftime('%Y%m%d-%H%M%S')+'.zip"');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+ def backup_restore(self,u,d):
+  if not u or u.get('role')!='admin':return self.send(403,body='403 - Solo administrador')
+  if self.val(d,'confirm_restore')!='yes':return self.send(400,body='Debes confirmar la restauración.')
+  payload=d.get('_file_backup',b'')
+  if not payload or len(payload)>25*1024*1024:return self.send(400,body='ZIP de respaldo inválido o demasiado grande.')
+  try:
+   with zipfile.ZipFile(io.BytesIO(payload)) as z:
+    names=set(z.namelist())
+    if not {'web.sqlite3','config.json','database.sql'}.issubset(names):raise ValueError('El ZIP no parece un backup KevinTech completo.')
+    if any(info.file_size>100*1024*1024 for info in z.infolist()):raise ValueError('El backup contiene un archivo demasiado grande.')
+    dbbytes=z.read('web.sqlite3');confbytes=z.read('config.json')
+   test=sqlite3.connect(':memory:');test.deserialize(dbbytes);check=test.execute('PRAGMA integrity_check').fetchone()[0];test.close()
+   if check!='ok':raise ValueError('La base de datos no pasó la comprobación de integridad.')
+   conf=json.loads(confbytes.decode('utf8'))
+   if not isinstance(conf,dict):raise ValueError('La configuración no es válida.')
+   DATA.mkdir(parents=True,exist_ok=True);(DATA/'web.sqlite3.restore').write_bytes(dbbytes);(DATA/'config.json.restore').write_bytes(confbytes);os.chmod(DATA/'web.sqlite3.restore',0o600);os.chmod(DATA/'config.json.restore',0o600)
+   # Remove WAL files before atomically replacing the DB.
+   for suffix in ('-wal','-shm'):(DATA/('web.sqlite3'+suffix)).unlink(missing_ok=True)
+   os.replace(DATA/'web.sqlite3.restore',DB);os.replace(DATA/'config.json.restore',CONFIG)
+   return self.send(200,body=tpl('message.html',u,'Respaldo restaurado',MESSAGE='<div class="notice oktxt">Respaldo validado y restaurado. La sesión puede pedirte iniciar sesión otra vez.</div><a class="btn primary" href="'+PREFIX+'/login">Continuar</a>'))
+  except Exception as e:
+   log('backup_restore_error '+repr(e))
+   (DATA/'web.sqlite3.restore').unlink(missing_ok=True);(DATA/'config.json.restore').unlink(missing_ok=True)
+   return self.send(400,body=tpl('message.html',u,'Error al restaurar',MESSAGE='<div class="notice bad">No se restauró el respaldo: '+html_escape(str(e))+'</div><a class="btn" href="'+PREFIX+'/tools/backup">Volver</a>'))
  def payloads_page(self,u,d=None):
   if not u:return self.redirect('/login')
   kind=self.val(d,'kind','http_get') if d else 'http_get'
@@ -569,7 +721,7 @@ class Handler(BaseHTTPRequestHandler):
   c=cfg();st=site_settings();
   if section=='ads':body=tpl('admin_settings_ads.html',u,'Ajuste de ads',ADS_CHECKED='checked' if c.get('ads_enabled') else '',ZONE=html_escape(c.get('monetag_zone','11217882')),CREATE=c.get('ads',{}).get('create',0),DELETE=c.get('ads',{}).get('delete',0),RENEW=c.get('ads',{}).get('renew',0))
   elif section=='quotas':body=tpl('admin_settings_quotas.html',u,'Cuotas',USER_DAYS=st['quota_user_days'],USER_LIMIT=st['quota_user_limit'],USER_ACCOUNTS=st.get('quota_user_accounts',2),ADMIN_DAYS=st['quota_admin_days'],ADMIN_LIMIT=st['quota_admin_limit'],RENEW_POINTS=st.get('quota_renew_points',4))
-  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']))
+  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']),SOCIAL_FACEBOOK=html_escape(st.get('social_facebook','')),SOCIAL_INSTAGRAM=html_escape(st.get('social_instagram','')),SOCIAL_TIKTOK=html_escape(st.get('social_tiktok','')),SOCIAL_WHATSAPP=html_escape(st.get('social_whatsapp','')),CONTACT_EMAIL=html_escape(st.get('contact_email','')),CONTACT_PHONE=html_escape(st.get('contact_phone','')))
   return self.send(200,body=body)
  def admin_settings_post(self,u,d,section):
   if not u or u['role']!='admin':return self.send(403,body='403')
@@ -582,7 +734,7 @@ class Handler(BaseHTTPRequestHandler):
    try:vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit')))),'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4'))))}
    except:return self.send(400,body='Cuotas inválidas')
    save_settings(vals);return self.redirect('/admin/settings/quotas')
-  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms')});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.redirect('/admin/settings/general')
+  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.redirect('/admin/settings/general')
  def plans_data(self):
   c=cfg();plans=c.get('plans')
   if not isinstance(plans,list):
@@ -694,19 +846,58 @@ class Handler(BaseHTTPRequestHandler):
   if not u:return self.redirect('/login')
   c=db();self.plan_orders_init(c);rows=c.execute('SELECT o.*,u.username FROM plan_orders o LEFT JOIN users u ON u.id=o.user_id '+('' if u['role']=='admin' else 'WHERE o.user_id=? ')+'ORDER BY o.id DESC',(() if u['role']=='admin' else (u['id'],))).fetchall();c.close();html=[]
   for x in rows:
-   actions=''
+   actions='<a class="btn" href="'+PREFIX+'/plans/invoice?order='+str(x['id'])+'">Ver recibo</a> <a class="btn" href="'+PREFIX+'/plans/invoice?order='+str(x['id'])+'&download=pdf">PDF</a>'
    if u['role']=='admin':
-    actions='<form class="inline" method="post" action="'+PREFIX+'/plans/history/action"><input type="hidden" name="order_id" value="'+str(x['id'])+'"><button class="btn primary" name="action" value="approve" data-confirm="¿Aprobar esta solicitud y aplicar sus beneficios?">Aprobar</button><button class="btn danger" name="action" value="reject" data-confirm="¿Rechazar esta solicitud sin aplicar beneficios?">Rechazar</button><button class="btn" name="action" value="delete" data-confirm="¿Eliminar esta solicitud?">Eliminar</button></form>'
-   html.append('<tr><td>'+html_escape(x['username'] or 'Usuario')+'</td><td>'+html_escape(x['plan_title'])+'</td><td>'+html_escape(cfg().get('currency_symbol') or site_settings().get('currency_symbol','S/'))+' '+html_escape(x['price'])+'</td><td>'+html_escape(x['payment'])+'</td><td>'+html_escape(x['status'])+'</td><td>'+html_escape(x['created_at'])+'</td>'+('<td>'+actions+'</td>' if u['role']=='admin' else '')+'</tr>')
-  return self.send(200,body=tpl('plans_history.html',u,'Historial',ROWS=''.join(html) or '<tr><td colspan="7">Sin solicitudes todavía.</td></tr>',ACTIONS_HEADER='<th>Acciones</th>' if u['role']=='admin' else ''))
+    actions='<a class="btn" href="'+PREFIX+'/plans/invoice?order='+str(x['id'])+'">Recibo</a> <a class="btn" href="'+PREFIX+'/plans/invoice?order='+str(x['id'])+'&download=pdf">PDF</a> <form class="inline" method="post" action="'+PREFIX+'/plans/history/action"><input type="hidden" name="order_id" value="'+str(x['id'])+'"><button class="btn primary" name="action" value="approve" data-confirm="¿Aprobar esta solicitud y aplicar sus beneficios?">Aprobar</button><button class="btn danger" name="action" value="reject" data-confirm="¿Rechazar esta solicitud sin aplicar beneficios?">Rechazar</button><button class="btn" name="action" value="delete" data-confirm="¿Eliminar esta solicitud?">Eliminar</button></form>'
+   html.append('<tr><td>'+html_escape(x['username'] or 'Usuario')+'</td><td>'+html_escape(x['plan_title'])+'</td><td>'+html_escape(cfg().get('currency_symbol') or site_settings().get('currency_symbol','S/'))+' '+html_escape(x['price'])+'</td><td>'+html_escape(x['payment'])+'</td><td>'+html_escape(x['status'])+'</td><td>'+html_escape(x['created_at'])+'</td><td>'+actions+'</td></tr>')
+  return self.send(200,body=tpl('plans_history.html',u,'Historial',ROWS=''.join(html) or '<tr><td colspan="7">Sin solicitudes todavía.</td></tr>',ACTIONS_HEADER='<th>Recibo / acciones</th>'))
  def plans_invoice(self,u):
   if not u:return self.redirect('/login')
-  return self.send(200,body=tpl('message.html',u,'Factura',MESSAGE='<div class="notice">Las facturas estarán disponibles aquí cuando una solicitud de plan sea confirmada. Esta versión registra solicitudes, pero no emite comprobantes tributarios ni procesa cobros PayPal reales.</div><a class="btn" href="'+PREFIX+'/plans/history">Ver historial</a>'))
+  query=parse_qs(urlparse(self.path).query);order_id=query.get('order',[''])[0]
+  c=db();self.plan_orders_init(c)
+  if order_id:
+   try:oid=int(order_id)
+   except:c.close();return self.send(400,body='Número de recibo inválido.')
+   row=c.execute('SELECT o.*,u.username,u.name FROM plan_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.id=?'+('' if u['role']=='admin' else ' AND o.user_id=?'),(oid,) if u['role']=='admin' else (oid,u['id'])).fetchone();c.close()
+   if not row:return self.send(404,body='Recibo no encontrado.')
+   if query.get('download',[''])[0]=='pdf':
+    lines=['KEVINTECH WEB - RECIBO DE PAGO','Recibo interno no tributario','Numero: '+str(row['id']),'Usuario: '+str(row['username'] or 'Usuario'),'Nombre: '+str(row['name'] or ''),'Plan: '+str(row['plan_title']),'Precio: '+str(cfg().get('currency_symbol') or site_settings().get('currency_symbol','S/'))+' '+str(row['price']),'Metodo: '+str(row['payment']),'Estado: '+str(row['status']).upper(),'Fecha: '+str(row['created_at']),'','Este recibo refleja el estado registrado en el panel.','No es un comprobante tributario.']
+    b=self.make_pdf(lines);self.send_response(200);self.send_header('Content-Type','application/pdf');self.send_header('Content-Disposition','attachment; filename="recibo-kevintech-'+str(row['id'])+'.pdf"');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b);return
+   body='<div class="hero"><h1><i class="fa-solid fa-receipt"></i> Recibo #'+str(row['id'])+'</h1><p>Recibo interno del panel; incluye solicitudes pendientes.</p></div><div class="card"><p><b>Usuario:</b> '+html_escape(row['username'] or 'Usuario')+'</p><p><b>Plan:</b> '+html_escape(row['plan_title'])+'</p><p><b>Precio:</b> '+html_escape(cfg().get('currency_symbol') or site_settings().get('currency_symbol','S/'))+' '+html_escape(row['price'])+'</p><p><b>Método:</b> '+html_escape(row['payment'])+'</p><p><b>Estado:</b> '+html_escape(row['status'])+'</p><p><b>Fecha:</b> '+html_escape(row['created_at'])+'</p><div class="notice">Este es un recibo interno del panel, no un comprobante tributario. Si está pendiente, seguirá indicando pendiente hasta que el administrador actualice la solicitud.</div><a class="btn primary" href="'+PREFIX+'/plans/invoice?order='+str(row['id'])+'&download=pdf"><i class="fa-solid fa-file-pdf"></i> Descargar PDF</a> <a class="btn" href="'+PREFIX+'/plans/invoice">Todos los recibos</a></div>'
+   return self.send(200,body=page('Recibo #'+str(row['id']),body,u))
+  rows=c.execute('SELECT o.*,u.username FROM plan_orders o LEFT JOIN users u ON u.id=o.user_id '+('' if u['role']=='admin' else 'WHERE o.user_id=? ')+'ORDER BY o.id DESC',(() if u['role']=='admin' else (u['id'],))).fetchall();c.close();items=[];currency=html_escape(cfg().get('currency_symbol') or site_settings().get('currency_symbol','S/'))
+  for r in rows:
+   items.append('<tr><td>#'+str(r['id'])+'</td><td>'+html_escape(r['username'] or 'Usuario')+'</td><td>'+html_escape(r['plan_title'])+'</td><td>'+currency+' '+html_escape(r['price'])+'</td><td>'+html_escape(r['payment'])+'</td><td>'+html_escape(r['status'])+'</td><td>'+html_escape(r['created_at'])+'</td><td><a class="btn" href="'+PREFIX+'/plans/invoice?order='+str(r['id'])+'">Ver</a> <a class="btn primary" href="'+PREFIX+'/plans/invoice?order='+str(r['id'])+'&download=pdf">PDF</a></td></tr>')
+  body='<div class="hero"><h1><i class="fa-solid fa-file-invoice"></i> Recibos de pagos</h1><p>Todos los pagos y solicitudes, incluidos los que siguen pendientes.</p></div><div class="card table-wrap"><table class="table"><thead><tr><th>N.º</th><th>Usuario</th><th>Plan</th><th>Precio</th><th>Método</th><th>Estado</th><th>Fecha</th><th>Recibo</th></tr></thead><tbody>'+(''.join(items) or '<tr><td colspan="8">Todavía no hay solicitudes de pago.</td></tr>')+'</tbody></table></div>'
+  return self.send(200,body=page('Recibos de pagos',body,u))
+ def make_pdf(self,lines):
+  def esc(x):return str(x).encode('latin-1','replace').decode('latin-1').replace('\\','\\\\').replace('(','\\(').replace(')','\\)')
+  commands=['BT','/F1 12 Tf','50 790 Td','16 TL']
+  for i,line in enumerate(lines):
+   if i:commands.append('T*')
+   commands.append('('+esc(line[:110])+') Tj')
+  commands.append('ET');stream='\n'.join(commands).encode('latin-1');objs=[b'<< /Type /Catalog /Pages 2 0 R >>',b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',b'<< /Length '+str(len(stream)).encode()+b' >>\nstream\n'+stream+b'\nendstream']
+  out=bytearray(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n');offsets=[0]
+  for i,obj in enumerate(objs,1):offsets.append(len(out));out.extend(str(i).encode()+b' 0 obj\n'+obj+b'\nendobj\n')
+  xref=len(out);out.extend(b'xref\n0 6\n0000000000 65535 f \n')
+  for off in offsets[1:]:out.extend(f'{off:010d} 00000 n \n'.encode())
+  out.extend(b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF');return bytes(out)
  def about(self,u):
   if not u:return self.redirect('/login')
-  st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};title,key=mapx.get(section,mapx['about']);edit=''
-  if u['role']=='admin':edit='<a class="btn" href="%s/admin/settings/general">✏️ Editar contenido</a>'%PREFIX
-  return self.send(200,body=tpl('about.html',u,title,HEADING=title,CONTENT=html_escape(st[key]).replace('\n','<br>'),EDIT=edit))
+  st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};edit=''
+  if section=='social':
+   title='Redes sociales y contacto';parts=[]
+   for label,key,icon in [('Facebook','social_facebook','fa-brands fa-facebook'),('Instagram','social_instagram','fa-brands fa-instagram'),('TikTok','social_tiktok','fa-brands fa-tiktok'),('WhatsApp','social_whatsapp','fa-brands fa-whatsapp')]:
+    val=str(st.get(key,'')).strip()
+    if val and val.startswith(('https://','http://')):parts.append('<p><i class="'+icon+'"></i> <a rel="noopener noreferrer" target="_blank" href="'+html_escape(val)+'">'+label+'</a></p>')
+   email=str(st.get('contact_email','')).strip();phone=str(st.get('contact_phone','')).strip()
+   if email and re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):parts.append('<p><i class="fa-solid fa-envelope"></i> <a href="mailto:'+html_escape(email)+'">'+html_escape(email)+'</a></p>')
+   if phone:parts.append('<p><i class="fa-solid fa-phone"></i> '+html_escape(phone)+'</p>')
+   content=''.join(parts) or '<p>Aún no se han configurado redes sociales ni datos de contacto.</p>'
+  else:
+   title,key=mapx.get(section,mapx['about']);content=html_escape(st[key]).replace('\n','<br>')
+  if u['role']=='admin':edit='<a class="btn" href="%s/admin/settings/general"><i class="fa-solid fa-gear"></i> Editar contenido y contacto</a>'%PREFIX
+  return self.send(200,body=tpl('about.html',u,title,HEADING=title,CONTENT=content,EDIT=edit))
  def console(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
   return self.send(200,body=tpl('console.html',u,'Consola',PREFIX=PREFIX))

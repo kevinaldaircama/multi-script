@@ -44,3 +44,13 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - Moneda local sincronizada entre Ajuste general y Configuración de planes (por defecto S/).
 - Generador de payloads con formulario web propio; ya no intenta ejecutar el script interactivo de terminal.
 - Detalles VPS y Speedtest con pantallas web; las herramientas de terminal restantes no se ejecutan automáticamente desde una visita web.
+
+
+## Actualización web 4.8
+- About usa únicamente el icono Font Awesome de información; Configuración usa el icono Font Awesome de engranaje. Los encabezados de las secciones del panel quedan alineados a la izquierda.
+- About incorpora “Redes sociales y contacto”, editable en Ajuste general (Facebook, Instagram, TikTok, WhatsApp, correo y teléfono).
+- Recibos de todos los pedidos de planes, incluidos los pendientes, con vista web y descarga de PDF. Son recibos internos del panel, no comprobantes tributarios.
+- Herramientas con formularios web: Block Torrent utiliza una cadena iptables propia y no vacía el firewall; Block Ads modifica únicamente su bloque marcado en `/etc/hosts`; Archivo Online permite subir/listar/descargar archivos y compartirlos externamente con confirmación; Scanner hace comprobaciones pasivas DNS/HTTP; Detalles VPS, Speedtest y Generador de Payloads cuentan con páginas web.
+- Herramientas → Backup y restauración permite descargar un ZIP con base de datos SQLite, exportación SQL y configuración, y restaurar un ZIP validado. La restauración reemplaza los datos actuales.
+- La base de datos del panel es SQLite, una base de datos relacional que utiliza SQL; usuarios, cuentas, solicitudes de pago, ajustes y configuración principal se guardan en tablas SQL. `config.json` se mantiene como copia compatible con instalaciones anteriores.
+- Las pasarelas PayPal y Mercado Pago siguen necesitando checkout y webhook verificado antes de procesar pagos automáticos; no se deben marcar como pagados por el simple retorno del navegador.
