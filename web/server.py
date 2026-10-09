@@ -78,6 +78,8 @@ def ensure_admin():
   pw=os.environ.get('WEB_ADMIN_PASS') or secrets.token_urlsafe(12);c['admin_password_hash']=hash_password(pw);c['initial_admin_password']=pw;changed=True
  for k,v in {'ads_enabled':False,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':''}.items():
   if k not in c:c[k]=v;changed=True
+ if not c.get('admin_referral_code'):c['admin_referral_code']=secrets.token_urlsafe(7);changed=True
+ if 'admin_referral_points' not in c:c['admin_referral_points']=0;changed=True
  if changed:save_cfg(c)
  c=db();c.close()
 
@@ -208,15 +210,16 @@ def page(title,body,user=None):
  s=site_settings();nav=''
  if user:
   role=user.get('role');
-  nav=f'''<button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button><aside class="sidebar" id="sidebar"><div class="brand">⚡ KEVINTECH</div><div class="menu-scroll">
-  <div class="menu-group"><button class="menu-item has-sub">🏠 Inicio <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/dashboard">📊 Panel</a><a href="{PREFIX}/account/create">➕ Crear cuenta</a>{'<a href="'+PREFIX+'/admin/users">👥 Usuarios</a>' if role=='admin' else ''}<a href="{PREFIX}/online">🟢 Online</a><a href="{PREFIX}/referrals">🎁 Referidos</a><a href="{PREFIX}/profile">👤 Perfil</a>{'<a href="'+PREFIX+'/admin/accounts/delete">🗑️ Eliminar cuenta</a>' if role=='admin' else ''}</div></div>
-  <div class="menu-group"><button class="menu-item has-sub">⚙️ Protocolos <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/protocols">📋 Todos</a><a href="{PREFIX}/protocols?status=active">🟢 Protocolos activos</a><a href="{PREFIX}/protocols?status=inactive">🔴 Protocolos inactivos</a></div></div>
+  toggle='<button class="menu-toggle" id="menuToggle" aria-label="Abrir menú" aria-expanded="false">☰</button>'
+  sidebar=f'''<aside class="sidebar" id="sidebar" aria-label="Menú principal"><div class="brand">⚡ KEVINTECH <button class="menu-close" id="menuClose" aria-label="Cerrar menú">×</button></div><div class="menu-scroll">
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false">🏠 Inicio <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/dashboard">📊 Panel</a><a href="{PREFIX}/account/create">➕ Crear cuenta</a>{'<a href="'+PREFIX+'/admin/users">👥 Usuarios</a>' if role=='admin' else ''}<a href="{PREFIX}/online">🟢 Online</a><a href="{PREFIX}/referrals">🎁 Referidos</a>{'<a href="'+PREFIX+'/admin/accounts/delete">🗑️ Eliminar cuenta</a>'}</div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false">⚙️ Protocolos <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/protocols">📋 Todos</a><a href="{PREFIX}/protocols?status=active">🟢 Protocolos activos</a><a href="{PREFIX}/protocols?status=inactive">🔴 Protocolos inactivos</a></div></div>
   {'<a class="menu-item-link" href="'+PREFIX+'/console">⌨️ Consola</a>' if role=='admin' else ''}
-  <div class="menu-group"><button class="menu-item has-sub">⚙️ Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile">👤 Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads">📢 Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general">📝 Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas">📅 Cuotas de creación</a>' if role=='admin' else ''}</div></div>
-  <div class="menu-group"><button class="menu-item has-sub">ℹ️ About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about">🏢 Sobre nosotros</a><a href="{PREFIX}/about?section=privacy">🔒 Política de privacidad</a><a href="{PREFIX}/about?section=cookies">🍪 Política de cookies</a><a href="{PREFIX}/about?section=terms">📜 Términos y condiciones</a></div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false">⚙️ Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile">👤 Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads">📢 Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general">📝 Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas">📅 Cuotas de creación</a>' if role=='admin' else ''}</div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false">ℹ️ About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about">🏢 Sobre nosotros</a><a href="{PREFIX}/about?section=privacy">🔒 Política de privacidad</a><a href="{PREFIX}/about?section=cookies">🍪 Política de cookies</a><a href="{PREFIX}/about?section=terms">📜 Términos y condiciones</a></div></div>
   </div><a class="menu-item-link exit" href="{PREFIX}/logout">↪ Salir</a></aside>'''
- else:nav=''
- return render_template('base.html',TITLE=html_escape(title),SITE_TITLE=html_escape(s.get('site_title','KevinTech Multi Script')),NAV=nav,BODY=body)
+ else:toggle='';sidebar=''
+ return render_template('base.html',TITLE=html_escape(title),SITE_TITLE=html_escape(s.get('site_title','KevinTech Multi Script')),TOGGLE=toggle,SIDEBAR=sidebar,BODY=body)
 
 def tpl(name,user=None,title='',**values):return page(title,render_template(name,**values),user)
 
@@ -249,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
  def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
   p=self.route_path();u=self.session()
-  routes={'/login':self.login_page,'/register':self.register_page,'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u)}
+  routes={'/login':self.login_page,'/register':self.register_page,'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u)}
   if p in ('/','/index','/index.html'):return self.redirect('/dashboard' if u else '/login')
   if p=='/logout':
    c=self.cookies().get('kt_session');
@@ -261,7 +264,7 @@ class Handler(BaseHTTPRequestHandler):
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
   p=self.route_path();d=self.read_post();u=self.session()
-  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d)}
+  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d)}
   if p in routes:return routes[p]()
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def login_page(self,msg=''):return self.send(200,body=tpl('login.html',None,'Ingreso',MSG=msg))
@@ -282,20 +285,30 @@ class Handler(BaseHTTPRequestHandler):
   c=db()
   if c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>')
   code=secrets.token_urlsafe(7);referred=None
-  if ref:
+  admin_code=cfg().get('admin_referral_code','')
+  admin_referred=bool(ref and admin_code and hmac.compare_digest(ref,admin_code))
+  if ref and not admin_referred:
    rr=c.execute('SELECT id FROM users WHERE referral_code=? AND active=1',(ref,)).fetchone()
    if rr:referred=rr['id']
   c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by,referral_points) VALUES(?,?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,referred,1))
   uid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
   if referred:c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referred,))
-  c.commit();c.close();self.set_session(uid,'user');return self.auth_cookie_redirect('/dashboard')
+  c.commit();c.close()
+  if admin_referred:
+   conf=cfg();conf['admin_referral_points']=int(conf.get('admin_referral_points',0))+2;save_cfg(conf)
+  self.set_session(uid,'user');return self.auth_cookie_redirect('/dashboard')
  def dashboard(self,u):
   if not u:return self.redirect('/login')
   c=db();q='SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id '
   if u['role']=='user':rows=c.execute(q+'WHERE a.user_id=? ORDER BY a.id DESC',(u['id'],)).fetchall()
   else:rows=c.execute(q+'ORDER BY a.id DESC LIMIT 100').fetchall()
-  cards=''.join(f'<div class="card account-card"><div class="account-head"><h3>👤 {html_escape(a["username"])}</h3><span class="tag">{html_escape(a["type"]).upper()}</span></div><p class="muted">Propietario: {html_escape(a["owner"])} · Expira: {html_escape(a["expiration"] or "—")}</p><p>Online: <b class="oktxt">{len(account_online(a["username"]))}</b> · Límite: <b>{a["ip_limit"]}</b> IP</p><a class="btn" href="{PREFIX}/account?id={a["id"]}">Ver cuenta</a><form class="inline" method="post" action="{PREFIX}/account/renew"><input type="hidden" name="id" value="{a["id"]}"><button class="btn primary">Renovar</button></form>{'<form class="inline" method="post" action="'+PREFIX+'/account/delete"><input type="hidden" name="id" value="'+str(a['id'])+'"><button class="btn danger">Eliminar</button></form>' if u['role']=='admin' else ''}</div>'''.replace('\\n','') for a in rows)
-  c.close();st=site_settings();return self.send(200,body=tpl('dashboard.html',u,'Inicio',COUNT=len(rows),ONLINE=len(all_online()),POINTS=(u.get('referral_points',0) if u['role']=='user' else '—'),ACCOUNTS=cards or '<div class="card">No hay cuentas para mostrar.</div>',SITE_TITLE=html_escape(st.get('home_title') or st['site_title']),SITE_DESC=html_escape(st.get('home_description') or st['site_description'])) )
+  cards_list=[]
+  for a in rows:
+   renew_button='<form class="inline" method="post" action="%s/account/renew"><input type="hidden" name="id" value="%s"><button class="btn primary">Renovar</button></form>'%(PREFIX,a['id']) if u['role']=='admin' else ''
+   delete_button='<form class="inline" method="post" action="%s/account/delete"><input type="hidden" name="id" value="%s"><button class="btn danger">Eliminar</button></form>'%(PREFIX,a['id'])
+   cards_list.append('<div class="card account-card"><div class="account-head"><h3>👤 %s</h3><span class="tag">%s</span></div><p class="muted">Propietario: %s · Expira: %s</p><p>Online: <b class="oktxt">%s</b> · Límite: <b>%s</b> IP</p><a class="btn" href="%s/account?id=%s">Ver cuenta</a>%s%s</div>'%(html_escape(a['username']),html_escape(a['type']).upper(),html_escape(a['owner']),html_escape(a['expiration'] or '—'),len(account_online(a['username'])),a['ip_limit'],PREFIX,a['id'],renew_button,delete_button))
+  cards=''.join(cards_list)
+  c.close();st=site_settings();return self.send(200,body=tpl('dashboard.html',u,'Inicio',COUNT=len(rows),ONLINE=len(all_online()),POINTS=(u.get('referral_points',0) if u['role']=='user' else int(cfg().get('admin_referral_points',0)) ),ACCOUNTS=cards or '<div class="card">No hay cuentas para mostrar.</div>',SITE_TITLE=html_escape(st.get('home_title') or st['site_title']),SITE_DESC=html_escape(st.get('home_description') or st['site_description'])) )
  def protocols(self,u):
   if not u:return self.redirect('/login')
   status=parse_qs(urlparse(self.path).query).get('status',['all'])[0]
@@ -309,7 +322,7 @@ class Handler(BaseHTTPRequestHandler):
  def profile(self,u):
   if not u:return self.redirect('/login')
   if u['role']=='admin':
-   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED='—',POINTS='—',CODE='—',ADMIN=True)
+   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED='—',POINTS=int(c.get('admin_referral_points',0)),CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True)
   else:
    body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=html_escape(u['created_at']),POINTS=u['referral_points'],CODE=html_escape(u['referral_code']),ADMIN=False)
   return self.send(200,body=body)
@@ -333,8 +346,15 @@ class Handler(BaseHTTPRequestHandler):
   if not u:return self.redirect('/login')
   if u['role']=='admin':
    c=db();rows=c.execute('SELECT username,name,referral_points,active FROM users ORDER BY referral_points DESC').fetchall();c.close();html=''.join('<tr><td>%s</td><td>%s</td><td><b>%s</b></td><td>%s</td></tr>'%(html_escape(x['username']),html_escape(x['name']),x['referral_points'],'Activo' if x['active'] else 'Bloqueado') for x in rows) or '<tr><td colspan="4">No hay usuarios.</td></tr>'
-   st=site_settings();return self.send(200,body=tpl('referrals.html',u,'Referidos',ADMIN_ROWS=html,POINTS='—',LINK='',REF_TITLE=html_escape(st.get('referrals_title','Referidos')),REF_DESC=html_escape(st.get('referrals_description','Comparte tu enlace y acumula puntos.'))))
-  link=(server_domain() or self.headers.get('Host','').split(':')[0]).strip();link=('https://'+link if link and not link.startswith('http') else link).rstrip('/')+'/register?ref='+u['referral_code']
+   host=(server_domain() or self.headers.get('X-Forwarded-Host','').split(',')[0].strip() or self.headers.get('Host','').split(':')[0]).strip()
+   scheme='https' if self.headers.get('X-Forwarded-Proto','https').split(',')[0].strip()=='https' else 'http'
+   root=(host if host.startswith('http://') or host.startswith('https://') else scheme+'://'+host).rstrip('/')
+   link=root+'/register?ref='+cfg().get('admin_referral_code','')
+   st=site_settings();return self.send(200,body=tpl('referrals.html',u,'Referidos',ADMIN_ROWS=html,POINTS=int(cfg().get('admin_referral_points',0)),LINK=html_escape(link),REF_TITLE=html_escape(st.get('referrals_title','Referidos')),REF_DESC=html_escape(st.get('referrals_description','Comparte tu enlace y acumula puntos.'))))
+  host=(server_domain() or self.headers.get('X-Forwarded-Host','').split(',')[0].strip() or self.headers.get('Host','').split(':')[0]).strip()
+  scheme='https' if self.headers.get('X-Forwarded-Proto','https').split(',')[0].strip()=='https' else 'http'
+  root=(host if host.startswith('http://') or host.startswith('https://') else scheme+'://'+host).rstrip('/')
+  link=root+'/register?ref='+u['referral_code']
   st=site_settings();return self.send(200,body=tpl('referrals.html',u,'Referidos',POINTS=u['referral_points'],LINK=html_escape(link),ADMIN_ROWS='',REF_TITLE=html_escape(st.get('referrals_title','Referidos')),REF_DESC=html_escape(st.get('referrals_description','Comparte tu enlace y acumula puntos.'))))
  def referral_redeem(self,u,d):return self.send(400,body=page('Referidos','<div class="notice bad">El canje se gestionará desde una versión posterior.</div>',u))
  def account_detail(self,u):
@@ -346,45 +366,60 @@ class Handler(BaseHTTPRequestHandler):
   pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close();info=server_info()
   if a['type']=='ssh':details=ssh_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days),a['ip_limit'])
   else:details=v2ray_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days))
-  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host'])))
+  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' else ''))
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
   st=site_settings();days=st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days'];limit=st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']
-  owners=''
-  if u['role']=='admin':
-   c=db();rows=c.execute('SELECT id,username FROM users WHERE active=1 ORDER BY username').fetchall();c.close();owners='<label>Propietario web (opcional)</label><select class="input" name="owner_id"><option value="">Mi administración</option>'+''.join('<option value="%s">%s</option>'%(x['id'],html_escape(x['username'])) for x in rows)+'</select>'
-  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',DAYS=days,LIMIT=limit,OWNERS=owners))
+  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',DAYS=days,LIMIT=limit,OWNERS=''))
  def account_create(self,u,d):
   if not u:return self.send(403,body='403')
+  # A configured ad gate is mandatory before account creation.
+  conf=cfg();ad_count=int(conf.get('ads',{}).get('create',0) or 0)
+  if conf.get('ads_enabled') and ad_count>0:
+   token=secrets.token_urlsafe(32);payload={k:v[0] for k,v in d.items() if k not in ('ad_token',)}
+   c=db();c.execute('INSERT INTO ad_tokens(token,user_id,action,account_id,expires,completed,payload) VALUES(?,?,?,?,?,?,?)',(token,int(u['id']), 'create',None,now()+TOKEN_TTL,0,json.dumps(payload)));c.commit();c.close()
+   return self.redirect('/ad/watch?token='+token)
+  return self.create_account_now(u,d)
+ def create_account_now(self,u,d):
   st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);limit=int(st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']);typ=self.val(d,'type','ssh');user=self.val(d,'username').lower();pw=self.val(d,'password')
   owner_id=u['id'] if u['role']=='user' else 0
-  if u['role']=='admin' and self.val(d,'owner_id'):
-   try:owner_id=int(self.val(d,'owner_id'))
-   except:return self.send(400,body='Propietario inválido')
-  if owner_id==0:
-   c=db();first=c.execute('SELECT id FROM users ORDER BY id LIMIT 1').fetchone();c.close()
-   if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">El administrador debe seleccionar un usuario web existente para guardar la cuenta.</div>'))
+  if u['role']=='admin':
+   c=db();first=c.execute('SELECT id FROM users WHERE active=1 ORDER BY id LIMIT 1').fetchone();c.close()
+   if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">No hay usuarios web registrados para asignar esta cuenta. Crea un usuario web primero.</div>'))
    owner_id=first['id']
-  if typ=='ssh':
-   ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
-  elif typ in ('v2ray','vmess'):
-   ok,msg,credential=create_v2ray_account(user,days);expiration=msg
+  if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
+  elif typ in ('v2ray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
   c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ!='ssh' else 'ssh',crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0];c.commit();c.close();return self.redirect('/account?id=%d'%aid)
+ def ad_watch(self,u):
+  if not u:return self.redirect('/login')
+  token=parse_qs(urlparse(self.path).query).get('token',[''])[0]
+  c=db();row=c.execute('SELECT * FROM ad_tokens WHERE token=? AND user_id=? AND action=? AND expires>? AND completed=0',(token,int(u['id']),'create',now())).fetchone();c.close()
+  if not row:return self.send(400,body=tpl('message.html',u,'Publicidad',MESSAGE='<div class="notice bad">El paso de publicidad expiró. Vuelve a intentar crear la cuenta.</div><a class="btn" href="%s/account/create">Volver</a>'%PREFIX))
+  conf=cfg();count=int(conf.get('ads',{}).get('create',0) or 0);zone=html_escape(conf.get('monetag_zone','11217882'))
+  return self.send(200,body=tpl('ad_watch.html',u,'Publicidad',COUNT=count,ACTION='crear la cuenta',ZONE=zone,TOKEN=html_escape(token),COMPLETE=PREFIX+'/ad/complete'))
+ def ad_complete(self,u,d):
+  if not u:return self.send(403,body='403')
+  token=self.val(d,'token');c=db();row=c.execute('SELECT * FROM ad_tokens WHERE token=? AND user_id=? AND action=? AND expires>? AND completed=0',(token,int(u['id']),'create',now())).fetchone()
+  if not row:c.close();return self.send(400,body=tpl('message.html',u,'Publicidad',MESSAGE='<div class="notice bad">El token de publicidad es inválido o expiró.</div>'))
+  c.execute('UPDATE ad_tokens SET completed=1 WHERE token=?',(token,));c.commit();c.close()
+  try:payload=json.loads(row['payload'])
+  except:payload={}
+  return self.create_account_now(u,payload)
  def account_delete(self,u,d):
-  if not u or u['role']!='admin':return self.send(403,body='403')
-  try:aid=int(self.val(d,'id'))
-  except:return self.send(400,body='ID inválido')
-  c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
-  if not a:c.close();return self.send(404,body='Cuenta no encontrada')
-  ok=delete_v2ray(a['username']) if a['type']=='v2ray' else delete_ssh(a['username'])[0];c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
- def account_renew(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))
   except:return self.send(400,body='ID inválido')
-  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
+  c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
+  ok=delete_v2ray(a['username']) if a['type']=='v2ray' else delete_ssh(a['username'])[0];c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
+ def account_renew(self,u,d):
+  if not u or u['role']!='admin':return self.send(403,body='Solo el administrador puede renovar cuentas.')
+  try:aid=int(self.val(d,'id'))
+  except:return self.send(400,body='ID inválido')
+  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
+  if not a:c.close();return self.send(404,body='Cuenta no encontrada')
   ok,msg=renew_account(a,days)
   if ok:c.execute('UPDATE accounts SET expiration=? WHERE id=?',(msg,aid));c.commit()
   c.close();return self.send(200,body=tpl('message.html',u,'Renovar',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/account?id=%s">Volver</a>'%('oktxt' if ok else 'bad',html_escape(msg),PREFIX,aid)))
@@ -395,8 +430,11 @@ class Handler(BaseHTTPRequestHandler):
   if not u or u['role']!='admin':return self.redirect('/login')
   c=db();rows=c.execute('SELECT id,username,name,referral_points,active FROM users ORDER BY id DESC').fetchall();c.close();html=''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(html_escape(x['username']),html_escape(x['name']),x['referral_points'],'Activo' if x['active'] else 'Bloqueado') for x in rows) or '<tr><td colspan="4">No hay usuarios.</td></tr>';return self.send(200,body=tpl('admin_users.html',u,'Usuarios',ROWS=html))
  def admin_delete_accounts(self,u):
-  if not u or u['role']!='admin':return self.redirect('/login')
-  c=db();rows=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC').fetchall();c.close();html=''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td><form method="post"><input type="hidden" name="id" value="%s"><button class="btn danger">Eliminar</button></form></td></tr>'%(html_escape(x['username']),html_escape(x['owner']),html_escape(x['type']),x['id']) for x in rows) or '<tr><td colspan="4">No hay cuentas.</td></tr>';return self.send(200,body=tpl('admin_delete.html',u,'Eliminar cuenta',ROWS=html))
+  if not u:return self.redirect('/login')
+  c=db()
+  if u['role']=='admin':rows=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC').fetchall()
+  else:rows=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.user_id=? ORDER BY a.id DESC',(u['id'],)).fetchall()
+  c.close();html=''.join('<tr><td>%s</td><td>%s</td><td>%s</td><td><form method="post"><input type="hidden" name="id" value="%s"><button class="btn danger">Eliminar</button></form></td></tr>'%(html_escape(x['username']),html_escape(x['owner']),html_escape(x['type']),x['id']) for x in rows) or '<tr><td colspan="4">No hay cuentas.</td></tr>';return self.send(200,body=tpl('admin_delete.html',u,'Eliminar cuenta',ROWS=html))
  def admin_delete_post(self,u,d):return self.account_delete(u,d)
  def admin_settings_redirect(self,u):return self.redirect('/admin/settings/general' if u and u.get('role')=='admin' else '/profile')
  def admin_settings(self,u,section):
