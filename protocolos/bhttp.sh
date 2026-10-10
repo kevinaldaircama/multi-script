@@ -27,7 +27,7 @@ CONFIG="$BASE/config.conf"
 source "$CONFIG"
 
 
-# Sistema de animación/progreso
+# Sistema de animación/progreso — estilo KevinTech XHTTP
 [[ -f "$BASE/lib/anim.sh" ]] && source "$BASE/lib/anim.sh"
 
 CYAN="${MV_CYN:-\e[1;96m}"
@@ -35,8 +35,67 @@ GREEN="${MV_GRN:-\e[1;92m}"
 RED="${MV_RED:-\e[1;91m}"
 YELLOW="${MV_YLW:-\e[1;93m}"
 WHITE="${MV_WHT:-\e[1;97m}"
+GRAY="${MV_GRY:-\e[1;90m}"
 RESET="${MV_R:-\e[0m}"
 
+anim_init() {
+    return 0
+}
+
+anim_step() {
+    echo
+    echo -e "${CYAN}➜ $1${RESET}"
+}
+
+anim_run() {
+    local LABEL="$1"
+    shift
+
+    echo -ne "${CYAN}➜ ${LABEL}...${RESET} "
+    if "$@" >/dev/null 2>&1; then
+        echo -e "${GREEN}OK${RESET}"
+        return 0
+    else
+        echo -e "${RED}ERROR${RESET}"
+        return 1
+    fi
+}
+
+svc_restart_anim() {
+    local SERVICE_NAME="$1"
+    local LABEL="$2"
+
+    echo -ne "${CYAN}➜ ${LABEL}...${RESET} "
+    systemctl restart "$SERVICE_NAME" >/dev/null 2>&1
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        echo -e "${GREEN}OK${RESET}"
+        return 0
+    else
+        echo -e "${RED}ERROR${RESET}"
+        return 1
+    fi
+}
+
+mv_header() {
+    local TITLE="${1:-KEVINTECH}"
+    local SUBTITLE="${2:-}"
+    local VERSION="${3:-}"
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${WHITE}        ${TITLE}${RESET}"
+    [[ -n "$SUBTITLE" ]] && echo -e "${GRAY}   ${SUBTITLE}${RESET}"
+    [[ -n "$VERSION" ]] && echo -e "${GRAY}        ${VERSION}${RESET}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+mv_brand_header() {
+    mv_header "$1" "kevintech BHTTP" "v6.2"
+}
+
+kevintech_contacts() {
+    return 0
+}
 SERVICE="bhttp"
 DIR="/etc/bhttp"
 BIN="/usr/local/bin/bhttp-server"
@@ -571,14 +630,12 @@ show_info(){
     read -n1 -r -p "$(trx 'Presione una tecla...')"
 }
 
+
 #==================================================
-# Menú Principal
+# MENÚ PRINCIPAL KEVINTECH BHTTP
 #==================================================
 
-# Navegación con flechitas
-[[ -f "$BASE/lib/nav.sh" ]] && source "$BASE/lib/nav.sh"
-
-# ── CLI headless: bash bhttp.sh --install [puerto1] [puerto2]
+# Instalación por CLI: bash bhttp.sh --install [puerto1] [puerto2]
 if [[ "${1:-}" == "--install" ]]; then
     [[ -n "${2:-}" ]] && export BHTTP_PORT="$2" BHTTP_FORCE_STANDALONE=1
     [[ -n "${3:-}" ]] && export BHTTP_XPORT="$3" BHTTP_FORCE_STANDALONE=1
@@ -587,11 +644,8 @@ if [[ "${1:-}" == "--install" ]]; then
     exit $?
 fi
 
-while true
-do
-
+while true; do
     clear
-
     source "$CONFIG"
 
     if systemctl is-active --quiet bhttp; then
@@ -600,55 +654,69 @@ do
         STATUS="${RED}🔴 DETENIDO${RESET}"
     fi
 
-    mv_header "📡 BHTTP v2 Manager" "$(trx 'SSH-HTTP/2 Bootstrap · 80/8443')" "v6.2"
+    if systemctl is-active --quiet haproxy 2>/dev/null; then
+        HAPROXY_STATUS="${GREEN}🟢 ACTIVO${RESET}"
+    else
+        HAPROXY_STATUS="${RED}🔴 INACTIVO${RESET}"
+    fi
+
+    mv_header "📡 BHTTP MANAGER" \
+        "$(trx 'SSH-HTTP/2 Bootstrap')" "v6.2"
+
     kevintech_contacts 2>/dev/null || true
 
-    echo -e " Estado      : $STATUS"
-    echo -e " Puertos     : $BHTTP_PORT / $BHTTP_XPORT"
+    echo
+    echo -e " ${WHITE}Estado      :${RESET} $STATUS"
+    echo -e " ${WHITE}Puertos     :${RESET} ${CYAN}$BHTTP_PORT / $BHTTP_XPORT${RESET}"
+    echo -e " ${WHITE}HAProxy     :${RESET} $HAPROXY_STATUS"
 
-    echo ""
+    if [[ "$HAPROXY_ON" == "1" ]]; then
+        echo -e " ${WHITE}Modo        :${RESET} ${CYAN}Integrado${RESET}"
+    else
+        echo -e " ${WHITE}Modo        :${RESET} ${CYAN}Standalone${RESET}"
+    fi
+
+    echo
 
     if [[ "$BHTTP" == "ON" ]]; then
-        LBL=("Desinstalar BHTTP" "Reiniciar Servicio" "Ver Estado" "Ver Datos de Conexión")
+        echo -e "${CYAN}  [1]${RESET} 🗑️ Desinstalar BHTTP"
+        echo -e "${CYAN}  [2]${RESET} 🔄 Reiniciar servicio"
+        echo -e "${CYAN}  [3]${RESET} 📊 Ver estado"
+        echo -e "${CYAN}  [4]${RESET} 📱 Datos de conexión"
     else
-        LBL=("Instalar BHTTP")
+        echo -e "${CYAN}  [1]${RESET} 🚀 Instalar BHTTP"
     fi
-    SEL=$(nav_pick "► Opción:" "${LBL[@]}" "↩ Regresar") || SEL=0
-    [[ $SEL -eq $((${#LBL[@]}+1)) ]] && SEL=0
-    OP="$SEL"
 
-    case "$OP" in
+    echo
+    echo -e "${RED}  [0]${RESET} ↩️ Regresar"
+    echo
 
+    read -r -p "$(echo -e "${CYAN}  ➜ Seleccione una opción: ${RESET}")" SEL
+
+    case "$SEL" in
         1)
             if [[ "$BHTTP" == "ON" ]]; then
                 remove_bhttp
             else
                 install_bhttp
             fi
-        ;;
-
+            ;;
         2)
             [[ "$BHTTP" == "ON" ]] && restart_bhttp
-        ;;
-
+            ;;
         3)
             [[ "$BHTTP" == "ON" ]] && status_bhttp
-        ;;
-
+            ;;
         4)
             [[ "$BHTTP" == "ON" ]] && show_info
-        ;;
-
+            ;;
         0)
             exec bash "$BASE/protocolos/menu.sh"
-        ;;
-
+            ;;
         *)
-            echo ""
-            echo "$(trx '❌ Opción inválida.')"
+            echo
+            echo -e "${RED}❌ Opción inválida.${RESET}"
             sleep 2
-        ;;
-
+            ;;
     esac
-
 done
