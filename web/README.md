@@ -54,3 +54,16 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - Herramientas → Backup y restauración permite descargar un ZIP con base de datos SQLite, exportación SQL y configuración, y restaurar un ZIP validado. La restauración reemplaza los datos actuales.
 - La base de datos del panel es SQLite, una base de datos relacional que utiliza SQL; usuarios, cuentas, solicitudes de pago, ajustes y configuración principal se guardan en tablas SQL. `config.json` se mantiene como copia compatible con instalaciones anteriores.
 - Las pasarelas PayPal y Mercado Pago siguen necesitando checkout y webhook verificado antes de procesar pagos automáticos; no se deben marcar como pagados por el simple retorno del navegador.
+
+
+## Cambios de esta actualización
+
+- El administrador puede indicar los días de duración y el límite IP al crear cuentas, y los días al renovarlas. No se aplican cuotas de creación ni puntos al administrador.
+- En Ajustes > Cuotas se configura el máximo de cuentas por usuario, los puntos requeridos para crear y renovar.
+- Registro con correo, idioma y confirmación de contraseña; perfil muestra la fecha de registro.
+- Recuperación de contraseña con enlaces de un solo uso que caducan a los 10 minutos. Para enviar correo configura las variables de entorno `SMTP_HOST`, `SMTP_PORT` (normalmente 587), `SMTP_USER`, `SMTP_PASS` y `SMTP_FROM` en el servicio systemd del panel. Sin SMTP configurado, los mensajes de recuperación no pueden enviarse.
+- Ajustes generales incluyen Open Graph y meta/código de verificación. El campo de código se inserta dentro de `<head>`; pega solo meta tags confiables.
+- PayPal Checkout (Orders API) y Mercado Pago Checkout Pro crean una orden externa y solo marcan el plan como aprobado tras consultar el estado oficial de pago. Configura credenciales reales/de prueba y usa un dominio público con HTTPS. En la configuración de pagos selecciona el código ISO correcto de moneda; debe ser compatible con tu cuenta del proveedor. Prueba primero en Sandbox.
+- El webhook de Mercado Pago está en `/payments/webhook`; el sistema consulta el estado de pago a la API oficial antes de aplicar beneficios.
+
+**Importante:** las pasarelas necesitan credenciales válidas, HTTPS público y una configuración correcta de moneda. La recuperación por correo requiere SMTP. Los idiomas aparecen en registro/perfil; las traducciones automáticas integradas cubren principalmente los elementos comunes de navegación y controles, y algunas páginas pueden conservar textos originales.

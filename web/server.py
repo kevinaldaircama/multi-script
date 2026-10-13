@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, quote
 
 BASE=Path('/etc/kevintech'); WEB=BASE/'web'; DATA=WEB/'data'; DB=DATA/'web.sqlite3'; CONFIG=DATA/'config.json'; KEYFILE=DATA/'.credential.key'; LOG=DATA/'web.log'
 HOST='127.0.0.1'; PORT=int(os.environ.get('KEVINTECH_WEB_PORT','18080')); PREFIX=os.environ.get('KEVINTECH_WEB_PREFIX','').strip().rstrip('/'); SESSION_TTL=86400*3; TOKEN_TTL=600
-DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.','social_facebook':'','social_instagram':'','social_tiktok':'','social_whatsapp':'','contact_email':'','contact_phone':''}
+DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'account_create_points':3,'og_title':'','og_description':'','og_image':'','index_code':'','about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.','social_facebook':'','social_instagram':'','social_tiktok':'','social_whatsapp':'','contact_email':'','contact_phone':''}
 SERVICES=[('OpenSSH','ssh','🔐'),('Dropbear','dropbear_custom','🚪'),('HAProxy / SSL','haproxy','🔒'),('SlowDNS','dnstt','🌐'),('Xray / V2Ray','xray','☁️'),('OpenVPN','openvpn-server@server','🔐'),('Hysteria','hysteria1-server','🛡️'),('BHTTP','bhttp','🌐'),('XHTTP','xhttp','🚀'),('Squid','squid','🌐'),('HCR','hcr-server','🛡️'),('WireGuard','wg-quick@wg0','🛡️'),('BTUN','btun','⚡'),('Shadowsocks','shadowsocks-libev-server@8388','🕶️'),('SOCKS5','sockd','🔐'),('3X-UI','x-ui','🖥️'),('VayDNS','vaydns','🔐'),('Slipstream','slipstream','🚀'),('DNSDist','dnsdist','🌐')]
 
 def log(msg):
@@ -58,11 +58,17 @@ def save_cfg(c):
 
 def db():
  DATA.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB,timeout=10); c.row_factory=sqlite3.Row; c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA foreign_keys=ON')
- c.executescript('''CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,referral_code TEXT UNIQUE NOT NULL,referred_by TEXT,referral_points INTEGER NOT NULL DEFAULT 0,referral_renews INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1);
+ c.executescript('''CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,referral_code TEXT UNIQUE NOT NULL,referred_by TEXT,referral_points INTEGER NOT NULL DEFAULT 0,referral_renews INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,email TEXT NOT NULL DEFAULT '',language TEXT NOT NULL DEFAULT 'es');
  CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,username TEXT UNIQUE NOT NULL,type TEXT NOT NULL DEFAULT 'ssh',credential TEXT NOT NULL,expiration TEXT,ip_limit INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,role TEXT NOT NULL,expires REAL NOT NULL);
  CREATE TABLE IF NOT EXISTS ad_tokens(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL,action TEXT NOT NULL,account_id INTEGER,expires REAL NOT NULL,completed INTEGER NOT NULL DEFAULT 0,payload TEXT NOT NULL DEFAULT '{}');
- CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,title TEXT NOT NULL,message TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'general',is_read INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL);''')
+ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,title TEXT NOT NULL,message TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'general',is_read INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS password_resets(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires REAL NOT NULL,used INTEGER NOT NULL DEFAULT 0);''')
+ # Safe migrations for existing installations
+ try:c.execute("ALTER TABLE plan_orders ADD COLUMN external_id TEXT NOT NULL DEFAULT ''")
+ except sqlite3.OperationalError:pass
+ for col,ddl in [('email',"TEXT NOT NULL DEFAULT ''"),('language',"TEXT NOT NULL DEFAULT 'es'")]:
+  try:c.execute('ALTER TABLE users ADD COLUMN '+col+' '+ddl)
+  except sqlite3.OperationalError:pass
  for k,v in DEFAULT_SETTINGS.items():c.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,json.dumps(v,ensure_ascii=False)))
  c.commit();return c
 
@@ -86,6 +92,7 @@ def ensure_admin():
  for k,v in {'ads_enabled':False,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':''}.items():
   if k not in c:c[k]=v;changed=True
  if not c.get('admin_referral_code'):c['admin_referral_code']=secrets.token_urlsafe(7);changed=True
+ if not c.get('admin_created_at'):c['admin_created_at']=datetime.now().isoformat(timespec='seconds');changed=True
  if 'admin_referral_points' not in c:c['admin_referral_points']=0;changed=True
  if changed:save_cfg(c)
  c=db();c.close()
@@ -213,6 +220,10 @@ def render_template(name,**values):
  for k,v in values.items():html=html.replace('{{'+k+'}}',str(v))
  return html.replace('{{PREFIX}}',PREFIX)
 
+LANGUAGES=[('es','Español'),('en','English'),('pt','Português'),('fr','Français'),('de','Deutsch'),('it','Italiano'),('ja','日本語'),('zh','中文'),('ru','Русский'),('ar','العربية'),('hi','हिन्दी'),('ko','한국어'),('tr','Türkçe'),('nl','Nederlands'),('pl','Polski'),('id','Bahasa Indonesia'),('vi','Tiếng Việt'),('th','ไทย'),('uk','Українська'),('bn','বাংলা'),('fa','فارسی'),('ur','اردو'),('sw','Kiswahili'),('ms','Bahasa Melayu'),('fil','Filipino'),('he','עברית'),('el','Ελληνικά'),('ro','Română'),('hu','Magyar'),('cs','Čeština'),('sv','Svenska'),('no','Norsk'),('da','Dansk'),('fi','Suomi')]
+def language_options(current='es'):
+ return ''.join('<option value="%s" %s>%s</option>'%(code,'selected' if code==current else '',label) for code,label in LANGUAGES)
+
 def page(title,body,user=None):
  s=site_settings();nav=''
  if user:
@@ -229,7 +240,7 @@ def page(title,body,user=None):
   </div><div class="theme-actions"><button type="button" class="menu-item-link" id="themeToggle"><i class="fa-solid fa-circle-half-stroke"></i> Cambiar a modo claro</button><a class="menu-item-link exit" href="{PREFIX}/logout"><i class="fa-solid fa-right-from-bracket"></i> Salir</a></div></aside>'''
  else:toggle='';sidebar=''
  lang=s.get('language_'+str(user.get('id',0)),'es') if user else 'es'
- return render_template('base.html',TITLE=html_escape(title),SITE_TITLE=html_escape(s.get('site_title','KevinTech Multi Script')),TOGGLE=toggle,SIDEBAR=sidebar,BODY=body,LANG=lang)
+ return render_template('base.html',TITLE=html_escape(title),SITE_TITLE=html_escape(s.get('site_title','KevinTech Multi Script')),TOGGLE=toggle,SIDEBAR=sidebar,BODY=body,LANG=lang,OG_TITLE=html_escape(s.get('og_title') or s.get('site_title','')),OG_DESCRIPTION=html_escape(s.get('og_description') or s.get('site_description','')),OG_IMAGE=html_escape(s.get('og_image','')),INDEX_CODE=s.get('index_code',''))
 
 def tpl(name,user=None,title='',**values):return page(title,render_template(name,**values),user)
 
@@ -278,7 +289,7 @@ class Handler(BaseHTTPRequestHandler):
  def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
   p=self.route_path();u=self.session()
-  routes={'/login':self.login_page,'/register':self.register_page,'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
+  routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
   if p in ('/','/index','/index.html'):return self.public_index(u)
   if p=='/logout':
    c=self.cookies().get('kt_session');
@@ -290,7 +301,7 @@ class Handler(BaseHTTPRequestHandler):
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
   p=self.route_path();ctype=self.headers.get('Content-Type','');d=self.read_multipart() if ctype.lower().startswith('multipart/form-data') else self.read_post();u=self.session()
-  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
+  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/forgot-password':lambda:self.forgot_password_post(d),'/reset-password':lambda:self.reset_password_post(d),'/payments/webhook':lambda:self.payment_webhook(),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
   if p in routes:return routes[p]()
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def tool_page(self,u,slug,title,admin_only=False):
@@ -478,12 +489,42 @@ class Handler(BaseHTTPRequestHandler):
   st=site_settings();title=html_escape(st.get('site_title','KevinTech Multi Script'));desc=html_escape(st.get('site_description','Panel web para administrar tu VPS y tus cuentas.'))
   body='<section class="public-hero"><div class="public-badge"><i class="fa-solid fa-shield-halved"></i> Plataforma de administración</div><h1>'+title+'</h1><p>'+desc+'</p><div class="public-actions"><a class="btn primary" href="'+PREFIX+'/login"><i class="fa-solid fa-right-to-bracket"></i> Ingresar</a><a class="btn" href="'+PREFIX+'/register"><i class="fa-solid fa-user-plus"></i> Registrarse</a></div></section><section class="grid public-features"><article class="card"><i class="fa-solid fa-server"></i><h2>Gestión centralizada</h2><p class="muted">Administra cuentas y consulta los servicios de tu servidor.</p></article><article class="card"><i class="fa-solid fa-user-shield"></i><h2>Acceso seguro</h2><p class="muted">Funciones privadas protegidas por inicio de sesión.</p></article><article class="card"><i class="fa-solid fa-headset"></i><h2>Soporte y planes</h2><p class="muted">Consulta los planes disponibles después de ingresar.</p></article></section>'
   return self.send(200,body=page('Inicio',body,u))
+ def forgot_password_page(self,msg=''):
+  return self.send(200,body=tpl('forgot_password.html',None,'Recuperar contraseña',MSG=msg))
+ def forgot_password_post(self,d):
+  email=self.val(d,'email').lower();c=db();row=c.execute('SELECT id FROM users WHERE email=? AND active=1',(email,)).fetchone()
+  # Always show the same response to avoid exposing registered email addresses.
+  if row:
+   token=secrets.token_urlsafe(32);c.execute('DELETE FROM password_resets WHERE user_id=?',(row['id'],));c.execute('INSERT INTO password_resets(token_hash,user_id,expires,used) VALUES(?,?,?,0)',(hashlib.sha256(token.encode()).hexdigest(),row['id'],now()+TOKEN_TTL));c.commit();c.close()
+   host=(self.headers.get('X-Forwarded-Proto','https')+'://'+self.headers.get('Host','')).rstrip('/');link=host+PREFIX+'/reset-password?token='+quote(token)
+   try:
+    import smtplib
+    from email.message import EmailMessage
+    smtp_host=os.environ.get('SMTP_HOST','');smtp_port=int(os.environ.get('SMTP_PORT','587'));smtp_user=os.environ.get('SMTP_USER','');smtp_pass=os.environ.get('SMTP_PASS','');mail_from=os.environ.get('SMTP_FROM',smtp_user)
+    if smtp_host and mail_from:
+     msg=EmailMessage();msg['Subject']='Recuperación de contraseña';msg['From']=mail_from;msg['To']=email;msg.set_content('Usa este enlace temporal (válido por 10 minutos) para cambiar tu contraseña: '+link+'\nSi no lo solicitaste, ignora este mensaje.')
+     with smtplib.SMTP(smtp_host,smtp_port,timeout=15) as server:
+      server.starttls();server.login(smtp_user,smtp_pass);server.send_message(msg)
+    else:log('Password reset email not sent: SMTP_HOST/SMTP_FROM not configured')
+   except Exception as e:log('Password reset email error: '+str(e))
+  else:c.close()
+  msg='<div class="notice">Si el correo está registrado y el servidor de correo está configurado, recibirás un enlace temporal. El enlace vence en 10 minutos.</div>'
+  return self.forgot_password_page(msg)
+ def reset_password_page(self,msg=''):
+  token=html_escape(parse_qs(urlparse(self.path).query).get('token',[''])[0]);return self.send(200,body=tpl('reset_password.html',None,'Cambiar contraseña',MSG=msg,TOKEN=token))
+ def reset_password_post(self,d):
+  token=self.val(d,'token');pw=self.val(d,'password');confirm=self.val(d,'confirm_password')
+  if len(pw)<8 or pw!=confirm:return self.reset_password_page('<div class="notice bad">Las contraseñas deben coincidir y tener al menos 8 caracteres.</div>')
+  digest=hashlib.sha256(token.encode()).hexdigest();c=db();row=c.execute('SELECT * FROM password_resets WHERE token_hash=? AND expires>? AND used=0',(digest,now())).fetchone()
+  if not row:c.close();return self.reset_password_page('<div class="notice bad">El enlace es inválido o expiró. Solicita uno nuevo.</div>')
+  c.execute('UPDATE users SET password_hash=? WHERE id=?',(hash_password(pw),row['user_id']));c.execute('UPDATE password_resets SET used=1 WHERE token_hash=?',(digest,));c.execute("DELETE FROM sessions WHERE user_id=? AND role='user'",(row['user_id'],));c.commit();c.close()
+  return self.send(200,body=tpl('message.html',None,'Contraseña actualizada',MESSAGE='<div class="notice oktxt">Contraseña cambiada con éxito. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
  def login_page(self,msg=''):return self.send(200,body=tpl('login.html',None,'Ingreso',MSG=msg,SITE_TITLE=html_escape(site_settings().get('site_title','KevinTech Multi Script'))))
  def login_post(self,d):
   user=self.val(d,'username');pw=self.val(d,'password');con=db();a=cfg();ok=False;role='';uid=0
   if hmac.compare_digest(user,a.get('admin_username','')) and verify_password(pw,a.get('admin_password_hash','')):ok=True;role='admin'
   else:
-   r=con.execute('SELECT * FROM users WHERE username=? AND active=1',(user,)).fetchone()
+   r=con.execute('SELECT * FROM users WHERE (username=? OR email=?) AND active=1',(user,user.lower())).fetchone()
    if r and verify_password(pw,r['password_hash']):ok=True;role='user';uid=r['id']
   con.close()
   if not ok:return self.login_page('<div class="notice bad">Usuario o contraseña incorrectos.</div>')
@@ -491,23 +532,24 @@ class Handler(BaseHTTPRequestHandler):
  def register_page(self,msg=''):
   ref=html_escape(parse_qs(urlparse(self.path).query).get('ref',[''])[0]);return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg,REF=ref))
  def register_post(self,d):
-  name=self.val(d,'name');user=self.val(d,'username');pw=self.val(d,'password');ref=self.val(d,'ref')
-  if not name or not safe_web_username(user) or len(pw)<6:return self.register_page('<div class="notice bad">Datos inválidos. La contraseña debe tener 6 caracteres o más.</div>')
+  name=self.val(d,'name');user=self.val(d,'username');email=self.val(d,'email').lower();pw=self.val(d,'password');confirm=self.val(d,'confirm_password');lang=self.val(d,'language','es');ref=self.val(d,'ref')
+  allowed=('es','en','pt','fr','de','it','ja','zh','ru','ar','hi','ko','tr','nl','pl','id','vi','th','uk','bn','fa','ur','sw','ms','fil','he','el','ro','hu','cs','sv','no','da','fi')
+  if lang not in allowed:lang='es'
+  if not name or not safe_web_username(user) or len(pw)<6 or pw!=confirm or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):return self.register_page('<div class="notice bad">Revisa los datos, el correo o las contraseñas (deben coincidir y tener al menos 6 caracteres).</div>')
   c=db()
   if c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>')
-  code=secrets.token_urlsafe(7);referred=None
-  admin_code=cfg().get('admin_referral_code','')
-  admin_referred=bool(ref and admin_code and hmac.compare_digest(ref,admin_code))
+  if c.execute('SELECT 1 FROM users WHERE email=?',(email,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese correo ya está registrado.</div>')
+  code=secrets.token_urlsafe(7);referred=None;admin_code=cfg().get('admin_referral_code','');admin_referred=bool(ref and admin_code and hmac.compare_digest(ref,admin_code))
   if ref and not admin_referred:
    rr=c.execute('SELECT id FROM users WHERE referral_code=? AND active=1',(ref,)).fetchone()
    if rr:referred=rr['id']
-  c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by,referral_points) VALUES(?,?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,referred,1))
-  uid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
+  c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by,referral_points,email,language) VALUES(?,?,?,?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,referred,1,email,lang))
   if referred:c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referred,))
-  c.commit();c.close()
   if admin_referred:
    conf=cfg();conf['admin_referral_points']=int(conf.get('admin_referral_points',0))+2;save_cfg(conf)
-  self.set_session(uid,'user');return self.auth_cookie_redirect('/dashboard')
+  c.commit();c.close()
+  return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE='<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
+
  def dashboard(self,u):
   if not u:return self.redirect('/login')
   c=db();q='SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id '
@@ -549,26 +591,28 @@ class Handler(BaseHTTPRequestHandler):
   st=site_settings();return self.send(200,body=tpl('protocols.html',u,'Protocolos',ROWS=''.join(rows),COUNT=len(items),FILTER=html_escape(status),PROTO_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTO_DESC=html_escape(st.get('protocols_description','Consulta el estado real de los servicios del VPS.'))))
  def user_language(self,u):
   if not u:return 'es'
-  return site_settings().get('language_'+str(u.get('id',0)),'es')
+  return (u.get('language') or site_settings().get('language_'+str(u.get('id',0)),'es'))
  def profile(self,u):
   if not u:return self.redirect('/login')
   if u['role']=='admin':
-   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED='—',POINTS=int(c.get('admin_referral_points',0)),CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '')
+   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED=html_escape(c.get('admin_created_at',''))[:10] or '—',POINTS='Ilimitados',CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   else:
-   body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=html_escape(u['created_at']),POINTS=u['referral_points'],CODE=html_escape(u['referral_code']),ADMIN=False,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '')
+   body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=html_escape(u['created_at']),POINTS=u['referral_points'],CODE=html_escape(u['referral_code']),ADMIN=False,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   return self.send(200,body=body)
  def profile_post(self,u,d):
   if not u:return self.redirect('/login')
   lang=self.val(d,'language','es')
-  if lang not in ('es','en','pt'):lang='es'
+  if lang not in ('es','en','pt','fr','de','it','ja','zh','ru','ar','hi','ko','tr','nl','pl','id','vi','th','uk','bn','fa','ur','sw','ms','fil','he','el','ro','hu','cs','sv','no','da','fi'):lang='es'
   save_settings({'language_'+str(u.get('id',0)):lang})
+  if u['role']=='user':
+   con=db();con.execute('UPDATE users SET language=? WHERE id=?',(lang,u['id']));con.commit();con.close()
   if u['role']=='admin':
    c=cfg();c['admin_username']=self.val(d,'name') or c.get('admin_username','admin');pw=self.val(d,'password')
    if pw:
     if len(pw)<8:return self.send(400,body=tpl('message.html',u,'Perfil',MESSAGE='<div class="notice bad">La contraseña de administrador debe tener al menos 8 caracteres.</div>'))
     c['admin_password_hash']=hash_password(pw)
-   save_cfg(c);return self.redirect('/profile')
-  name=self.val(d,'name') or u['name'];pw=self.val(d,'password');c=db();c.execute('UPDATE users SET name=?,password_hash=? WHERE id=?',(name,hash_password(pw),u['id'])) if pw else c.execute('UPDATE users SET name=? WHERE id=?',(name,u['id']));c.commit();c.close();return self.redirect('/profile')
+   save_cfg(c);return self.send(200,body=tpl('message.html',u,'Perfil',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/profile">Continuar</a>') )
+  name=self.val(d,'name') or u['name'];pw=self.val(d,'password');c=db();c.execute('UPDATE users SET name=?,password_hash=? WHERE id=?',(name,hash_password(pw),u['id'])) if pw else c.execute('UPDATE users SET name=? WHERE id=?',(name,u['id']));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Perfil',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/profile">Continuar</a>'))
  def online(self,u):
   if not u:return self.redirect('/login')
   c=db();rows=all_online() if u['role']=='admin' else []
@@ -600,17 +644,17 @@ class Handler(BaseHTTPRequestHandler):
   pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close();info=server_info()
   if a['type']=='ssh':details=ssh_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days),a['ip_limit'])
   else:details=v2ray_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days))
-  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' else ''))
+  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' else ''))
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
-  st=site_settings();days=st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days'];limit=st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']
-  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',DAYS=days,LIMIT=limit,OWNERS='',ADMIN=(u['role']=='admin')))
+  st=site_settings();admin=u['role']=='admin';fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
+  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
  def account_create(self,u,d):
   if not u:return self.send(403,body='403')
   if u['role']!='admin':
    st=site_settings();con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
    if owned>=max(0,int(st.get('quota_user_accounts',2))):return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
-   if int(u.get('referral_points',0))<3:return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas 3 puntos de referidos por cada cuenta. Comparte tu enlace para ganar puntos.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
+   if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   # A configured ad gate is mandatory before account creation.
   conf=cfg();ad_count=int(conf.get('ads',{}).get('create',0) or 0)
   if u['role']!='admin' and conf.get('ads_enabled') and ad_count>0:
@@ -619,12 +663,23 @@ class Handler(BaseHTTPRequestHandler):
    return self.redirect('/ad/watch?token='+token)
   return self.create_account_now(u,d)
  def create_account_now(self,u,d):
-  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);limit=int(st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']);typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'v2ray','v2rayvmess':'v2ray','ssh':'ssh'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
+  st=site_settings();days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);limit=int(st['quota_admin_limit'] if u['role']=='admin' else st['quota_user_limit']);
+  if u['role']=='admin':
+   try:
+    chosen=self.val(d,'expires_on')
+    if chosen:
+     target=datetime.strptime(chosen,'%Y-%m-%d').date();delta=(target-datetime.now().date()).days
+     if delta<1 or delta>3650:raise ValueError('La fecha debe estar entre mañana y 10 años.')
+     days=delta
+    else:days=max(1,min(3650,int(self.val(d,'days',str(days)))))
+    limit=max(0,min(100,int(self.val(d,'ip_limit',str(limit)))))
+   except:return self.send(400,body='Fecha de expiración o límite IP inválido. Elige una fecha futura, máximo 10 años.')
+  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'v2ray','v2rayvmess':'v2ray','ssh':'ssh'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
    max_accounts=max(0,int(st.get('quota_user_accounts',2)))
    if owned>=max_accounts:return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
-   if int(u.get('referral_points',0))<3:return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas 3 puntos de referidos por cada cuenta. Comparte tu enlace para ganar puntos.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
+   if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   owner_id=u['id'] if u['role']=='user' else 0
   if u['role']=='admin':
    c=db();first=c.execute('SELECT id FROM users WHERE active=1 ORDER BY id LIMIT 1').fetchone();c.close()
@@ -635,7 +690,7 @@ class Handler(BaseHTTPRequestHandler):
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
   c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ!='ssh' else 'ssh',crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
-  if u['role']!='admin':c.execute('UPDATE users SET referral_points=MAX(0,referral_points-3) WHERE id=?',(u['id'],))
+  if u['role']!='admin':c.execute('UPDATE users SET referral_points=MAX(0,referral_points-?) WHERE id=?',(max(0,int(st.get('account_create_points',3))),u['id']))
   c.commit();c.close();return self.redirect('/account?id=%d'%aid)
  def ad_watch(self,u):
   if not u:return self.redirect('/login')
@@ -680,14 +735,18 @@ class Handler(BaseHTTPRequestHandler):
    if int(u.get('referral_points',0))<need:return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(need)+' puntos para renovar esta cuenta.</div><a class="btn" href="'+PREFIX+'/referrals">Ir a referidos</a>'))
    conf=cfg();count=int(conf.get('ads',{}).get('renew',0) or 0)
    if conf.get('ads_enabled') and count>0:return self.start_ad_action(u,'renew',aid,{'id':str(aid)})
-  return self.renew_account_now(u,{'id':str(aid)})
+  return self.renew_account_now(u,{'id':str(aid),'days':self.val(d,'days','')})
  def renew_account_now(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))
   except:return self.send(400,body='ID inválido')
   st=site_settings();c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
-  days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);ok,msg=renew_account(a,days)
+  days=int(st['quota_admin_days'] if u['role']=='admin' else st['quota_user_days']);
+  if u['role']=='admin':
+   try:days=max(1,min(3650,int(self.val(d,'days',str(days)))))
+   except: c.close();return self.send(400,body='Indica una duración válida en días.')
+  ok,msg=renew_account(a,days)
   if ok:
    c.execute('UPDATE accounts SET expiration=? WHERE id=?',(msg,aid))
    if u['role']!='admin':c.execute('UPDATE users SET referral_points=MAX(0,referral_points-?) WHERE id=?',(max(1,int(st.get('quota_renew_points',4))),u['id']))
@@ -713,15 +772,15 @@ class Handler(BaseHTTPRequestHandler):
  def admin_renew_accounts(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
   c=db();rows=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC').fetchall();c.close()
-  html=''.join('<tr><td>'+html_escape(x['username'])+'</td><td>'+html_escape(x['owner'])+'</td><td>'+html_escape(x['type'])+'</td><td>'+html_escape(x['expiration'] or '—')+'</td><td><form method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(x['id'])+'"><button class="btn primary">Renovar</button></form></td></tr>' for x in rows) or '<tr><td colspan="5">No hay cuentas.</td></tr>'
+  html=''.join('<tr><td>'+html_escape(x['username'])+'</td><td>'+html_escape(x['owner'])+'</td><td>'+html_escape(x['type'])+'</td><td>'+html_escape(x['expiration'] or '—')+'</td><td><form method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(x['id'])+'"><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">Renovar</button></form></td></tr>' for x in rows) or '<tr><td colspan="5">No hay cuentas.</td></tr>'
   return self.send(200,body=tpl('admin_renew.html',u,'Renovar cuentas',ROWS=html))
  def admin_settings_redirect(self,u):return self.redirect('/admin/settings/general' if u and u.get('role')=='admin' else '/profile')
  def admin_settings(self,u,section):
   if not u or u['role']!='admin':return self.redirect('/login')
   c=cfg();st=site_settings();
   if section=='ads':body=tpl('admin_settings_ads.html',u,'Ajuste de ads',ADS_CHECKED='checked' if c.get('ads_enabled') else '',ZONE=html_escape(c.get('monetag_zone','11217882')),CREATE=c.get('ads',{}).get('create',0),DELETE=c.get('ads',{}).get('delete',0),RENEW=c.get('ads',{}).get('renew',0))
-  elif section=='quotas':body=tpl('admin_settings_quotas.html',u,'Cuotas',USER_DAYS=st['quota_user_days'],USER_LIMIT=st['quota_user_limit'],USER_ACCOUNTS=st.get('quota_user_accounts',2),ADMIN_DAYS=st['quota_admin_days'],ADMIN_LIMIT=st['quota_admin_limit'],RENEW_POINTS=st.get('quota_renew_points',4))
-  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']),SOCIAL_FACEBOOK=html_escape(st.get('social_facebook','')),SOCIAL_INSTAGRAM=html_escape(st.get('social_instagram','')),SOCIAL_TIKTOK=html_escape(st.get('social_tiktok','')),SOCIAL_WHATSAPP=html_escape(st.get('social_whatsapp','')),CONTACT_EMAIL=html_escape(st.get('contact_email','')),CONTACT_PHONE=html_escape(st.get('contact_phone','')))
+  elif section=='quotas':body=tpl('admin_settings_quotas.html',u,'Cuotas',USER_DAYS=st['quota_user_days'],USER_LIMIT=st['quota_user_limit'],USER_ACCOUNTS=st.get('quota_user_accounts',2),ADMIN_DAYS=st['quota_admin_days'],ADMIN_LIMIT=st['quota_admin_limit'],RENEW_POINTS=st.get('quota_renew_points',4),CREATE_POINTS=st.get('account_create_points',3))
+  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']),SOCIAL_FACEBOOK=html_escape(st.get('social_facebook','')),SOCIAL_INSTAGRAM=html_escape(st.get('social_instagram','')),SOCIAL_TIKTOK=html_escape(st.get('social_tiktok','')),SOCIAL_WHATSAPP=html_escape(st.get('social_whatsapp','')),CONTACT_EMAIL=html_escape(st.get('contact_email','')),CONTACT_PHONE=html_escape(st.get('contact_phone','')),OG_TITLE=html_escape(st.get('og_title','')),OG_DESCRIPTION=html_escape(st.get('og_description','')),OG_IMAGE=html_escape(st.get('og_image','')),INDEX_CODE=html_escape(st.get('index_code','')))
   return self.send(200,body=body)
  def admin_settings_post(self,u,d,section):
   if not u or u['role']!='admin':return self.send(403,body='403')
@@ -729,12 +788,12 @@ class Handler(BaseHTTPRequestHandler):
    c=cfg();c['ads_enabled']='ads_enabled' in d;c['monetag_zone']=self.val(d,'monetag_zone','11217882')
    try:c['ads']={'create':max(0,min(20,int(self.val(d,'ad_create','0')))),'delete':max(0,min(20,int(self.val(d,'ad_delete','0')))),'renew':max(0,min(20,int(self.val(d,'ad_renew','0'))))}
    except:pass
-   save_cfg(c);return self.redirect('/admin/settings/ads')
+   save_cfg(c);return self.send(200,body=tpl('message.html',u,'Ajuste de ads',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/ads">Continuar</a>'))
   if section=='quotas':
-   try:vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit')))),'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4'))))}
+   try:vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit')))),'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4')))),'account_create_points':max(0,min(1000,int(self.val(d,'create_points','3'))))}
    except:return self.send(400,body='Cuotas inválidas')
-   save_settings(vals);return self.redirect('/admin/settings/quotas')
-  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.redirect('/admin/settings/general')
+   save_settings(vals);return self.send(200,body=tpl('message.html',u,'Cuotas',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/quotas">Continuar</a>') )
+  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80],'og_title':self.val(d,'og_title')[:200],'og_description':self.val(d,'og_description')[:500],'og_image':self.val(d,'og_image')[:1000],'index_code':self.val(d,'index_code')[:4000]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.send(200,body=tpl('message.html',u,'Ajuste general',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/general">Continuar</a>') )
  def plans_data(self):
   c=cfg();plans=c.get('plans')
   if not isinstance(plans,list):
@@ -750,7 +809,7 @@ class Handler(BaseHTTPRequestHandler):
   rows=''.join('<div class="card"><form method="post"><input type="hidden" name="id" value="'+html_escape(x.get('id',''))+'"><label>Título</label><input class="input" name="title" value="'+html_escape(x.get('title',''))+'"><label>Beneficios</label><textarea class="input" name="benefits">'+html_escape(x.get('benefits',''))+'</textarea><label>Precio</label><input class="input" name="price" type="number" step="0.01" value="'+html_escape(x.get('price','0'))+'"><label>Periodo</label><select class="input" name="period"><option value="mensual" '+('selected' if x.get('period')=='mensual' else '')+'>Mensual</option></select><label>Método de pago</label><select class="input" name="payment"><option value="manual" '+('selected' if x.get('payment')=='manual' else '')+'>Manual</option><option value="paypal" '+('selected' if x.get('payment')=='paypal' else '')+'>PayPal</option><option value="mercadopago" '+('selected' if x.get('payment')=='mercadopago' else '')+'>Mercado Pago</option></select><button class="btn primary" name="action" value="save">Guardar plan</button> <button class="btn danger" name="action" value="delete">Eliminar</button></form></div>' for x in self.plans_data())
   rows+='<div class="card"><h2>Agregar plan</h2><form method="post"><input type="hidden" name="id" value=""><label>Título</label><input class="input" name="title" required><label>Beneficios</label><textarea class="input" name="benefits" required></textarea><label>Precio</label><input class="input" name="price" type="number" min="0" step="0.01" required><label>Periodo</label><select class="input" name="period"><option value="mensual">Mensual</option></select><label>Método de pago</label><select class="input" name="payment"><option value="manual">Manual</option><option value="paypal">PayPal</option><option value="mercadopago">Mercado Pago</option></select><button class="btn primary" name="action" value="save">Agregar plan</button></form></div>'
   manuals_html=''.join('<div class="notice"><b>'+html_escape(m.get('name','Pago manual'))+'</b><p>'+html_escape(m.get('info',''))+'</p><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="delete_manual"><input type="hidden" name="id" value="'+html_escape(m.get('id',''))+'"><button class="btn danger">Eliminar método</button></form></div>' for m in manuals)
-  payment_box='<div class="card"><h2><i class="fa-solid fa-coins"></i> Moneda local</h2><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="currency"><label>Símbolo o código de moneda (ej. S/, $, MXN, COP)</label><input class="input" name="currency_symbol" maxlength="8" value="'+html_escape(c.get('currency_symbol') or site_settings().get('currency_symbol','S/'))+'" required><button class="btn primary">Guardar moneda</button></form></div><div class="card"><h2><i class="fa-solid fa-wallet"></i> Métodos de pago</h2><button type="button" class="btn primary" data-open-dialog="manualDialog">Agregar método manual</button><dialog class="config-dialog" id="manualDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Agregar pago manual</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="add_manual"><label>Nombre del método</label><input class="input" name="manual_name" placeholder="Ej. Yape, transferencia" required><label>Información e instrucciones</label><textarea class="input" name="manual_info" required></textarea><button class="btn primary">Guardar método manual</button></form></dialog>'+manuals_html+'<hr><button type="button" class="btn primary" data-open-dialog="paypalDialog">Configurar PayPal</button><dialog class="config-dialog" id="paypalDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales PayPal</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="paypal"><label>Client ID</label><input class="input" name="paypal_client_id" value="'+html_escape(decrypt_credential(c.get('paypal_client_id','')) if c.get('paypal_client_id') else '')+'"><label>Client Secret</label><input class="input" name="paypal_secret" type="password" placeholder="Dejar vacío para conservar"><label>Modo</label><select class="input" name="paypal_mode"><option value="sandbox">Sandbox / pruebas</option><option value="live" '+('selected' if c.get('paypal_mode')=='live' else '')+'>Producción</option></select><button class="btn primary">Guardar PayPal</button></form></dialog><hr><button type="button" class="btn primary" data-open-dialog="mpDialog">Configurar Mercado Pago</button><dialog class="config-dialog" id="mpDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales Mercado Pago</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="mercadopago"><label>Access Token</label><input class="input" name="mp_access_token" type="password" placeholder="Dejar vacío para conservar"><label>Public Key</label><input class="input" name="mp_public_key" value="'+html_escape(decrypt_credential(c.get('mp_public_key','')) if c.get('mp_public_key') else '')+'"><button class="btn primary">Guardar Mercado Pago</button></form></dialog><p class="muted small">Las credenciales se guardan protegidas. El cobro automático requiere configurar y probar las notificaciones/webhooks oficiales del proveedor; guardar credenciales por sí solo no confirma pagos.</p></div>'
+  payment_box='<div class="card"><h2><i class="fa-solid fa-coins"></i> Moneda local</h2><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="currency"><label>Símbolo local (ej. S/, $, MXN, COP)</label><input class="input" name="currency_symbol" maxlength="8" value="'+html_escape(c.get('currency_symbol') or site_settings().get('currency_symbol','S/'))+'" required><label>Código ISO de moneda para cobros (PEN, USD, BRL, MXN)</label><input class="input" name="payment_currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="'+html_escape(c.get('payment_currency_code','PEN'))+'" required><button class="btn primary">Guardar moneda</button></form></div><div class="card"><h2><i class="fa-solid fa-wallet"></i> Métodos de pago</h2><button type="button" class="btn primary" data-open-dialog="manualDialog">Agregar método manual</button><dialog class="config-dialog" id="manualDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Agregar pago manual</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="add_manual"><label>Nombre del método</label><input class="input" name="manual_name" placeholder="Ej. Yape, transferencia" required><label>Información e instrucciones</label><textarea class="input" name="manual_info" required></textarea><button class="btn primary">Guardar método manual</button></form></dialog>'+manuals_html+'<hr><button type="button" class="btn primary" data-open-dialog="paypalDialog">Configurar PayPal</button><dialog class="config-dialog" id="paypalDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales PayPal</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="paypal"><label>Client ID</label><input class="input" name="paypal_client_id" value="'+html_escape(decrypt_credential(c.get('paypal_client_id','')) if c.get('paypal_client_id') else '')+'"><label>Client Secret</label><input class="input" name="paypal_secret" type="password" placeholder="Dejar vacío para conservar"><label>Modo</label><select class="input" name="paypal_mode"><option value="sandbox">Sandbox / pruebas</option><option value="live" '+('selected' if c.get('paypal_mode')=='live' else '')+'>Producción</option></select><button class="btn primary">Guardar PayPal</button></form></dialog><hr><button type="button" class="btn primary" data-open-dialog="mpDialog">Configurar Mercado Pago</button><dialog class="config-dialog" id="mpDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales Mercado Pago</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="mercadopago"><label>Access Token</label><input class="input" name="mp_access_token" type="password" placeholder="Dejar vacío para conservar"><label>Public Key</label><input class="input" name="mp_public_key" value="'+html_escape(decrypt_credential(c.get('mp_public_key','')) if c.get('mp_public_key') else '')+'"><button class="btn primary">Guardar Mercado Pago</button></form></dialog><p class="muted small">Las credenciales se guardan protegidas. El cobro automático requiere configurar y probar las notificaciones/webhooks oficiales del proveedor; guardar credenciales por sí solo no confirma pagos.</p></div>'
   return self.send(200,body=tpl('plans_settings.html',u,'Configuración de planes',ROWS=rows+payment_box))
  def plans_settings_post(self,u,d):
   if not u or u['role']!='admin':return self.send(403,body='403')
@@ -761,12 +820,13 @@ class Handler(BaseHTTPRequestHandler):
    if not item['title']:return self.send(400,body='El título es obligatorio')
    if pid and any(x.get('id')==pid for x in plans):plans=[item if x.get('id')==pid else x for x in plans]
    else:plans.append(item)
-  c['plans']=plans;save_cfg(c);return self.redirect('/plans/settings')
+  c['plans']=plans;save_cfg(c);return self.send(200,body=tpl('message.html',u,'Configuración',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/plans/settings">Continuar</a>') )
  def plan_payment_settings_post(self,u,d):
   if not u or u.get('role')!='admin':return self.send(403,body='403')
   c=cfg();action=self.val(d,'action')
   if action=='currency':
    c['currency_symbol']=self.val(d,'currency_symbol','S/')[:8] or 'S/'
+   c['payment_currency_code']=self.val(d,'payment_currency_code','PEN').upper()[:3]
    save_settings({'currency_symbol':c['currency_symbol']})
   elif action=='add_manual':
    name=self.val(d,'manual_name')[:100];info=self.val(d,'manual_info')[:3000]
@@ -780,7 +840,7 @@ class Handler(BaseHTTPRequestHandler):
   elif action=='mercadopago':
    if self.val(d,'mp_access_token'):c['mp_access_token']=crypt_credential(self.val(d,'mp_access_token'))
    if self.val(d,'mp_public_key'):c['mp_public_key']=crypt_credential(self.val(d,'mp_public_key'))
-  save_cfg(c);return self.redirect('/plans/settings')
+  save_cfg(c);return self.send(200,body=tpl('message.html',u,'Configuración',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/plans/settings">Continuar</a>') )
  def plan_orders_init(self,c):
   c.execute('CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL)')
  def add_notification(self,user_id,title,message,kind='general'):
@@ -830,18 +890,85 @@ class Handler(BaseHTTPRequestHandler):
   message=('Tu solicitud para el plan '+order['plan_title']+' fue aceptada. Los beneficios configurados se han aplicado a tu cuenta.' if action=='approve' else 'Tu solicitud para el plan '+order['plan_title']+' fue rechazada. No se aplicaron beneficios.')
   self.add_notification(uid,title,message,'plan_approved' if action=='approve' else 'plan_rejected')
   return self.send(200,body=tpl('message.html',u,'Acción completada',MESSAGE='<div class="expiry-modal" style="position:relative;inset:auto;background:transparent"><div class="expiry-modal-card"><h2><i class="fa-solid '+('fa-trash' if action=='delete' else ('fa-circle-check' if action=='approve' else 'fa-circle-xmark'))+'"></i> '+html_escape('Solicitud eliminada' if action=='delete' else ('Solicitud aprobada' if action=='approve' else 'Solicitud rechazada'))+'</h2><p>'+html_escape('Solicitud eliminada.' if action=='delete' else ('Beneficios aplicados.' if action=='approve' else 'No se aplicaron beneficios.'))+'</p><a class="btn primary" href="'+PREFIX+'/plans/history">Entendido</a></div></div>'))
+ def payment_request(self,url,method='GET',payload=None,headers=None):
+  data=json.dumps(payload).encode() if payload is not None else None;h={'Content-Type':'application/json','Accept':'application/json'};h.update(headers or {})
+  req=urllib.request.Request(url,data=data,headers=h,method=method)
+  with urllib.request.urlopen(req,timeout=20) as response:return json.loads(response.read().decode())
+ def payment_root(self):
+  host=(self.headers.get('X-Forwarded-Host','').split(',')[0].strip() or self.headers.get('Host','')).strip();scheme=self.headers.get('X-Forwarded-Proto','https').split(',')[0].strip()
+  if not host:return ''
+  return ('https' if scheme not in ('http','https') else scheme)+'://'+host
+ def paypal_access_token(self,conf):
+  cid=decrypt_credential(conf.get('paypal_client_id',''));secret=decrypt_credential(conf.get('paypal_secret',''));base='https://api-m.paypal.com' if conf.get('paypal_mode')=='live' else 'https://api-m.sandbox.paypal.com'
+  raw=base64.b64encode((cid+':'+secret).encode()).decode();req=urllib.request.Request(base+'/v1/oauth2/token',data=b'grant_type=client_credentials',headers={'Authorization':'Basic '+raw,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+  with urllib.request.urlopen(req,timeout=20) as r:token=json.loads(r.read().decode())['access_token']
+  return base,token
  def plans_buy(self,u,d):
   if not u:return self.redirect('/login')
-  pid=self.val(d,'plan_id');plans=self.plans_data();plan=next((x for x in plans if x.get('id')==pid),None)
+  pid=self.val(d,'plan_id');plan=next((x for x in self.plans_data() if x.get('id')==pid),None)
   if not plan:return self.send(404,body='Plan no encontrado')
   payment=self.val(d,'payment_method','manual')
   if payment not in ('manual','paypal','mercadopago'):payment='manual'
-  conf=cfg()
-  if payment=='paypal' and not (conf.get('paypal_client_id') and conf.get('paypal_secret')):return self.send(400,body=tpl('message.html',u,'PayPal no configurado',MESSAGE='<div class="notice bad">El administrador debe configurar las credenciales de PayPal y la integración de pago antes de cobrar.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
-  if payment=='mercadopago' and not conf.get('mp_access_token'):return self.send(400,body=tpl('message.html',u,'Mercado Pago no configurado',MESSAGE='<div class="notice bad">El administrador debe configurar Mercado Pago y su integración de pago antes de cobrar.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
-  if payment!='manual':return self.send(501,body=tpl('message.html',u,'Pasarela pendiente de integrar',MESSAGE='<div class="notice bad">Las credenciales están guardadas, pero falta completar la creación de checkout y la verificación del webhook del proveedor. No se ha realizado ningún cobro ni aplicado beneficios.</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
-  c=db();self.plan_orders_init(c);c.execute('INSERT INTO plan_orders(user_id,plan_id,plan_title,price,payment,status,created_at) VALUES(?,?,?,?,?,?,?)',(u['id'],pid,plan['title'],plan['price'],payment,'pendiente',datetime.now().isoformat(timespec='seconds')));c.commit();c.close()
-  return self.send(200,body=tpl('message.html',u,'Solicitud de plan',MESSAGE='<div class="notice">Solicitud manual registrada. Espera a que el administrador verifique el pago y apruebe el plan.</div><a class="btn" href="'+PREFIX+'/plans/history">Ver historial</a>'))
+  conf=cfg();currency_code=(conf.get('payment_currency_code') or ('PEN' if (conf.get('currency_symbol') or site_settings().get('currency_symbol','S/'))=='S/' else 'USD')).upper()
+  c=db();self.plan_orders_init(c);c.execute('INSERT INTO plan_orders(user_id,plan_id,plan_title,price,payment,status,created_at,external_id) VALUES(?,?,?,?,?,?,?,?)',(u['id'],pid,plan['title'],plan['price'],payment,'pendiente',datetime.now().isoformat(timespec='seconds'),''));oid=c.execute('SELECT last_insert_rowid()').fetchone()[0];c.commit();c.close()
+  if payment=='manual':return self.send(200,body=tpl('message.html',u,'Solicitud de plan',MESSAGE='<div class="notice">Solicitud manual registrada. Espera a que el administrador verifique el pago y apruebe el plan.</div><a class="btn" href="'+PREFIX+'/plans/history">Ver historial</a>'))
+  root=self.payment_root()
+  if not root or not root.startswith('https://'):return self.send(400,body=tpl('message.html',u,'Pago no disponible',MESSAGE='<div class="notice bad">Para activar pagos automáticos, configura el panel detrás de HTTPS con un dominio público.</div><a class="btn" href="'+PREFIX+'/plans">Volver</a>'))
+  try:
+   if payment=='paypal':
+    if not (conf.get('paypal_client_id') and conf.get('paypal_secret')):raise ValueError('El administrador debe configurar las credenciales de PayPal.')
+    base,token=self.paypal_access_token(conf);payload={'intent':'CAPTURE','purchase_units':[{'reference_id':str(oid),'custom_id':str(oid),'description':str(plan['title'])[:127],'amount':{'currency_code':currency_code,'value':format(float(plan['price']),'.2f')}}],'application_context':{'return_url':root+PREFIX+'/payments/return?provider=paypal&order='+str(oid),'cancel_url':root+PREFIX+'/plans?cancelled=1','user_action':'PAY_NOW'}}
+    result=self.payment_request(base+'/v2/checkout/orders','POST',payload,{'Authorization':'Bearer '+token});external=result.get('id','');approve=next((x.get('href') for x in result.get('links',[]) if x.get('rel')=='approve'),None)
+   else:
+    access=decrypt_credential(conf.get('mp_access_token',''))
+    if not access:raise ValueError('El administrador debe configurar Mercado Pago.')
+    payload={'items':[{'title':str(plan['title'])[:256],'quantity':1,'currency_id':currency_code,'unit_price':float(plan['price'])}],'external_reference':str(oid),'back_urls':{'success':root+PREFIX+'/payments/return?provider=mercadopago&order='+str(oid),'pending':root+PREFIX+'/payments/return?provider=mercadopago&order='+str(oid),'failure':root+PREFIX+'/payments/return?provider=mercadopago&order='+str(oid)},'auto_return':'approved','notification_url':root+PREFIX+'/payments/webhook'}
+    result=self.payment_request('https://api.mercadopago.com/checkout/preferences','POST',payload,{'Authorization':'Bearer '+access});external=result.get('id','');approve=result.get('init_point') or result.get('sandbox_init_point')
+   if not external or not approve:raise ValueError('El proveedor no devolvió un enlace de pago válido.')
+   c=db();c.execute('UPDATE plan_orders SET external_id=? WHERE id=?',(external,oid));c.commit();c.close();return self.redirect_external(approve)
+  except Exception as e:
+   log('Payment checkout error: '+repr(e));return self.send(400,body=tpl('message.html',u,'Error de pago',MESSAGE='<div class="notice bad">No se pudo iniciar el pago: '+html_escape(str(e))+'</div><a class="btn" href="'+PREFIX+'/plans">Volver a planes</a>'))
+ def redirect_external(self,url):
+  self.send_response(303);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.send_header('Content-Length','0');self.end_headers()
+ def apply_paid_order(self,oid,provider_ref=''):
+  c=db();self.plan_orders_init(c);order=c.execute('SELECT * FROM plan_orders WHERE id=?',(oid,)).fetchone()
+  if not order or order['status']=='aprobado':c.close();return False
+  plan=next((x for x in self.plans_data() if x.get('id')==order['plan_id']),{});benefits=plan.get('benefits','');nums=re.findall(r'(?i)(\d+)\s*(?:puntos?|points?)',benefits);points=sum(int(n) for n in nums) if nums else 0
+  if points:c.execute('UPDATE users SET referral_points=referral_points+? WHERE id=?',(points,order['user_id']))
+  account_nums=re.findall(r'(?i)(\d+)\s*(?:cuentas?|accounts?)',benefits)
+  if account_nums:
+   entcfg=cfg();ent=entcfg.setdefault('user_plan_entitlements',{});key=str(order['user_id']);ent[key]=int(ent.get(key,0))+sum(int(n) for n in account_nums);save_cfg(entcfg)
+  c.execute("UPDATE plan_orders SET status='aprobado' WHERE id=?",(oid,));c.commit();uid=order['user_id'];c.close();self.add_notification(uid,'Plan aprobado','Tu pago del plan '+order['plan_title']+' fue confirmado y sus beneficios se aplicaron.','plan_approved');return True
+ def payment_return(self,u):
+  query=parse_qs(urlparse(self.path).query);provider=query.get('provider',[''])[0];oid=query.get('order',[''])[0]
+  if not u:return self.redirect('/login')
+  try:oid=int(oid)
+  except:return self.send(400,body='Orden inválida')
+  c=db();self.plan_orders_init(c);order=c.execute('SELECT * FROM plan_orders WHERE id=?'+('' if u['role']=='admin' else ' AND user_id=?'),(oid,) if u['role']=='admin' else (oid,u['id'])).fetchone();c.close()
+  if not order:return self.send(404,body='Orden no encontrada')
+  try:
+   conf=cfg()
+   if provider=='paypal':
+    token_id=query.get('token',[''])[0];base,access=self.paypal_access_token(conf);res=self.payment_request(base+'/v2/checkout/orders/'+quote(token_id)+'/capture','POST',{}, {'Authorization':'Bearer '+access})
+    if res.get('status')=='COMPLETED' and str(res.get('purchase_units',[{}])[0].get('reference_id',''))==str(oid):self.apply_paid_order(oid)
+   elif provider=='mercadopago':
+    payment_id=query.get('payment_id',[''])[0];access=decrypt_credential(conf.get('mp_access_token',''));res=self.payment_request('https://api.mercadopago.com/v1/payments/'+quote(payment_id),headers={'Authorization':'Bearer '+access})
+    if res.get('status')=='approved' and str(res.get('external_reference',''))==str(oid):self.apply_paid_order(oid)
+  except Exception as e:log('Payment verification error: '+repr(e))
+  c=db();row=c.execute('SELECT status FROM plan_orders WHERE id=?',(oid,)).fetchone();c.close();status=row['status'] if row else 'pendiente'
+  message='Pago confirmado; los beneficios se aplicaron.' if status=='aprobado' else 'El proveedor aún no confirma el pago. Si ya pagaste, espera la notificación o contacta al administrador.'
+  return self.send(200,body=tpl('message.html',u,'Estado del pago',MESSAGE='<div class="notice '+('oktxt' if status=='aprobado' else '')+'">'+message+'</div><a class="btn primary" href="'+PREFIX+'/plans/history">Ver historial</a>'))
+ def payment_webhook(self):
+  try:
+   n=int(self.headers.get('Content-Length','0'));raw=self.rfile.read(min(n,65536));payload=json.loads(raw.decode() or '{}');data=payload.get('data',{});payment_id=str(data.get('id') or payload.get('id') or '')
+   if not payment_id:return self.send(200,body='ok')
+   conf=cfg();access=decrypt_credential(conf.get('mp_access_token',''));res=self.payment_request('https://api.mercadopago.com/v1/payments/'+quote(payment_id),headers={'Authorization':'Bearer '+access})
+   if res.get('status')=='approved':
+    try:self.apply_paid_order(int(res.get('external_reference','')))
+    except:pass
+   return self.send(200,body='ok')
+  except Exception as e:log('Payment webhook error: '+repr(e));return self.send(200,body='ok')
+
  def plans_history(self,u):
   if not u:return self.redirect('/login')
   c=db();self.plan_orders_init(c);rows=c.execute('SELECT o.*,u.username FROM plan_orders o LEFT JOIN users u ON u.id=o.user_id '+('' if u['role']=='admin' else 'WHERE o.user_id=? ')+'ORDER BY o.id DESC',(() if u['role']=='admin' else (u['id'],))).fetchall();c.close();html=[]
