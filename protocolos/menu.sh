@@ -422,20 +422,17 @@ show_protocol_menu() {
 
     printf "  ${MAGENTA}${BOLD}[21]${RESET} 🔐 VayDNS      %b    " "$VAYDNS_STATUS"
     printf "${MAGENTA}${BOLD}[22]${RESET} 🚀 Slipstream  %b\n" "$SLIPSTREAM_STATUS"
-
-    printf "  ${MAGENTA}${BOLD}[23]${RESET} 🌐 DNSDist     %b\n" "$DNSDIST_STATUS"
-
     echo
     echo -e "${BLUE}${BOLD}  🛠️  ADMINISTRACIÓN DEL SISTEMA${RESET}"
     line
 
-    printf "  ${GREEN}${BOLD}[24]${RESET} 🧰 Herramientas          "
-    printf "${GREEN}${BOLD}[25]${RESET} 🔄 Reiniciar Servicios\n"
+    printf "  ${GREEN}${BOLD}[23]${RESET} 🧰 Herramientas          "
+    printf "${GREEN}${BOLD}[24]${RESET} 🔄 Reiniciar Servicios\n"
 
-    printf "  ${GREEN}${BOLD}[26]${RESET} 🔥 Firewall              "
-    printf "${GREEN}${BOLD}[27]${RESET} 🤖 Bot Telegram\n"
+    printf "  ${GREEN}${BOLD}[25]${RESET} 🔥 Firewall              "
+    printf "${GREEN}${BOLD}[26]${RESET} 🤖 Bot Telegram\n"
 
-    printf "  ${GREEN}${BOLD}[28]${RESET} 🌐 Web Universal\n"
+    printf "  ${GREEN}${BOLD}[27]${RESET} 🌐 Web Universal\n"
 
     echo
     line
@@ -492,17 +489,16 @@ process_option() {
         20) run_module "$PROTOCOL_DIR/3x-ui.sh" ;;
         21) run_module "$PROTOCOL_DIR/vaydns.sh" ;;
         22) run_module "$PROTOCOL_DIR/slipstream.sh" ;;
-        23) run_module "$PROTOCOL_DIR/dnsdist.sh" ;;
 
         # ------------------------------------------------------
         # Administración
         # ------------------------------------------------------
 
-        24) run_module "$TOOLS_DIR/menu.sh" ;;
-        25) run_module "$TOOLS_DIR/reiniciar.sh" ;;
-        26) run_module "$TOOLS_DIR/firewall.sh" ;;
-        27) run_module "$BASE/telegram/install.sh" ;;
-        28) run_module "$BASE/web/installer.sh" ;;
+        23) run_module "$TOOLS_DIR/menu.sh" ;;
+        24) run_module "$TOOLS_DIR/reiniciar.sh" ;;
+        25) run_module "$TOOLS_DIR/firewall.sh" ;;
+        26) run_module "$BASE/telegram/install.sh" ;;
+        27) run_module "$BASE/web/installer.sh" ;;
 
         0|00)
             clear
