@@ -486,16 +486,14 @@ class Handler(BaseHTTPRequestHandler):
   body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Resultado de Speedtest</h1></div><div class="card"><p>Resultado: '+('Correcto' if rc==0 else 'Código '+str(rc))+'</p><pre class="terminal">'+html_escape(out or 'Sin salida')+'</pre><a class="btn" href="'+PREFIX+'/tools/speedtest">Volver</a></div>'
   return self.send(200,body=page('Resultado Speedtest',body,u))
  def public_index(self,u):
-  # Servir el index.html personalizado subido por el propietario, en vez de
-  # generar la portada antigua desde page().
-  index_path=WEB/'index.html'
+  # La portada se mantiene únicamente en templates/index.html.
+  # Esto evita duplicados y asegura que el sitio use la plantilla correcta.
+  index_path=WEB/'templates'/'index.html'
   try:
    html=index_path.read_text(encoding='utf-8')
-  except (OSError, UnicodeError):
-   # Compatibilidad: si el archivo no está en web/, probar la plantilla.
-   try: html=(WEB/'templates'/'index.html').read_text(encoding='utf-8')
-   except (OSError, UnicodeError):
-    return self.send(500,body='No se encontró web/index.html. Coloca ahí la portada personalizada.')
+  except (OSError, UnicodeError) as e:
+   log('No se pudo leer templates/index.html: '+repr(e))
+   return self.send(500,body='No se encontró web/templates/index.html. Reinstala/actualiza los archivos web.')
   # Enlazar los botones de acceso y registro a las rutas reales del servidor.
   html=html.replace('href="login.html"', 'href="'+PREFIX+'/login"')
   html=html.replace('href="register.html"', 'href="'+PREFIX+'/register"')

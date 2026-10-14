@@ -4,7 +4,7 @@ Panel web responsive para KevinTech Multi Script.
 
 ## Cambios principales
 - Menú hamburguesa lateral a la izquierda, compatible con móvil, con submenús por rol.
-- `/`, `/index` y `/index.html` llevan al inicio/login; rutas inexistentes muestran `404` y existe `web/404.html`.
+- `/`, `/index` y `/index.html` sirven la portada desde `web/templates/index.html`; las rutas inexistentes muestran la plantilla `web/templates/404.html`. Las páginas HTML se mantienen dentro de `templates/`, sin copias duplicadas en la raíz de `web/`.
 - Registro sin campo visible de código de referido; el código llega oculto desde `?ref=`.
 - Referidos: el nuevo usuario recibe 1 punto y el propietario del enlace recibe 2 puntos; el administrador también tiene enlace y contador propios.
 - Enlaces de referido con dominio completo: `https://dominio.tld/register?ref=CODIGO`.
@@ -67,3 +67,18 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - El webhook de Mercado Pago está en `/payments/webhook`; el sistema consulta el estado de pago a la API oficial antes de aplicar beneficios.
 
 **Importante:** las pasarelas necesitan credenciales válidas, HTTPS público y una configuración correcta de moneda. La recuperación por correo requiere SMTP. Los idiomas aparecen en registro/perfil; las traducciones automáticas integradas cubren principalmente los elementos comunes de navegación y controles, y algunas páginas pueden conservar textos originales.
+
+
+## Error 502 Bad Gateway
+
+HAProxy reenvía las solicitudes del dominio al servidor Python local en `127.0.0.1:18080`. Un `502` suele indicar que el servicio `kevintech-web` está detenido, que Python falló al arrancar o que el backend no responde. Después de actualizar, el instalador prueba `/login` localmente y muestra el registro del servicio si falla. Diagnóstico manual:
+
+```bash
+systemctl status kevintech-web --no-pager -l
+journalctl -u kevintech-web -n 100 --no-pager
+ss -lntp | grep ':18080'
+curl -v http://127.0.0.1:18080/login
+haproxy -c -f /etc/haproxy/haproxy.cfg
+```
+
+Si la petición local funciona pero el dominio da 502, revisa el backend `kevintech_web` en HAProxy y recarga HAProxy solo si la validación de configuración termina correctamente.

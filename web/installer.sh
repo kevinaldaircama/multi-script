@@ -106,7 +106,25 @@ r=subprocess.run(['systemctl','reload','haproxy'],capture_output=True,text=True)
 if r.returncode: print(r.stdout+r.stderr); raise SystemExit(4)
 PY
 }
-copy_web_files(){ local src dst; src="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$WEB/templates"; for f in server.py requirements.txt version.txt README.md 404.html; do if [[ -f "$src/$f" ]]; then dst="$WEB/$f"; [[ "$(readlink -f "$src/$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$src/$f" "$dst"; fi; done; for f in "$src/templates"/*.html; do [[ -f "$f" ]] || continue; dst="$WEB/templates/$(basename "$f")"; [[ "$(readlink -f "$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$f" "$dst"; done; mkdir -p "$DATA"; }
+copy_web_files(){
+ local src dst f
+ src="$(cd "$(dirname "$0")" && pwd)"
+ mkdir -p "$WEB/templates" "$DATA"
+ # Copiar el servidor y sus metadatos; las páginas HTML viven en templates/.
+ for f in server.py requirements.txt version.txt README.md; do
+  if [[ -f "$src/$f" ]]; then
+   dst="$WEB/$f"
+   [[ "$(readlink -f "$src/$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$src/$f" "$dst"
+  fi
+ done
+ for f in "$src/templates"/*.html; do
+  [[ -f "$f" ]] || continue
+  dst="$WEB/templates/$(basename "$f")"
+  [[ "$(readlink -f "$f")" == "$(readlink -f "$dst" 2>/dev/null || true)" ]] || cp -f "$f" "$dst"
+ done
+ # Retirar las páginas duplicadas antiguas de la raíz del sitio.
+ rm -f "$WEB/index.html" "$WEB/404.html"
+}
 save_credentials(){ python3 - "$DATA/config.json" "$1" "$2" "$3" <<'PY'
 import json,sys,hashlib,base64,secrets,os
 p,u,pw,domain=sys.argv[1:]; os.makedirs(os.path.dirname(p),exist_ok=True)
@@ -124,7 +142,18 @@ import json,sys
 try: print(json.load(open(sys.argv[1])).get('server_domain',''))
 except: print('')
 PY
-)"; existing_domain="${existing_domain:-$(current_domain)}"; if [[ -z "$existing_domain" ]]; then prompt_fresh || return 1; save_credentials "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" || return 1; else WEB_DOMAIN="$existing_domain"; echo -e "${cyan}Actualizando: se conservan usuario, contraseña y dominio.${reset}"; fi; write_service; write_acme_service; make_temp_cert "$WEB_DOMAIN"; patch_haproxy "$WEB_DOMAIN" || return 1; ensure_cert "$WEB_DOMAIN" || return 1; systemctl daemon-reload; systemctl enable "$SERVICE" "$ACME_SERVICE" >/dev/null 2>&1 || true; systemctl restart "$SERVICE"; sleep 1; if systemctl is-active --quiet "$SERVICE"; then echo -e "${green}✔ KevinTech Web instalada/actualizada.${reset}"; echo -e "${cyan}✔ Panel: https://$WEB_DOMAIN/login${reset}"; else journalctl -u "$SERVICE" -n 40 --no-pager; return 1; fi; }
+)"; existing_domain="${existing_domain:-$(current_domain)}"; if [[ -z "$existing_domain" ]]; then prompt_fresh || return 1; save_credentials "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" || return 1; else WEB_DOMAIN="$existing_domain"; echo -e "${cyan}Actualizando: se conservan usuario, contraseña y dominio.${reset}"; fi; write_service; write_acme_service; make_temp_cert "$WEB_DOMAIN"; patch_haproxy "$WEB_DOMAIN" || return 1; ensure_cert "$WEB_DOMAIN" || return 1; systemctl daemon-reload; systemctl enable "$SERVICE" "$ACME_SERVICE" >/dev/null 2>&1 || true; systemctl restart "$SERVICE"; sleep 2
+ if systemctl is-active --quiet "$SERVICE" && curl -fsS --max-time 5 "http://127.0.0.1:$PORT/login" >/dev/null; then
+  echo -e "${green}✔ KevinTech Web instalada/actualizada y respondiendo en 127.0.0.1:$PORT.${reset}"
+  echo -e "${cyan}✔ Panel: https://$WEB_DOMAIN/login${reset}"
+ else
+  echo -e "${red}✘ El panel no respondió localmente; revisa el servicio antes de probar HTTPS.${reset}"
+  systemctl status "$SERVICE" --no-pager -l || true
+  journalctl -u "$SERVICE" -n 60 --no-pager || true
+  echo -e "${yellow}Prueba: curl -v http://127.0.0.1:$PORT/login${reset}"
+  return 1
+ fi
+}
 change_data(){
  root_check; [[ -f "$DATA/config.json" ]] || { echo -e "${red}Web no instalada. Primero usa opción 1.${reset}"; return 1; }
  local oldu olddomain u p domain
