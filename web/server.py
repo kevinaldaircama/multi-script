@@ -485,15 +485,23 @@ class Handler(BaseHTTPRequestHandler):
   rc,out=shell(shlex.quote(command)+' --accept-license --accept-gdpr' if command.endswith('/speedtest') else shlex.quote(command),90)
   body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Resultado de Speedtest</h1></div><div class="card"><p>Resultado: '+('Correcto' if rc==0 else 'Código '+str(rc))+'</p><pre class="terminal">'+html_escape(out or 'Sin salida')+'</pre><a class="btn" href="'+PREFIX+'/tools/speedtest">Volver</a></div>'
   return self.send(200,body=page('Resultado Speedtest',body,u))
-  def public_index(self,u):
-   # Serve the user's supplied landing page instead of the old hard-coded splash.
-   index_file=WEB/'index.html'
-   try:
-    body=index_file.read_text(encoding='utf-8')
-   except (OSError,UnicodeError):
-    body='<!doctype html><html lang="es"><meta charset="utf-8"><title>Kevin tech tutorials</title><p>No se pudo cargar index.html.</p></html>'
-   body=body.replace('href="/login"','href="'+PREFIX+'/login"').replace('href="/register"','href="'+PREFIX+'/register"')
-   return self.send(200,ctype='text/html; charset=utf8',body=body)
+ def public_index(self,u):
+  # Servir el index.html personalizado subido por el propietario, en vez de
+  # generar la portada antigua desde page().
+  index_path=WEB/'index.html'
+  try:
+   html=index_path.read_text(encoding='utf-8')
+  except (OSError, UnicodeError):
+   # Compatibilidad: si el archivo no está en web/, probar la plantilla.
+   try: html=(WEB/'templates'/'index.html').read_text(encoding='utf-8')
+   except (OSError, UnicodeError):
+    return self.send(500,body='No se encontró web/index.html. Coloca ahí la portada personalizada.')
+  # Enlazar los botones de acceso y registro a las rutas reales del servidor.
+  html=html.replace('href="login.html"', 'href="'+PREFIX+'/login"')
+  html=html.replace('href="register.html"', 'href="'+PREFIX+'/register"')
+  html=html.replace("href='login.html'", "href='"+PREFIX+"/login'")
+  html=html.replace("href='register.html'", "href='"+PREFIX+"/register'")
+  return self.send(200,'text/html; charset=utf-8',html)
  def forgot_password_page(self,msg=''):
   return self.send(200,body=tpl('forgot_password.html',None,'Recuperar contraseña',MSG=msg))
  def forgot_password_post(self,d):
