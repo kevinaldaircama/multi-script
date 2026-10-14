@@ -485,10 +485,15 @@ class Handler(BaseHTTPRequestHandler):
   rc,out=shell(shlex.quote(command)+' --accept-license --accept-gdpr' if command.endswith('/speedtest') else shlex.quote(command),90)
   body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Resultado de Speedtest</h1></div><div class="card"><p>Resultado: '+('Correcto' if rc==0 else 'Código '+str(rc))+'</p><pre class="terminal">'+html_escape(out or 'Sin salida')+'</pre><a class="btn" href="'+PREFIX+'/tools/speedtest">Volver</a></div>'
   return self.send(200,body=page('Resultado Speedtest',body,u))
- def public_index(self,u):
-  st=site_settings();title=html_escape(st.get('site_title','KevinTech Multi Script'));desc=html_escape(st.get('site_description','Panel web para administrar tu VPS y tus cuentas.'))
-  body='<section class="public-hero"><div class="public-badge"><i class="fa-solid fa-shield-halved"></i> Plataforma de administración</div><h1>'+title+'</h1><p>'+desc+'</p><div class="public-actions"><a class="btn primary" href="'+PREFIX+'/login"><i class="fa-solid fa-right-to-bracket"></i> Ingresar</a><a class="btn" href="'+PREFIX+'/register"><i class="fa-solid fa-user-plus"></i> Registrarse</a></div></section><section class="grid public-features"><article class="card"><i class="fa-solid fa-server"></i><h2>Gestión centralizada</h2><p class="muted">Administra cuentas y consulta los servicios de tu servidor.</p></article><article class="card"><i class="fa-solid fa-user-shield"></i><h2>Acceso seguro</h2><p class="muted">Funciones privadas protegidas por inicio de sesión.</p></article><article class="card"><i class="fa-solid fa-headset"></i><h2>Soporte y planes</h2><p class="muted">Consulta los planes disponibles después de ingresar.</p></article></section>'
-  return self.send(200,body=page('Inicio',body,u))
+  def public_index(self,u):
+   # Serve the user's supplied landing page instead of the old hard-coded splash.
+   index_file=WEB/'index.html'
+   try:
+    body=index_file.read_text(encoding='utf-8')
+   except (OSError,UnicodeError):
+    body='<!doctype html><html lang="es"><meta charset="utf-8"><title>Kevin tech tutorials</title><p>No se pudo cargar index.html.</p></html>'
+   body=body.replace('href="/login"','href="'+PREFIX+'/login"').replace('href="/register"','href="'+PREFIX+'/register"')
+   return self.send(200,ctype='text/html; charset=utf8',body=body)
  def forgot_password_page(self,msg=''):
   return self.send(200,body=tpl('forgot_password.html',None,'Recuperar contraseña',MSG=msg))
  def forgot_password_post(self,d):
