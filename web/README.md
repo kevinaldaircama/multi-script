@@ -72,6 +72,7 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 ### Cambios de mantenimiento (actualización)
 - La portada y la página 404 se sirven desde `templates/`; ya no se usan `web/index.html` ni `web/404.html`.
 - La marca de la portada se configura en Ajustes generales > Título del sitio.
-- La sección Configurar SMTP aparece debajo de Enviar notificaciones e incluye guardado cifrado de contraseña y correo de prueba.
+- Configurar SMTP está en una página separada (`/admin/settings/smtp`), no dentro de Enviar notificaciones. Los mensajes se guardan en la campana y, si SMTP está activado, se envían por email; el resultado indica enviados y fallidos. Incluye contraseña protegida y correo de prueba.
 - SQLite utiliza WAL inicializado al arrancar, `busy_timeout` y espera ampliada para reducir errores `database is locked`.
-- Los enlaces de About, términos, privacidad, cookies y contacto llevan a las rutas de plantillas del panel.
+- Los enlaces públicos de About, términos, privacidad, cookies y contacto abren las plantillas del panel sin obligar a iniciar sesión.
+- Los beneficios de planes reconocen números seguidos de puntos/points/créditos/credits; al aprobar una solicitud se acreditan al saldo de puntos del usuario y se registra el texto de beneficios. El beneficio “sin ads” se respeta en las acciones publicitarias del panel. El período del plan se puede editar desde Configuración de planes.

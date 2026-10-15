@@ -83,6 +83,22 @@ def save_settings(values):
  for k,v in values.items():c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,json.dumps(v,ensure_ascii=False)))
  c.commit();c.close()
 
+def user_has_plan_flag(user_id,flag):
+ try:
+  ent=cfg().get('user_plan_entitlements',{}).get(str(user_id),{})
+  return bool(ent.get(flag,False)) if isinstance(ent,dict) else False
+ except Exception:return False
+
+def record_plan_entitlement(con,user_id,plan_title,benefits,account_nums):
+ # Store plan entitlements in the same SQLite transaction as the order approval.
+ row=con.execute("SELECT value FROM settings WHERE key='__app_config__'").fetchone()
+ try:appconf=json.loads(row['value']) if row else {}
+ except Exception:appconf={}
+ ent=appconf.setdefault('user_plan_entitlements',{});key=str(user_id);old=ent.get(key,0)
+ oldcount=old if isinstance(old,int) else int(old.get('accounts',0) if isinstance(old,dict) else 0)
+ ent[key]={'accounts':oldcount+(sum(int(n) for n in account_nums) if account_nums else 0),'last_plan':plan_title,'benefits':benefits,'support_priority':bool(re.search(r'prioritari[oa]',benefits,re.I)),'no_ads':bool(re.search(r'\bsin\s+ads?\b|sin publicidad',benefits,re.I)),'updated_at':datetime.now().isoformat(timespec='seconds')}
+ con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(appconf,ensure_ascii=False),))
+
 def ensure_admin():
  credential_key()
  DATA.mkdir(parents=True,exist_ok=True)
@@ -243,7 +259,7 @@ def page(title,body,user=None):
   {'<a class="menu-item-link" href="'+PREFIX+'/console"><i class="fa-solid fa-terminal"></i> Consola</a>' if role=='admin' else ''}
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gem"></i> Planes <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/plans"><i class="fa-solid fa-gem"></i> Planes</a>{'<a href="'+PREFIX+'/plans/settings">⚙️ Configuración</a>' if role=='admin' else ''}<a href="{PREFIX}/plans/history"><i class="fa-solid fa-receipt"></i> Historial</a><a href="{PREFIX}/plans/invoice"><i class="fa-solid fa-file-invoice"></i> Recibos y PDF</a></div></div>
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-screwdriver-wrench"></i> Herramientas <span>⌄</span></button><div class="submenu">{'<a href="'+PREFIX+'/tools/backup"><i class="fa-solid fa-database"></i> Backup y restauración</a><a href="'+PREFIX+'/tools/block-torrent"><i class="fa-solid fa-ban"></i> Block Torrent</a><a href="'+PREFIX+'/tools/archivo-online"><i class="fa-solid fa-folder-open"></i> Archivo Online</a><a href="'+PREFIX+'/tools/speedtest"><i class="fa-solid fa-gauge-high"></i> Speedtest</a><a href="'+PREFIX+'/tools/detalles-vps"><i class="fa-solid fa-server"></i> Detalles VPS</a><a href="'+PREFIX+'/tools/block-ads"><i class="fa-solid fa-shield-halved"></i> Block Ads</a>' if role=='admin' else ''}<a href="{PREFIX}/tools/scanner"><i class="fa-solid fa-magnifying-glass"></i> Scanner</a><a href="{PREFIX}/tools/payloads"><i class="fa-solid fa-bolt"></i> Generador de Payloads</a></div></div>
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i> Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a><a href="'+PREFIX+'/admin/notifications#smtp"><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</a>' if role=='admin' else ''}</div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i> Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a><a href="'+PREFIX+'/admin/settings/smtp"><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</a>' if role=='admin' else ''}</div></div>
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-circle-info"></i> About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about"><i class="fa-solid fa-building"></i> Sobre nosotros</a><a href="{PREFIX}/about?section=privacy"><i class="fa-solid fa-lock"></i> Política de privacidad</a><a href="{PREFIX}/about?section=cookies"><i class="fa-solid fa-cookie-bite"></i> Política de cookies</a><a href="{PREFIX}/about?section=terms"><i class="fa-solid fa-file-contract"></i> Términos y condiciones</a><a href="{PREFIX}/about?section=social"><i class="fa-solid fa-share-nodes"></i> Redes sociales y contacto</a></div></div>
   </div><div class="theme-actions"><button type="button" class="menu-item-link" id="themeToggle"><i class="fa-solid fa-circle-half-stroke"></i> Cambiar a modo claro</button><a class="menu-item-link exit" href="{PREFIX}/logout"><i class="fa-solid fa-right-from-bracket"></i> Salir</a></div></aside>'''
  else:toggle='';sidebar=''
@@ -297,7 +313,7 @@ class Handler(BaseHTTPRequestHandler):
  def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
   p=self.route_path();u=self.session()
-  routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
+  routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/admin/settings/smtp':lambda:self.smtp_settings(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
   if p in ('/','/index','/index.html'):return self.public_index(u)
   if p=='/logout':
    c=self.cookies().get('kt_session');
@@ -309,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
   p=self.route_path();ctype=self.headers.get('Content-Type','');d=self.read_multipart() if ctype.lower().startswith('multipart/form-data') else self.read_post();u=self.session()
-  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/forgot-password':lambda:self.forgot_password_post(d),'/reset-password':lambda:self.reset_password_post(d),'/payments/webhook':lambda:self.payment_webhook(),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
+  routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/forgot-password':lambda:self.forgot_password_post(d),'/reset-password':lambda:self.reset_password_post(d),'/payments/webhook':lambda:self.payment_webhook(),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/admin/settings/smtp':lambda:self.smtp_settings_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
   if p in routes:return routes[p]()
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def tool_page(self,u,slug,title,admin_only=False):
@@ -685,7 +701,7 @@ class Handler(BaseHTTPRequestHandler):
    if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   # A configured ad gate is mandatory before account creation.
   conf=cfg();ad_count=int(conf.get('ads',{}).get('create',0) or 0)
-  if u['role']!='admin' and conf.get('ads_enabled') and ad_count>0:
+  if u['role']!='admin' and not user_has_plan_flag(u['id'],'no_ads') and conf.get('ads_enabled') and ad_count>0:
    token=secrets.token_urlsafe(32);payload={k:v[0] for k,v in d.items() if k not in ('ad_token',)}
    c=db();c.execute('INSERT INTO ad_tokens(token,user_id,action,account_id,expires,completed,payload) VALUES(?,?,?,?,?,?,?)',(token,int(u['id']), 'create',None,now()+TOKEN_TTL,0,json.dumps(payload)));c.commit();c.close()
    return self.redirect('/ad/watch?token='+token)
@@ -744,7 +760,7 @@ class Handler(BaseHTTPRequestHandler):
   except:return self.send(400,body='ID inválido')
   if u['role']!='admin':
    conf=cfg();count=int(conf.get('ads',{}).get('delete',0) or 0)
-   if conf.get('ads_enabled') and count>0:return self.start_ad_action(u,'delete',aid,{'id':str(aid)})
+   if not user_has_plan_flag(u['id'],'no_ads') and conf.get('ads_enabled') and count>0:return self.start_ad_action(u,'delete',aid,{'id':str(aid)})
   return self.delete_account_now(u,{'id':str(aid)})
  def delete_account_now(self,u,d):
   try:aid=int(self.val(d,'id'))
@@ -762,7 +778,7 @@ class Handler(BaseHTTPRequestHandler):
    st=site_settings();need=max(1,int(st.get('quota_renew_points',4)))
    if int(u.get('referral_points',0))<need:return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(need)+' puntos para renovar esta cuenta.</div><a class="btn" href="'+PREFIX+'/referrals">Ir a referidos</a>'))
    conf=cfg();count=int(conf.get('ads',{}).get('renew',0) or 0)
-   if conf.get('ads_enabled') and count>0:return self.start_ad_action(u,'renew',aid,{'id':str(aid)})
+   if not user_has_plan_flag(u['id'],'no_ads') and conf.get('ads_enabled') and count>0:return self.start_ad_action(u,'renew',aid,{'id':str(aid)})
   return self.renew_account_now(u,{'id':str(aid),'days':self.val(d,'days','')})
  def renew_account_now(self,u,d):
   if not u:return self.send(403,body='403')
@@ -782,7 +798,7 @@ class Handler(BaseHTTPRequestHandler):
   c.close();return self.send(200,body=tpl('message.html',u,'Renovar',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/account?id=%s">Volver</a>'%('oktxt' if ok else 'bad',html_escape(msg),PREFIX,aid)))
  def start_ad_action(self,u,action,aid,payload):
   conf=cfg();count=int(conf.get('ads',{}).get(action,0) or 0)
-  if u['role']=='admin' or not conf.get('ads_enabled') or count<=0:return None
+  if u['role']=='admin' or user_has_plan_flag(u['id'],'no_ads') or not conf.get('ads_enabled') or count<=0:return None
   token=secrets.token_urlsafe(32);c=db();c.execute('INSERT INTO ad_tokens(token,user_id,action,account_id,expires,completed,payload) VALUES(?,?,?,?,?,?,?)',(token,int(u['id']),action,aid,now()+TOKEN_TTL,0,json.dumps(payload)));c.commit();c.close();return self.redirect('/ad/watch?token='+token)
  def admin(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
@@ -829,13 +845,13 @@ class Handler(BaseHTTPRequestHandler):
   return plans
  def plans(self,u):
   if not u:return self.redirect('/login')
-  conf=cfg();currency=conf.get('currency_symbol') or site_settings().get('currency_symbol','S/') or 'S/';plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p class="plan-benefits">'+html_escape(x.get('benefits',''))+'</p><p><b>Precio: '+html_escape(currency)+' '+html_escape(x.get('price','0'))+'</b></p><button type="button" class="btn primary" data-plan-buy data-id="'+html_escape(x.get('id',''))+'" data-title="'+html_escape(x.get('title','Plan'))+'" data-benefits="'+html_escape(x.get('benefits',''))+'" data-price="'+html_escape(x.get('price','0'))+'" data-currency="'+html_escape(currency)+'" data-period=""><i class="fa-solid fa-cart-shopping"></i> Solicitar plan</button></div>' for x in plans) or '<p>No hay planes disponibles.</p>';manuals_html=''.join('<div class="manual-payment-option" data-name="'+html_escape(m.get('name',''))+'" data-info="'+html_escape(m.get('info',''))+'"></div>' for m in conf.get('manual_payment_methods',[]));cards += '<div id="manualPaymentOptions" style="display:none">'+manuals_html+'</div>'
+  conf=cfg();currency=conf.get('currency_symbol') or site_settings().get('currency_symbol','S/') or 'S/';plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p class="plan-benefits">'+html_escape(x.get('benefits','')).replace('\n','<br>')+'</p><p class="muted">'+html_escape(x.get('period',''))+'</p><p><b>Precio: '+html_escape(currency)+' '+html_escape(x.get('price','0'))+'</b></p><button type="button" class="btn primary" data-plan-buy data-id="'+html_escape(x.get('id',''))+'" data-title="'+html_escape(x.get('title','Plan'))+'" data-benefits="'+html_escape(x.get('benefits',''))+'" data-price="'+html_escape(x.get('price','0'))+'" data-currency="'+html_escape(currency)+'" data-period="'+html_escape(x.get('period',''))+'"><i class="fa-solid fa-cart-shopping"></i> Solicitar plan</button></div>' for x in plans) or '<p>No hay planes disponibles.</p>';manuals_html=''.join('<div class="manual-payment-option" data-name="'+html_escape(m.get('name',''))+'" data-info="'+html_escape(m.get('info',''))+'"></div>' for m in conf.get('manual_payment_methods',[]));cards += '<div id="manualPaymentOptions" style="display:none">'+manuals_html+'</div>'
   return self.send(200,body=tpl('plans.html',u,'Planes',CARDS=cards))
  def plans_settings(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
   c=cfg();manuals=c.get('manual_payment_methods',[])
-  rows=''.join('<div class="card"><form method="post"><input type="hidden" name="id" value="'+html_escape(x.get('id',''))+'"><label>Título</label><input class="input" name="title" value="'+html_escape(x.get('title',''))+'"><label>Beneficios (cada beneficio en una línea)</label><textarea class="input" name="benefits" rows="4">'+html_escape(x.get('benefits',''))+'</textarea><label>Precio (0.00 = gratis)</label><input class="input" name="price" type="number" min="0" step="0.01" value="'+html_escape(x.get('price','0'))+'"><button class="btn primary" name="action" value="save">Guardar plan</button> <button class="btn danger" name="action" value="delete">Eliminar</button></form></div>' for x in self.plans_data())
-  rows+='<div class="card"><h2>Agregar plan</h2><form method="post"><input type="hidden" name="id" value=""><label>Título</label><input class="input" name="title" required><label>Beneficios (cada beneficio en una línea)</label><textarea class="input" name="benefits" rows="4" required></textarea><label>Precio (0.00 = gratis)</label><input class="input" name="price" type="number" min="0" step="0.01" required><button class="btn primary" name="action" value="save">Agregar plan</button></form></div>'
+  rows=''.join('<div class="card"><form method="post"><input type="hidden" name="id" value="'+html_escape(x.get('id',''))+'"><label>Título</label><input class="input" name="title" value="'+html_escape(x.get('title',''))+'"><label>Beneficios (cada beneficio en una línea)</label><textarea class="input" name="benefits" rows="4">'+html_escape(x.get('benefits',''))+'</textarea><label>Periodo</label><input class="input" name="period" value="'+html_escape(x.get('period','mensual'))+'" placeholder="mensual, anual, único"><label>Precio (0.00 = gratis)</label><input class="input" name="price" type="number" min="0" step="0.01" value="'+html_escape(x.get('price','0'))+'"><button class="btn primary" name="action" value="save">Guardar plan</button> <button class="btn danger" name="action" value="delete">Eliminar</button></form></div>' for x in self.plans_data())
+  rows+='<div class="card"><h2>Agregar plan</h2><form method="post"><input type="hidden" name="id" value=""><label>Título</label><input class="input" name="title" required><label>Beneficios (cada beneficio en una línea)</label><textarea class="input" name="benefits" rows="4" required></textarea><label>Periodo</label><input class="input" name="period" value="mensual" placeholder="mensual, anual, único"><label>Precio (0.00 = gratis)</label><input class="input" name="price" type="number" min="0" step="0.01" required><button class="btn primary" name="action" value="save">Agregar plan</button></form></div>'
   manuals_html=''.join('<div class="notice"><b>'+html_escape(m.get('name','Pago manual'))+'</b><p>'+html_escape(m.get('info',''))+'</p><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="delete_manual"><input type="hidden" name="id" value="'+html_escape(m.get('id',''))+'"><button class="btn danger">Eliminar método</button></form></div>' for m in manuals)
   payment_box='<div class="card"><h2><i class="fa-solid fa-coins"></i> Moneda local</h2><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="currency"><label>Símbolo local (ej. S/, $, MXN, COP)</label><input class="input" name="currency_symbol" maxlength="8" value="'+html_escape(c.get('currency_symbol') or site_settings().get('currency_symbol','S/'))+'" required><label>Código ISO para Mercado Pago (ej. PEN, BRL, MXN)</label><input class="input" name="payment_currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="'+html_escape(c.get('payment_currency_code','PEN'))+'" required><label>Moneda para PayPal (recomendado USD)</label><input class="input" name="paypal_currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="'+html_escape(c.get('paypal_currency_code','USD'))+'" required><p class="muted small">PayPal no admite todas las monedas locales. El precio del plan se enviará en la moneda indicada para cada pasarela; asegúrate de que el importe del plan corresponda a esa moneda.</p><button class="btn primary">Guardar moneda</button></form></div><div class="card"><h2><i class="fa-solid fa-wallet"></i> Métodos de pago</h2><button type="button" class="btn primary" data-open-dialog="manualDialog">Agregar método manual</button><dialog class="config-dialog" id="manualDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Agregar pago manual</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="add_manual"><label>Nombre del método</label><input class="input" name="manual_name" placeholder="Ej. Yape, transferencia" required><label>Información e instrucciones</label><textarea class="input" name="manual_info" required></textarea><button class="btn primary">Guardar método manual</button></form></dialog>'+manuals_html+'<hr><button type="button" class="btn primary" data-open-dialog="paypalDialog">Configurar PayPal</button><dialog class="config-dialog" id="paypalDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales PayPal</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="paypal"><label>Client ID</label><input class="input" name="paypal_client_id" value="'+html_escape(decrypt_credential(c.get('paypal_client_id','')) if c.get('paypal_client_id') else '')+'"><label>Client Secret</label><input class="input" name="paypal_secret" type="password" placeholder="Dejar vacío para conservar"><label>Modo</label><select class="input" name="paypal_mode"><option value="sandbox">Sandbox / pruebas</option><option value="live" '+('selected' if c.get('paypal_mode')=='live' else '')+'>Producción</option></select><button class="btn primary">Guardar PayPal</button></form></dialog><hr><button type="button" class="btn primary" data-open-dialog="mpDialog">Configurar Mercado Pago</button><dialog class="config-dialog" id="mpDialog"><button type="button" class="modal-x" data-close-dialog>×</button><h3>Credenciales Mercado Pago</h3><form method="post" action="'+PREFIX+'/plans/settings/payments"><input type="hidden" name="action" value="mercadopago"><label>Access Token</label><input class="input" name="mp_access_token" type="password" placeholder="Dejar vacío para conservar"><label>Public Key</label><input class="input" name="mp_public_key" value="'+html_escape(decrypt_credential(c.get('mp_public_key','')) if c.get('mp_public_key') else '')+'"><button class="btn primary">Guardar Mercado Pago</button></form></dialog><p class="muted small">Las credenciales se guardan protegidas. El cobro automático requiere configurar y probar las notificaciones/webhooks oficiales del proveedor; guardar credenciales por sí solo no confirma pagos.</p></div>'
   return self.send(200,body=tpl('plans_settings.html',u,'Configuración de planes',ROWS=rows+payment_box))
@@ -892,37 +908,48 @@ class Handler(BaseHTTPRequestHandler):
   if not u or u.get('role')!='admin':return self.redirect('/login')
   c=db();rows=c.execute('SELECT * FROM notifications WHERE user_id IS NULL ORDER BY id DESC LIMIT 50').fetchall();c.close()
   html=''.join('<div class="notice"><b>'+html_escape(x['title'])+'</b><p>'+html_escape(x['message'])+'</p><small>'+html_escape(x['created_at'])+'</small></div>' for x in rows) or '<p class="muted">Todavía no has enviado notificaciones.</p>'
-  conf=cfg(); smtp_enabled=bool(conf.get('smtp_enabled')); smtp_pass=decrypt_credential(conf.get('smtp_password','')) if conf.get('smtp_password') else ''; smtp_box='<section id="smtp" class="hero"><h2><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</h2><p>Configura el servidor de correo para enviar avisos por email. La contraseña se guarda cifrada en el servidor.</p></section><div class="card form"><form method="post"><input type="hidden" name="action" value="smtp_save"><label><input type="checkbox" name="smtp_enabled" '+('checked' if smtp_enabled else '')+'> Activar envío por correo</label><label>Servidor SMTP</label><input class="input" name="smtp_host" value="'+html_escape(conf.get('smtp_host',''))+'" placeholder="smtp.gmail.com" required><label>Puerto</label><input class="input" type="number" name="smtp_port" min=1 max=65535 value="'+html_escape(conf.get('smtp_port',587))+'" required><label>Seguridad</label><select class="input" name="smtp_security"><option value="starttls" '+('selected' if conf.get('smtp_security','starttls')=='starttls' else '')+'>STARTTLS (recomendado, puerto 587)</option><option value="ssl" '+('selected' if conf.get('smtp_security')=='ssl' else '')+'>SSL/TLS (normalmente puerto 465)</option><option value="none" '+('selected' if conf.get('smtp_security')=='none' else '')+'>Sin cifrado (no recomendado)</option></select><label>Usuario SMTP</label><input class="input" name="smtp_username" value="'+html_escape(conf.get('smtp_username',''))+'"><label>Contraseña SMTP</label><input class="input" type="password" name="smtp_password" placeholder="Dejar vacío para conservar la actual"><label>Correo remitente</label><input class="input" type="email" name="smtp_from_email" value="'+html_escape(conf.get('smtp_from_email',''))+'" required><label>Nombre remitente</label><input class="input" name="smtp_from_name" value="'+html_escape(conf.get('smtp_from_name','KevinTech Multi Script'))+'"><button class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Guardar SMTP</button></form><form method="post" style="margin-top:14px"><input type="hidden" name="action" value="smtp_test"><label>Enviar correo de prueba a</label><input class="input" type="email" name="test_email" value="'+html_escape(conf.get('contact_email',''))+'" required><button class="btn"><i class="fa-solid fa-paper-plane"></i> Enviar prueba</button></form></div>'; body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>Las notificaciones se mostrarán en la campana de los usuarios.</p></div><div class="card form"><form method="post"><label>Título</label><input class="input" name="title" required maxlength="160"><label>Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label>Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary"><i class="fa-solid fa-paper-plane"></i> Enviar notificación</button></form></div>'+smtp_box+'<div class="hero"><h2><i class="fa-solid fa-clock-rotate-left"></i> Enviadas recientemente</h2></div>'+html
-  return self.send(200,body=page('Notificaciones',body,u))
+  body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>El aviso aparecerá en la campana del panel y, si SMTP está activado, también se enviará por correo a los usuarios que tengan email registrado.</p><p><a class="btn" href="'+PREFIX+'/admin/settings/smtp"><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</a></p></div><div class="card form"><form method="post"><label>Título</label><input class="input" name="title" required maxlength="160"><label>Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label>Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary"><i class="fa-solid fa-paper-plane"></i> Enviar notificación y correo</button></form></div><div class="hero"><h2><i class="fa-solid fa-clock-rotate-left"></i> Enviadas recientemente</h2></div>'+html
+  return self.send(200,body=page('Enviar notificaciones',body,u))
+ def smtp_settings(self,u):
+  if not u or u.get('role')!='admin':return self.redirect('/login')
+  conf=cfg()
+  return self.send(200,body=tpl('smtp_settings.html',u,'Configuración SMTP',SMTP_ENABLED='checked' if conf.get('smtp_enabled') else '',SMTP_HOST=html_escape(conf.get('smtp_host','')),SMTP_PORT=html_escape(conf.get('smtp_port',587)),SMTP_STARTTLS='selected' if conf.get('smtp_security','starttls')=='starttls' else '',SMTP_SSL='selected' if conf.get('smtp_security')=='ssl' else '',SMTP_NONE='selected' if conf.get('smtp_security')=='none' else '',SMTP_USER=html_escape(conf.get('smtp_username','')),SMTP_FROM=html_escape(conf.get('smtp_from_email','')),SMTP_NAME=html_escape(conf.get('smtp_from_name','KevinTech Multi Script')),TEST_EMAIL=html_escape(conf.get('contact_email',''))))
+ def smtp_settings_post(self,u,d):
+  if not u or u.get('role')!='admin':return self.send(403,body='403')
+  conf=cfg();action=self.val(d,'action')
+  if action=='smtp_save':
+   try:port=max(1,min(65535,int(self.val(d,'smtp_port','587'))))
+   except ValueError:return self.send(400,body='Puerto SMTP inválido')
+   security=self.val(d,'smtp_security','starttls')
+   if security not in ('starttls','ssl','none'):security='starttls'
+   conf.update({'smtp_enabled':'smtp_enabled' in d,'smtp_host':self.val(d,'smtp_host')[:255],'smtp_port':port,'smtp_username':self.val(d,'smtp_username')[:255],'smtp_from_email':self.val(d,'smtp_from_email')[:254],'smtp_from_name':self.val(d,'smtp_from_name','KevinTech Multi Script')[:160],'smtp_security':security})
+   if self.val(d,'smtp_password'):conf['smtp_password']=crypt_credential(self.val(d,'smtp_password'))
+   save_cfg(conf);return self.redirect('/admin/settings/smtp')
+  if action=='smtp_test':
+   try:
+    recipient=self.val(d,'test_email');self.send_smtp_email(conf,recipient,'Prueba SMTP','La configuración SMTP de KevinTech Multi Script funciona correctamente.')
+    return self.send(200,body=tpl('message.html',u,'Prueba SMTP',MESSAGE='<div class="notice oktxt"><i class="fa-solid fa-circle-check"></i> Correo de prueba enviado a '+html_escape(recipient)+'.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/smtp">Volver a SMTP</a>'))
+   except Exception as e:
+    log('SMTP TEST ERROR: '+str(e));return self.send(400,body=tpl('message.html',u,'Error SMTP',MESSAGE='<div class="notice bad"><i class="fa-solid fa-triangle-exclamation"></i> No se pudo enviar el correo: '+html_escape(str(e))+'</div><a class="btn primary" href="'+PREFIX+'/admin/settings/smtp">Volver a SMTP</a>'))
+  return self.send(400,body='Acción SMTP inválida')
  def admin_notifications_post(self,u,d):
   if not u or u.get('role')!='admin':return self.send(403,body='403')
   action=self.val(d,'action')
-  if action in ('smtp_save','smtp_test'):
-   conf=cfg()
-   if action=='smtp_save':
-    try: port=max(1,min(65535,int(self.val(d,'smtp_port','587'))))
-    except ValueError: return self.send(400,body='Puerto SMTP inválido')
-    conf.update({'smtp_enabled':'smtp_enabled' in d,'smtp_host':self.val(d,'smtp_host')[:255],'smtp_port':port,'smtp_username':self.val(d,'smtp_username')[:255],'smtp_from_email':self.val(d,'smtp_from_email')[:254],'smtp_from_name':self.val(d,'smtp_from_name','KevinTech Multi Script')[:160],'smtp_security':self.val(d,'smtp_security','starttls') if self.val(d,'smtp_security','starttls') in ('starttls','ssl','none') else 'starttls'})
-    if self.val(d,'smtp_password'): conf['smtp_password']=crypt_credential(self.val(d,'smtp_password'))
-    save_cfg(conf); return self.redirect('/admin/notifications#smtp')
-   try:
-    recipient=self.val(d,'test_email'); self.send_smtp_email(conf,recipient,'Prueba SMTP','La configuración SMTP de KevinTech Multi Script funciona correctamente.')
-    return self.send(200,body=tpl('message.html',u,'Prueba SMTP',MESSAGE='<div class="notice oktxt"><i class="fa-solid fa-circle-check"></i> Correo de prueba enviado a '+html_escape(recipient)+'.</div><a class="btn primary" href="'+PREFIX+'/admin/notifications#smtp">Volver</a>'))
-   except Exception as e:
-    log('SMTP TEST ERROR: '+str(e)); return self.send(400,body=tpl('message.html',u,'Error SMTP',MESSAGE='<div class="notice bad"><i class="fa-solid fa-triangle-exclamation"></i> No se pudo enviar el correo: '+html_escape(str(e))+'</div><a class="btn primary" href="'+PREFIX+'/admin/notifications#smtp">Volver</a>'))
+  if action in ('smtp_save','smtp_test'):return self.redirect('/admin/settings/smtp')
   title=self.val(d,'title');message=self.val(d,'message')
   if not title or not message:return self.send(400,body='Título y mensaje son obligatorios')
   self.add_notification(None,title,message,'broadcast')
   c=db();users=c.execute('SELECT id,email FROM users WHERE active=1').fetchall();c.executemany('INSERT INTO notifications(user_id,title,message,kind,created_at) VALUES(?,?,?,?,?)',[(x['id'],title[:160],message[:4000],'broadcast',datetime.now().isoformat(timespec='seconds')) for x in users]);c.commit();c.close()
-  conf=cfg()
+  conf=cfg();sent=0;failed=0;with_email=sum(1 for x in users if x['email'])
   if conf.get('smtp_enabled'):
-   sent=0
    for x in users:
     if x['email']:
-     try: self.send_smtp_email(conf,x['email'],title,message); sent+=1
-     except Exception as e: log('SMTP NOTIFICATION ERROR user_id=%s: %s'%(x['id'],e))
-   log('SMTP notification sent=%s total_with_email=%s'%(sent,sum(1 for x in users if x['email'])))
-  return self.redirect('/admin/notifications')
+     try:self.send_smtp_email(conf,x['email'],title,message);sent+=1
+     except Exception as e:failed+=1;log('SMTP NOTIFICATION ERROR user_id=%s: %s'%(x['id'],e))
+   log('SMTP notification sent=%s failed=%s total_with_email=%s'%(sent,failed,with_email))
+   detail='Notificación guardada en el panel. Correos enviados: %s; fallidos: %s; usuarios con email: %s.'%(sent,failed,with_email)
+  else:detail='Notificación guardada en el panel. El envío por correo está desactivado; activa SMTP para enviar emails.'
+  return self.send(200,body=tpl('message.html',u,'Notificación enviada',MESSAGE='<div class="notice '+('oktxt' if conf.get('smtp_enabled') and failed==0 else '')+'">'+html_escape(detail)+'</div><a class="btn primary" href="'+PREFIX+'/admin/notifications">Volver a notificaciones</a>'))
  def notifications(self,u):
   if not u:return self.redirect('/login')
   c=db();rows=c.execute('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 100',(u['id'],)).fetchall();c.execute('UPDATE notifications SET is_read=1 WHERE user_id=?',(u['id'],));c.commit();c.close()
@@ -937,22 +964,19 @@ class Handler(BaseHTTPRequestHandler):
   if not order:c.close();return self.send(404,body='Solicitud no encontrada')
   if action=='delete':c.execute('DELETE FROM plan_orders WHERE id=?',(oid,));c.commit();c.close();return self.redirect('/plans/history')
   if action not in ('approve','reject'):c.close();return self.send(400,body='Acción inválida')
-  new_status='aprobado' if action=='approve' else 'rechazado'
+  new_status='aprobado' if action=='approve' else 'rechazado';benefits=''
   # Benefits are only applied once, on first transition to approved.
   if action=='approve' and order['status']=='pendiente':
    plan=next((x for x in self.plans_data() if x.get('id')==order['plan_id']),{})
    benefits=plan.get('benefits','')
-   nums=re.findall(r'(?i)(\d+)\s*(?:puntos?|points?)',benefits)
+   nums=re.findall(r'(?i)(\d+)\s*(?:puntos?|points?|cr[eé]ditos?|credits?)',benefits)
    points=sum(int(n) for n in nums) if nums else 0
    if points:c.execute('UPDATE users SET referral_points=referral_points+? WHERE id=?',(points,order['user_id']))
    account_nums=re.findall(r'(?i)(\d+)\s*(?:cuentas?|accounts?)',benefits)
-   if account_nums:
-    try:
-     entcfg=cfg();ent=entcfg.setdefault('user_plan_entitlements',{});key=str(order['user_id']);ent[key]=int(ent.get(key,0))+sum(int(n) for n in account_nums);save_cfg(entcfg)
-    except Exception:pass
+   record_plan_entitlement(c,order['user_id'],order['plan_title'],benefits,account_nums)
   c.execute('UPDATE plan_orders SET status=? WHERE id=?',(new_status,oid));c.commit();uid=order['user_id'];c.close()
   title='Plan aprobado' if action=='approve' else 'Plan rechazado'
-  message=('Tu solicitud para el plan '+order['plan_title']+' fue aceptada. Los beneficios configurados se han aplicado a tu cuenta.' if action=='approve' else 'Tu solicitud para el plan '+order['plan_title']+' fue rechazada. No se aplicaron beneficios.')
+  message=('Tu solicitud para el plan '+order['plan_title']+' fue aceptada. Se acreditaron los puntos/créditos numéricos detectados y se guardaron los beneficios del plan. Beneficios: '+benefits if action=='approve' else 'Tu solicitud para el plan '+order['plan_title']+' fue rechazada. No se aplicaron beneficios.')
   self.add_notification(uid,title,message,'plan_approved' if action=='approve' else 'plan_rejected')
   return self.send(200,body=tpl('message.html',u,'Acción completada',MESSAGE='<div class="expiry-modal" style="position:relative;inset:auto;background:transparent"><div class="expiry-modal-card"><h2><i class="fa-solid '+('fa-trash' if action=='delete' else ('fa-circle-check' if action=='approve' else 'fa-circle-xmark'))+'"></i> '+html_escape('Solicitud eliminada' if action=='delete' else ('Solicitud aprobada' if action=='approve' else 'Solicitud rechazada'))+'</h2><p>'+html_escape('Solicitud eliminada.' if action=='delete' else ('Beneficios aplicados.' if action=='approve' else 'No se aplicaron beneficios.'))+'</p><a class="btn primary" href="'+PREFIX+'/plans/history">Entendido</a></div></div>'))
  def payment_request(self,url,method='GET',payload=None,headers=None):
@@ -1029,12 +1053,11 @@ class Handler(BaseHTTPRequestHandler):
  def apply_paid_order(self,oid,provider_ref=''):
   c=db();self.plan_orders_init(c);order=c.execute('SELECT * FROM plan_orders WHERE id=?',(oid,)).fetchone()
   if not order or order['status']=='aprobado':c.close();return False
-  plan=next((x for x in self.plans_data() if x.get('id')==order['plan_id']),{});benefits=plan.get('benefits','');nums=re.findall(r'(?i)(\d+)\s*(?:puntos?|points?)',benefits);points=sum(int(n) for n in nums) if nums else 0
+  plan=next((x for x in self.plans_data() if x.get('id')==order['plan_id']),{});benefits=plan.get('benefits','');nums=re.findall(r'(?i)(\d+)\s*(?:puntos?|points?|cr[eé]ditos?|credits?)',benefits);points=sum(int(n) for n in nums) if nums else 0
   if points:c.execute('UPDATE users SET referral_points=referral_points+? WHERE id=?',(points,order['user_id']))
   account_nums=re.findall(r'(?i)(\d+)\s*(?:cuentas?|accounts?)',benefits)
-  if account_nums:
-   entcfg=cfg();ent=entcfg.setdefault('user_plan_entitlements',{});key=str(order['user_id']);ent[key]=int(ent.get(key,0))+sum(int(n) for n in account_nums);save_cfg(entcfg)
-  c.execute("UPDATE plan_orders SET status='aprobado' WHERE id=?",(oid,));c.commit();uid=order['user_id'];c.close();self.add_notification(uid,'Plan aprobado','Tu pago del plan '+order['plan_title']+' fue confirmado y sus beneficios se aplicaron.','plan_approved');return True
+  record_plan_entitlement(c,order['user_id'],order['plan_title'],benefits,account_nums)
+  c.execute("UPDATE plan_orders SET status='aprobado' WHERE id=?",(oid,));c.commit();uid=order['user_id'];c.close();self.add_notification(uid,'Plan aprobado','Tu pago del plan '+order['plan_title']+' fue confirmado. Se acreditaron los puntos/créditos numéricos detectados y se guardaron los beneficios del plan. Beneficios: '+benefits,'plan_approved');return True
  def payment_return(self,u):
   query=parse_qs(urlparse(self.path).query);provider=query.get('provider',[''])[0];oid=query.get('order',[''])[0]
   if not u:return self.redirect('/login')
@@ -1106,7 +1129,6 @@ class Handler(BaseHTTPRequestHandler):
   for off in offsets[1:]:out.extend(f'{off:010d} 00000 n \n'.encode())
   out.extend(b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF');return bytes(out)
  def about(self,u):
-  if not u:return self.redirect('/login')
   st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};edit=''
   if section=='social':
    title='Redes sociales y contacto';parts=[]
