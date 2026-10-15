@@ -494,7 +494,10 @@ class Handler(BaseHTTPRequestHandler):
   except (OSError, UnicodeError) as e:
    log('No se pudo leer templates/index.html: '+repr(e))
    return self.send(500,body='No se encontró web/templates/index.html. Reinstala/actualiza los archivos web.')
-  # Enlazar los botones de acceso y registro a las rutas reales del servidor.
+  # La marca y el título de la portada proceden de Ajustes generales.
+  site_title=html_escape(str(site_settings().get('site_title') or 'KevinTech Multi Script'))
+  html=html.replace('__SITE_TITLE__', site_title)
+  # Enlazar botones y páginas informativas a las rutas reales del servidor.
   html=html.replace('href="login.html"', 'href="'+PREFIX+'/login"')
   html=html.replace('href="register.html"', 'href="'+PREFIX+'/register"')
   html=html.replace("href='login.html'", "href='"+PREFIX+"/login'")
@@ -511,11 +514,18 @@ class Handler(BaseHTTPRequestHandler):
    try:
     import smtplib
     from email.message import EmailMessage
-    smtp_host=os.environ.get('SMTP_HOST','');smtp_port=int(os.environ.get('SMTP_PORT','587'));smtp_user=os.environ.get('SMTP_USER','');smtp_pass=os.environ.get('SMTP_PASS','');mail_from=os.environ.get('SMTP_FROM',smtp_user)
+    smtp_cfg=cfg();smtp_host=str(smtp_cfg.get('smtp_host') or os.environ.get('SMTP_HOST',''));smtp_port=int(smtp_cfg.get('smtp_port') or os.environ.get('SMTP_PORT','587'));smtp_user=str(smtp_cfg.get('smtp_user') or os.environ.get('SMTP_USER',''));smtp_pass=decrypt_credential(smtp_cfg.get('smtp_pass','')) if smtp_cfg.get('smtp_pass') else os.environ.get('SMTP_PASS','');mail_from=str(smtp_cfg.get('smtp_from') or os.environ.get('SMTP_FROM',smtp_user))
     if smtp_host and mail_from:
      msg=EmailMessage();msg['Subject']='Recuperación de contraseña';msg['From']=mail_from;msg['To']=email;msg.set_content('Usa este enlace temporal (válido por 10 minutos) para cambiar tu contraseña: '+link+'\nSi no lo solicitaste, ignora este mensaje.')
-     with smtplib.SMTP(smtp_host,smtp_port,timeout=15) as server:
-      server.starttls();server.login(smtp_user,smtp_pass);server.send_message(msg)
+     if smtp_cfg.get('smtp_ssl'):
+      with smtplib.SMTP_SSL(smtp_host,smtp_port,timeout=15) as server:
+       if smtp_user:server.login(smtp_user,smtp_pass)
+       server.send_message(msg)
+     else:
+      with smtplib.SMTP(smtp_host,smtp_port,timeout=15) as server:
+       server.ehlo();server.starttls();server.ehlo()
+       if smtp_user:server.login(smtp_user,smtp_pass)
+       server.send_message(msg)
     else:log('Password reset email not sent: SMTP_HOST/SMTP_FROM not configured')
    except Exception as e:log('Password reset email error: '+str(e))
   else:c.close()
@@ -862,10 +872,21 @@ class Handler(BaseHTTPRequestHandler):
   if not u or u.get('role')!='admin':return self.redirect('/login')
   c=db();rows=c.execute('SELECT * FROM notifications WHERE user_id IS NULL ORDER BY id DESC LIMIT 50').fetchall();c.close()
   html=''.join('<div class="notice"><b>'+html_escape(x['title'])+'</b><p>'+html_escape(x['message'])+'</p><small>'+html_escape(x['created_at'])+'</small></div>' for x in rows) or '<p class="muted">Todavía no has enviado notificaciones.</p>'
-  body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>Las notificaciones se mostrarán en la campana de los usuarios.</p></div><div class="card form"><form method="post"><label>Título</label><input class="input" name="title" required maxlength="160"><label>Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label>Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary">Enviar notificación</button></form></div><div class="hero"><h2>Enviadas recientemente</h2></div>'+html
+  sc=cfg(); smtp_host=html_escape(sc.get('smtp_host','')); smtp_port=html_escape(str(sc.get('smtp_port','587'))); smtp_user=html_escape(sc.get('smtp_user','')); smtp_from=html_escape(sc.get('smtp_from','')); smtp_secure='checked' if sc.get('smtp_ssl') else ''
+  body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>Las notificaciones se mostrarán en la campana de los usuarios.</p></div><div class="card form"><form method="post"><label><i class="fa-solid fa-heading"></i> Título</label><input class="input" name="title" required maxlength="160"><label><i class="fa-solid fa-message"></i> Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label><i class="fa-solid fa-users"></i> Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary"><i class="fa-solid fa-paper-plane"></i> Enviar notificación</button></form></div><div class="hero"><h2><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</h2><p>Configura el correo saliente usado para recuperación de contraseñas. La contraseña se guarda cifrada.</p></div><div class="card form"><form method="post" action="'+PREFIX+'/admin/notifications"><input type="hidden" name="action" value="save_smtp"><label>Servidor SMTP</label><input class="input" name="smtp_host" value="'+smtp_host+'" placeholder="smtp.gmail.com" required><label>Puerto</label><input class="input" type="number" min="1" max="65535" name="smtp_port" value="'+smtp_port+'" required><label>Usuario SMTP</label><input class="input" name="smtp_user" value="'+smtp_user+'" autocomplete="username"><label>Contraseña SMTP</label><input class="input" type="password" name="smtp_pass" autocomplete="new-password" placeholder="Dejar vacío para conservar la actual"><label>Correo remitente</label><input class="input" type="email" name="smtp_from" value="'+smtp_from+'" required><label><input type="checkbox" name="smtp_ssl" '+smtp_secure+'> Usar conexión SSL directa (normalmente puerto 465)</label><p class="muted small">Para el puerto 587 se recomienda STARTTLS; desmarca SSL directa. El puerto 465 normalmente utiliza SSL directo.</p><button class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Guardar SMTP</button></form></div><div class="hero"><h2><i class="fa-solid fa-clock-rotate-left"></i> Enviadas recientemente</h2></div>'+html
   return self.send(200,body=page('Notificaciones',body,u))
  def admin_notifications_post(self,u,d):
   if not u or u.get('role')!='admin':return self.send(403,body='403')
+  if self.val(d,'action')=='save_smtp':
+   host=self.val(d,'smtp_host').strip()[:255]; user=self.val(d,'smtp_user').strip()[:254]; mail_from=self.val(d,'smtp_from').strip()[:254]
+   try:port=max(1,min(65535,int(self.val(d,'smtp_port','587'))))
+   except ValueError:return self.send(400,body='Puerto SMTP inválido.')
+   if not host or not mail_from or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',mail_from):return self.send(400,body='Servidor y correo remitente válidos son obligatorios.')
+   conf=cfg();conf.update({'smtp_host':host,'smtp_port':port,'smtp_user':user,'smtp_from':mail_from,'smtp_ssl':'smtp_ssl' in d})
+   newpass=self.val(d,'smtp_pass')
+   if newpass:conf['smtp_pass']=crypt_credential(newpass)
+   save_cfg(conf)
+   return self.redirect('/admin/notifications')
   title=self.val(d,'title');message=self.val(d,'message')
   if not title or not message:return self.send(400,body='Título y mensaje son obligatorios')
   self.add_notification(None,title,message,'broadcast')
@@ -1054,7 +1075,6 @@ class Handler(BaseHTTPRequestHandler):
   for off in offsets[1:]:out.extend(f'{off:010d} 00000 n \n'.encode())
   out.extend(b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF');return bytes(out)
  def about(self,u):
-  if not u:return self.redirect('/login')
   st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};edit=''
   if section=='social':
    title='Redes sociales y contacto';parts=[]
@@ -1086,5 +1106,5 @@ def delete_ssh(username):
 
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));httpd=ThreadingHTTPServer((HOST,PORT),Handler);httpd.daemon_threads=True;httpd.block_on_close=False;httpd.serve_forever(poll_interval=0.5)
 if __name__=='__main__':main()

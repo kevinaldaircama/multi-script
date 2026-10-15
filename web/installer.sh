@@ -13,6 +13,7 @@ write_service(){ cat > "/etc/systemd/system/$SERVICE" <<EOF2
 Description=KevinTech Web Panel
 After=network-online.target haproxy.service
 Wants=network-online.target
+StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=root
@@ -22,10 +23,11 @@ Environment=PYTHONUNBUFFERED=1
 Environment=KEVINTECH_WEB_PORT=$PORT
 Environment=KEVINTECH_WEB_PREFIX=/
 ExecStart=/usr/bin/python3 $WEB/server.py
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=3
 TimeoutStartSec=30
 TimeoutStopSec=20
+KillSignal=SIGINT
 LimitNOFILE=65535
 [Install]
 WantedBy=multi-user.target
