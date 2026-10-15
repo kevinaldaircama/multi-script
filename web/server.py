@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil, io, zipfile, socket, urllib.request, urllib.error
+import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil, io, zipfile, socket, urllib.request, urllib.error, smtplib, ssl
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -44,7 +45,7 @@ def decrypt_credential(value):
 
 def cfg():
  DATA.mkdir(parents=True,exist_ok=True)
- if not CONFIG.exists(): CONFIG.write_text(json.dumps({'admin_username':'admin','admin_password_hash':'','secret':secrets.token_hex(32),'ads_enabled':True,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':''},indent=2),encoding='utf8')
+ if not CONFIG.exists(): CONFIG.write_text(json.dumps({'admin_username':'admin','admin_password_hash':'','secret':secrets.token_hex(32),'ads_enabled':True,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':'','smtp_enabled':False,'smtp_host':'','smtp_port':587,'smtp_username':'','smtp_password':'','smtp_from_email':'','smtp_from_name':'KevinTech Multi Script','smtp_security':'starttls'},indent=2),encoding='utf8')
  # SQL is the primary store for application configuration; config.json remains a compatibility mirror.
  try:
   con=db();row=con.execute("SELECT value FROM settings WHERE key='__app_config__'").fetchone();con.close()
@@ -57,7 +58,7 @@ def save_cfg(c):
  con=db();con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(c,ensure_ascii=False),));con.commit();con.close()
 
 def db():
- DATA.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB,timeout=10); c.row_factory=sqlite3.Row; c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA foreign_keys=ON')
+ DATA.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA busy_timeout=30000'); c.execute('PRAGMA foreign_keys=ON')
  c.executescript('''CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,referral_code TEXT UNIQUE NOT NULL,referred_by TEXT,referral_points INTEGER NOT NULL DEFAULT 0,referral_renews INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,email TEXT NOT NULL DEFAULT '',language TEXT NOT NULL DEFAULT 'es');
  CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,username TEXT UNIQUE NOT NULL,type TEXT NOT NULL DEFAULT 'ssh',credential TEXT NOT NULL,expiration TEXT,ip_limit INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,role TEXT NOT NULL,expires REAL NOT NULL);
@@ -69,7 +70,6 @@ def db():
  for col,ddl in [('email',"TEXT NOT NULL DEFAULT ''"),('language',"TEXT NOT NULL DEFAULT 'es'")]:
   try:c.execute('ALTER TABLE users ADD COLUMN '+col+' '+ddl)
   except sqlite3.OperationalError:pass
- for k,v in DEFAULT_SETTINGS.items():c.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,json.dumps(v,ensure_ascii=False)))
  c.commit();return c
 
 def site_settings():
@@ -84,12 +84,20 @@ def save_settings(values):
  c.commit();c.close()
 
 def ensure_admin():
- credential_key(); c=cfg(); changed=False
+ credential_key()
+ DATA.mkdir(parents=True,exist_ok=True)
+ try:
+  con=sqlite3.connect(DB,timeout=30); con.execute('PRAGMA busy_timeout=30000'); con.execute('PRAGMA journal_mode=WAL'); con.close()
+ except sqlite3.Error as e: log('SQLite WAL init: '+str(e))
+ con=db()
+ for k,v in DEFAULT_SETTINGS.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,json.dumps(v,ensure_ascii=False)))
+ con.commit(); con.close()
+ c=cfg(); changed=False
  if not c.get('secret'):c['secret']=secrets.token_hex(32);changed=True
  if not c.get('admin_username'):c['admin_username']='admin';changed=True
  if not c.get('admin_password_hash'):
   pw=os.environ.get('WEB_ADMIN_PASS') or secrets.token_urlsafe(12);c['admin_password_hash']=hash_password(pw);c['initial_admin_password']=pw;changed=True
- for k,v in {'ads_enabled':False,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':''}.items():
+ for k,v in {'ads_enabled':False,'ad_provider':'monetag','monetag_zone':'11217882','ads':{'create':0,'delete':0,'renew':0},'server_prefix':PREFIX,'server_domain':'','smtp_enabled':False,'smtp_host':'','smtp_port':587,'smtp_username':'','smtp_password':'','smtp_from_email':'','smtp_from_name':'KevinTech Multi Script','smtp_security':'starttls'}.items():
   if k not in c:c[k]=v;changed=True
  if not c.get('admin_referral_code'):c['admin_referral_code']=secrets.token_urlsafe(7);changed=True
  if not c.get('admin_created_at'):c['admin_created_at']=datetime.now().isoformat(timespec='seconds');changed=True
@@ -235,7 +243,7 @@ def page(title,body,user=None):
   {'<a class="menu-item-link" href="'+PREFIX+'/console"><i class="fa-solid fa-terminal"></i> Consola</a>' if role=='admin' else ''}
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gem"></i> Planes <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/plans"><i class="fa-solid fa-gem"></i> Planes</a>{'<a href="'+PREFIX+'/plans/settings">⚙️ Configuración</a>' if role=='admin' else ''}<a href="{PREFIX}/plans/history"><i class="fa-solid fa-receipt"></i> Historial</a><a href="{PREFIX}/plans/invoice"><i class="fa-solid fa-file-invoice"></i> Recibos y PDF</a></div></div>
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-screwdriver-wrench"></i> Herramientas <span>⌄</span></button><div class="submenu">{'<a href="'+PREFIX+'/tools/backup"><i class="fa-solid fa-database"></i> Backup y restauración</a><a href="'+PREFIX+'/tools/block-torrent"><i class="fa-solid fa-ban"></i> Block Torrent</a><a href="'+PREFIX+'/tools/archivo-online"><i class="fa-solid fa-folder-open"></i> Archivo Online</a><a href="'+PREFIX+'/tools/speedtest"><i class="fa-solid fa-gauge-high"></i> Speedtest</a><a href="'+PREFIX+'/tools/detalles-vps"><i class="fa-solid fa-server"></i> Detalles VPS</a><a href="'+PREFIX+'/tools/block-ads"><i class="fa-solid fa-shield-halved"></i> Block Ads</a>' if role=='admin' else ''}<a href="{PREFIX}/tools/scanner"><i class="fa-solid fa-magnifying-glass"></i> Scanner</a><a href="{PREFIX}/tools/payloads"><i class="fa-solid fa-bolt"></i> Generador de Payloads</a></div></div>
-  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i> Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a>' if role=='admin' else ''}</div></div>
+  <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-gear"></i> Configuración <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/profile"><i class="fa-solid fa-user"></i> Perfil</a>{'<a href="'+PREFIX+'/admin/settings/ads"><i class="fa-solid fa-rectangle-ad"></i> Ajuste de ads</a><a href="'+PREFIX+'/admin/settings/general"><i class="fa-solid fa-sliders"></i> Ajuste general</a><a href="'+PREFIX+'/admin/settings/quotas"><i class="fa-solid fa-calendar-days"></i> Cuotas de creación</a><a href="'+PREFIX+'/admin/notifications"><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</a><a href="'+PREFIX+'/admin/notifications#smtp"><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</a>' if role=='admin' else ''}</div></div>
   <div class="menu-group"><button type="button" class="menu-item has-sub" aria-expanded="false"><i class="fa-solid fa-circle-info"></i> About <span>⌄</span></button><div class="submenu"><a href="{PREFIX}/about"><i class="fa-solid fa-building"></i> Sobre nosotros</a><a href="{PREFIX}/about?section=privacy"><i class="fa-solid fa-lock"></i> Política de privacidad</a><a href="{PREFIX}/about?section=cookies"><i class="fa-solid fa-cookie-bite"></i> Política de cookies</a><a href="{PREFIX}/about?section=terms"><i class="fa-solid fa-file-contract"></i> Términos y condiciones</a><a href="{PREFIX}/about?section=social"><i class="fa-solid fa-share-nodes"></i> Redes sociales y contacto</a></div></div>
   </div><div class="theme-actions"><button type="button" class="menu-item-link" id="themeToggle"><i class="fa-solid fa-circle-half-stroke"></i> Cambiar a modo claro</button><a class="menu-item-link exit" href="{PREFIX}/logout"><i class="fa-solid fa-right-from-bracket"></i> Salir</a></div></aside>'''
  else:toggle='';sidebar=''
@@ -486,20 +494,25 @@ class Handler(BaseHTTPRequestHandler):
   body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Resultado de Speedtest</h1></div><div class="card"><p>Resultado: '+('Correcto' if rc==0 else 'Código '+str(rc))+'</p><pre class="terminal">'+html_escape(out or 'Sin salida')+'</pre><a class="btn" href="'+PREFIX+'/tools/speedtest">Volver</a></div>'
   return self.send(200,body=page('Resultado Speedtest',body,u))
  def public_index(self,u):
-  # La portada se mantiene únicamente en templates/index.html.
-  # Esto evita duplicados y asegura que el sitio use la plantilla correcta.
+  # Servir el index.html personalizado subido por el propietario, en vez de
+  # generar la portada antigua desde page().
   index_path=WEB/'templates'/'index.html'
   try:
    html=index_path.read_text(encoding='utf-8')
-  except (OSError, UnicodeError) as e:
-   log('No se pudo leer templates/index.html: '+repr(e))
-   return self.send(500,body='No se encontró web/templates/index.html. Reinstala/actualiza los archivos web.')
-  # La marca y el título de la portada proceden de Ajustes generales.
-  site_title=html_escape(str(site_settings().get('site_title') or 'KevinTech Multi Script'))
-  html=html.replace('__SITE_TITLE__', site_title)
-  # Enlazar botones y páginas informativas a las rutas reales del servidor.
+  except (OSError, UnicodeError):
+   return self.send(500,body='No se encontró web/templates/index.html.')
+  # La marca de la portada se controla desde Ajustes generales > Título del sitio.
+  brand=html_escape(site_settings().get('site_title','Kevin tech tutorials'))
+  html=html.replace('Kevin tech tutorials',brand)
+  # Enlazar los botones y páginas informativas a las rutas reales del servidor.
   html=html.replace('href="login.html"', 'href="'+PREFIX+'/login"')
   html=html.replace('href="register.html"', 'href="'+PREFIX+'/register"')
+  html=html.replace('href="contacto.html"', 'href="'+PREFIX+'/about?section=social"')
+  html=html.replace('href="terminos.html"', 'href="'+PREFIX+'/about?section=terms"')
+  html=html.replace('href="privacidad.html"', 'href="'+PREFIX+'/about?section=privacy"')
+  html=html.replace('href="cookies.html"', 'href="'+PREFIX+'/about?section=cookies"')
+  html=html.replace('href="about.html"', 'href="'+PREFIX+'/about"')
+  html=html.replace('href="apps.html"', 'href="'+PREFIX+'/about"')
   html=html.replace("href='login.html'", "href='"+PREFIX+"/login'")
   html=html.replace("href='register.html'", "href='"+PREFIX+"/register'")
   return self.send(200,'text/html; charset=utf-8',html)
@@ -514,18 +527,11 @@ class Handler(BaseHTTPRequestHandler):
    try:
     import smtplib
     from email.message import EmailMessage
-    smtp_cfg=cfg();smtp_host=str(smtp_cfg.get('smtp_host') or os.environ.get('SMTP_HOST',''));smtp_port=int(smtp_cfg.get('smtp_port') or os.environ.get('SMTP_PORT','587'));smtp_user=str(smtp_cfg.get('smtp_user') or os.environ.get('SMTP_USER',''));smtp_pass=decrypt_credential(smtp_cfg.get('smtp_pass','')) if smtp_cfg.get('smtp_pass') else os.environ.get('SMTP_PASS','');mail_from=str(smtp_cfg.get('smtp_from') or os.environ.get('SMTP_FROM',smtp_user))
+    smtp_host=os.environ.get('SMTP_HOST','');smtp_port=int(os.environ.get('SMTP_PORT','587'));smtp_user=os.environ.get('SMTP_USER','');smtp_pass=os.environ.get('SMTP_PASS','');mail_from=os.environ.get('SMTP_FROM',smtp_user)
     if smtp_host and mail_from:
      msg=EmailMessage();msg['Subject']='Recuperación de contraseña';msg['From']=mail_from;msg['To']=email;msg.set_content('Usa este enlace temporal (válido por 10 minutos) para cambiar tu contraseña: '+link+'\nSi no lo solicitaste, ignora este mensaje.')
-     if smtp_cfg.get('smtp_ssl'):
-      with smtplib.SMTP_SSL(smtp_host,smtp_port,timeout=15) as server:
-       if smtp_user:server.login(smtp_user,smtp_pass)
-       server.send_message(msg)
-     else:
-      with smtplib.SMTP(smtp_host,smtp_port,timeout=15) as server:
-       server.ehlo();server.starttls();server.ehlo()
-       if smtp_user:server.login(smtp_user,smtp_pass)
-       server.send_message(msg)
+     with smtplib.SMTP(smtp_host,smtp_port,timeout=15) as server:
+      server.starttls();server.login(smtp_user,smtp_pass);server.send_message(msg)
     else:log('Password reset email not sent: SMTP_HOST/SMTP_FROM not configured')
    except Exception as e:log('Password reset email error: '+str(e))
   else:c.close()
@@ -868,29 +874,54 @@ class Handler(BaseHTTPRequestHandler):
   c.execute('CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL)')
  def add_notification(self,user_id,title,message,kind='general'):
   c=db();c.execute('INSERT INTO notifications(user_id,title,message,kind,created_at) VALUES(?,?,?,?,?)',(user_id,title[:160],message[:4000],kind,datetime.now().isoformat(timespec='seconds')));c.commit();c.close()
+ def send_smtp_email(self,conf,recipient,subject,body):
+  if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',recipient or ''): raise ValueError('Correo destinatario inválido')
+  host=conf.get('smtp_host','').strip(); sender=conf.get('smtp_from_email','').strip(); security=conf.get('smtp_security','starttls'); port=int(conf.get('smtp_port',587))
+  if not host or not sender: raise ValueError('Configura el servidor SMTP y el correo remitente primero')
+  msg=EmailMessage(); msg['Subject']=subject; msg['From']=('%s <%s>'%(conf.get('smtp_from_name','KevinTech Multi Script'),sender)); msg['To']=recipient; msg.set_content(body)
+  password=decrypt_credential(conf.get('smtp_password','')) if conf.get('smtp_password') else ''
+  if security=='ssl': server=smtplib.SMTP_SSL(host,port,timeout=15,context=ssl.create_default_context())
+  else: server=smtplib.SMTP(host,port,timeout=15)
+  try:
+   server.ehlo()
+   if security=='starttls': server.starttls(context=ssl.create_default_context()); server.ehlo()
+   if conf.get('smtp_username'): server.login(conf['smtp_username'],password)
+   server.send_message(msg)
+  finally: server.quit()
  def admin_notifications(self,u):
   if not u or u.get('role')!='admin':return self.redirect('/login')
   c=db();rows=c.execute('SELECT * FROM notifications WHERE user_id IS NULL ORDER BY id DESC LIMIT 50').fetchall();c.close()
   html=''.join('<div class="notice"><b>'+html_escape(x['title'])+'</b><p>'+html_escape(x['message'])+'</p><small>'+html_escape(x['created_at'])+'</small></div>' for x in rows) or '<p class="muted">Todavía no has enviado notificaciones.</p>'
-  sc=cfg(); smtp_host=html_escape(sc.get('smtp_host','')); smtp_port=html_escape(str(sc.get('smtp_port','587'))); smtp_user=html_escape(sc.get('smtp_user','')); smtp_from=html_escape(sc.get('smtp_from','')); smtp_secure='checked' if sc.get('smtp_ssl') else ''
-  body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>Las notificaciones se mostrarán en la campana de los usuarios.</p></div><div class="card form"><form method="post"><label><i class="fa-solid fa-heading"></i> Título</label><input class="input" name="title" required maxlength="160"><label><i class="fa-solid fa-message"></i> Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label><i class="fa-solid fa-users"></i> Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary"><i class="fa-solid fa-paper-plane"></i> Enviar notificación</button></form></div><div class="hero"><h2><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</h2><p>Configura el correo saliente usado para recuperación de contraseñas. La contraseña se guarda cifrada.</p></div><div class="card form"><form method="post" action="'+PREFIX+'/admin/notifications"><input type="hidden" name="action" value="save_smtp"><label>Servidor SMTP</label><input class="input" name="smtp_host" value="'+smtp_host+'" placeholder="smtp.gmail.com" required><label>Puerto</label><input class="input" type="number" min="1" max="65535" name="smtp_port" value="'+smtp_port+'" required><label>Usuario SMTP</label><input class="input" name="smtp_user" value="'+smtp_user+'" autocomplete="username"><label>Contraseña SMTP</label><input class="input" type="password" name="smtp_pass" autocomplete="new-password" placeholder="Dejar vacío para conservar la actual"><label>Correo remitente</label><input class="input" type="email" name="smtp_from" value="'+smtp_from+'" required><label><input type="checkbox" name="smtp_ssl" '+smtp_secure+'> Usar conexión SSL directa (normalmente puerto 465)</label><p class="muted small">Para el puerto 587 se recomienda STARTTLS; desmarca SSL directa. El puerto 465 normalmente utiliza SSL directo.</p><button class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Guardar SMTP</button></form></div><div class="hero"><h2><i class="fa-solid fa-clock-rotate-left"></i> Enviadas recientemente</h2></div>'+html
+  conf=cfg(); smtp_enabled=bool(conf.get('smtp_enabled')); smtp_pass=decrypt_credential(conf.get('smtp_password','')) if conf.get('smtp_password') else ''; smtp_box='<section id="smtp" class="hero"><h2><i class="fa-solid fa-envelope-circle-check"></i> Configurar SMTP</h2><p>Configura el servidor de correo para enviar avisos por email. La contraseña se guarda cifrada en el servidor.</p></section><div class="card form"><form method="post"><input type="hidden" name="action" value="smtp_save"><label><input type="checkbox" name="smtp_enabled" '+('checked' if smtp_enabled else '')+'> Activar envío por correo</label><label>Servidor SMTP</label><input class="input" name="smtp_host" value="'+html_escape(conf.get('smtp_host',''))+'" placeholder="smtp.gmail.com" required><label>Puerto</label><input class="input" type="number" name="smtp_port" min=1 max=65535 value="'+html_escape(conf.get('smtp_port',587))+'" required><label>Seguridad</label><select class="input" name="smtp_security"><option value="starttls" '+('selected' if conf.get('smtp_security','starttls')=='starttls' else '')+'>STARTTLS (recomendado, puerto 587)</option><option value="ssl" '+('selected' if conf.get('smtp_security')=='ssl' else '')+'>SSL/TLS (normalmente puerto 465)</option><option value="none" '+('selected' if conf.get('smtp_security')=='none' else '')+'>Sin cifrado (no recomendado)</option></select><label>Usuario SMTP</label><input class="input" name="smtp_username" value="'+html_escape(conf.get('smtp_username',''))+'"><label>Contraseña SMTP</label><input class="input" type="password" name="smtp_password" placeholder="Dejar vacío para conservar la actual"><label>Correo remitente</label><input class="input" type="email" name="smtp_from_email" value="'+html_escape(conf.get('smtp_from_email',''))+'" required><label>Nombre remitente</label><input class="input" name="smtp_from_name" value="'+html_escape(conf.get('smtp_from_name','KevinTech Multi Script'))+'"><button class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Guardar SMTP</button></form><form method="post" style="margin-top:14px"><input type="hidden" name="action" value="smtp_test"><label>Enviar correo de prueba a</label><input class="input" type="email" name="test_email" value="'+html_escape(conf.get('contact_email',''))+'" required><button class="btn"><i class="fa-solid fa-paper-plane"></i> Enviar prueba</button></form></div>'; body='<div class="hero"><h1><i class="fa-solid fa-paper-plane"></i> Enviar notificaciones</h1><p>Las notificaciones se mostrarán en la campana de los usuarios.</p></div><div class="card form"><form method="post"><label>Título</label><input class="input" name="title" required maxlength="160"><label>Mensaje</label><textarea class="input" name="message" required rows="5"></textarea><label>Destinatarios</label><select class="input" name="target"><option value="all">Todos los usuarios</option></select><button class="btn primary"><i class="fa-solid fa-paper-plane"></i> Enviar notificación</button></form></div>'+smtp_box+'<div class="hero"><h2><i class="fa-solid fa-clock-rotate-left"></i> Enviadas recientemente</h2></div>'+html
   return self.send(200,body=page('Notificaciones',body,u))
  def admin_notifications_post(self,u,d):
   if not u or u.get('role')!='admin':return self.send(403,body='403')
-  if self.val(d,'action')=='save_smtp':
-   host=self.val(d,'smtp_host').strip()[:255]; user=self.val(d,'smtp_user').strip()[:254]; mail_from=self.val(d,'smtp_from').strip()[:254]
-   try:port=max(1,min(65535,int(self.val(d,'smtp_port','587'))))
-   except ValueError:return self.send(400,body='Puerto SMTP inválido.')
-   if not host or not mail_from or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',mail_from):return self.send(400,body='Servidor y correo remitente válidos son obligatorios.')
-   conf=cfg();conf.update({'smtp_host':host,'smtp_port':port,'smtp_user':user,'smtp_from':mail_from,'smtp_ssl':'smtp_ssl' in d})
-   newpass=self.val(d,'smtp_pass')
-   if newpass:conf['smtp_pass']=crypt_credential(newpass)
-   save_cfg(conf)
-   return self.redirect('/admin/notifications')
+  action=self.val(d,'action')
+  if action in ('smtp_save','smtp_test'):
+   conf=cfg()
+   if action=='smtp_save':
+    try: port=max(1,min(65535,int(self.val(d,'smtp_port','587'))))
+    except ValueError: return self.send(400,body='Puerto SMTP inválido')
+    conf.update({'smtp_enabled':'smtp_enabled' in d,'smtp_host':self.val(d,'smtp_host')[:255],'smtp_port':port,'smtp_username':self.val(d,'smtp_username')[:255],'smtp_from_email':self.val(d,'smtp_from_email')[:254],'smtp_from_name':self.val(d,'smtp_from_name','KevinTech Multi Script')[:160],'smtp_security':self.val(d,'smtp_security','starttls') if self.val(d,'smtp_security','starttls') in ('starttls','ssl','none') else 'starttls'})
+    if self.val(d,'smtp_password'): conf['smtp_password']=crypt_credential(self.val(d,'smtp_password'))
+    save_cfg(conf); return self.redirect('/admin/notifications#smtp')
+   try:
+    recipient=self.val(d,'test_email'); self.send_smtp_email(conf,recipient,'Prueba SMTP','La configuración SMTP de KevinTech Multi Script funciona correctamente.')
+    return self.send(200,body=tpl('message.html',u,'Prueba SMTP',MESSAGE='<div class="notice oktxt"><i class="fa-solid fa-circle-check"></i> Correo de prueba enviado a '+html_escape(recipient)+'.</div><a class="btn primary" href="'+PREFIX+'/admin/notifications#smtp">Volver</a>'))
+   except Exception as e:
+    log('SMTP TEST ERROR: '+str(e)); return self.send(400,body=tpl('message.html',u,'Error SMTP',MESSAGE='<div class="notice bad"><i class="fa-solid fa-triangle-exclamation"></i> No se pudo enviar el correo: '+html_escape(str(e))+'</div><a class="btn primary" href="'+PREFIX+'/admin/notifications#smtp">Volver</a>'))
   title=self.val(d,'title');message=self.val(d,'message')
   if not title or not message:return self.send(400,body='Título y mensaje son obligatorios')
   self.add_notification(None,title,message,'broadcast')
-  c=db();users=c.execute('SELECT id FROM users WHERE active=1').fetchall();c.executemany('INSERT INTO notifications(user_id,title,message,kind,created_at) VALUES(?,?,?,?,?)',[(x['id'],title[:160],message[:4000],'broadcast',datetime.now().isoformat(timespec='seconds')) for x in users]);c.commit();c.close()
+  c=db();users=c.execute('SELECT id,email FROM users WHERE active=1').fetchall();c.executemany('INSERT INTO notifications(user_id,title,message,kind,created_at) VALUES(?,?,?,?,?)',[(x['id'],title[:160],message[:4000],'broadcast',datetime.now().isoformat(timespec='seconds')) for x in users]);c.commit();c.close()
+  conf=cfg()
+  if conf.get('smtp_enabled'):
+   sent=0
+   for x in users:
+    if x['email']:
+     try: self.send_smtp_email(conf,x['email'],title,message); sent+=1
+     except Exception as e: log('SMTP NOTIFICATION ERROR user_id=%s: %s'%(x['id'],e))
+   log('SMTP notification sent=%s total_with_email=%s'%(sent,sum(1 for x in users if x['email'])))
   return self.redirect('/admin/notifications')
  def notifications(self,u):
   if not u:return self.redirect('/login')
@@ -1075,6 +1106,7 @@ class Handler(BaseHTTPRequestHandler):
   for off in offsets[1:]:out.extend(f'{off:010d} 00000 n \n'.encode())
   out.extend(b'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+str(xref).encode()+b'\n%%EOF');return bytes(out)
  def about(self,u):
+  if not u:return self.redirect('/login')
   st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};edit=''
   if section=='social':
    title='Redes sociales y contacto';parts=[]
@@ -1106,5 +1138,5 @@ def delete_ssh(username):
 
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));httpd=ThreadingHTTPServer((HOST,PORT),Handler);httpd.daemon_threads=True;httpd.block_on_close=False;httpd.serve_forever(poll_interval=0.5)
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
 if __name__=='__main__':main()
