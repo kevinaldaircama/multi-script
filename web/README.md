@@ -76,3 +76,14 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - SQLite utiliza WAL inicializado al arrancar, `busy_timeout` y espera ampliada para reducir errores `database is locked`.
 - Los enlaces públicos de About, términos, privacidad, cookies y contacto abren las plantillas del panel sin obligar a iniciar sesión.
 - Los beneficios de planes reconocen números seguidos de puntos/points/créditos/credits; al aprobar una solicitud se acreditan al saldo de puntos del usuario y se registra el texto de beneficios. El beneficio “sin ads” se respeta en las acciones publicitarias del panel. El período del plan se puede editar desde Configuración de planes.
+
+
+## Estabilidad 24/7 (actualización v4)
+
+- `server.py` inicializa el esquema SQLite una sola vez por proceso; evita ejecutar `CREATE TABLE`/migraciones en cada petición concurrente.
+- Cada conexión SQLite usa `busy_timeout=30000`; el modo WAL se activa durante el arranque del panel.
+- El servicio `kevintech-web.service` usa `Restart=always` y `RestartSec=3`.
+- El instalador configura `kevintech-web-healthcheck.timer`, que comprueba `http://127.0.0.1:18080/health` cada minuto y reinicia el servicio si la comprobación falla.
+- Las páginas públicas `/about` y `/about?section=terms|privacy|cookies|social` funcionan sin iniciar sesión.
+
+Ningún sistema puede garantizar cero caídas; estas medidas permiten recuperarse automáticamente de varios fallos y reducen los bloqueos SQLite. Para aplicar el temporizador de salud, ejecutar el instalador de actualización como root.

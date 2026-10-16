@@ -13,6 +13,7 @@ write_service(){ cat > "/etc/systemd/system/$SERVICE" <<EOF2
 Description=KevinTech Web Panel
 After=network-online.target haproxy.service
 Wants=network-online.target
+StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=root
@@ -22,8 +23,8 @@ Environment=PYTHONUNBUFFERED=1
 Environment=KEVINTECH_WEB_PORT=$PORT
 Environment=KEVINTECH_WEB_PREFIX=/
 ExecStart=/usr/bin/python3 $WEB/server.py
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=3
 TimeoutStartSec=30
 TimeoutStopSec=20
 LimitNOFILE=65535
@@ -31,6 +32,41 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF2
 systemctl daemon-reload; systemctl enable "$SERVICE" >/dev/null 2>&1 || true; }
+write_healthcheck(){
+ cat > /usr/local/sbin/kevintech-web-healthcheck <<'EOFHC'
+#!/bin/bash
+set -u
+URL="http://127.0.0.1:18080/health"
+if ! /usr/bin/curl -fsS --max-time 5 "$URL" >/dev/null 2>&1; then
+  /usr/bin/logger -t kevintech-web-healthcheck "health endpoint failed; restarting kevintech-web.service"
+  /usr/bin/systemctl restart kevintech-web.service
+  sleep 3
+  /usr/bin/curl -fsS --max-time 5 "$URL" >/dev/null 2>&1 || /usr/bin/logger -t kevintech-web-healthcheck "health endpoint still failing after restart"
+fi
+EOFHC
+ chmod 750 /usr/local/sbin/kevintech-web-healthcheck
+ cat > /etc/systemd/system/kevintech-web-healthcheck.service <<'EOFHC'
+[Unit]
+Description=KevinTech Web health check
+After=kevintech-web.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kevintech-web-healthcheck
+EOFHC
+ cat > /etc/systemd/system/kevintech-web-healthcheck.timer <<'EOFHC'
+[Unit]
+Description=Check KevinTech Web health every minute
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=kevintech-web-healthcheck.service
+[Install]
+WantedBy=timers.target
+EOFHC
+ systemctl daemon-reload
+ systemctl enable --now kevintech-web-healthcheck.timer >/dev/null 2>&1 || true
+}
 write_acme_service(){ mkdir -p "$ACME_ROOT/.well-known/acme-challenge"; cat > "/etc/systemd/system/$ACME_SERVICE" <<EOF2
 [Unit]
 Description=KevinTech ACME webroot helper
@@ -124,7 +160,7 @@ import json,sys
 try: print(json.load(open(sys.argv[1])).get('server_domain',''))
 except: print('')
 PY
-)"; existing_domain="${existing_domain:-$(current_domain)}"; if [[ -z "$existing_domain" ]]; then prompt_fresh || return 1; save_credentials "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" || return 1; else WEB_DOMAIN="$existing_domain"; echo -e "${cyan}Actualizando: se conservan usuario, contraseña y dominio.${reset}"; fi; write_service; write_acme_service; make_temp_cert "$WEB_DOMAIN"; patch_haproxy "$WEB_DOMAIN" || return 1; ensure_cert "$WEB_DOMAIN" || return 1; systemctl daemon-reload; systemctl enable "$SERVICE" "$ACME_SERVICE" >/dev/null 2>&1 || true; systemctl restart "$SERVICE"; sleep 1; if systemctl is-active --quiet "$SERVICE"; then echo -e "${green}✔ KevinTech Web instalada/actualizada.${reset}"; echo -e "${cyan}✔ Panel: https://$WEB_DOMAIN/login${reset}"; else journalctl -u "$SERVICE" -n 40 --no-pager; return 1; fi; }
+)"; existing_domain="${existing_domain:-$(current_domain)}"; if [[ -z "$existing_domain" ]]; then prompt_fresh || return 1; save_credentials "$WEB_ADMIN_USER" "$WEB_ADMIN_PASS" "$WEB_DOMAIN" || return 1; else WEB_DOMAIN="$existing_domain"; echo -e "${cyan}Actualizando: se conservan usuario, contraseña y dominio.${reset}"; fi; write_service; write_healthcheck; write_acme_service; make_temp_cert "$WEB_DOMAIN"; patch_haproxy "$WEB_DOMAIN" || return 1; ensure_cert "$WEB_DOMAIN" || return 1; systemctl daemon-reload; systemctl enable "$SERVICE" "$ACME_SERVICE" >/dev/null 2>&1 || true; systemctl restart "$SERVICE"; sleep 1; if systemctl is-active --quiet "$SERVICE"; then echo -e "${green}✔ KevinTech Web instalada/actualizada.${reset}"; echo -e "${cyan}✔ Panel: https://$WEB_DOMAIN/login${reset}"; else journalctl -u "$SERVICE" -n 40 --no-pager; return 1; fi; }
 change_data(){
  root_check; [[ -f "$DATA/config.json" ]] || { echo -e "${red}Web no instalada. Primero usa opción 1.${reset}"; return 1; }
  local oldu olddomain u p domain
@@ -157,9 +193,9 @@ PY2
 show_logs(){ root_check; journalctl -u "$SERVICE" -f -n 80 --no-pager; }
 remove_web(){
  root_check
- systemctl stop "$SERVICE" 2>/dev/null || true; systemctl disable "$SERVICE" 2>/dev/null || true
+ systemctl stop kevintech-web-healthcheck.timer 2>/dev/null || true; systemctl disable kevintech-web-healthcheck.timer 2>/dev/null || true; systemctl stop "$SERVICE" 2>/dev/null || true; systemctl disable "$SERVICE" 2>/dev/null || true
  systemctl stop "$ACME_SERVICE" 2>/dev/null || true; systemctl disable "$ACME_SERVICE" 2>/dev/null || true
- rm -f "/etc/systemd/system/$SERVICE" "/etc/systemd/system/$ACME_SERVICE" "$HOOK" "$PEM" "$DOMAIN_FILE"
+ rm -f "/etc/systemd/system/$SERVICE" "/etc/systemd/system/$ACME_SERVICE" /etc/systemd/system/kevintech-web-healthcheck.service /etc/systemd/system/kevintech-web-healthcheck.timer /usr/local/sbin/kevintech-web-healthcheck "$HOOK" "$PEM" "$DOMAIN_FILE"
  local old_domain=""; [[ -f "$DATA/config.json" ]] && old_domain="$(python3 - "$DATA/config.json" <<'PY2'
 import json,sys
 try: print(json.load(open(sys.argv[1])).get('server_domain',''))

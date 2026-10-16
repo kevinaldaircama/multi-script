@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil, io, zipfile, socket, urllib.request, urllib.error, smtplib, ssl
+import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, uuid, shlex, shutil, io, zipfile, socket, urllib.request, urllib.error, smtplib, ssl, threading
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from http import cookies
@@ -57,20 +57,34 @@ def save_cfg(c):
  payload=json.dumps(c,indent=2,ensure_ascii=False);CONFIG.write_text(payload,encoding='utf8');os.chmod(CONFIG,0o600)
  con=db();con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(c,ensure_ascii=False),));con.commit();con.close()
 
+_DB_SCHEMA_READY=False
+_DB_SCHEMA_LOCK=threading.Lock()
+
 def db():
- DATA.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA busy_timeout=30000'); c.execute('PRAGMA foreign_keys=ON')
- c.executescript('''CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,referral_code TEXT UNIQUE NOT NULL,referred_by TEXT,referral_points INTEGER NOT NULL DEFAULT 0,referral_renews INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,email TEXT NOT NULL DEFAULT '',language TEXT NOT NULL DEFAULT 'es');
+ # Esquema y migraciones solo una vez por proceso. Antes se ejecutaban DDL y
+ # ALTER TABLE en cada petición HTTP concurrente, generando SQLITE_BUSY.
+ global _DB_SCHEMA_READY
+ DATA.mkdir(parents=True,exist_ok=True)
+ c=sqlite3.connect(DB,timeout=30,isolation_level='DEFERRED')
+ c.row_factory=sqlite3.Row
+ c.execute('PRAGMA busy_timeout=30000')
+ c.execute('PRAGMA foreign_keys=ON')
+ if not _DB_SCHEMA_READY:
+  with _DB_SCHEMA_LOCK:
+   if not _DB_SCHEMA_READY:
+    c.executescript('''CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,referral_code TEXT UNIQUE NOT NULL,referred_by TEXT,referral_points INTEGER NOT NULL DEFAULT 0,referral_renews INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,email TEXT NOT NULL DEFAULT '',language TEXT NOT NULL DEFAULT 'es');
  CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,username TEXT UNIQUE NOT NULL,type TEXT NOT NULL DEFAULT 'ssh',credential TEXT NOT NULL,expiration TEXT,ip_limit INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,role TEXT NOT NULL,expires REAL NOT NULL);
  CREATE TABLE IF NOT EXISTS ad_tokens(token TEXT PRIMARY KEY,user_id INTEGER NOT NULL,action TEXT NOT NULL,account_id INTEGER,expires REAL NOT NULL,completed INTEGER NOT NULL DEFAULT 0,payload TEXT NOT NULL DEFAULT '{}');
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER,title TEXT NOT NULL,message TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'general',is_read INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS plan_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,plan_id TEXT NOT NULL,plan_title TEXT NOT NULL,price TEXT NOT NULL,payment TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS password_resets(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires REAL NOT NULL,used INTEGER NOT NULL DEFAULT 0);''')
- # Safe migrations for existing installations
- try:c.execute("ALTER TABLE plan_orders ADD COLUMN external_id TEXT NOT NULL DEFAULT ''")
- except sqlite3.OperationalError:pass
- for col,ddl in [('email',"TEXT NOT NULL DEFAULT ''"),('language',"TEXT NOT NULL DEFAULT 'es'")]:
-  try:c.execute('ALTER TABLE users ADD COLUMN '+col+' '+ddl)
-  except sqlite3.OperationalError:pass
- c.commit();return c
+    try:c.execute("ALTER TABLE plan_orders ADD COLUMN external_id TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:pass
+    for col,ddl in [('email',"TEXT NOT NULL DEFAULT ''"),('language',"TEXT NOT NULL DEFAULT 'es'")]:
+     try:c.execute('ALTER TABLE users ADD COLUMN '+col+' '+ddl)
+     except sqlite3.OperationalError:pass
+    c.commit()
+    _DB_SCHEMA_READY=True
+ return c
 
 def site_settings():
  c=db(); rows=c.execute('SELECT key,value FROM settings').fetchall();c.close(); out=dict(DEFAULT_SETTINGS)
@@ -271,6 +285,9 @@ def tpl(name,user=None,title='',**values):return page(title,render_template(name
 class Handler(BaseHTTPRequestHandler):
  server_version='KevinTechWeb/4.0'
  def log_message(self,fmt,*args):pass
+ def handle_error(self,request,client_address):
+  import traceback
+  log('HTTP handler error from %s: %s'%(client_address,traceback.format_exc()))
  def route_path(self):
   p=urlparse(self.path).path
   if PREFIX and p.startswith(PREFIX):p=p[len(PREFIX):] or '/'
@@ -312,7 +329,9 @@ class Handler(BaseHTTPRequestHandler):
   return v.strip() if isinstance(v,str) else default
  def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
-  p=self.route_path();u=self.session()
+  p=self.route_path()
+  if p=='/health':return self.send(200,'text/plain; charset=utf8','ok\n')
+  u=self.session()
   routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/admin/settings/smtp':lambda:self.smtp_settings(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
   if p in ('/','/index','/index.html'):return self.public_index(u)
   if p=='/logout':
@@ -1141,7 +1160,7 @@ class Handler(BaseHTTPRequestHandler):
    content=''.join(parts) or '<p>Aún no se han configurado redes sociales ni datos de contacto.</p>'
   else:
    title,key=mapx.get(section,mapx['about']);content=html_escape(st[key]).replace('\n','<br>')
-  if u['role']=='admin':edit='<a class="btn" href="%s/admin/settings/general"><i class="fa-solid fa-gear"></i> Editar contenido y contacto</a>'%PREFIX
+  if u and u.get('role')=='admin':edit='<a class="btn" href="%s/admin/settings/general"><i class="fa-solid fa-gear"></i> Editar contenido y contacto</a>'%PREFIX
   return self.send(200,body=tpl('about.html',u,title,HEADING=title,CONTENT=content,EDIT=edit))
  def console(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
@@ -1160,5 +1179,5 @@ def delete_ssh(username):
 
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=ThreadingHTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
 if __name__=='__main__':main()
