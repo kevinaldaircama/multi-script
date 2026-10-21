@@ -1157,14 +1157,6 @@ else
 fi
 
 #=========================================================
-# DROPBEAR
-#=========================================================
-
-instalar_modulo \
-    "Dropbear" \
-    "$BASE/protocolos/dropbear.sh" \
-    "DROPBEAR"
-#=========================================================
 # BADVPN
 #=========================================================
 
@@ -1218,14 +1210,6 @@ instalar_modulo \
     "UDP Custom" \
     "$BASE/protocolos/udpcustom.sh" \
     "UDP_CUSTOM"
-#=========================================================
-# ZIVPN
-#=========================================================
-
-instalar_modulo \
-    "ZiVPN" \
-    "$BASE/protocolos/zivpn.sh" \
-    "ZIPVPN"
 
 #=========================================================
 # SLOWDNS
@@ -1276,14 +1260,12 @@ show_protocol() {
 }
 
 show_protocol "OpenSSH" "OPENSSH"
-show_protocol "Dropbear" "DROPBEAR"
 show_protocol "SSL Tunnel" "SSL"
 show_protocol "UDP Custom" "UDP_CUSTOM"
 show_protocol "BadVPN" "BADVPN"
-show_protocol "ZiVPN" "ZIPVPN"
 show_protocol "SlowDNS" "SLOWDNS"
 show_protocol "Xray" "XRAY"
-show_protocol "OpenVPN" "OPENVPN"
+show_protocol "BHTTP" "BHTTP"
 
 #=========================================================
 # BANNER SSH
