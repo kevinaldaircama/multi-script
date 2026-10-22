@@ -65,9 +65,9 @@ def db():
  # ALTER TABLE en cada petición HTTP concurrente, generando SQLITE_BUSY.
  global _DB_SCHEMA_READY
  DATA.mkdir(parents=True,exist_ok=True)
- c=sqlite3.connect(DB,timeout=30,isolation_level='DEFERRED')
+ c=sqlite3.connect(DB,timeout=60,isolation_level='DEFERRED')
  c.row_factory=sqlite3.Row
- c.execute('PRAGMA busy_timeout=30000')
+ c.execute('PRAGMA busy_timeout=60000')
  c.execute('PRAGMA foreign_keys=ON')
  if not _DB_SCHEMA_READY:
   with _DB_SCHEMA_LOCK:
@@ -197,6 +197,55 @@ def create_v2ray_account(username,days):
   return True,iso(datetime.now()+timedelta(days=days)),uid
  except Exception as e:return False,str(e),''
 
+def create_socks5_account(username,password,days):
+ if not safe_username(username):return False,'Usuario SOCKS5 inválido.',''
+ if len(password)<4:return False,'La contraseña debe tener al menos 4 caracteres.',''
+ if not shutil.which('useradd') or not shutil.which('chpasswd'):return False,'No se encontraron herramientas de gestión de usuarios del sistema.',''
+ if subprocess.run(['id',username],capture_output=True).returncode==0:return False,'Ese usuario ya existe en el VPS.',''
+ exp=iso(datetime.now()+timedelta(days=days))
+ rc,out=shell('useradd -e %s -M -s /usr/sbin/nologin %s && printf %s | chpasswd'%(shlex.quote(exp),shlex.quote(username),shlex.quote(username+':'+password)),15)
+ return (True,exp,password) if rc==0 else (False,out or 'No se pudo crear el usuario SOCKS5.','')
+
+def create_wireguard_account(username,days):
+ if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de usuario WireGuard inválido.',''
+ if not shutil.which('wg'):return False,'WireGuard no está instalado. Instala y activa primero el protocolo WireGuard.',''
+ wgconf=Path('/etc/wireguard/wg0.conf'); peers=BASE/'wg-peers'
+ if not wgconf.exists():return False,'No existe /etc/wireguard/wg0.conf. Instala y activa WireGuard primero.',''
+ peers.mkdir(parents=True,exist_ok=True);peer=peers/(username+'.conf')
+ if peer.exists():return False,'Ya existe un peer WireGuard con ese nombre.',''
+ try:
+  conf=wgconf.read_text();m=re.search(r'^Address\s*=\s*([0-9.]+)\.1/24',conf,re.M);net=m.group(1) if m else '10.66.66'
+  used=set()
+  for f in peers.glob('*.conf'):
+   mt=re.search(r'^Address\s*=\s*'+re.escape(net)+r'\.(\d+)',f.read_text(errors='ignore'),re.M)
+   if mt:used.add(int(mt.group(1)))
+  host=next((n for n in range(2,255) if n not in used),None)
+  if host is None:return False,'No quedan direcciones IP libres para WireGuard.',''
+  priv=subprocess.run(['wg','genkey'],capture_output=True,text=True,check=True,timeout=5).stdout.strip()
+  pub=subprocess.run(['wg','pubkey'],input=priv,capture_output=True,text=True,check=True,timeout=5).stdout.strip()
+  server_pub=subprocess.run(['wg','show','wg0','public-key'],capture_output=True,text=True,timeout=5).stdout.strip()
+  if not server_pub:return False,'WireGuard wg0 no está activo. Activa el servicio antes de crear cuentas.',''
+  mport=re.search(r'^ListenPort\s*=\s*(\d+)',conf,re.M);port=mport.group(1) if mport else '51820'
+  endpoint=server_domain() or server_ip()
+  client=f'[Interface]\nPrivateKey = {priv}\nAddress = {net}.{host}/32\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = {server_pub}\nEndpoint = {endpoint}:{port}\nAllowedIPs = 0.0.0.0/0, ::/0\nPersistentKeepalive = 25\n'
+  rc,out=shell('wg set wg0 peer %s allowed-ips %s/32'%(shlex.quote(pub),shlex.quote(net+'.'+str(host))),10)
+  if rc:return False,out or 'No se pudo añadir el peer al WireGuard activo.',''
+  with wgconf.open('a') as f:f.write('\n# KevinTech peer '+username+'\n[Peer]\nPublicKey = '+pub+'\nAllowedIPs = '+net+'.'+str(host)+'/32\n')
+  os.chmod(wgconf,0o600);peer.write_text(client);os.chmod(peer,0o600)
+  return True,iso(datetime.now()+timedelta(days=days)),client
+ except Exception as e:return False,'Error creando peer WireGuard: '+str(e),''
+
+def delete_wireguard(username):
+ peer=BASE/'wg-peers'/(username+'.conf');wgconf=Path('/etc/wireguard/wg0.conf')
+ try:
+  if not peer.exists():return False
+  text=peer.read_text();m=re.search(r'^PublicKey\s*=\s*(.+)$',text,re.M)
+  if m:subprocess.run(['wg','set','wg0','peer',m.group(1).strip(),'remove'],capture_output=True,timeout=5)
+  if wgconf.exists():
+   raw=wgconf.read_text();raw=re.sub(r'\n?# KevinTech peer '+re.escape(username)+r'\n\[Peer\]\nPublicKey = '+re.escape(m.group(1).strip() if m else '')+r'\nAllowedIPs = [^\n]+\n?','\n',raw);wgconf.write_text(raw);os.chmod(wgconf,0o600)
+  peer.unlink(missing_ok=True);return True
+ except Exception:return False
+
 def delete_v2ray(username):
  for cfgp in [Path('/usr/local/etc/xray/config.json'),Path('/etc/xray/config.json')]:
   if cfgp.exists():
@@ -209,7 +258,7 @@ def delete_v2ray(username):
 
 def renew_account(a,days):
  if a['type']=='ssh':return renew_ssh(a['username'],days)
- if a['type']=='v2ray':
+ if a['type'] in ('v2ray','xray','wireguard','socks5'):
   exp=iso(datetime.now()+timedelta(days=days));return True,exp
  return False,'Tipo no soportado.'
 def renew_ssh(username,days):
@@ -308,7 +357,24 @@ class Handler(BaseHTTPRequestHandler):
    if u:u['role']='user'
   con.close();return u
  def set_session(self,user_id,role):
-  tok=secrets.token_urlsafe(32);con=db();con.execute('DELETE FROM sessions WHERE expires<?',(now(),));con.execute('INSERT INTO sessions VALUES(?,?,?,?)',(tok,user_id,role,now()+SESSION_TTL));con.commit();con.close();c=cookies.SimpleCookie();c['kt_session']=tok;c['kt_session']['path']=PREFIX or '/';c['kt_session']['httponly']=True;c['kt_session']['secure']=True;c['kt_session']['samesite']='Lax';self.extra_cookie=c.output(header='').strip()
+  tok=secrets.token_urlsafe(32);last_error=None
+  for attempt in range(6):
+   con=None
+   try:
+    con=db();con.execute('BEGIN IMMEDIATE');con.execute('DELETE FROM sessions WHERE expires<?',(now(),));con.execute('INSERT INTO sessions(token,user_id,role,expires) VALUES(?,?,?,?)',(tok,user_id,role,now()+SESSION_TTL));con.commit();last_error=None;break
+   except sqlite3.OperationalError as e:
+    last_error=e
+    if con:
+     try:con.rollback()
+     except sqlite3.Error:pass
+    if 'locked' not in str(e).lower() and 'busy' not in str(e).lower():raise
+    time.sleep(0.15*(attempt+1))
+   finally:
+    if con:
+     try:con.close()
+     except sqlite3.Error:pass
+  if last_error:raise last_error
+  c=cookies.SimpleCookie();c['kt_session']=tok;c['kt_session']['path']=PREFIX or '/';c['kt_session']['httponly']=True;c['kt_session']['secure']=True;c['kt_session']['samesite']='Lax';self.extra_cookie=c.output(header='').strip()
  def read_post(self):n=int(self.headers.get('Content-Length','0'));return parse_qs(self.rfile.read(min(n,1024*1024)).decode(errors='ignore'),keep_blank_values=True)
  def read_multipart(self):
   from email.parser import BytesParser
@@ -340,12 +406,18 @@ class Handler(BaseHTTPRequestHandler):
     con=db();con.execute('DELETE FROM sessions WHERE token=?',(c.value,));con.commit();con.close()
    return self.redirect('/login')
   if p=='/404.html':return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
-  if p in routes:return routes[p]()
+  if p in routes:
+   try:return routes[p]()
+   except Exception as e:
+    log('GET '+p+' error: '+repr(e));return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
   p=self.route_path();ctype=self.headers.get('Content-Type','');d=self.read_multipart() if ctype.lower().startswith('multipart/form-data') else self.read_post();u=self.session()
   routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/forgot-password':lambda:self.forgot_password_post(d),'/reset-password':lambda:self.reset_password_post(d),'/payments/webhook':lambda:self.payment_webhook(),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/admin/settings/smtp':lambda:self.smtp_settings_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
-  if p in routes:return routes[p]()
+  if p in routes:
+   try:return routes[p]()
+   except Exception as e:
+    log('POST '+p+' error: '+repr(e));return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def tool_page(self,u,slug,title,admin_only=False):
   if not u:return self.redirect('/login')
@@ -705,7 +777,8 @@ class Handler(BaseHTTPRequestHandler):
   c=db();a=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body=tpl('404.html',u,'Cuenta no encontrada'))
   pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close();info=server_info()
-  if a['type']=='ssh':details=ssh_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days),a['ip_limit'])
+  if a['type'] in ('ssh','socks5'):details=ssh_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days),a['ip_limit'])
+  elif a['type']=='wireguard':details='CONFIGURACIÓN WIREGUARD\n\n'+pw
   else:details=v2ray_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days))
   return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' else ''))
  def account_create_page(self,u):
@@ -737,7 +810,7 @@ class Handler(BaseHTTPRequestHandler):
     else:days=max(1,min(3650,int(self.val(d,'days',str(days)))))
     limit=max(0,min(100,int(self.val(d,'ip_limit',str(limit)))))
    except:return self.send(400,body='Fecha de expiración o límite IP inválido. Elige una fecha futura, máximo 10 años.')
-  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'v2ray','v2rayvmess':'v2ray','ssh':'ssh'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
+  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
    max_accounts=max(0,int(st.get('quota_user_accounts',2)))
@@ -749,10 +822,12 @@ class Handler(BaseHTTPRequestHandler):
    if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">No hay usuarios web registrados para asignar esta cuenta. Crea un usuario web primero.</div>'))
    owner_id=first['id']
   if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
-  elif typ in ('v2ray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
+  elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
+  elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
+  elif typ=='wireguard':ok,msg,credential=create_wireguard_account(user,days);expiration=msg
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
-  c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ!='ssh' else 'ssh',crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
+  c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ=='xray' else typ,crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
   if u['role']!='admin':c.execute('UPDATE users SET referral_points=MAX(0,referral_points-?) WHERE id=?',(max(0,int(st.get('account_create_points',3))),u['id']))
   c.commit();c.close();return self.redirect('/account?id=%d'%aid)
  def ad_watch(self,u):
@@ -786,7 +861,7 @@ class Handler(BaseHTTPRequestHandler):
   except:return self.send(400,body='ID inválido')
   c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
-  ok=delete_v2ray(a['username']) if a['type']=='v2ray' else delete_ssh(a['username'])[0];c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
+  ok=delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else delete_ssh(a['username'])[0]);c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
  def account_renew(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))
