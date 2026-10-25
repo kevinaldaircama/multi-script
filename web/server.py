@@ -235,6 +235,87 @@ def create_wireguard_account(username,days):
   return True,iso(datetime.now()+timedelta(days=days)),client
  except Exception as e:return False,'Error creando peer WireGuard: '+str(e),''
 
+
+def create_zivpn_account(username,password,days):
+ if not safe_username(username):return False,'Usuario ZiVPN inválido.',''
+ if len(password)<4:return False,'La contraseña ZiVPN debe tener al menos 4 caracteres.',''
+ config=Path('/etc/zivpn/config.json')
+ if not config.exists():return False,'ZiVPN no está instalado: no existe /etc/zivpn/config.json.',''
+ try:
+  data=json.loads(config.read_text())
+  auth=data.setdefault('auth',{})
+  if auth.get('mode')!='passwords':return False,'La autenticación de ZiVPN no está configurada en modo passwords.',''
+  passwords=auth.setdefault('config',[])
+  if password in passwords:return False,'Esa contraseña ya existe en ZiVPN.',''
+  backup=config.with_suffix('.json.kevintech.bak')
+  if not backup.exists():backup.write_bytes(config.read_bytes());os.chmod(backup,0o600)
+  passwords.append(password)
+  tmp=config.with_suffix('.json.tmp');tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(config)
+  rc,out=shell('systemctl restart zivpn',20)
+  if rc:
+   # Restore the original configuration if the service rejects the update.
+   config.write_bytes(backup.read_bytes())
+   shell('systemctl restart zivpn',15)
+   return False,out or 'No se pudo reiniciar ZiVPN; se restauró la configuración anterior.',''
+  return True,iso(datetime.now()+timedelta(days=days)),password
+ except Exception as e:return False,'Error configurando ZiVPN: '+str(e),''
+
+def create_openvpn_account(username,days):
+ if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de cliente OpenVPN inválido.',''
+ root=Path('/etc/openvpn/server');easyrsa=root/'easy-rsa';server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
+ if not server_conf.exists() or not (easyrsa/'easyrsa').exists():return False,'OpenVPN no está instalado o no existe EasyRSA en /etc/openvpn/server/easy-rsa.',''
+ if not (easyrsa/'pki/ca.crt').exists() or not tc_key.exists():return False,'La PKI de OpenVPN no está completa (falta CA o tls-crypt).',''
+ cert=easyrsa/'pki/issued'/f'{username}.crt'
+ if cert.exists():return False,'Ya existe un cliente OpenVPN con ese nombre.',''
+ try:
+  proc=subprocess.run([str(easyrsa/'easyrsa'),'--batch','--days='+str(max(1,min(3650,days))),'build-client-full',username,'nopass'],cwd=str(easyrsa),capture_output=True,text=True,timeout=90)
+  if proc.returncode:return False,(proc.stderr or proc.stdout or 'EasyRSA no pudo crear el certificado.').strip()[-700:],''
+  if common.exists():base=common.read_text()
+  else:
+   cfgtext=server_conf.read_text(errors='ignore');port=re.search(r'^port\s+(\d+)',cfgtext,re.M);proto=re.search(r'^proto\s+(\S+)',cfgtext,re.M);host=server_domain() or server_ip()
+   base='client\ndev tun\nproto '+(proto.group(1) if proto else 'udp')+'\nremote '+host+' '+(port.group(1) if port else '1194')+'\nresolv-retry infinite\nnobind\npersist-key\npersist-tun\nremote-cert-tls server\nauth SHA256\nignore-unknown-option block-outside-dns\nverb 3\n'
+  certdata=cert.read_text();keydata=(easyrsa/'pki/private'/f'{username}.key').read_text();cadata=(easyrsa/'pki/ca.crt').read_text();tlsdata=tc_key.read_text()
+  if 'auth-user-pass' in base:base=re.sub(r'^auth-user-pass\s*$', '# auth-user-pass not required for certificate clients',base,flags=re.M)
+  content=base.rstrip()+'\n\n<ca>\n'+cadata.rstrip()+'\n</ca>\n\n<cert>\n'+certdata.rstrip()+'\n</cert>\n\n<key>\n'+keydata.rstrip()+'\n</key>\n\n<tls-crypt>\n'+tlsdata.rstrip()+'\n</tls-crypt>\n'
+  folder=DATA/'openvpn-clients';folder.mkdir(parents=True,exist_ok=True);out=folder/(username+'.ovpn');out.write_text(content);os.chmod(out,0o600)
+  return True,iso(datetime.now()+timedelta(days=days)),'openvpn-file$'+str(out)
+ except subprocess.TimeoutExpired:return False,'EasyRSA tardó demasiado al crear el cliente.',''
+ except Exception as e:return False,'Error creando cliente OpenVPN: '+str(e),''
+
+def delete_zivpn_account(username,password):
+ config=Path('/etc/zivpn/config.json')
+ try:
+  if not config.exists():return False
+  data=json.loads(config.read_text());auth=data.get('auth',{});old=auth.get('config',[]);new=[x for x in old if x!=password]
+  if len(new)==len(old):return False
+  auth['config']=new;tmp=config.with_suffix('.json.tmp');tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(config)
+  return shell('systemctl restart zivpn',20)[0]==0
+ except:return False
+
+def delete_openvpn_account(username):
+ if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False
+ easyrsa=Path('/etc/openvpn/server/easy-rsa');cert=easyrsa/'pki/issued'/f'{username}.crt';client=DATA/'openvpn-clients'/f'{username}.ovpn'
+ if not cert.exists():
+  try:client.unlink(missing_ok=True)
+  except:pass
+  return False
+ try:
+  r=subprocess.run([str(easyrsa/'easyrsa'),'--batch','revoke',username],cwd=str(easyrsa),capture_output=True,text=True,timeout=45)
+  if r.returncode:return False
+  subprocess.run([str(easyrsa/'easyrsa'),'--batch','gen-crl'],cwd=str(easyrsa),capture_output=True,text=True,timeout=45)
+  crl=easyrsa/'pki/crl.pem';dest=Path('/etc/openvpn/server/crl.pem')
+  if crl.exists():dest.write_bytes(crl.read_bytes());os.chmod(dest,0o644)
+  client.unlink(missing_ok=True);return True
+ except:return False
+
+def qr_data_uri(payload):
+ if not payload or not shutil.which('qrencode'):return ''
+ try:
+  r=subprocess.run(['qrencode','-t','PNG','-o','-'],input=payload.encode(),capture_output=True,timeout=8)
+  if r.returncode==0 and r.stdout:return 'data:image/png;base64,'+base64.b64encode(r.stdout).decode()
+ except Exception:pass
+ return ''
+
 def delete_wireguard(username):
  peer=BASE/'wg-peers'/(username+'.conf');wgconf=Path('/etc/wireguard/wg0.conf')
  try:
@@ -374,7 +455,9 @@ class Handler(BaseHTTPRequestHandler):
      try:con.close()
      except sqlite3.Error:pass
   if last_error:raise last_error
-  c=cookies.SimpleCookie();c['kt_session']=tok;c['kt_session']['path']=PREFIX or '/';c['kt_session']['httponly']=True;c['kt_session']['secure']=True;c['kt_session']['samesite']='Lax';self.extra_cookie=c.output(header='').strip()
+  c=cookies.SimpleCookie();c['kt_session']=tok;c['kt_session']['path']=PREFIX or '/';c['kt_session']['httponly']=True;c['kt_session']['samesite']='Lax'
+  if self.headers.get('X-Forwarded-Proto','').split(',')[0].strip().lower()=='https' or (getattr(self,'server',None) is not None and getattr(self.server,'server_port',0)==443):c['kt_session']['secure']=True
+  self.extra_cookie=c.output(header='').strip()
  def read_post(self):n=int(self.headers.get('Content-Length','0'));return parse_qs(self.rfile.read(min(n,1024*1024)).decode(errors='ignore'),keep_blank_values=True)
  def read_multipart(self):
   from email.parser import BytesParser
@@ -398,7 +481,7 @@ class Handler(BaseHTTPRequestHandler):
   p=self.route_path()
   if p=='/health':return self.send(200,'text/plain; charset=utf8','ok\n')
   u=self.session()
-  routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/admin/settings/smtp':lambda:self.smtp_settings(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
+  routes={'/login':self.login_page,'/register':self.register_page,'/forgot-password':self.forgot_password_page,'/reset-password':self.reset_password_page,'/payments/return':lambda:self.payment_return(u),'/notifications':lambda:self.notifications(u),'/admin/notifications':lambda:self.admin_notifications(u),'/admin/settings/smtp':lambda:self.smtp_settings(u),'/dashboard':lambda:self.dashboard(u),'/protocols':lambda:self.protocols(u),'/profile':lambda:self.profile(u),'/online':lambda:self.online(u),'/referrals':lambda:self.referrals(u),'/account':lambda:self.account_detail(u),'/account/download':lambda:self.account_download(u),'/account/create':lambda:self.account_create_page(u),'/admin':lambda:self.admin(u),'/admin/users':lambda:self.admin_users(u),'/admin/accounts/delete':lambda:self.admin_delete_accounts(u),'/admin/accounts/renew':lambda:self.admin_renew_accounts(u),'/plans':lambda:self.plans(u),'/plans/settings':lambda:self.plans_settings(u),'/plans/history':lambda:self.plans_history(u),'/plans/invoice':lambda:self.plans_invoice(u),'/console':lambda:self.console(u),'/admin/settings':lambda:self.admin_settings_redirect(u),'/admin/settings/ads':lambda:self.admin_settings(u,'ads'),'/admin/settings/general':lambda:self.admin_settings(u,'general'),'/admin/settings/quotas':lambda:self.admin_settings(u,'quotas'),'/about':lambda:self.about(u),'/ad/watch':lambda:self.ad_watch(u),'/tools/block-torrent':lambda:self.tool_page(u,'block-torrent','Block Torrent',True),'/tools/archivo-online':lambda:self.tool_page(u,'archivo-online','Archivo Online',True),'/tools/speedtest':lambda:self.tool_page(u,'speedtest','Speedtest',True),'/tools/detalles-vps':lambda:self.tool_page(u,'detalles-vps','Detalles VPS',True),'/tools/block-ads':lambda:self.tool_page(u,'block-ads','Block Ads',True),'/tools/scanner':lambda:self.tool_page(u,'scanner','Scanner',False),'/tools/payloads':lambda:self.payloads_page(u),'/tools/backup':lambda:self.backup_page(u),'/tools/backup/download':lambda:self.backup_download(u),'/tools/archive-download':lambda:self.archive_download(u)}
   if p in ('/','/index','/index.html'):return self.public_index(u)
   if p=='/logout':
    c=self.cookies().get('kt_session');
@@ -655,14 +738,22 @@ class Handler(BaseHTTPRequestHandler):
   return self.send(200,body=tpl('message.html',None,'Contraseña actualizada',MESSAGE='<div class="notice oktxt">Contraseña cambiada con éxito. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
  def login_page(self,msg=''):return self.send(200,body=tpl('login.html',None,'Ingreso',MSG=msg,SITE_TITLE=html_escape(site_settings().get('site_title','KevinTech Multi Script'))))
  def login_post(self,d):
-  user=self.val(d,'username');pw=self.val(d,'password');con=db();a=cfg();ok=False;role='';uid=0
-  if hmac.compare_digest(user,a.get('admin_username','')) and verify_password(pw,a.get('admin_password_hash','')):ok=True;role='admin'
-  else:
-   r=con.execute('SELECT * FROM users WHERE (username=? OR email=?) AND active=1',(user,user.lower())).fetchone()
-   if r and verify_password(pw,r['password_hash']):ok=True;role='user';uid=r['id']
-  con.close()
+  user=self.val(d,'username');pw=self.val(d,'password');ok=False;role='';uid=0
+  try:
+   a=cfg()
+   if hmac.compare_digest(user,a.get('admin_username','')) and verify_password(pw,a.get('admin_password_hash','')):ok=True;role='admin'
+   else:
+    con=db()
+    try:r=con.execute('SELECT * FROM users WHERE (username=? OR email=?) AND active=1',(user,user.lower())).fetchone()
+    finally:con.close()
+    if r and verify_password(pw,r['password_hash']):ok=True;role='user';uid=r['id']
+  except sqlite3.OperationalError as e:
+   log('LOGIN database lookup error: '+repr(e));return self.login_page('<div class="notice bad">La base de datos está ocupada. Espera unos segundos e inténtalo otra vez.</div>')
   if not ok:return self.login_page('<div class="notice bad">Usuario o contraseña incorrectos.</div>')
-  self.set_session(uid,role);return self.auth_cookie_redirect('/dashboard')
+  try:self.set_session(uid,role)
+  except sqlite3.OperationalError as e:
+   log('LOGIN session database error: '+repr(e));return self.login_page('<div class="notice bad">No se pudo guardar la sesión porque la base de datos está ocupada. Espera unos segundos e inténtalo otra vez.</div>')
+  return self.auth_cookie_redirect('/dashboard')
  def register_page(self,msg=''):
   ref=html_escape(parse_qs(urlparse(self.path).query).get('ref',[''])[0]);return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg,REF=ref))
  def register_post(self,d):
@@ -776,11 +867,36 @@ class Handler(BaseHTTPRequestHandler):
   except:aid=0
   c=db();a=c.execute('SELECT a.*,u.username owner FROM accounts a JOIN users u ON u.id=a.user_id WHERE a.id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body=tpl('404.html',u,'Cuenta no encontrada'))
-  pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close();info=server_info()
-  if a['type'] in ('ssh','socks5'):details=ssh_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days),a['ip_limit'])
-  elif a['type']=='wireguard':details='CONFIGURACIÓN WIREGUARD\n\n'+pw
-  else:details=v2ray_message(a['username'],pw,a['expiration'],max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days))
-  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape(a['type']),PASSWORD=html_escape(pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' else ''))
+  pw=decrypt_credential(a['credential']);ips=account_online(a['username']);c.close();info=server_info();typ=a['type'];qr='';download=''
+  days=max(1,(datetime.strptime(a['expiration'],'%Y-%m-%d')-datetime.strptime(a['created_at'][:10],'%Y-%m-%d')).days) if a['expiration'] else 1
+  if typ in ('ssh','socks5'):
+   details=ssh_message(a['username'],pw,a['expiration'] or iso(datetime.now()),days,a['ip_limit'])
+   if typ=='socks5':details='🎉 CUENTA SOCKS5 CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE ACCESO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: '+a['username']+'\n• Contraseña: '+pw+'\n• Servidor: '+info['host']+'\n• Puerto: 1080 (confirma el puerto de tu servicio SOCKS5)\n• Expira: '+str(a['expiration'] or '—')+'\n\n⚠️ La cuenta del sistema no garantiza por sí sola que el daemon SOCKS5 tenga habilitada autenticación PAM.'
+  elif typ=='wireguard':
+   details='🛡️ CUENTA WIREGUARD CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE LA CUENTA\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: '+a['username']+'\n• Expira: '+str(a['expiration'] or '—')+'\n\n━━━━━━━━━━━━━━━━━━━━\n📲 CONFIGURACIÓN DEL CLIENTE\n━━━━━━━━━━━━━━━━━━━━\n'+pw
+   qr=qr_data_uri(pw)
+  elif typ in ('v2ray','xray'):
+   details=v2ray_message(a['username'],pw,a['expiration'] or iso(datetime.now()),days)
+   m=re.search(r'(?m)^(?:vmess|vless|trojan)://\S+',details);qr=qr_data_uri(m.group(0) if m else '')
+  elif typ=='zivpn':
+   details='🎉 CUENTA ZIVPN UDP CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE ACCESO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario / etiqueta: '+a['username']+'\n• Contraseña ZiVPN: '+pw+'\n• Servidor: '+info['host']+'\n• Puerto UDP: 20000-29999\n• Expira (panel): '+str(a['expiration'] or '—')+'\n\n⚠️ ZiVPN autentica por contraseña compartida. El vencimiento se muestra en el panel, pero no se aplica automáticamente al servicio ZiVPN.'
+  elif typ=='openvpn':
+   filepath=pw[13:] if pw.startswith('openvpn-file$') else ''
+   details='🎉 CLIENTE OPENVPN CREADO EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DEL CLIENTE\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: '+a['username']+'\n• Servidor: '+info['host']+'\n• Puerto: consulta el archivo .ovpn\n• Expira (panel): '+str(a['expiration'] or '—')+'\n\n📥 Descarga el perfil .ovpn e impórtalo en OpenVPN Connect.'
+   if filepath and Path(filepath).is_file():download='<a class="btn primary" href="'+PREFIX+'/account/download?id='+str(a['id'])+'">📥 Descargar perfil .ovpn</a>'
+  else:details='Tipo de cuenta: '+str(typ)+'\n'+str(pw)
+  display_pw='Perfil .ovpn descargable' if typ=='openvpn' else pw
+  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape({'v2ray':'V2Ray/Xray','xray':'V2Ray/Xray','zivpn':'ZiVPN UDP','openvpn':'OpenVPN','wireguard':'WireGuard','socks5':'SOCKS5','ssh':'SSH'}.get(typ,typ)),PASSWORD=html_escape(display_pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),QR_IMAGE=('<div class="card qr-card"><h2>📲 Escanea para importar</h2><img alt="Código QR de configuración" style="width:min(280px,100%);height:auto;background:#fff;padding:12px;border-radius:12px" src="'+qr+'"><p class="muted">Generado localmente en tu VPS.</p></div>' if qr else ''),DOWNLOAD_LINK=download,OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' and typ not in ('openvpn','zivpn') else ''))
+ def account_download(self,u):
+  if not u:return self.redirect('/login')
+  try:aid=int(parse_qs(urlparse(self.path).query).get('id',['0'])[0])
+  except:aid=0
+  c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone();c.close()
+  if not a or a['type']!='openvpn' or (u['role']!='admin' and a['user_id']!=u['id']):return self.send(404,body='Perfil no encontrado')
+  cred=decrypt_credential(a['credential']);path=cred[13:] if cred.startswith('openvpn-file$') else ''
+  f=Path(path)
+  if not f.is_file() or f.parent!=(DATA/'openvpn-clients'):return self.send(404,body='El perfil .ovpn no está disponible en este servidor.')
+  self.send_response(200);self.send_header('Content-Type','application/x-openvpn-profile');self.send_header('Content-Disposition','attachment; filename="'+a['username']+'.ovpn"');self.send_header('Content-Length',str(f.stat().st_size));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(f.read_bytes())
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
   st=site_settings();admin=u['role']=='admin';fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
@@ -810,7 +926,7 @@ class Handler(BaseHTTPRequestHandler):
     else:days=max(1,min(3650,int(self.val(d,'days',str(days)))))
     limit=max(0,min(100,int(self.val(d,'ip_limit',str(limit)))))
    except:return self.send(400,body='Fecha de expiración o límite IP inválido. Elige una fecha futura, máximo 10 años.')
-  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
+  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayxray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5','zivpn':'zivpn','zivpnudp':'zivpn','openvpn':'openvpn'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
    max_accounts=max(0,int(st.get('quota_user_accounts',2)))
@@ -825,6 +941,8 @@ class Handler(BaseHTTPRequestHandler):
   elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
   elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
   elif typ=='wireguard':ok,msg,credential=create_wireguard_account(user,days);expiration=msg
+  elif typ=='zivpn':ok,msg,credential=create_zivpn_account(user,pw,days);expiration=msg
+  elif typ=='openvpn':ok,msg,credential=create_openvpn_account(user,days);expiration=msg
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
   c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ=='xray' else typ,crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -861,7 +979,7 @@ class Handler(BaseHTTPRequestHandler):
   except:return self.send(400,body='ID inválido')
   c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
-  ok=delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else delete_ssh(a['username'])[0]);c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
+  cred=decrypt_credential(a['credential']);ok=(delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else (delete_zivpn_account(a['username'],cred) if a['type']=='zivpn' else (delete_openvpn_account(a['username']) if a['type']=='openvpn' else delete_ssh(a['username'])[0]))));c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
  def account_renew(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))

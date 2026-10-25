@@ -87,3 +87,12 @@ Usa `installer.sh` para instalar/actualizar la web en el VPS.
 - Las páginas públicas `/about` y `/about?section=terms|privacy|cookies|social` funcionan sin iniciar sesión.
 
 Ningún sistema puede garantizar cero caídas; estas medidas permiten recuperarse automáticamente de varios fallos y reducen los bloqueos SQLite. Para aplicar el temporizador de salud, ejecutar el instalador de actualización como root.
+
+
+## Actualización de protocolos y cuentas
+- Crear cuenta admite SSH, V2Ray/Xray, SOCKS5, WireGuard, ZiVPN UDP y OpenVPN.
+- OpenVPN genera un perfil `.ovpn` descargable desde la ficha de la cuenta, si EasyRSA/PKI ya están instalados.
+- ZiVPN añade la contraseña a `/etc/zivpn/config.json` y reinicia el servicio; la fecha de expiración es informativa en el panel, ya que ZiVPN usa una lista de contraseñas compartidas.
+- WireGuard y V2Ray/Xray muestran QR local cuando `qrencode` está instalado. No se envía la configuración privada a servicios externos.
+- Si el acceso al panel se hace por HTTPS detrás de un proxy, la cookie segura depende de `X-Forwarded-Proto: https`; en HTTP local no se fuerza `Secure`, para evitar impedir el inicio de sesión.
+- SQLite usa espera y reintentos al guardar sesiones; si el archivo permanece bloqueado, revisar procesos que abren la base de datos y permisos de `web/data`.
