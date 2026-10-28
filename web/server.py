@@ -3,7 +3,7 @@ import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, 
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from http import cookies
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, quote
 
@@ -1372,5 +1372,5 @@ def delete_ssh(username):
 
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=ThreadingHTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=HTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
 if __name__=='__main__':main()
