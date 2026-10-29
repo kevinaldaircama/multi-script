@@ -452,7 +452,7 @@ process_option() {
     case "$OP" in
 
         1|01) run_module "$PROTOCOL_DIR/openssh.sh" ;;
-        2|02) run_module "$PROTOCOL_DIR/zipvpn.sh" ;;
+        2|02) run_module "$PROTOCOL_DIR/zivpn.sh" ;;
         3|03) run_module "$PROTOCOL_DIR/dropbear.sh" ;;
         4|04) run_module "$PROTOCOL_DIR/ssl.sh" ;;
         5|05) run_module "$PROTOCOL_DIR/badvpn.sh" ;;
