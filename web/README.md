@@ -96,3 +96,12 @@ Ningún sistema puede garantizar cero caídas; estas medidas permiten recuperars
 - WireGuard y V2Ray/Xray muestran QR local cuando `qrencode` está instalado. No se envía la configuración privada a servicios externos.
 - Si el acceso al panel se hace por HTTPS detrás de un proxy, la cookie segura depende de `X-Forwarded-Proto: https`; en HTTP local no se fuerza `Secure`, para evitar impedir el inicio de sesión.
 - SQLite usa espera y reintentos al guardar sesiones; si el archivo permanece bloqueado, revisar procesos que abren la base de datos y permisos de `web/data`.
+
+
+## Actualización de interfaz y administración (2026-10)
+- Se añadió consentimiento de cookies con acceso a la política de cookies.
+- Se muestra bienvenida al registro por referido con el nombre del invitador.
+- La selección de protocolos se limita a SSH y servicios detectados como instalados en systemd.
+- Se corrigió la detección de EasyRSA en rutas habituales para generar perfiles OpenVPN.
+- Se añadió soporte de enlaces YouTube y Web en contactos, se retiró el enlace redundante de retorno y se ajustaron cuotas/beneficios de planes.
+- Los planes con precio cero se activan como gratuitos sin solicitar método de pago.

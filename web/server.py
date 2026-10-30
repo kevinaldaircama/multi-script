@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, quote
 
 BASE=Path('/etc/kevintech'); WEB=BASE/'web'; DATA=WEB/'data'; DB=DATA/'web.sqlite3'; CONFIG=DATA/'config.json'; KEYFILE=DATA/'.credential.key'; LOG=DATA/'web.log'
 HOST='127.0.0.1'; PORT=int(os.environ.get('KEVINTECH_WEB_PORT','18080')); PREFIX=os.environ.get('KEVINTECH_WEB_PREFIX','').strip().rstrip('/'); SESSION_TTL=86400*3; TOKEN_TTL=600
-DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'account_create_points':3,'og_title':'','og_description':'','og_image':'','index_code':'','about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.','social_facebook':'','social_instagram':'','social_tiktok':'','social_whatsapp':'','contact_email':'','contact_phone':''}
+DEFAULT_SETTINGS={'site_title':'KevinTech Multi Script','site_description':'Panel web para administrar tu VPS y tus cuentas.','currency_symbol':'S/','quota_user_days':7,'quota_user_limit':1,'quota_admin_days':30,'quota_admin_limit':5,'quota_user_accounts':2,'quota_renew_points':4,'account_create_points':3,'og_title':'','og_description':'','og_image':'','index_code':'','about_us':'Somos un proyecto dedicado a ofrecer herramientas sencillas para administrar servicios de VPS.','privacy':'Usamos tus datos únicamente para administrar tu cuenta web y las funciones del panel.','cookies':'Este panel utiliza cookies técnicas para mantener la sesión iniciada.','terms':'El uso del panel y de los servicios del VPS debe respetar las leyes y las políticas de tu proveedor.','home_title':'Inicio','home_description':'Administra tus cuentas y consulta el estado de tu VPS.','protocols_title':'Protocolos','protocols_description':'Consulta el estado real de los servicios del VPS.','online_title':'Online','online_description':'Conexiones SSH detectadas actualmente.','referrals_title':'Referidos','referrals_description':'Comparte tu enlace y acumula puntos.','social_facebook':'','social_instagram':'','social_tiktok':'','social_whatsapp':'','social_youtube':'','social_web':'','contact_email':'','contact_phone':''}
 SERVICES=[('OpenSSH','ssh','🔐'),('Dropbear','dropbear_custom','🚪'),('HAProxy / SSL','haproxy','🔒'),('SlowDNS','dnstt','🌐'),('Xray / V2Ray','xray','☁️'),('OpenVPN','openvpn-server@server','🔐'),('Hysteria','hysteria1-server','🛡️'),('BHTTP','bhttp','🌐'),('XHTTP','xhttp','🚀'),('Squid','squid','🌐'),('HCR','hcr-server','🛡️'),('WireGuard','wg-quick@wg0','🛡️'),('BTUN','btun','⚡'),('Shadowsocks','shadowsocks-libev-server@8388','🕶️'),('SOCKS5','sockd','🔐'),('3X-UI','x-ui','🖥️'),('VayDNS','vaydns','🔐'),('Slipstream','slipstream','🚀'),('DNSDist','dnsdist','🌐')]
 
 def log(msg):
@@ -110,7 +110,7 @@ def record_plan_entitlement(con,user_id,plan_title,benefits,account_nums):
  except Exception:appconf={}
  ent=appconf.setdefault('user_plan_entitlements',{});key=str(user_id);old=ent.get(key,0)
  oldcount=old if isinstance(old,int) else int(old.get('accounts',0) if isinstance(old,dict) else 0)
- ent[key]={'accounts':oldcount+(sum(int(n) for n in account_nums) if account_nums else 0),'last_plan':plan_title,'benefits':benefits,'support_priority':bool(re.search(r'prioritari[oa]',benefits,re.I)),'no_ads':bool(re.search(r'\bsin\s+ads?\b|sin publicidad',benefits,re.I)),'updated_at':datetime.now().isoformat(timespec='seconds')}
+ ent[key]={'accounts':oldcount+(sum(int(n) for n in account_nums) if account_nums else 0),'last_plan':plan_title,'benefits':benefits,'support_priority':bool(re.search(r'prioritari[oa]',benefits,re.I)),'no_ads':bool(re.search(r'\bsin\s+ads?\b|sin publicidad|sin anuncios',benefits,re.I)),'updated_at':datetime.now().isoformat(timespec='seconds')}
  con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(appconf,ensure_ascii=False),))
 
 def ensure_admin():
@@ -262,8 +262,12 @@ def create_zivpn_account(username,password,days):
 
 def create_openvpn_account(username,days):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de cliente OpenVPN inválido.',''
- root=Path('/etc/openvpn/server');easyrsa=root/'easy-rsa';server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
- if not server_conf.exists() or not (easyrsa/'easyrsa').exists():return False,'OpenVPN no está instalado o no existe EasyRSA en /etc/openvpn/server/easy-rsa.',''
+ root=Path('/etc/openvpn/server');server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
+ candidates=[root/'easy-rsa',Path('/etc/openvpn/easy-rsa'),Path('/usr/share/easy-rsa'),Path('/usr/share/easy-rsa/3')]
+ easyrsa=next((x for x in candidates if (x/'easyrsa').is_file()),None)
+ if easyrsa is None and shutil.which('easyrsa'):
+  easyrsa=Path(shutil.which('easyrsa')).resolve().parent
+ if not server_conf.exists() or easyrsa is None:return False,'OpenVPN/EasyRSA no está completo. Comprueba openvpn-server@server y la instalación de EasyRSA (se buscaron las rutas habituales).',''
  if not (easyrsa/'pki/ca.crt').exists() or not tc_key.exists():return False,'La PKI de OpenVPN no está completa (falta CA o tls-crypt).',''
  cert=easyrsa/'pki/issued'/f'{username}.crt'
  if cert.exists():return False,'Ya existe un cliente OpenVPN con ese nombre.',''
@@ -540,9 +544,10 @@ class Handler(BaseHTTPRequestHandler):
   out='';rc=0
   try:
    if action in ('torrent_block','torrent_unblock'):
-    if not shutil.which('iptables'):raise RuntimeError('No se encontró iptables.')
+    iptables_bin=shutil.which('iptables') or next((x for x in ('/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables') if Path(x).is_file()),None)
+    if not iptables_bin:raise RuntimeError('No se encontró iptables. Instala iptables o habilita el backend iptables-nft.')
     def ipt(args,check=False):
-     return subprocess.run(['iptables']+args,capture_output=True,text=True,timeout=10).returncode
+     return subprocess.run([iptables_bin]+args,capture_output=True,text=True,timeout=10).returncode
     if action=='torrent_block':
      ipt(['-N','KEVINTECH_TORRENT']);ipt(['-F','KEVINTECH_TORRENT'])
      for args in (['-p','tcp','--dport','6881:6999','-j','DROP'],['-p','udp','--dport','6881:6999','-j','DROP'],['-m','string','--algo','bm','--string','BitTorrent','-j','DROP'],['-m','string','--algo','bm','--string','peer_id=','-j','DROP']):
@@ -772,8 +777,12 @@ class Handler(BaseHTTPRequestHandler):
   if referred:c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referred,))
   if admin_referred:
    conf=cfg();conf['admin_referral_points']=int(conf.get('admin_referral_points',0))+2;save_cfg(conf)
+  inviter_name='KevinTech / Administrador' if admin_referred else ''
+  if referred:
+   inviter=c.execute('SELECT name,username FROM users WHERE id=?',(referred,)).fetchone();inviter_name=(inviter['name']+' (@'+inviter['username']+')') if inviter else 'Usuario invitador'
   c.commit();c.close()
-  return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE='<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
+  welcome=('<div class="expiry-modal" id="refWelcome"><div class="expiry-modal-card"><h2>🎉 ¡Bienvenido por invitación!</h2><p>Te registraste mediante un enlace de referido de <b>'+html_escape(inviter_name)+'</b>.</p><p>Los referidos permiten que quien te invitó acumule puntos cuando te registras. Esos puntos pueden utilizarse según las reglas del panel.</p><button class="btn primary" onclick="this.parentNode.parentNode.remove()">Aceptar</button></div></div>' if (referred or admin_referred) else '')
+  return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE=welcome+'<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
 
  def dashboard(self,u):
   if not u:return self.redirect('/login')
@@ -820,7 +829,7 @@ class Handler(BaseHTTPRequestHandler):
  def profile(self,u):
   if not u:return self.redirect('/login')
   if u['role']=='admin':
-   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED=html_escape(c.get('admin_created_at',''))[:10] or '—',POINTS='Ilimitados',CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
+   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED=html_escape(c.get('admin_created_at',''))[:10] or '—',POINTS='—',CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   else:
    body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=html_escape(u['created_at']),POINTS=u['referral_points'],CODE=html_escape(u['referral_code']),ADMIN=False,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   return self.send(200,body=body)
@@ -899,13 +908,21 @@ class Handler(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type','application/x-openvpn-profile');self.send_header('Content-Disposition','attachment; filename="'+a['username']+'.ovpn"');self.send_header('Content-Length',str(f.stat().st_size));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(f.read_bytes())
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
-  st=site_settings();admin=u['role']=='admin';fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
-  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
+  st=site_settings();admin=u['role']=='admin';available=[]
+  for key,label,service in [('ssh','SSH','ssh'),('xray','V2Ray/Xray (VMess)','xray'),('socks5','SOCKS5','sockd'),('wireguard','WireGuard','wg-quick@wg0'),('zivpn','ZiVPN UDP','zivpn'),('openvpn','OpenVPN','openvpn-server@server')]:
+   try:
+    loaded=subprocess.run(['systemctl','show',service,'-p','LoadState','--value'],capture_output=True,text=True,timeout=2).stdout.strip()=='loaded'
+    active=subprocess.run(['systemctl','is-active','--quiet',service],timeout=2).returncode==0
+   except Exception:loaded=active=False
+   if key=='ssh' or loaded or active:available.append((key,label))
+  options=''.join('<option value="%s">%s</option>'%(k,html_escape(v)) for k,v in available)
+  fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
+  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,PROTOCOL_OPTIONS=options,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
  def account_create(self,u,d):
   if not u:return self.send(403,body='403')
   if u['role']!='admin':
    st=site_settings();con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
-   if owned>=max(0,int(st.get('quota_user_accounts',2))):return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
+   if owned>=max(0,int(st.get('quota_user_accounts',2)))+max(0,int(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}).get('accounts',0))):return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
    if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   # A configured ad gate is mandatory before account creation.
   conf=cfg();ad_count=int(conf.get('ads',{}).get('create',0) or 0)
@@ -926,10 +943,10 @@ class Handler(BaseHTTPRequestHandler):
     else:days=max(1,min(3650,int(self.val(d,'days',str(days)))))
     limit=max(0,min(100,int(self.val(d,'ip_limit',str(limit)))))
    except:return self.send(400,body='Fecha de expiración o límite IP inválido. Elige una fecha futura, máximo 10 años.')
-  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayxray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5','zivpn':'zivpn','zivpnudp':'zivpn','openvpn':'openvpn'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
+  typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayxray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5','zivpn':'zivpn','zivpnudp':'zivpn','openvpn':'openvpn','btun':'btun','shadowsocks':'shadowsocks','hysteria':'hysteria'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
-   max_accounts=max(0,int(st.get('quota_user_accounts',2)))
+   max_accounts=max(0,int(st.get('quota_user_accounts',2)))+max(0,int(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}).get('accounts',0)))
    if owned>=max_accounts:return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
    if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   owner_id=u['id'] if u['role']=='user' else 0
@@ -937,6 +954,7 @@ class Handler(BaseHTTPRequestHandler):
    c=db();first=c.execute('SELECT id FROM users WHERE active=1 ORDER BY id LIMIT 1').fetchone();c.close()
    if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">No hay usuarios web registrados para asignar esta cuenta. Crea un usuario web primero.</div>'))
    owner_id=first['id']
+  if typ not in ('ssh','xray','socks5','wireguard','zivpn','openvpn'):return self.send(400,body='Este protocolo aún no tiene un creador de cuentas compatible desde el panel web.')
   if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
   elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
   elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
@@ -1036,7 +1054,7 @@ class Handler(BaseHTTPRequestHandler):
   c=cfg();st=site_settings();
   if section=='ads':body=tpl('admin_settings_ads.html',u,'Ajuste de ads',ADS_CHECKED='checked' if c.get('ads_enabled') else '',ZONE=html_escape(c.get('monetag_zone','11217882')),CREATE=c.get('ads',{}).get('create',0),DELETE=c.get('ads',{}).get('delete',0),RENEW=c.get('ads',{}).get('renew',0))
   elif section=='quotas':body=tpl('admin_settings_quotas.html',u,'Cuotas',USER_DAYS=st['quota_user_days'],USER_LIMIT=st['quota_user_limit'],USER_ACCOUNTS=st.get('quota_user_accounts',2),ADMIN_DAYS=st['quota_admin_days'],ADMIN_LIMIT=st['quota_admin_limit'],RENEW_POINTS=st.get('quota_renew_points',4),CREATE_POINTS=st.get('account_create_points',3))
-  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']),SOCIAL_FACEBOOK=html_escape(st.get('social_facebook','')),SOCIAL_INSTAGRAM=html_escape(st.get('social_instagram','')),SOCIAL_TIKTOK=html_escape(st.get('social_tiktok','')),SOCIAL_WHATSAPP=html_escape(st.get('social_whatsapp','')),CONTACT_EMAIL=html_escape(st.get('contact_email','')),CONTACT_PHONE=html_escape(st.get('contact_phone','')),OG_TITLE=html_escape(st.get('og_title','')),OG_DESCRIPTION=html_escape(st.get('og_description','')),OG_IMAGE=html_escape(st.get('og_image','')),INDEX_CODE=html_escape(st.get('index_code','')))
+  else:body=tpl('admin_settings_general.html',u,'Ajuste general',TITLE=html_escape(st['site_title']),DESCRIPTION=html_escape(st['site_description']),CURRENCY=html_escape(st.get('currency_symbol','S/')),HOME_TITLE=html_escape(st.get('home_title','Inicio')),HOME_DESC=html_escape(st.get('home_description','')),PROTOCOLS_TITLE=html_escape(st.get('protocols_title','Protocolos')),PROTOCOLS_DESC=html_escape(st.get('protocols_description','')),ONLINE_TITLE=html_escape(st.get('online_title','Online')),ONLINE_DESC=html_escape(st.get('online_description','')),REFERRALS_TITLE=html_escape(st.get('referrals_title','Referidos')),REFERRALS_DESC=html_escape(st.get('referrals_description','')),ABOUT=html_escape(st['about_us']),PRIVACY=html_escape(st['privacy']),COOKIES=html_escape(st['cookies']),TERMS=html_escape(st['terms']),SOCIAL_FACEBOOK=html_escape(st.get('social_facebook','')),SOCIAL_INSTAGRAM=html_escape(st.get('social_instagram','')),SOCIAL_TIKTOK=html_escape(st.get('social_tiktok','')),SOCIAL_WHATSAPP=html_escape(st.get('social_whatsapp','')),SOCIAL_YOUTUBE=html_escape(st.get('social_youtube','')),SOCIAL_WEB=html_escape(st.get('social_web','')),CONTACT_EMAIL=html_escape(st.get('contact_email','')),CONTACT_PHONE=html_escape(st.get('contact_phone','')),OG_TITLE=html_escape(st.get('og_title','')),OG_DESCRIPTION=html_escape(st.get('og_description','')),OG_IMAGE=html_escape(st.get('og_image','')),INDEX_CODE=html_escape(st.get('index_code','')))
   return self.send(200,body=body)
  def admin_settings_post(self,u,d,section):
   if not u or u['role']!='admin':return self.send(403,body='403')
@@ -1046,10 +1064,11 @@ class Handler(BaseHTTPRequestHandler):
    except:pass
    save_cfg(c);return self.send(200,body=tpl('message.html',u,'Ajuste de ads',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/ads">Continuar</a>'))
   if section=='quotas':
-   try:vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit')))),'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4')))),'account_create_points':max(0,min(1000,int(self.val(d,'create_points','3'))))}
+   try:
+    vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days','7')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit','1')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days','30')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit','5')))),'quota_renew_points':max(0,min(1000,int(self.val(d,'renew_points','4')))),'account_create_points':max(0,min(1000,int(self.val(d,'create_points','3'))))}
    except:return self.send(400,body='Cuotas inválidas')
    save_settings(vals);return self.send(200,body=tpl('message.html',u,'Cuotas',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/quotas">Continuar</a>') )
-  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80],'og_title':self.val(d,'og_title')[:200],'og_description':self.val(d,'og_description')[:500],'og_image':self.val(d,'og_image')[:1000],'index_code':self.val(d,'index_code')[:4000]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.send(200,body=tpl('message.html',u,'Ajuste general',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/general">Continuar</a>') )
+  symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'social_youtube':self.val(d,'social_youtube')[:500],'social_web':self.val(d,'social_web')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80],'og_title':self.val(d,'og_title')[:200],'og_description':self.val(d,'og_description')[:500],'og_image':self.val(d,'og_image')[:1000],'index_code':self.val(d,'index_code')[:4000]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.send(200,body=tpl('message.html',u,'Ajuste general',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/general">Continuar</a>') )
  def plans_data(self):
   c=cfg();plans=c.get('plans')
   if not isinstance(plans,list):
@@ -1344,7 +1363,7 @@ class Handler(BaseHTTPRequestHandler):
   st=site_settings();section=parse_qs(urlparse(self.path).query).get('section',['about'])[0];mapx={'about':('Sobre nosotros','about_us'),'privacy':('Política de privacidad','privacy'),'cookies':('Política de cookies','cookies'),'terms':('Términos y condiciones','terms')};edit=''
   if section=='social':
    title='Redes sociales y contacto';parts=[]
-   for label,key,icon in [('Facebook','social_facebook','fa-brands fa-facebook'),('Instagram','social_instagram','fa-brands fa-instagram'),('TikTok','social_tiktok','fa-brands fa-tiktok'),('WhatsApp','social_whatsapp','fa-brands fa-whatsapp')]:
+   for label,key,icon in [('Facebook','social_facebook','fa-brands fa-facebook'),('Instagram','social_instagram','fa-brands fa-instagram'),('TikTok','social_tiktok','fa-brands fa-tiktok'),('WhatsApp','social_whatsapp','fa-brands fa-whatsapp'),('YouTube','social_youtube','fa-brands fa-youtube'),('Web','social_web','fa-solid fa-globe')]:
     val=str(st.get(key,'')).strip()
     if val and val.startswith(('https://','http://')):parts.append('<p><i class="'+icon+'"></i> <a rel="noopener noreferrer" target="_blank" href="'+html_escape(val)+'">'+label+'</a></p>')
    email=str(st.get('contact_email','')).strip();phone=str(st.get('contact_phone','')).strip()
@@ -1353,7 +1372,7 @@ class Handler(BaseHTTPRequestHandler):
    content=''.join(parts) or '<p>Aún no se han configurado redes sociales ni datos de contacto.</p>'
   else:
    title,key=mapx.get(section,mapx['about']);content=html_escape(st[key]).replace('\n','<br>')
-  if u and u.get('role')=='admin':edit='<a class="btn" href="%s/admin/settings/general"><i class="fa-solid fa-gear"></i> Editar contenido y contacto</a>'%PREFIX
+  if u and u.get('role')=='admin':edit=''
   return self.send(200,body=tpl('about.html',u,title,HEADING=title,CONTENT=content,EDIT=edit))
  def console(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
