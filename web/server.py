@@ -109,8 +109,10 @@ def record_plan_entitlement(con,user_id,plan_title,benefits,account_nums):
  try:appconf=json.loads(row['value']) if row else {}
  except Exception:appconf={}
  ent=appconf.setdefault('user_plan_entitlements',{});key=str(user_id);old=ent.get(key,0)
- oldcount=old if isinstance(old,int) else int(old.get('accounts',0) if isinstance(old,dict) else 0)
- ent[key]={'accounts':oldcount+(sum(int(n) for n in account_nums) if account_nums else 0),'last_plan':plan_title,'benefits':benefits,'support_priority':bool(re.search(r'prioritari[oa]',benefits,re.I)),'no_ads':bool(re.search(r'\bsin\s+ads?\b|sin publicidad|sin anuncios',benefits,re.I)),'updated_at':datetime.now().isoformat(timespec='seconds')}
+ old_ent=old if isinstance(old,dict) else {}
+ oldcount=int(old_ent.get('accounts',old if isinstance(old,int) else 0) or 0)
+ new_benefits=bool(re.search(r'\bsin\s+ads?\b|sin publicidad|sin anuncios|no ads',benefits,re.I))
+ ent[key]={'accounts':oldcount+(sum(int(n) for n in account_nums) if account_nums else 0),'last_plan':plan_title,'benefits':benefits,'support_priority':bool(old_ent.get('support_priority')) or bool(re.search(r'prioritari[oa]',benefits,re.I)),'no_ads':bool(old_ent.get('no_ads')) or new_benefits,'updated_at':datetime.now().isoformat(timespec='seconds')}
  con.execute("INSERT INTO settings(key,value) VALUES('__app_config__',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(appconf,ensure_ascii=False),))
 
 def ensure_admin():
@@ -260,14 +262,82 @@ def create_zivpn_account(username,password,days):
   return True,iso(datetime.now()+timedelta(days=days)),password
  except Exception as e:return False,'Error configurando ZiVPN: '+str(e),''
 
+def openvpn_easyrsa_dir():
+ candidates=[Path('/etc/openvpn/server/easy-rsa'),Path('/etc/openvpn/easy-rsa'),Path('/usr/share/easy-rsa'),Path('/usr/share/easy-rsa/3')]
+ for candidate in candidates:
+  exe=candidate/'easyrsa'
+  if exe.is_file():
+   try:
+    if not os.access(exe,os.X_OK):os.chmod(exe,0o700)
+   except OSError:pass
+   return candidate
+ return candidates[0]
+
+def create_btun_account(username,password,days):
+ if not safe_username(username):return False,'Usuario BTUN inválido.',''
+ if len(password)<4:return False,'La contraseña BTUN debe tener al menos 4 caracteres.',''
+ auth=Path('/etc/btun/users');service=Path('/etc/systemd/system/btun.service')
+ if not auth.exists() or not service.exists() or subprocess.run(['systemctl','is-active','--quiet','btun']).returncode!=0:return False,'BTUN no está instalado o su servicio no está activo. Instálalo y actívalo desde el gestor BTUN.',''
+ try:
+  lines=auth.read_text(errors='ignore').splitlines()
+  if any(x.split(':',1)[0]==username for x in lines if ':' in x):return False,'Ese usuario BTUN ya existe.',''
+  auth.parent.mkdir(parents=True,exist_ok=True);auth.write_text('\n'.join(lines+[username+':'+password])+'\n');os.chmod(auth,0o600)
+  return True,iso(datetime.now()+timedelta(days=days)),'btun$'+password
+ except Exception as e:return False,'Error actualizando usuarios BTUN: '+str(e),''
+
+def create_shadowsocks_account(username,password,days):
+ if not safe_username(username):return False,'Usuario Shadowsocks inválido.',''
+ if len(password)<8:return False,'La contraseña Shadowsocks debe tener al menos 8 caracteres.',''
+ if not shutil.which('ss-server'):return False,'Shadowsocks-libev no está instalado. Instálalo desde el gestor Shadowsocks.',''
+ folder=Path('/etc/shadowsocks-libev');folder.mkdir(parents=True,exist_ok=True)
+ used=set()
+ for f in folder.glob('*.json'):
+  try:used.add(int(f.stem))
+  except:pass
+ port=next((n for n in range(20000,30000) if n not in used),None)
+ if port is None:return False,'No hay puertos libres para una nueva cuenta Shadowsocks.',''
+ conf={'server':'0.0.0.0','server_port':port,'password':password,'timeout':300,'method':'aes-256-gcm','mode':'tcp_and_udp'}
+ path=folder/(str(port)+'.json')
+ try:
+  path.write_text(json.dumps(conf,indent=2));os.chmod(path,0o600)
+  rc,out=shell('systemctl enable --now shadowsocks-libev-server@%s'%port,25)
+  if shutil.which('ufw'):shell('ufw allow %s/tcp && ufw allow %s/udp'%(port,port),10)
+  if rc:
+   path.unlink(missing_ok=True);return False,out or 'No se pudo iniciar la instancia Shadowsocks para el puerto asignado.',''
+  return True,iso(datetime.now()+timedelta(days=days)),'ss$%s$%s'%(port,password)
+ except Exception as e:
+  path.unlink(missing_ok=True);return False,'Error creando Shadowsocks: '+str(e),''
+
+def create_hysteria_account(username,password,days):
+ if not Path('/etc/hysteria/config.json').exists():return False,'Hysteria no está instalado o falta /etc/hysteria/config.json.',''
+ if subprocess.run(['systemctl','is-active','--quiet','hysteria1-server']).returncode!=0 and subprocess.run(['systemctl','is-active','--quiet','hysteria']).returncode!=0:return False,'Hysteria no está activo. Inicia el servicio antes de crear cuentas.',''
+ ok,result=create_ssh_account(username,password,days,0)
+ if not ok:return False,result,''
+ return True,result,password
+
+def delete_btun_account(username):
+ auth=Path('/etc/btun/users')
+ try:
+  if not auth.exists():return False
+  lines=auth.read_text(errors='ignore').splitlines();new=[x for x in lines if x.split(':',1)[0]!=username]
+  if len(new)==len(lines):return False
+  auth.write_text('\n'.join(new)+('\n' if new else ''));os.chmod(auth,0o600);return True
+ except:return False
+
+def delete_shadowsocks_account(credential):
+ try:
+  if not credential.startswith('ss$'):return False
+  port=int(credential.split('$',2)[1]);path=Path('/etc/shadowsocks-libev')/(str(port)+'.json')
+  shell('systemctl disable --now shadowsocks-libev-server@%s'%port,15)
+  if shutil.which('ufw'):
+   shell('ufw delete allow %s/tcp; ufw delete allow %s/udp'%(port,port),10)
+  path.unlink(missing_ok=True);return True
+ except:return False
+
 def create_openvpn_account(username,days):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de cliente OpenVPN inválido.',''
- root=Path('/etc/openvpn/server');server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
- candidates=[root/'easy-rsa',Path('/etc/openvpn/easy-rsa'),Path('/usr/share/easy-rsa'),Path('/usr/share/easy-rsa/3')]
- easyrsa=next((x for x in candidates if (x/'easyrsa').is_file()),None)
- if easyrsa is None and shutil.which('easyrsa'):
-  easyrsa=Path(shutil.which('easyrsa')).resolve().parent
- if not server_conf.exists() or easyrsa is None:return False,'OpenVPN/EasyRSA no está completo. Comprueba openvpn-server@server y la instalación de EasyRSA (se buscaron las rutas habituales).',''
+ root=Path('/etc/openvpn/server');easyrsa=openvpn_easyrsa_dir();server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
+ if not server_conf.exists() or not (easyrsa/'easyrsa').is_file():return False,'OpenVPN no está instalado o EasyRSA no aparece en las rutas habituales (/etc/openvpn/server/easy-rsa, /etc/openvpn/easy-rsa o /usr/share/easy-rsa). Ejecuta el instalador de OpenVPN del script y completa la PKI.',''
  if not (easyrsa/'pki/ca.crt').exists() or not tc_key.exists():return False,'La PKI de OpenVPN no está completa (falta CA o tls-crypt).',''
  cert=easyrsa/'pki/issued'/f'{username}.crt'
  if cert.exists():return False,'Ya existe un cliente OpenVPN con ese nombre.',''
@@ -298,7 +368,7 @@ def delete_zivpn_account(username,password):
 
 def delete_openvpn_account(username):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False
- easyrsa=Path('/etc/openvpn/server/easy-rsa');cert=easyrsa/'pki/issued'/f'{username}.crt';client=DATA/'openvpn-clients'/f'{username}.ovpn'
+ easyrsa=openvpn_easyrsa_dir();cert=easyrsa/'pki/issued'/f'{username}.crt';client=DATA/'openvpn-clients'/f'{username}.ovpn'
  if not cert.exists():
   try:client.unlink(missing_ok=True)
   except:pass
@@ -342,8 +412,8 @@ def delete_v2ray(username):
  return False
 
 def renew_account(a,days):
- if a['type']=='ssh':return renew_ssh(a['username'],days)
- if a['type'] in ('v2ray','xray','wireguard','socks5'):
+ if a['type'] in ('ssh','hysteria'):return renew_ssh(a['username'],days)
+ if a['type'] in ('v2ray','xray','wireguard','socks5','btun','shadowsocks'):
   exp=iso(datetime.now()+timedelta(days=days));return True,exp
  return False,'Tipo no soportado.'
 def renew_ssh(username,days):
@@ -544,14 +614,13 @@ class Handler(BaseHTTPRequestHandler):
   out='';rc=0
   try:
    if action in ('torrent_block','torrent_unblock'):
-    iptables_bin=shutil.which('iptables') or next((x for x in ('/usr/sbin/iptables','/sbin/iptables','/usr/bin/iptables') if Path(x).is_file()),None)
-    if not iptables_bin:raise RuntimeError('No se encontró iptables. Instala iptables o habilita el backend iptables-nft.')
+    if not shutil.which('iptables'):raise RuntimeError('No se encontró iptables. Instala iptables/iptables-nft en Ubuntu y vuelve a intentarlo.')
     def ipt(args,check=False):
-     return subprocess.run([iptables_bin]+args,capture_output=True,text=True,timeout=10).returncode
+     return subprocess.run(['iptables']+args,capture_output=True,text=True,timeout=10).returncode
     if action=='torrent_block':
      ipt(['-N','KEVINTECH_TORRENT']);ipt(['-F','KEVINTECH_TORRENT'])
-     for args in (['-p','tcp','--dport','6881:6999','-j','DROP'],['-p','udp','--dport','6881:6999','-j','DROP'],['-m','string','--algo','bm','--string','BitTorrent','-j','DROP'],['-m','string','--algo','bm','--string','peer_id=','-j','DROP']):
-      ipt(['-A','KEVINTECH_TORRENT']+args)
+     for args in (['-p','tcp','--dport','6881:6999','-j','DROP'],['-p','udp','--dport','6881:6999','-j','DROP']):
+      if ipt(['-A','KEVINTECH_TORRENT']+args)!=0:raise RuntimeError('No se pudo aplicar la regla BitTorrent. Comprueba permisos y el backend de iptables.')
      for chain in ('INPUT','OUTPUT'):
       if ipt(['-C',chain,'-j','KEVINTECH_TORRENT'])!=0:ipt(['-I',chain,'-j','KEVINTECH_TORRENT'])
      out='Reglas de BitTorrent activadas en la cadena aislada KEVINTECH_TORRENT.'
@@ -708,6 +777,7 @@ class Handler(BaseHTTPRequestHandler):
   html=html.replace('href="cookies.html"', 'href="'+PREFIX+'/about?section=cookies"')
   html=html.replace('href="about.html"', 'href="'+PREFIX+'/about"')
   html=html.replace('href="apps.html"', 'href="'+PREFIX+'/about"')
+  html=html.replace('href="/about?section=cookies"', 'href="'+PREFIX+'/about?section=cookies"')
   html=html.replace("href='login.html'", "href='"+PREFIX+"/login'")
   html=html.replace("href='register.html'", "href='"+PREFIX+"/register'")
   return self.send(200,'text/html; charset=utf-8',html)
@@ -770,19 +840,21 @@ class Handler(BaseHTTPRequestHandler):
   if c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>')
   if c.execute('SELECT 1 FROM users WHERE email=?',(email,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese correo ya está registrado.</div>')
   code=secrets.token_urlsafe(7);referred=None;admin_code=cfg().get('admin_referral_code','');admin_referred=bool(ref and admin_code and hmac.compare_digest(ref,admin_code))
+  inviter_name='';inviter_username=''
+  if admin_referred:
+   inviter_name='Administrador';inviter_username=str(cfg().get('admin_username','admin'))
   if ref and not admin_referred:
-   rr=c.execute('SELECT id FROM users WHERE referral_code=? AND active=1',(ref,)).fetchone()
-   if rr:referred=rr['id']
+   rr=c.execute('SELECT id,name,username FROM users WHERE referral_code=? AND active=1',(ref,)).fetchone()
+   if rr:referred=rr['id'];inviter_name=rr['name'];inviter_username=rr['username']
   c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by,referral_points,email,language) VALUES(?,?,?,?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,referred,1,email,lang))
   if referred:c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referred,))
   if admin_referred:
    conf=cfg();conf['admin_referral_points']=int(conf.get('admin_referral_points',0))+2;save_cfg(conf)
-  inviter_name='KevinTech / Administrador' if admin_referred else ''
-  if referred:
-   inviter=c.execute('SELECT name,username FROM users WHERE id=?',(referred,)).fetchone();inviter_name=(inviter['name']+' (@'+inviter['username']+')') if inviter else 'Usuario invitador'
   c.commit();c.close()
-  welcome=('<div class="expiry-modal" id="refWelcome"><div class="expiry-modal-card"><h2>🎉 ¡Bienvenido por invitación!</h2><p>Te registraste mediante un enlace de referido de <b>'+html_escape(inviter_name)+'</b>.</p><p>Los referidos permiten que quien te invitó acumule puntos cuando te registras. Esos puntos pueden utilizarse según las reglas del panel.</p><button class="btn primary" onclick="this.parentNode.parentNode.remove()">Aceptar</button></div></div>' if (referred or admin_referred) else '')
-  return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE=welcome+'<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'))
+  if referred or admin_referred:
+   welcome='<div class="expiry-modal" id="refWelcome"><div class="expiry-modal-card"><div style="font-size:42px">🎁</div><h2>¡Bienvenido a KevinTech!</h2><p>Te registraste mediante un enlace de invitación.</p><div class="notice"><b>Te invitó:</b> '+html_escape(inviter_name)+' (@'+html_escape(inviter_username)+')</div><p>El programa de referidos recompensa a la comunidad: recibes 1 punto al registrarte y la persona que te invitó recibe 2 puntos. Puedes compartir tu propio enlace desde la sección Referidos.</p><button class="btn primary" type="button" onclick="document.getElementById(\'refWelcome\').remove()">Aceptar</button></div></div>'
+  else:welcome=''
+  return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE='<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'+welcome))
 
  def dashboard(self,u):
   if not u:return self.redirect('/login')
@@ -829,7 +901,7 @@ class Handler(BaseHTTPRequestHandler):
  def profile(self,u):
   if not u:return self.redirect('/login')
   if u['role']=='admin':
-   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED=html_escape(c.get('admin_created_at',''))[:10] or '—',POINTS='—',CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
+   c=cfg();body=tpl('profile.html',u,'Perfil',NAME='Administrador',USERNAME=html_escape(c.get('admin_username','admin')),CREATED=html_escape(c.get('admin_created_at',''))[:10] or '—',POINTS='No aplica (administrador)',CODE=html_escape(c.get('admin_referral_code','')),ADMIN=True,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   else:
    body=tpl('profile.html',u,'Perfil',NAME=html_escape(u['name']),USERNAME=html_escape(u['username']),CREATED=html_escape(u['created_at']),POINTS=u['referral_points'],CODE=html_escape(u['referral_code']),ADMIN=False,LANG_ES='selected' if self.user_language(u)=='es' else '',LANG_EN='selected' if self.user_language(u)=='en' else '',LANG_PT='selected' if self.user_language(u)=='pt' else '',LANG_OPTIONS=language_options(self.user_language(u)))
   return self.send(200,body=body)
@@ -887,6 +959,12 @@ class Handler(BaseHTTPRequestHandler):
   elif typ in ('v2ray','xray'):
    details=v2ray_message(a['username'],pw,a['expiration'] or iso(datetime.now()),days)
    m=re.search(r'(?m)^(?:vmess|vless|trojan)://\S+',details);qr=qr_data_uri(m.group(0) if m else '')
+  elif typ=='shadowsocks':
+   parts=pw.split('$',2);port=parts[1] if len(parts)>1 else '8388';secret=parts[2] if len(parts)>2 else '';raw='aes-256-gcm:'+secret+'@'+info['host']+':'+port;link='ss://'+base64.b64encode(raw.encode()).decode()+'#KevinTech-'+a['username'];details='🕶️ CUENTA SHADOWSOCKS CREADA\n\nUsuario: '+a['username']+'\nServidor: '+info['host']+'\nPuerto: '+port+'\nCifrado: aes-256-gcm\nContraseña: '+secret+'\nExpira: '+str(a['expiration'] or '—')+'\n\nEnlace de importación:\n'+link;qr=qr_data_uri(link)
+  elif typ=='btun':
+   secret=pw[5:] if pw.startswith('btun$') else pw;details='⚡ CUENTA BTUN CREADA\n\nUsuario: '+a['username']+'\nContraseña: '+secret+'\nServidor: '+info['host']+'\nPuerto: consulta la configuración BTUN del VPS\nExpira en el panel: '+str(a['expiration'] or '—')+'\n\nLa autenticación BTUN se guarda en /etc/btun/users.'
+  elif typ=='hysteria':
+   details='🚀 CUENTA HYSTERIA CREADA\n\nUsuario: '+a['username']+'\nContraseña: '+pw+'\nServidor: '+info['host']+'\nPuerto: consulta /etc/hysteria/config.json\nExpira: '+str(a['expiration'] or '—')+'\n\nAutenticación PAM del sistema.'
   elif typ=='zivpn':
    details='🎉 CUENTA ZIVPN UDP CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE ACCESO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario / etiqueta: '+a['username']+'\n• Contraseña ZiVPN: '+pw+'\n• Servidor: '+info['host']+'\n• Puerto UDP: 20000-29999\n• Expira (panel): '+str(a['expiration'] or '—')+'\n\n⚠️ ZiVPN autentica por contraseña compartida. El vencimiento se muestra en el panel, pero no se aplica automáticamente al servicio ZiVPN.'
   elif typ=='openvpn':
@@ -894,8 +972,8 @@ class Handler(BaseHTTPRequestHandler):
    details='🎉 CLIENTE OPENVPN CREADO EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DEL CLIENTE\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: '+a['username']+'\n• Servidor: '+info['host']+'\n• Puerto: consulta el archivo .ovpn\n• Expira (panel): '+str(a['expiration'] or '—')+'\n\n📥 Descarga el perfil .ovpn e impórtalo en OpenVPN Connect.'
    if filepath and Path(filepath).is_file():download='<a class="btn primary" href="'+PREFIX+'/account/download?id='+str(a['id'])+'">📥 Descargar perfil .ovpn</a>'
   else:details='Tipo de cuenta: '+str(typ)+'\n'+str(pw)
-  display_pw='Perfil .ovpn descargable' if typ=='openvpn' else pw
-  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape({'v2ray':'V2Ray/Xray','xray':'V2Ray/Xray','zivpn':'ZiVPN UDP','openvpn':'OpenVPN','wireguard':'WireGuard','socks5':'SOCKS5','ssh':'SSH'}.get(typ,typ)),PASSWORD=html_escape(display_pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),QR_IMAGE=('<div class="card qr-card"><h2>📲 Escanea para importar</h2><img alt="Código QR de configuración" style="width:min(280px,100%);height:auto;background:#fff;padding:12px;border-radius:12px" src="'+qr+'"><p class="muted">Generado localmente en tu VPS.</p></div>' if qr else ''),DOWNLOAD_LINK=download,OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' and typ not in ('openvpn','zivpn') else ''))
+  display_pw='Perfil .ovpn descargable' if typ=='openvpn' else (('Puerto '+pw.split('$',2)[1]+' · contraseña protegida') if typ=='shadowsocks' and pw.startswith('ss$') else (pw[5:] if typ=='btun' and pw.startswith('btun$') else pw))
+  return self.send(200,body=tpl('account.html',u,'Cuenta',USERNAME=html_escape(a['username']),TYPE=html_escape({'v2ray':'V2Ray/Xray','xray':'V2Ray/Xray','zivpn':'ZiVPN UDP','openvpn':'OpenVPN','wireguard':'WireGuard','socks5':'SOCKS5','ssh':'SSH','btun':'BTUN','shadowsocks':'Shadowsocks','hysteria':'Hysteria'}.get(typ,typ)),PASSWORD=html_escape(display_pw),EXPIRATION=html_escape(a['expiration'] or '—'),LIMIT=a['ip_limit'],ONLINE=len(ips),IPS=', '.join(html_escape(x) for x in ips) if ips else 'Ninguna',ID=a['id'],DETAILS=html_escape(details),QR_IMAGE=('<div class="card qr-card"><h2>📲 Escanea para importar</h2><img alt="Código QR de configuración" style="width:min(280px,100%);height:auto;background:#fff;padding:12px;border-radius:12px" src="'+qr+'"><p class="muted">Generado localmente en tu VPS.</p></div>' if qr else ''),DOWNLOAD_LINK=download,OWNER=html_escape(a['owner']),HOST=html_escape(info['host']),RENEW_BUTTON='<form class="inline" method="post" action="'+PREFIX+'/account/renew"><input type="hidden" name="id" value="'+str(a['id'])+'"><label>Días</label><input class="input" style="width:90px" name="days" type="number" min="1" max="3650" value="30" required><button class="btn primary">♻️ Renovar</button></form>' if u['role']=='admin' and typ not in ('openvpn','zivpn') else ''))
  def account_download(self,u):
   if not u:return self.redirect('/login')
   try:aid=int(parse_qs(urlparse(self.path).query).get('id',['0'])[0])
@@ -908,21 +986,13 @@ class Handler(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type','application/x-openvpn-profile');self.send_header('Content-Disposition','attachment; filename="'+a['username']+'.ovpn"');self.send_header('Content-Length',str(f.stat().st_size));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(f.read_bytes())
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
-  st=site_settings();admin=u['role']=='admin';available=[]
-  for key,label,service in [('ssh','SSH','ssh'),('xray','V2Ray/Xray (VMess)','xray'),('socks5','SOCKS5','sockd'),('wireguard','WireGuard','wg-quick@wg0'),('zivpn','ZiVPN UDP','zivpn'),('openvpn','OpenVPN','openvpn-server@server')]:
-   try:
-    loaded=subprocess.run(['systemctl','show',service,'-p','LoadState','--value'],capture_output=True,text=True,timeout=2).stdout.strip()=='loaded'
-    active=subprocess.run(['systemctl','is-active','--quiet',service],timeout=2).returncode==0
-   except Exception:loaded=active=False
-   if key=='ssh' or loaded or active:available.append((key,label))
-  options=''.join('<option value="%s">%s</option>'%(k,html_escape(v)) for k,v in available)
-  fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
-  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,PROTOCOL_OPTIONS=options,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
+  st=site_settings();admin=u['role']=='admin';fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
+  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
  def account_create(self,u,d):
   if not u:return self.send(403,body='403')
   if u['role']!='admin':
    st=site_settings();con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
-   if owned>=max(0,int(st.get('quota_user_accounts',2)))+max(0,int(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}).get('accounts',0))):return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
+   if owned>=max(0,int(st.get('quota_user_accounts',2)))+max(0,int(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}).get('accounts',0) if isinstance(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}),dict) else 0)):return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
    if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   # A configured ad gate is mandatory before account creation.
   conf=cfg();ad_count=int(conf.get('ads',{}).get('create',0) or 0)
@@ -946,7 +1016,8 @@ class Handler(BaseHTTPRequestHandler):
   typ=self.val(d,'type','ssh').strip().lower().replace(' ','').replace('/','');typ={'vmess':'xray','v2ray':'xray','v2rayxray':'xray','v2rayvmess':'xray','ssh':'ssh','wireguard':'wireguard','socks5':'socks5','zivpn':'zivpn','zivpnudp':'zivpn','openvpn':'openvpn','btun':'btun','shadowsocks':'shadowsocks','hysteria':'hysteria'}.get(typ,typ);user=self.val(d,'username').lower();pw=self.val(d,'password')
   if u['role']!='admin':
    con=db();owned=con.execute('SELECT COUNT(*) n FROM accounts WHERE user_id=?',(u['id'],)).fetchone()['n'];con.close()
-   max_accounts=max(0,int(st.get('quota_user_accounts',2)))+max(0,int(cfg().get('user_plan_entitlements',{}).get(str(u['id']),{}).get('accounts',0)))
+   ent=cfg().get('user_plan_entitlements',{}).get(str(u['id']),{});extra_accounts=int(ent.get('accounts',0)) if isinstance(ent,dict) else 0
+   max_accounts=max(0,int(st.get('quota_user_accounts',2)))+max(0,extra_accounts)
    if owned>=max_accounts:return self.send(403,body=tpl('message.html',u,'Cuota alcanzada',MESSAGE='<div class="notice bad">Has alcanzado el máximo de cuentas permitido por el administrador.</div>'))
    if int(u.get('referral_points',0))<max(0,int(st.get('account_create_points',3))):return self.send(403,body=tpl('message.html',u,'Puntos insuficientes',MESSAGE='<div class="notice bad">Necesitas '+str(max(0,int(st.get('account_create_points',3))))+' puntos por cada cuenta.</div><a class="btn" href="%s/referrals">Ir a referidos</a>'%PREFIX))
   owner_id=u['id'] if u['role']=='user' else 0
@@ -954,13 +1025,15 @@ class Handler(BaseHTTPRequestHandler):
    c=db();first=c.execute('SELECT id FROM users WHERE active=1 ORDER BY id LIMIT 1').fetchone();c.close()
    if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">No hay usuarios web registrados para asignar esta cuenta. Crea un usuario web primero.</div>'))
    owner_id=first['id']
-  if typ not in ('ssh','xray','socks5','wireguard','zivpn','openvpn'):return self.send(400,body='Este protocolo aún no tiene un creador de cuentas compatible desde el panel web.')
   if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
   elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
   elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
   elif typ=='wireguard':ok,msg,credential=create_wireguard_account(user,days);expiration=msg
   elif typ=='zivpn':ok,msg,credential=create_zivpn_account(user,pw,days);expiration=msg
   elif typ=='openvpn':ok,msg,credential=create_openvpn_account(user,days);expiration=msg
+  elif typ=='btun':ok,msg,credential=create_btun_account(user,pw,days);expiration=msg
+  elif typ=='shadowsocks':ok,msg,credential=create_shadowsocks_account(user,pw,days);expiration=msg
+  elif typ=='hysteria':ok,msg,credential=create_hysteria_account(user,pw,days);expiration=msg
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
   c=db();c.execute('INSERT INTO accounts(user_id,username,type,credential,expiration,ip_limit,created_at) VALUES(?,?,?,?,?,?,?)',(owner_id,user,'v2ray' if typ=='xray' else typ,crypt_credential(credential),expiration,limit,datetime.now().isoformat(timespec='seconds')));aid=c.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -997,7 +1070,7 @@ class Handler(BaseHTTPRequestHandler):
   except:return self.send(400,body='ID inválido')
   c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
-  cred=decrypt_credential(a['credential']);ok=(delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else (delete_zivpn_account(a['username'],cred) if a['type']=='zivpn' else (delete_openvpn_account(a['username']) if a['type']=='openvpn' else delete_ssh(a['username'])[0]))));c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
+  cred=decrypt_credential(a['credential']);ok=(delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else (delete_zivpn_account(a['username'],cred) if a['type']=='zivpn' else (delete_openvpn_account(a['username']) if a['type']=='openvpn' else (delete_btun_account(a['username']) if a['type']=='btun' else (delete_shadowsocks_account(cred) if a['type']=='shadowsocks' else (delete_ssh(a['username'])[0] if a['type'] in ('ssh','socks5','hysteria') else False)))))));c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
  def account_renew(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))
@@ -1065,7 +1138,14 @@ class Handler(BaseHTTPRequestHandler):
    save_cfg(c);return self.send(200,body=tpl('message.html',u,'Ajuste de ads',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/ads">Continuar</a>'))
   if section=='quotas':
    try:
-    vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days','7')))),'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit','1')))),'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days','30')))),'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit','5')))),'quota_renew_points':max(0,min(1000,int(self.val(d,'renew_points','4')))),'account_create_points':max(0,min(1000,int(self.val(d,'create_points','3'))))}
+    current=site_settings()
+    vals={'quota_user_days':max(1,min(3650,int(self.val(d,'user_days')))),
+     'quota_user_limit':max(0,min(100,int(self.val(d,'user_limit')))),
+     'quota_user_accounts':max(0,min(100,int(self.val(d,'user_accounts','2')))),
+     'quota_admin_days':max(1,min(3650,int(self.val(d,'admin_days',str(current.get('quota_admin_days',30)))))),
+     'quota_admin_limit':max(0,min(100,int(self.val(d,'admin_limit',str(current.get('quota_admin_limit',5)))))),
+     'quota_renew_points':max(1,min(1000,int(self.val(d,'renew_points','4')))),
+     'account_create_points':max(0,min(1000,int(self.val(d,'create_points','3'))))}
    except:return self.send(400,body='Cuotas inválidas')
    save_settings(vals);return self.send(200,body=tpl('message.html',u,'Cuotas',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/quotas">Continuar</a>') )
   symbol=self.val(d,'currency_symbol','S/')[:8] or 'S/';save_settings({'currency_symbol':symbol,'site_title':self.val(d,'site_title','KevinTech Multi Script'),'site_description':self.val(d,'site_description'),'home_title':self.val(d,'home_title','Inicio'),'home_description':self.val(d,'home_description'),'protocols_title':self.val(d,'protocols_title','Protocolos'),'protocols_description':self.val(d,'protocols_description'),'online_title':self.val(d,'online_title','Online'),'online_description':self.val(d,'online_description'),'referrals_title':self.val(d,'referrals_title','Referidos'),'referrals_description':self.val(d,'referrals_description'),'about_us':self.val(d,'about_us'),'privacy':self.val(d,'privacy'),'cookies':self.val(d,'cookies'),'terms':self.val(d,'terms'),'social_facebook':self.val(d,'social_facebook')[:500],'social_instagram':self.val(d,'social_instagram')[:500],'social_tiktok':self.val(d,'social_tiktok')[:500],'social_whatsapp':self.val(d,'social_whatsapp')[:500],'social_youtube':self.val(d,'social_youtube')[:500],'social_web':self.val(d,'social_web')[:500],'contact_email':self.val(d,'contact_email')[:254],'contact_phone':self.val(d,'contact_phone')[:80],'og_title':self.val(d,'og_title')[:200],'og_description':self.val(d,'og_description')[:500],'og_image':self.val(d,'og_image')[:1000],'index_code':self.val(d,'index_code')[:4000]});conf=cfg();conf['currency_symbol']=symbol;save_cfg(conf);return self.send(200,body=tpl('message.html',u,'Ajuste general',MESSAGE='<div class="notice oktxt">Guardado con éxito.</div><a class="btn primary" href="'+PREFIX+'/admin/settings/general">Continuar</a>') )
@@ -1076,7 +1156,7 @@ class Handler(BaseHTTPRequestHandler):
   return plans
  def plans(self,u):
   if not u:return self.redirect('/login')
-  conf=cfg();currency=conf.get('currency_symbol') or site_settings().get('currency_symbol','S/') or 'S/';plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p class="plan-benefits">'+html_escape(x.get('benefits','')).replace('\n','<br>')+'</p><p class="muted">'+html_escape(x.get('period',''))+'</p><p><b>Precio: '+html_escape(currency)+' '+html_escape(x.get('price','0'))+'</b></p><button type="button" class="btn primary" data-plan-buy data-id="'+html_escape(x.get('id',''))+'" data-title="'+html_escape(x.get('title','Plan'))+'" data-benefits="'+html_escape(x.get('benefits',''))+'" data-price="'+html_escape(x.get('price','0'))+'" data-currency="'+html_escape(currency)+'" data-period="'+html_escape(x.get('period',''))+'"><i class="fa-solid fa-cart-shopping"></i> Solicitar plan</button></div>' for x in plans) or '<p>No hay planes disponibles.</p>';manuals_html=''.join('<div class="manual-payment-option" data-name="'+html_escape(m.get('name',''))+'" data-info="'+html_escape(m.get('info',''))+'"></div>' for m in conf.get('manual_payment_methods',[]));cards += '<div id="manualPaymentOptions" style="display:none">'+manuals_html+'</div>'
+  conf=cfg();currency=conf.get('currency_symbol') or site_settings().get('currency_symbol','S/') or 'S/';plans=self.plans_data();cards=''.join('<div class="card"><h2>'+html_escape(x.get('title','Plan'))+'</h2><p class="plan-benefits">'+html_escape(x.get('benefits','')).replace('\n','<br>')+'</p><p class="muted">'+html_escape(x.get('period',''))+'</p><p><b>Precio: '+html_escape(currency)+' '+html_escape(x.get('price','0'))+'</b></p><button type="button" class="btn primary" data-plan-buy data-id="'+html_escape(x.get('id',''))+'" data-title="'+html_escape(x.get('title','Plan'))+'" data-benefits="'+html_escape(x.get('benefits',''))+'" data-price="'+html_escape(x.get('price','0'))+'" data-free="'+('1' if float(x.get('price') or 0)<=0 else '0')+'" data-currency="'+html_escape(currency)+'" data-period="'+html_escape(x.get('period',''))+'"><i class="fa-solid fa-cart-shopping"></i> Solicitar plan</button></div>' for x in plans) or '<p>No hay planes disponibles.</p>';manuals_html=''.join('<div class="manual-payment-option" data-name="'+html_escape(m.get('name',''))+'" data-info="'+html_escape(m.get('info',''))+'"></div>' for m in conf.get('manual_payment_methods',[]));cards += '<div id="manualPaymentOptions" style="display:none">'+manuals_html+'</div>'
   return self.send(200,body=tpl('plans.html',u,'Planes',CARDS=cards))
  def plans_settings(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
@@ -1372,7 +1452,6 @@ class Handler(BaseHTTPRequestHandler):
    content=''.join(parts) or '<p>Aún no se han configurado redes sociales ni datos de contacto.</p>'
   else:
    title,key=mapx.get(section,mapx['about']);content=html_escape(st[key]).replace('\n','<br>')
-  if u and u.get('role')=='admin':edit=''
   return self.send(200,body=tpl('about.html',u,title,HEADING=title,CONTENT=content,EDIT=edit))
  def console(self,u):
   if not u or u['role']!='admin':return self.redirect('/login')
