@@ -174,6 +174,67 @@ def all_online():
   return rows
  except:return []
 
+def sync_zivpn_password(password):
+ config=Path('/etc/zivpn/config.json')
+ if not config.is_file():return True
+ try:
+  data=json.loads(config.read_text());auth=data.get('auth',{})
+  if auth.get('mode')!='passwords':return False
+  values=auth.setdefault('config',[])
+  if password in values:return True
+  old=config.read_bytes();values.append(password);tmp=config.with_suffix('.json.kt-tmp');tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(config)
+  rc,out=shell('systemctl restart zivpn',20)
+  if rc:
+   config.write_bytes(old);os.chmod(config,0o600);shell('systemctl restart zivpn',15);log('ZiVPN password sync failed: '+(out or 'restart failed'));return False
+  return True
+ except Exception as e:log('ZiVPN password sync error: '+str(e));return False
+
+def ensure_ssh_account_integrations():
+ # Install the dynamic login notice and IP limiter used by usuarios/add.sh.
+ checkuser=Path('/usr/local/bin/kevintech-checkuser')
+ checkuser.write_text(r'''#!/bin/bash
+BASE="/etc/kevintech"
+LIMITS_FILE="$BASE/limits.conf"
+U="${USER:-${LOGNAME:-}}"
+[[ -z "$U" ]] && exit 0
+id "$U" >/dev/null 2>&1 || exit 0
+LIMIT=$(awk -F: -v u="$U" '$1==u{print $2;exit}' "$LIMITS_FILE" 2>/dev/null); [[ -z "$LIMIT" ]] && LIMIT=0
+IPS=$(who 2>/dev/null | awk -v u="$U" '$1==u{ip=$5;gsub(/[()]/,"",ip);if(ip!="")print ip}' | sort -u)
+COUNT=$(printf '%s\n' "$IPS" | grep -c . 2>/dev/null); [[ -z "$IPS" ]] && COUNT=0
+EXP=$(chage -l "$U" 2>/dev/null | awk -F': ' '/Account expires/{print $2;exit}')
+[[ -z "$EXP" || "$EXP" == never ]] && EXP=Ilimitada
+printf '\nCHECK USER\nUsuario: %s\nConexiones: %s/%s\nExpiración: %s\n\n' "$U" "$COUNT" "${LIMIT:-0}" "$EXP"
+''',encoding='utf8');os.chmod(checkuser,0o755)
+ sshrc=Path('/etc/ssh/sshrc')
+ try:
+  old=sshrc.read_text(errors='ignore') if sshrc.exists() else ''
+  marker='# KevinTech Dynamic CheckUser'
+  if marker not in old:
+   sshrc.parent.mkdir(parents=True,exist_ok=True);sshrc.write_text(old.rstrip()+'\n\n'+marker+'\n[ -x /usr/local/bin/kevintech-checkuser ] && /usr/local/bin/kevintech-checkuser\n')
+   os.chmod(sshrc,0o755)
+ except Exception as e:log('Could not install sshrc checkuser hook: '+str(e))
+ limiter=Path('/usr/local/bin/kevintech-limit')
+ limiter.write_text(r'''#!/bin/bash
+LIMITS_FILE="/etc/kevintech/limits.conf"
+[[ ! -f "$LIMITS_FILE" ]] && exit 0
+while IFS=: read -r U LIMIT; do
+ [[ -z "$U" || "$U" =~ ^# ]] && continue
+ [[ "$LIMIT" =~ ^[0-9]+$ ]] || continue
+ (( LIMIT == 0 )) && continue
+ id "$U" >/dev/null 2>&1 || continue
+ SESSIONS=$(who 2>/dev/null | awk -v u="$U" '$1==u{tty=$2;ip=$5;gsub(/[()]/,"",ip);if(tty!=""&&ip!="")print tty "|" ip}')
+ [[ -z "$SESSIONS" ]] && continue
+ IPS=$(printf '%s\n' "$SESSIONS" | cut -d'|' -f2 | awk '!seen[$0]++')
+ COUNT=0; ALLOWED=''
+ while IFS= read -r IP; do [[ -z "$IP" ]] && continue; ((COUNT++)); (( COUNT <= LIMIT )) && ALLOWED="${ALLOWED}${IP}"$'\n'; done <<< "$IPS"
+ while IFS='|' read -r TTY IP; do [[ -z "$TTY" || -z "$IP" ]] && continue; if ! printf '%s' "$ALLOWED" | grep -Fxq "$IP"; then pkill -KILL -t "$TTY" 2>/dev/null; fi; done <<< "$SESSIONS"
+done < "$LIMITS_FILE"
+''',encoding='utf8');os.chmod(limiter,0o755)
+ service=Path('/etc/systemd/system/kevintech-limit.service')
+ service.write_text("[Unit]\nDescription=KevinTech SSH IP Limit\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=/bin/bash -c 'while true; do /usr/local/bin/kevintech-limit; sleep 2; done'\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=multi-user.target\n",encoding='utf8')
+ try:shell('systemctl daemon-reload && systemctl enable --now kevintech-limit.service',20)
+ except Exception as e:log('Could not enable kevintech-limit.service: '+str(e))
+
 def create_ssh_account(username,password,days,limit):
  if not safe_username(username):return False,'Usuario SSH inválido.'
  if len(password)<4:return False,'La contraseña debe tener al menos 4 caracteres.'
@@ -182,7 +243,7 @@ def create_ssh_account(username,password,days,limit):
  if subprocess.run(['id',username],capture_output=True).returncode==0:return False,'Ese usuario ya existe en el VPS.'
  exp=iso(datetime.now()+timedelta(days=days));rc,out=shell('useradd -e %s -M -s /usr/sbin/nologin %s && printf %s | chpasswd'%(shlex.quote(exp),shlex.quote(username),shlex.quote(username+':'+password)),15)
  if rc!=0:return False,out or 'No se pudo crear el usuario.'
- limits=BASE/'limits.conf';lines=limits.read_text(errors='ignore').splitlines() if limits.exists() else [];lines=[x for x in lines if not x.startswith(username+':')];lines.append(f'{username}:{limit}');limits.write_text('\n'.join(lines)+'\n');os.chmod(limits,0o600);return True,exp
+ limits=BASE/'limits.conf';lines=limits.read_text(errors='ignore').splitlines() if limits.exists() else [];lines=[x for x in lines if not x.startswith(username+':')];lines.append(f'{username}:{limit}');limits.write_text('\n'.join(lines)+'\n');os.chmod(limits,0o600);ensure_ssh_account_integrations();sync_zivpn_password(password);return True,exp
 
 def create_v2ray_account(username,days):
  cfgp=Path('/usr/local/etc/xray/config.json')
@@ -273,15 +334,34 @@ def openvpn_easyrsa_dir():
    return candidate
  return candidates[0]
 
+def _read_kevintech_config_value(key, default=''):
+ try:
+  conf=BASE/'config.conf'
+  if conf.exists():
+   for line in conf.read_text(errors='ignore').splitlines():
+    if line.startswith(key+'='):
+     return line.split('=',1)[1].strip().strip('"\'')
+ except Exception:pass
+ return default
+
 def create_btun_account(username,password,days):
  if not safe_username(username):return False,'Usuario BTUN inválido.',''
  if len(password)<4:return False,'La contraseña BTUN debe tener al menos 4 caracteres.',''
  auth=Path('/etc/btun/users');service=Path('/etc/systemd/system/btun.service')
- if not auth.exists() or not service.exists() or subprocess.run(['systemctl','is-active','--quiet','btun']).returncode!=0:return False,'BTUN no está instalado o su servicio no está activo. Instálalo y actívalo desde el gestor BTUN.',''
+ if not auth.is_file() or not service.is_file() or subprocess.run(['systemctl','is-active','--quiet','btun']).returncode!=0:return False,'BTUN no está instalado o su servicio no está activo. Instálalo y actívalo desde el gestor BTUN.',''
  try:
-  lines=auth.read_text(errors='ignore').splitlines()
+  original=auth.read_text(errors='ignore')
+  lines=original.splitlines()
   if any(x.split(':',1)[0]==username for x in lines if ':' in x):return False,'Ese usuario BTUN ya existe.',''
-  auth.parent.mkdir(parents=True,exist_ok=True);auth.write_text('\n'.join(lines+[username+':'+password])+'\n');os.chmod(auth,0o600)
+  auth.parent.mkdir(parents=True,exist_ok=True)
+  auth.write_text(original.rstrip()+'\n'+username+':'+password+'\n' if original.strip() else username+':'+password+'\n')
+  os.chmod(auth,0o600)
+  rc,out=shell('systemctl restart btun',20)
+  if rc or subprocess.run(['systemctl','is-active','--quiet','btun']).returncode!=0:
+   auth.write_text(original);os.chmod(auth,0o600);shell('systemctl restart btun',15)
+   return False,out or 'BTUN no reinició correctamente; se restauró el archivo de usuarios anterior.',''
+  # BTUN's auth-file format has no per-user expiration field. The panel tracks
+  # the requested date but the BTUN daemon itself does not enforce it.
   return True,iso(datetime.now()+timedelta(days=days)),'btun$'+password
  except Exception as e:return False,'Error actualizando usuarios BTUN: '+str(e),''
 
@@ -289,28 +369,36 @@ def create_shadowsocks_account(username,password,days):
  if not safe_username(username):return False,'Usuario Shadowsocks inválido.',''
  if len(password)<8:return False,'La contraseña Shadowsocks debe tener al menos 8 caracteres.',''
  if not shutil.which('ss-server'):return False,'Shadowsocks-libev no está instalado. Instálalo desde el gestor Shadowsocks.',''
- folder=Path('/etc/shadowsocks-libev');folder.mkdir(parents=True,exist_ok=True)
- used=set()
- for f in folder.glob('*.json'):
-  try:used.add(int(f.stem))
-  except:pass
- port=next((n for n in range(20000,30000) if n not in used),None)
- if port is None:return False,'No hay puertos libres para una nueva cuenta Shadowsocks.',''
- conf={'server':'0.0.0.0','server_port':port,'password':password,'timeout':300,'method':'aes-256-gcm','mode':'tcp_and_udp'}
- path=folder/(str(port)+'.json')
+ port=_read_kevintech_config_value('SS_PORT','8388')
+ if not str(port).isdigit() or not 1<=int(port)<=65535:return False,'El puerto SS_PORT de KevinTech no es válido.',''
+ port=int(port);folder=Path('/etc/shadowsocks-libev');path=folder/(str(port)+'.json')
+ if not path.is_file():return False,'No existe la configuración real de Shadowsocks en '+str(path)+'. Instala Shadowsocks desde el gestor del script.',''
+ service='shadowsocks-libev-server@'+str(port)
+ if subprocess.run(['systemctl','is-active','--quiet',service]).returncode!=0:return False,'El servicio '+service+' no está activo. Inícialo desde el gestor Shadowsocks antes de crear la credencial.',''
  try:
-  path.write_text(json.dumps(conf,indent=2));os.chmod(path,0o600)
-  rc,out=shell('systemctl enable --now shadowsocks-libev-server@%s'%port,25)
-  if shutil.which('ufw'):shell('ufw allow %s/tcp && ufw allow %s/udp'%(port,port),10)
-  if rc:
-   path.unlink(missing_ok=True);return False,out or 'No se pudo iniciar la instancia Shadowsocks para el puerto asignado.',''
+  data=json.loads(path.read_text())
+  if int(data.get('server_port',0))!=port:return False,'El puerto del archivo de Shadowsocks no coincide con SS_PORT.',''
+  # The original KevinTech CLI uses ONE shared server password, not per-user
+  # credentials or extra ports. Keep the same service and cipher.
+  old_bytes=path.read_bytes()
+  old_password=str(data.get('password',''))
+  data['password']=password;data.setdefault('method','aes-256-gcm');data.setdefault('mode','tcp_and_udp')
+  tmp=path.with_suffix('.json.tmp');tmp.write_text(json.dumps(data,indent=4,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(path)
+  rc,out=shell('systemctl restart '+shlex.quote(service),20)
+  if rc or subprocess.run(['systemctl','is-active','--quiet',service]).returncode!=0:
+   path.write_bytes(old_bytes);os.chmod(path,0o600)
+   shell('systemctl restart '+shlex.quote(service),15)
+   return False,out or 'Shadowsocks no reinició; se restauró la contraseña anterior.',''
+  # Keep the CLI manager's config.conf synchronized with the live config.
+  conf=BASE/'config.conf'
+  if conf.exists():
+   raw=conf.read_text(errors='ignore').splitlines();raw=[x for x in raw if not x.startswith('SS_PASSWORD=')];raw.append('SS_PASSWORD='+password);conf.write_text('\n'.join(raw)+'\n')
   return True,iso(datetime.now()+timedelta(days=days)),'ss$%s$%s'%(port,password)
- except Exception as e:
-  path.unlink(missing_ok=True);return False,'Error creando Shadowsocks: '+str(e),''
+ except Exception as e:return False,'Error actualizando la configuración real de Shadowsocks: '+str(e),''
 
 def create_hysteria_account(username,password,days):
- if not Path('/etc/hysteria/config.json').exists():return False,'Hysteria no está instalado o falta /etc/hysteria/config.json.',''
- if subprocess.run(['systemctl','is-active','--quiet','hysteria1-server']).returncode!=0 and subprocess.run(['systemctl','is-active','--quiet','hysteria']).returncode!=0:return False,'Hysteria no está activo. Inicia el servicio antes de crear cuentas.',''
+ if not Path('/etc/hysteria/config.json').is_file() or not Path('/usr/local/bin/hysteria-auth.sh').is_file():return False,'Hysteria no está instalado o falta su configuración/autenticador PAM de KevinTech (/etc/hysteria/config.json y /usr/local/bin/hysteria-auth.sh).',''
+ if subprocess.run(['systemctl','is-active','--quiet','hysteria1-server']).returncode!=0:return False,'El servicio hysteria1-server no está activo. Inícialo desde el gestor Hysteria.',''
  ok,result=create_ssh_account(username,password,days,0)
  if not ok:return False,result,''
  return True,result,password
@@ -318,21 +406,36 @@ def create_hysteria_account(username,password,days):
 def delete_btun_account(username):
  auth=Path('/etc/btun/users')
  try:
-  if not auth.exists():return False
-  lines=auth.read_text(errors='ignore').splitlines();new=[x for x in lines if x.split(':',1)[0]!=username]
-  if len(new)==len(lines):return False
-  auth.write_text('\n'.join(new)+('\n' if new else ''));os.chmod(auth,0o600);return True
+  if not auth.is_file():return False
+  original=auth.read_text(errors='ignore');lines=original.splitlines();new_lines=[x for x in lines if x.split(':',1)[0]!=username]
+  if len(new_lines)==len(lines):return False
+  auth.write_text('\n'.join(new_lines)+('\n' if new_lines else ''));os.chmod(auth,0o600)
+  rc,out=shell('systemctl restart btun',20)
+  if rc:
+   auth.write_text(original);os.chmod(auth,0o600);shell('systemctl restart btun',15);return False
+  return True
  except:return False
 
 def delete_shadowsocks_account(credential):
  try:
   if not credential.startswith('ss$'):return False
-  port=int(credential.split('$',2)[1]);path=Path('/etc/shadowsocks-libev')/(str(port)+'.json')
-  shell('systemctl disable --now shadowsocks-libev-server@%s'%port,15)
-  if shutil.which('ufw'):
-   shell('ufw delete allow %s/tcp; ufw delete allow %s/udp'%(port,port),10)
-  path.unlink(missing_ok=True);return True
- except:return False
+  parts=credential.split('$',2)
+  if len(parts)!=3:return False
+  port=int(parts[1]);path=Path('/etc/shadowsocks-libev')/(str(port)+'.json');service='shadowsocks-libev-server@'+str(port)
+  if not path.is_file():return False
+  old_bytes=path.read_bytes();data=json.loads(old_bytes)
+  if str(data.get('server_port'))!=str(port):return False
+  # Revoke the one shared password used by the script, keeping its service installed.
+  new_password=secrets.token_urlsafe(18)
+  data['password']=new_password;tmp=path.with_suffix('.json.tmp');tmp.write_text(json.dumps(data,indent=4,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(path)
+  rc,out=shell('systemctl restart '+shlex.quote(service),20)
+  if rc:
+   path.write_bytes(old_bytes);os.chmod(path,0o600);shell('systemctl restart '+shlex.quote(service),15);return False
+  conf=BASE/'config.conf'
+  if conf.exists():
+   lines=[x for x in conf.read_text(errors='ignore').splitlines() if not x.startswith('SS_PASSWORD=')];lines.append('SS_PASSWORD='+new_password);conf.write_text('\n'.join(lines)+'\n')
+  return True
+ except Exception:return False
 
 def create_openvpn_account(username,days):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de cliente OpenVPN inválido.',''
@@ -437,12 +540,82 @@ def server_ip():
  return (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]
 def slowdns_key():
  p=Path('/etc/slowdns/server.pub');return p.read_text(errors='ignore').strip() if p.exists() else 'No configurado'
+def _listening_ports(process_pattern,protocol='tcp'):
+ try:
+  cmd=['ss','-H','-ltnp'] if protocol=='tcp' else ['ss','-H','-lunp']
+  out=subprocess.run(cmd,capture_output=True,text=True,timeout=5).stdout
+  ports=set()
+  for line in out.splitlines():
+   if not re.search(process_pattern,line,re.I):continue
+   parts=line.split()
+   if len(parts)<4:continue
+   port=parts[3].rsplit(':',1)[-1]
+   if port.isdigit():ports.add(int(port))
+  return ','.join(str(x) for x in sorted(ports))
+ except Exception:return ''
+
+def _service_active(*names):
+ for name in names:
+  try:
+   if subprocess.run(['systemctl','is-active','--quiet',name],timeout=3).returncode==0:return True
+  except Exception:pass
+ return False
+
+def _json_port(path,field='listen',default=''):
+ try:
+  data=json.loads(Path(path).read_text());value=str(data.get(field,'')).strip()
+  m=re.search(r'(?:^|:)(\d+)$',value)
+  return m.group(1) if m else default
+ except Exception:return default
+
 def server_info():
- domain=server_domain();ip=server_ip();host=domain or ip;return {'host':host,'ip':ip,'ssh':'22','dropbear':'143,90,109','ssl':'8080,443,80','badvpn':'7300,7200','bhttp':'8088','slowdns':'5300','zivpn':'21992','zivpn_udp':'20000-29999','slowdns_ns':('ns-'+domain if domain else 'No configurado'),'slowdns_key':slowdns_key()}
+ domain=server_domain();ip=server_ip();host=domain or ip
+ ssh=_listening_ports(r'sshd','tcp') or ('22' if _service_active('ssh','sshd') else '—')
+ dropbear=_listening_ports(r'dropbear','tcp') or '—'
+ ssl=_listening_ports(r'haproxy','tcp') or '—'
+ badvpn=_listening_ports(r'badvpn-udpgw','tcp') or '—'
+ udp_custom=_listening_ports(r'udp-custom|udpcustom','udp') or '—'
+ try:tcp_listeners=subprocess.run(['ss','-H','-ltn'],capture_output=True,text=True,timeout=4).stdout
+ except Exception:tcp_listeners=''
+ http=[str(port) for port in (80,443,8080) if re.search(r':'+str(port)+r'\s',tcp_listeners)]
+ slowdns='—';slowdns_ns='No configurado';slowdns_pub=slowdns_key()
+ if Path('/etc/slowdns/domain.conf').is_file() and Path('/etc/slowdns/server.pub').is_file() and _service_active('slowdns','dnstt'):
+  try:slowdns_ns=Path('/etc/slowdns/domain.conf').read_text().strip() or 'No configurado'
+  except:pass
+  slowdns=_listening_ports(r'dnstt|slowdns','udp') or '5300'
+ zivpn='—'
+ if Path('/etc/zivpn/config.json').is_file() and _service_active('zivpn'):
+  zivpn=_json_port('/etc/zivpn/config.json','listen','21992')
+ openvpn='—'
+ if _service_active('openvpn-server@server','openvpn'):
+  ovpn_tcp=_listening_ports(r'openvpn','tcp');ovpn_udp=_listening_ports(r'openvpn','udp');openvpn=','.join(x for x in (ovpn_tcp,ovpn_udp) if x) or '—'
+ hysteria_port='—';hysteria_obfs=''
+ if Path('/etc/hysteria/config.json').is_file() and _service_active('hysteria1-server','hysteria','hysteria-server'):
+  hysteria_port=_json_port('/etc/hysteria/config.json','listen','UDP')
+  try:
+   hc=json.loads(Path('/etc/hysteria/config.json').read_text());ob=hc.get('obfs','');hysteria_obfs=str(ob.get('password') or ob.get('type') or '') if isinstance(ob,dict) else str(ob or '')
+  except:pass
+ bhttp='8088' if Path('/etc/systemd/system/bhttp.service').is_file() and _service_active('bhttp') and re.search(r':8088\s',tcp_listeners) else '—'
+ return {'host':host,'ip':ip,'ssh':ssh,'dropbear':dropbear,'ssl':ssl,'badvpn':badvpn,'bhttp':bhttp,'slowdns':slowdns,'slowdns_ns':slowdns_ns,'slowdns_key':slowdns_pub,'zivpn':zivpn,'zivpn_udp':'20000-29999','openvpn':openvpn,'http_custom':','.join(http) or '—','udp_custom':udp_custom,'hysteria_port':hysteria_port,'hysteria_obfs':hysteria_obfs}
 
 def ssh_message(username,password,expiration,days,limit):
  s=server_info();lim='Ilimitado' if int(limit)==0 else str(limit)
- return f'''🎉 CUENTA CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DEL USUARIO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: {username}\n• 🔑 Contraseña: {password}\n• Expira: {datetime.strptime(expiration,'%Y-%m-%d').strftime('%d/%m/%Y')}\n• Duración: {days} días\n• Límite IP: {lim}\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 INFORMACIÓN DEL SERVIDOR\n━━━━━━━━━━━━━━━━━━━━\n• Host/IP: {s['host']}\n• IP: {s['ip']}\n• SSH: {s['ssh']}\n• Dropbear: {s['dropbear']}\n• SSL Tunnel: {s['ssl']}\n• BadVPN: {s['badvpn']}\n• BHTTP: {s['bhttp']}\n\n━━━━━━━━━━━━━━━━━━━━\n📡 HTTP CUSTOM\n━━━━━━━━━━━━━━━━━━━━\n{s['host']}:443@{username}:{password}\n{s['host']}:80@{username}:{password}\n{s['host']}:8080@{username}:{password}\n\n━━━━━━━━━━━━━━━━━━━━\n🚀 UDP CUSTOM\n━━━━━━━━━━━━━━━━━━━━\n{s['host']}:1-65535@{username}:{password}\n\n━━━━━━━━━━━━━━━━━━━━\n🚀 ZIVPN UDP\n━━━━━━━━━━━━━━━━━━━━\n• Servidor: {s['host']}:{s['zivpn']}\n• Contraseña: {password}\n• Puerto UDP: {s['zivpn_udp']}\n\n━━━━━━━━━━━━━━━━━━━━\n🐌 SLOWDNS (5300)\n━━━━━━━━━━━━━━━━━━━━\n• NS: {s['slowdns_ns']}\n• KEY: {s['slowdns_key']}\n• Puerto: {s['slowdns']}\n\n━━━━━━━━━━━━━━━━━━━━\n💎 KEVINTECH MULTI SCRIPT\n━━━━━━━━━━━━━━━━━━━━'''
+ try:exp=datetime.strptime(expiration,'%Y-%m-%d').strftime('%d/%m/%Y')
+ except:exp=str(expiration or 'Ilimitada')
+ rows=[f"🎉 CUENTA CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DEL USUARIO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: {username}\n• 🔑 Contraseña: {password}\n• Expira: {exp}\n• Duración: {days} días\n• Límite IP: {lim}\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 INFORMACIÓN DEL SERVIDOR\n━━━━━━━━━━━━━━━━━━━━\n• Host/IP: {s['host']}\n• IP: {s['ip']}"]
+ if s['ssh']!='—':rows.append('• SSH: '+s['ssh'])
+ if s['dropbear']!='—':rows.append('• Dropbear: '+s['dropbear'])
+ if s['ssl']!='—':rows.append('• SSL / HAProxy: '+s['ssl'])
+ if s['badvpn']!='—':rows.append('• BadVPN: '+s['badvpn'])
+ if s['bhttp']!='—':rows.append('• BHTTP: '+s['bhttp'])
+ if s['openvpn']!='—':rows.append('• OpenVPN: '+s['openvpn'])
+ if s['hysteria_port']!='—':rows.append('\n━━━━━━━━━━━━━━━━━━━━\n🚀 HYSTERIA V1\n━━━━━━━━━━━━━━━━━━━━\n• Puerto UDP: '+s['hysteria_port']+'\n• AUTH: Usuario SSH + Contraseña SSH'+('\n• OBFS: '+s['hysteria_obfs'] if s['hysteria_obfs'] else ''))
+ if s['zivpn']!='—':rows.append('\n━━━━━━━━━━━━━━━━━━━━\n🚀 ZIVPN UDP\n━━━━━━━━━━━━━━━━━━━━\n• Servidor: '+s['host']+':'+s['zivpn']+'\n• Contraseña: '+password+'\n• Puerto UDP: '+s['zivpn_udp'])
+ if s['slowdns']!='—':rows.append('\n━━━━━━━━━━━━━━━━━━━━\n🐌 SLOWDNS\n━━━━━━━━━━━━━━━━━━━━\n• NS: '+s['slowdns_ns']+'\n• KEY: '+s['slowdns_key']+'\n• Puerto: '+s['slowdns'])
+ if s['http_custom']!='—':rows.append('\n━━━━━━━━━━━━━━━━━━━━\n📡 HTTP CUSTOM\n━━━━━━━━━━━━━━━━━━━━\n'+''.join(s['host']+':'+p+'@'+username+':'+password+'\n' for p in s['http_custom'].split(',')))
+ if s['udp_custom']!='—':rows.append('\n━━━━━━━━━━━━━━━━━━━━\n🚀 UDP CUSTOM\n━━━━━━━━━━━━━━━━━━━━\nudp: '+s['host']+'::1-65535:'+username+':'+password)
+ rows.append('\n━━━━━━━━━━━━━━━━━━━━\n💎 KEVINTECH MULTI SCRIPT\n━━━━━━━━━━━━━━━━━━━━')
+ return '\n'.join(rows)
 
 def v2ray_message(username,uid,expiration,days):
  s=server_info();exp=datetime.strptime(expiration,'%Y-%m-%d').strftime('%d/%m/%Y');raw=f'v:vmess@{s["host"]}:443?type=ws&path=/vmess&security=tls&uuid={uid}';link='vmess://'+base64.b64encode(raw.encode()).decode()
@@ -591,7 +764,14 @@ class Handler(BaseHTTPRequestHandler):
    body='<div class="hero"><h1><i class="fa-solid fa-gauge-high"></i> Speedtest</h1><p>Comprueba la velocidad de conexión del VPS.</p></div><div class="card"><p>'+html_escape(msg)+'</p>'+(('<form method="post" action="'+PREFIX+'/tools/speedtest/run"><button class="btn primary">Ejecutar prueba</button></form>') if has else '')+'</div>'
    return self.send(200,body=page(title,body,u))
   if slug=='block-torrent':
-   body='<div class="hero"><h1><i class="fa-solid fa-ban"></i> Block Torrent</h1><p>Aplica o retira reglas aisladas de BitTorrent sin vaciar todas las reglas del firewall.</p></div><div class="card"><div class="notice">Requiere permisos de administrador del VPS. Se modificará únicamente la cadena KEVINTECH_TORRENT.</div><form method="post" action="'+PREFIX+'/tools/run"><button class="btn primary" name="tool_action" value="torrent_block">Bloquear BitTorrent</button><button class="btn danger" name="tool_action" value="torrent_unblock" data-confirm="¿Retirar las reglas BitTorrent de KevinTech?">Desbloquear BitTorrent</button></form></div>'
+   ipt=shutil.which('iptables');active=False;state='No se pudo consultar el firewall: iptables no está instalado.'
+   if ipt:
+    try:
+     check=subprocess.run([ipt,'-w','5','-C','INPUT','-j','KEVINTECH_TORRENT'],capture_output=True,text=True,timeout=8)
+     active=check.returncode==0
+     state='Bloqueo activo: la cadena KEVINTECH_TORRENT está conectada a INPUT.' if active else 'Bloqueo inactivo: no se encontró la regla de KevinTech en INPUT.'
+    except Exception as e:state='No se pudo consultar iptables: '+str(e)
+   body='<div class="hero"><h1><i class="fa-solid fa-ban"></i> Block Torrent</h1><p>Gestiona las reglas de BitTorrent sin vaciar ni modificar las demás reglas del firewall.</p></div><div class="card"><div class="notice"><b>Estado:</b> '+html_escape(state)+'</div><p class="muted small">Solo administradores. El servicio web se ejecuta como root; si iptables o el módulo de coincidencia no están disponibles, se mostrará el error concreto. Las reglas cubren IPv4.</p><form method="post" action="'+PREFIX+'/tools/run"><button class="btn primary" name="tool_action" value="torrent_block">Bloquear BitTorrent</button><button class="btn danger" name="tool_action" value="torrent_unblock" data-confirm="¿Retirar las reglas BitTorrent de KevinTech?">Desbloquear BitTorrent</button></form></div>'
    return self.send(200,body=page(title,body,u))
   if slug=='block-ads':
    body='<div class="hero"><h1><i class="fa-solid fa-shield-halved"></i> Block Ads</h1><p>Administra el bloque de dominios publicitarios del archivo hosts.</p></div><div class="card"><p>Se conserva una copia de seguridad y solo se quita el bloque marcado por KevinTech.</p><form method="post" action="'+PREFIX+'/tools/run"><button class="btn primary" name="tool_action" value="ads_block">Bloquear dominios de anuncios</button><button class="btn danger" name="tool_action" value="ads_unblock" data-confirm="¿Eliminar solamente el bloque de anuncios de KevinTech?">Desbloquear anuncios</button></form></div>'
@@ -614,20 +794,44 @@ class Handler(BaseHTTPRequestHandler):
   out='';rc=0
   try:
    if action in ('torrent_block','torrent_unblock'):
-    if not shutil.which('iptables'):raise RuntimeError('No se encontró iptables. Instala iptables/iptables-nft en Ubuntu y vuelve a intentarlo.')
-    def ipt(args,check=False):
-     return subprocess.run(['iptables']+args,capture_output=True,text=True,timeout=10).returncode
+    if os.geteuid()!=0:raise PermissionError('Block Torrent necesita root. Verifica que kevintech-web.service tenga User=root y reinicia el servicio.')
+    iptbin=shutil.which('iptables')
+    if not iptbin:raise RuntimeError('No se encontró iptables. Instala iptables/iptables-nft en Ubuntu.')
+    def ipt(args):
+     return subprocess.run([iptbin,'-w','5']+args,capture_output=True,text=True,timeout=12)
+    chain='KEVINTECH_TORRENT'
     if action=='torrent_block':
-     ipt(['-N','KEVINTECH_TORRENT']);ipt(['-F','KEVINTECH_TORRENT'])
-     for args in (['-p','tcp','--dport','6881:6999','-j','DROP'],['-p','udp','--dport','6881:6999','-j','DROP']):
-      if ipt(['-A','KEVINTECH_TORRENT']+args)!=0:raise RuntimeError('No se pudo aplicar la regla BitTorrent. Comprueba permisos y el backend de iptables.')
-     for chain in ('INPUT','OUTPUT'):
-      if ipt(['-C',chain,'-j','KEVINTECH_TORRENT'])!=0:ipt(['-I',chain,'-j','KEVINTECH_TORRENT'])
-     out='Reglas de BitTorrent activadas en la cadena aislada KEVINTECH_TORRENT.'
+     created=ipt(['-N',chain])
+     if created.returncode!=0 and 'already exists' not in (created.stderr+' '+created.stdout).lower():
+      raise RuntimeError('No se pudo crear la cadena '+chain+': '+(created.stderr or created.stdout).strip())
+     flush=ipt(['-F',chain])
+     if flush.returncode:raise RuntimeError('No se pudo preparar la cadena '+chain+': '+(flush.stderr or flush.stdout).strip())
+     rules=[('INPUT',['-p','tcp','--dport','6881:6999','-j','DROP']),('INPUT',['-p','udp','--dport','6881:6999','-j','DROP']),('OUTPUT',['-p','tcp','--sport','6881:6999','-j','DROP']),('OUTPUT',['-p','udp','--sport','6881:6999','-j','DROP'])]
+     for direction,args in rules:
+      r=ipt(['-A',chain]+args)
+      if r.returncode:raise RuntimeError('No se pudo añadir regla '+direction+' '+ ' '.join(args)+': '+(r.stderr or r.stdout).strip())
+     # Same packet signatures as the CLI tool; optional string matches are
+     # attempted only after port rules have been installed.
+     optional=[]
+     for args in (['-m','string','--algo','bm','--string','BitTorrent','-j','DROP'],['-m','string','--algo','bm','--string','peer_id=','-j','DROP'],['-m','string','--algo','bm','--string','.torrent','-j','DROP'],['-m','string','--algo','bm','--string','announce.php?passkey=','-j','DROP'],['-m','string','--algo','bm','--string','info_hash','-j','DROP']):
+      r=ipt(['-A',chain]+args)
+      if r.returncode:optional.append((r.stderr or r.stdout).strip())
+     for parent in ('INPUT','OUTPUT'):
+      chk=ipt(['-C',parent,'-j',chain])
+      if chk.returncode:
+       ins=ipt(['-I',parent,'-j',chain])
+       if ins.returncode:raise RuntimeError('Las reglas están creadas, pero no se pudieron conectar a '+parent+': '+(ins.stderr or ins.stdout).strip())
+     out='Block Torrent activado. Se aplicaron los bloqueos TCP/UDP 6881–6999 en INPUT y OUTPUT.'
+     if optional:out+='\nAviso: algunos filtros de contenido no están disponibles en este kernel; el bloqueo por puertos sí quedó aplicado.'
     else:
-     for chain in ('INPUT','OUTPUT'):
-      while ipt(['-C',chain,'-j','KEVINTECH_TORRENT'])==0:ipt(['-D',chain,'-j','KEVINTECH_TORRENT'])
-     ipt(['-F','KEVINTECH_TORRENT']);ipt(['-X','KEVINTECH_TORRENT']);out='Reglas de KevinTech retiradas. No se vació el firewall completo.'
+     for parent in ('INPUT','OUTPUT'):
+      while ipt(['-C',parent,'-j',chain]).returncode==0:
+       r=ipt(['-D',parent,'-j',chain])
+       if r.returncode:raise RuntimeError('No se pudo desconectar '+chain+' de '+parent+': '+(r.stderr or r.stdout).strip())
+     # Delete only KevinTech's dedicated chain; never flush the whole firewall.
+     ipt(['-F',chain]);deleted=ipt(['-X',chain])
+     if deleted.returncode and 'no chain' not in (deleted.stderr+' '+deleted.stdout).lower():raise RuntimeError('No se pudo eliminar la cadena '+chain+': '+(deleted.stderr or deleted.stdout).strip())
+     out='Block Torrent desactivado. Se retiraron únicamente las reglas de KevinTech.'
    elif action in ('ads_block','ads_unblock'):
     hosts=Path('/etc/hosts');marker='# KEVINTECH BLOCK ADS BEGIN';end='# KEVINTECH BLOCK ADS END';text=hosts.read_text(errors='replace')
     if action=='ads_block':
@@ -829,16 +1033,17 @@ class Handler(BaseHTTPRequestHandler):
   except sqlite3.OperationalError as e:
    log('LOGIN session database error: '+repr(e));return self.login_page('<div class="notice bad">No se pudo guardar la sesión porque la base de datos está ocupada. Espera unos segundos e inténtalo otra vez.</div>')
   return self.auth_cookie_redirect('/dashboard')
- def register_page(self,msg=''):
-  ref=html_escape(parse_qs(urlparse(self.path).query).get('ref',[''])[0]);return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg,REF=ref))
+ def register_page(self,msg='',ref_override=None):
+  raw_ref=parse_qs(urlparse(self.path).query).get('ref',[''])[0] if ref_override is None else ref_override
+  ref=html_escape(raw_ref);return self.send(200,body=tpl('register.html',None,'Registro',MSG=msg,REF=ref))
  def register_post(self,d):
   name=self.val(d,'name');user=self.val(d,'username');email=self.val(d,'email').lower();pw=self.val(d,'password');confirm=self.val(d,'confirm_password');lang=self.val(d,'language','es');ref=self.val(d,'ref')
   allowed=('es','en','pt','fr','de','it','ja','zh','ru','ar','hi','ko','tr','nl','pl','id','vi','th','uk','bn','fa','ur','sw','ms','fil','he','el','ro','hu','cs','sv','no','da','fi')
   if lang not in allowed:lang='es'
-  if not name or not safe_web_username(user) or len(pw)<6 or pw!=confirm or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):return self.register_page('<div class="notice bad">Revisa los datos, el correo o las contraseñas (deben coincidir y tener al menos 6 caracteres).</div>')
+  if not name or not safe_web_username(user) or len(pw)<6 or pw!=confirm or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):return self.register_page('<div class="notice bad">Revisa los datos, el correo o las contraseñas (deben coincidir y tener al menos 6 caracteres).</div>',ref)
   c=db()
-  if c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>')
-  if c.execute('SELECT 1 FROM users WHERE email=?',(email,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese correo ya está registrado.</div>')
+  if c.execute('SELECT 1 FROM users WHERE username=?',(user,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese usuario web ya existe.</div>',ref)
+  if c.execute('SELECT 1 FROM users WHERE email=?',(email,)).fetchone():c.close();return self.register_page('<div class="notice bad">Ese correo ya está registrado.</div>',ref)
   code=secrets.token_urlsafe(7);referred=None;admin_code=cfg().get('admin_referral_code','');admin_referred=bool(ref and admin_code and hmac.compare_digest(ref,admin_code))
   inviter_name='';inviter_username=''
   if admin_referred:
@@ -848,11 +1053,11 @@ class Handler(BaseHTTPRequestHandler):
    if rr:referred=rr['id'];inviter_name=rr['name'];inviter_username=rr['username']
   c.execute('INSERT INTO users(username,password_hash,name,created_at,referral_code,referred_by,referral_points,email,language) VALUES(?,?,?,?,?,?,?,?,?)',(user,hash_password(pw),name,datetime.now().isoformat(timespec='seconds'),code,referred,1,email,lang))
   if referred:c.execute('UPDATE users SET referral_points=referral_points+2 WHERE id=?',(referred,))
+  c.commit();c.close()
   if admin_referred:
    conf=cfg();conf['admin_referral_points']=int(conf.get('admin_referral_points',0))+2;save_cfg(conf)
-  c.commit();c.close()
   if referred or admin_referred:
-   welcome='<div class="expiry-modal" id="refWelcome"><div class="expiry-modal-card"><div style="font-size:42px">🎁</div><h2>¡Bienvenido a KevinTech!</h2><p>Te registraste mediante un enlace de invitación.</p><div class="notice"><b>Te invitó:</b> '+html_escape(inviter_name)+' (@'+html_escape(inviter_username)+')</div><p>El programa de referidos recompensa a la comunidad: recibes 1 punto al registrarte y la persona que te invitó recibe 2 puntos. Puedes compartir tu propio enlace desde la sección Referidos.</p><button class="btn primary" type="button" onclick="document.getElementById(\'refWelcome\').remove()">Aceptar</button></div></div>'
+   welcome='<div class="expiry-modal" id="refWelcome"><div class="expiry-modal-card"><div style="font-size:42px">🎁</div><h2>¡Bienvenido a KevinTech!</h2><p>Tu registro quedó vinculado a una invitación. La persona que te compartió el enlace es:</p><div class="notice"><b>Te invitó:</b> '+html_escape(inviter_name)+' (@'+html_escape(inviter_username)+')</div><p>El programa de referidos recompensa a la comunidad: recibes 1 punto al registrarte y la persona que te invitó recibe 2 puntos. Cuando ingreses al panel podrás compartir tu propio enlace desde la sección Referidos.</p><button class="btn primary" type="button" onclick="document.getElementById(\'refWelcome\').remove()">Aceptar</button></div></div>'
   else:welcome=''
   return self.send(200,body=tpl('message.html',None,'Registro',MESSAGE='<div class="notice oktxt">Registro completado. Ya puedes iniciar sesión.</div><a class="btn primary" href="'+PREFIX+'/login">Iniciar sesión</a>'+welcome))
 
@@ -960,11 +1165,15 @@ class Handler(BaseHTTPRequestHandler):
    details=v2ray_message(a['username'],pw,a['expiration'] or iso(datetime.now()),days)
    m=re.search(r'(?m)^(?:vmess|vless|trojan)://\S+',details);qr=qr_data_uri(m.group(0) if m else '')
   elif typ=='shadowsocks':
-   parts=pw.split('$',2);port=parts[1] if len(parts)>1 else '8388';secret=parts[2] if len(parts)>2 else '';raw='aes-256-gcm:'+secret+'@'+info['host']+':'+port;link='ss://'+base64.b64encode(raw.encode()).decode()+'#KevinTech-'+a['username'];details='🕶️ CUENTA SHADOWSOCKS CREADA\n\nUsuario: '+a['username']+'\nServidor: '+info['host']+'\nPuerto: '+port+'\nCifrado: aes-256-gcm\nContraseña: '+secret+'\nExpira: '+str(a['expiration'] or '—')+'\n\nEnlace de importación:\n'+link;qr=qr_data_uri(link)
+   parts=pw.split('$',2);port=parts[1] if len(parts)>1 else _read_kevintech_config_value('SS_PORT','8388');secret=parts[2] if len(parts)>2 else '';method='aes-256-gcm';raw=method+':'+secret+'@'+info['host']+':'+str(port);link='ss://'+base64.b64encode(raw.encode()).decode()+'#KevinTech';details='🎉 SHADOWSOCKS · DATOS DE CONEXIÓN\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 SERVIDOR\n━━━━━━━━━━━━━━━━━━━━\n• IP / Host: '+info['ip']+'\n• Puerto: '+str(port)+'\n• Cifrado: '+method+'\n• Modo: TCP + UDP\n• Clave: '+secret+'\n\n━━━━━━━━━━━━━━━━━━━━\n🔗 ENLACE SS\n━━━━━━━━━━━━━━━━━━━━\n'+link+'\n\n⚠️ El gestor original de KevinTech usa una sola contraseña compartida para todo el servidor. Al cambiarla, se reemplaza la clave de todos los clientes que usaban la anterior. La fecha de vencimiento se guarda en el panel; el servicio Shadowsocks no expira por usuario.';qr=qr_data_uri(link)
   elif typ=='btun':
-   secret=pw[5:] if pw.startswith('btun$') else pw;details='⚡ CUENTA BTUN CREADA\n\nUsuario: '+a['username']+'\nContraseña: '+secret+'\nServidor: '+info['host']+'\nPuerto: consulta la configuración BTUN del VPS\nExpira en el panel: '+str(a['expiration'] or '—')+'\n\nLa autenticación BTUN se guarda en /etc/btun/users.'
+   secret=pw[5:] if pw.startswith('btun$') else pw;port=_read_kevintech_config_value('BTUN_PORT','7900');subnet=_read_kevintech_config_value('BTUN_SUBNET','10.77.0.0/16');details='⚡ CUENTA BTUN CREADA\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 CONFIGURACIÓN VPN\n━━━━━━━━━━━━━━━━━━━━\n• IP / Host: '+info['ip']+'\n• Puerto: '+port+'\n• Protocolo: TCP + UDP\n• Subred: '+subnet+'\n• Interfaz: btun0\n\n━━━━━━━━━━━━━━━━━━━━\n🔐 CREDENCIALES\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: '+a['username']+'\n• Clave: '+secret+'\n\n📲 Configura la app en modo VPN / Túnel BTUN.\n⚠️ El script BTUN guarda usuarios en /etc/btun/users y no incorpora caducidad individual; la fecha indicada se controla únicamente desde el panel.'
   elif typ=='hysteria':
-   details='🚀 CUENTA HYSTERIA CREADA\n\nUsuario: '+a['username']+'\nContraseña: '+pw+'\nServidor: '+info['host']+'\nPuerto: consulta /etc/hysteria/config.json\nExpira: '+str(a['expiration'] or '—')+'\n\nAutenticación PAM del sistema.'
+   hcfg=Path('/etc/hysteria/config.json');hport='UDP';obfs='No configurado';sni=info['host']
+   try:
+    hc=json.loads(hcfg.read_text());m=re.search(r':(\d+)$',str(hc.get('listen',':')));hport=m.group(1) if m else 'UDP';obfs=str(hc.get('obfs','No configurado'));sni=server_domain() or info['host']
+   except Exception:pass
+   details='🚀 HYSTERIA V1 · DATOS DE CONEXIÓN\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE ACCESO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario SSH: '+a['username']+'\n• Contraseña: '+pw+'\n• Autenticación: Usuario SSH + Contraseña SSH (PAM)\n• Expira: '+str(a['expiration'] or '—')+'\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 INFORMACIÓN DEL SERVIDOR UDP\n━━━━━━━━━━━━━━━━━━━━\n• IP / Host: '+info['ip']+'\n• Puerto UDP: '+hport+'\n• SNI: '+sni+'\n• ALPN: h3\n• OBFS: '+obfs+'\n\nEl acceso Hysteria valida el usuario del sistema mediante /usr/local/bin/hysteria-auth.sh; la expiración de Linux bloquea la cuenta al vencer.'
   elif typ=='zivpn':
    details='🎉 CUENTA ZIVPN UDP CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DE ACCESO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario / etiqueta: '+a['username']+'\n• Contraseña ZiVPN: '+pw+'\n• Servidor: '+info['host']+'\n• Puerto UDP: 20000-29999\n• Expira (panel): '+str(a['expiration'] or '—')+'\n\n⚠️ ZiVPN autentica por contraseña compartida. El vencimiento se muestra en el panel, pero no se aplica automáticamente al servicio ZiVPN.'
   elif typ=='openvpn':
@@ -987,7 +1196,8 @@ class Handler(BaseHTTPRequestHandler):
  def account_create_page(self,u):
   if not u:return self.redirect('/login')
   st=site_settings();admin=u['role']=='admin';fields=('<label>Fecha de expiración</label><input class="input" type="date" name="expires_on" min="'+datetime.now().strftime('%Y-%m-%d')+'" value="'+(datetime.now()+timedelta(days=int(st.get('quota_admin_days',30)))).strftime('%Y-%m-%d')+'" required><label>Límite IP</label><input class="input" type="number" name="ip_limit" min="0" max="100" value="'+str(st.get('quota_admin_limit',5))+'" required>' if admin else '')
-  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.')))
+  ss_option='<option value="shadowsocks">🕶️ Shadowsocks · clave compartida</option>' if admin else '<option value="shadowsocks" disabled>🕶️ Shadowsocks · solo administrador</option>'
+  return self.send(200,body=tpl('account_create.html',u,'Crear cuenta',ADMIN_FIELDS=fields,ADMIN_NOTE=('Como administrador no tienes cuotas: elige duración y límite para esta cuenta.' if admin else 'La duración, el límite y los puntos se aplican según la configuración del administrador.'),SHADOWSOCKS_OPTION=ss_option))
  def account_create(self,u,d):
   if not u:return self.send(403,body='403')
   if u['role']!='admin':
@@ -1025,6 +1235,7 @@ class Handler(BaseHTTPRequestHandler):
    c=db();first=c.execute('SELECT id FROM users WHERE active=1 ORDER BY id LIMIT 1').fetchone();c.close()
    if not first:return self.send(400,body=tpl('message.html',u,'Crear cuenta',MESSAGE='<div class="notice bad">No hay usuarios web registrados para asignar esta cuenta. Crea un usuario web primero.</div>'))
    owner_id=first['id']
+  if typ=='shadowsocks' and u['role']!='admin':return self.send(403,body=tpl('message.html',u,'Permiso requerido',MESSAGE='<div class="notice bad">Shadowsocks en el script usa una única clave compartida del servidor. Solo el administrador puede cambiarla o revocarla.</div><a class="btn" href="'+PREFIX+'/dashboard">Volver al panel</a>'))
   if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
   elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
   elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
@@ -1032,7 +1243,10 @@ class Handler(BaseHTTPRequestHandler):
   elif typ=='zivpn':ok,msg,credential=create_zivpn_account(user,pw,days);expiration=msg
   elif typ=='openvpn':ok,msg,credential=create_openvpn_account(user,days);expiration=msg
   elif typ=='btun':ok,msg,credential=create_btun_account(user,pw,days);expiration=msg
-  elif typ=='shadowsocks':ok,msg,credential=create_shadowsocks_account(user,pw,days);expiration=msg
+  elif typ=='shadowsocks':
+   check=db();existing=check.execute("SELECT username FROM accounts WHERE type='shadowsocks' LIMIT 1").fetchone();check.close()
+   if existing:return self.send(409,body=tpl('message.html',u,'Shadowsocks ya configurado',MESSAGE='<div class="notice bad">El script KevinTech utiliza una sola contraseña Shadowsocks compartida para todo el VPS. Ya existe una credencial registrada ('+html_escape(existing['username'])+'). Elimínala antes de reemplazarla; así se revocará la clave anterior sin apagar el servicio.</div><a class="btn" href="'+PREFIX+'/dashboard">Volver al panel</a>'))
+   ok,msg,credential=create_shadowsocks_account(user,pw,days);expiration=msg
   elif typ=='hysteria':ok,msg,credential=create_hysteria_account(user,pw,days);expiration=msg
   else:return self.send(400,body='Tipo de cuenta inválido')
   if not ok:return self.send(400,body=tpl('message.html',u,'Error',MESSAGE='<div class="notice bad">%s</div>'%html_escape(msg)))
@@ -1070,7 +1284,20 @@ class Handler(BaseHTTPRequestHandler):
   except:return self.send(400,body='ID inválido')
   c=db();a=c.execute('SELECT * FROM accounts WHERE id=?',(aid,)).fetchone()
   if not a or (u['role']!='admin' and a['user_id']!=u['id']):c.close();return self.send(404,body='Cuenta no encontrada')
-  cred=decrypt_credential(a['credential']);ok=(delete_v2ray(a['username']) if a['type']=='v2ray' else (delete_wireguard(a['username']) if a['type']=='wireguard' else (delete_zivpn_account(a['username'],cred) if a['type']=='zivpn' else (delete_openvpn_account(a['username']) if a['type']=='openvpn' else (delete_btun_account(a['username']) if a['type']=='btun' else (delete_shadowsocks_account(cred) if a['type']=='shadowsocks' else (delete_ssh(a['username'])[0] if a['type'] in ('ssh','socks5','hysteria') else False)))))));c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit();c.close();return self.send(200,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad','Cuenta eliminada.' if ok else 'No se pudo eliminar completamente la cuenta.',PREFIX)))
+  if a['type']=='shadowsocks' and u['role']!='admin':c.close();return self.send(403,body=tpl('message.html',u,'Permiso requerido',MESSAGE='<div class="notice bad">Solo el administrador puede revocar la clave compartida de Shadowsocks.</div>'))
+  cred=decrypt_credential(a['credential'])
+  if a['type']=='v2ray':ok=delete_v2ray(a['username'])
+  elif a['type']=='wireguard':ok=delete_wireguard(a['username'])
+  elif a['type']=='zivpn':ok=delete_zivpn_account(a['username'],cred)
+  elif a['type']=='openvpn':ok=delete_openvpn_account(a['username'])
+  elif a['type']=='btun':ok=delete_btun_account(a['username'])
+  elif a['type']=='shadowsocks':ok=delete_shadowsocks_account(cred)
+  elif a['type'] in ('ssh','socks5','hysteria'):ok=delete_ssh(a['username'])[0]
+  else:ok=False
+  if ok:c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit()
+  c.close()
+  msg='Cuenta eliminada y credencial retirada del servicio.' if ok else 'No se pudo retirar la credencial del servicio. El registro se conservó para que puedas volver a intentarlo.'
+  return self.send(200 if ok else 500,body=tpl('message.html',u,'Eliminar cuenta',MESSAGE='<div class="notice %s">%s</div><a class="btn" href="%s/dashboard">Volver</a>'%('oktxt' if ok else 'bad',msg,PREFIX)))
  def account_renew(self,u,d):
   if not u:return self.send(403,body='403')
   try:aid=int(self.val(d,'id'))
