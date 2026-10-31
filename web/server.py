@@ -618,7 +618,11 @@ def ssh_message(username,password,expiration,days,limit):
  return '\n'.join(rows)
 
 def v2ray_message(username,uid,expiration,days):
- s=server_info();exp=datetime.strptime(expiration,'%Y-%m-%d').strftime('%d/%m/%Y');raw=f'v:vmess@{s["host"]}:443?type=ws&path=/vmess&security=tls&uuid={uid}';link='vmess://'+base64.b64encode(raw.encode()).decode()
+ # Mantiene exactamente el formato VMess JSON que genera protocolos/v2ray.sh
+ s=server_info();exp=datetime.strptime(expiration,'%Y-%m-%d').strftime('%d/%m/%Y')
+ vmess={"v":"2","ps":username,"add":s["host"],"port":"443","id":uid,"aid":"0","scy":"auto","net":"ws","type":"none","host":s["host"],"path":"/vmess","tls":"tls","sni":s["host"],"alpn":""}
+ raw=json.dumps(vmess,ensure_ascii=False,separators=(",",":")).encode('utf-8')
+ link='vmess://'+base64.b64encode(raw).decode('ascii')
  return f'''🚀 CUENTA V2RAY CREADA EXITOSAMENTE\n\n━━━━━━━━━━━━━━━━━━━━\n👤 DATOS DEL USUARIO\n━━━━━━━━━━━━━━━━━━━━\n• Usuario: {username}\n• 🆔 UUID: {uid}\n• Expira: {exp}\n• Duración: {days} días\n\n━━━━━━━━━━━━━━━━━━━━\n🌐 INFORMACIÓN DEL SERVIDOR\n━━━━━━━━━━━━━━━━━━━━\n• Host/IP: {s['host']}\n• IP: {s['ip']}\n• Puerto: 443\n• Red: WebSocket\n• Path: /vmess\n• Seguridad: TLS\n\n━━━━━━━━━━━━━━━━━━━━\n🔗 VMESS\n━━━━━━━━━━━━━━━━━━━━\n{link}\n\n━━━━━━━━━━━━━━━━━━━━\n💎 KEVINTECH MULTI SCRIPT\n━━━━━━━━━━━━━━━━━━━━'''
 
 def protocol_status():
