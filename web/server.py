@@ -174,20 +174,32 @@ def all_online():
   return rows
  except:return []
 
+
 def sync_zivpn_password(password):
  config=Path('/etc/zivpn/config.json')
  if not config.is_file():return True
  try:
-  data=json.loads(config.read_text());auth=data.get('auth',{})
-  if auth.get('mode')!='passwords':return False
+  data=json.loads(config.read_text())
+  auth=data.setdefault('auth',{})
   values=auth.setdefault('config',[])
+  if not isinstance(values,list):return False
   if password in values:return True
-  old=config.read_bytes();values.append(password);tmp=config.with_suffix('.json.kt-tmp');tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(config)
+  old=config.read_bytes()
+  values.append(password)
+  tmp=config.with_suffix('.json.kt-tmp')
+  tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False))
+  os.chmod(tmp,0o600)
+  tmp.replace(config)
   rc,out=shell('systemctl restart zivpn',20)
-  if rc:
-   config.write_bytes(old);os.chmod(config,0o600);shell('systemctl restart zivpn',15);log('ZiVPN password sync failed: '+(out or 'restart failed'));return False
+  if rc or subprocess.run(['systemctl','is-active','--quiet','zivpn']).returncode!=0:
+   config.write_bytes(old);os.chmod(config,0o600)
+   shell('systemctl restart zivpn',15)
+   log('ZiVPN password sync failed: '+(out or 'restart failed'))
+   return False
   return True
- except Exception as e:log('ZiVPN password sync error: '+str(e));return False
+ except Exception as e:
+  log('ZiVPN password sync error: '+str(e))
+  return False
 
 def ensure_ssh_account_integrations():
  # Install the dynamic login notice and IP limiter used by usuarios/add.sh.
@@ -260,14 +272,32 @@ def create_v2ray_account(username,days):
   return True,iso(datetime.now()+timedelta(days=days)),uid
  except Exception as e:return False,str(e),''
 
+
 def create_socks5_account(username,password,days):
- if not safe_username(username):return False,'Usuario SOCKS5 inválido.',''
- if len(password)<4:return False,'La contraseña debe tener al menos 4 caracteres.',''
- if not shutil.which('useradd') or not shutil.which('chpasswd'):return False,'No se encontraron herramientas de gestión de usuarios del sistema.',''
- if subprocess.run(['id',username],capture_output=True).returncode==0:return False,'Ese usuario ya existe en el VPS.',''
- exp=iso(datetime.now()+timedelta(days=days))
- rc,out=shell('useradd -e %s -M -s /usr/sbin/nologin %s && printf %s | chpasswd'%(shlex.quote(exp),shlex.quote(username),shlex.quote(username+':'+password)),15)
- return (True,exp,password) if rc==0 else (False,out or 'No se pudo crear el usuario SOCKS5.','')
+ if not re.fullmatch(r'[A-Za-z0-9._-]{1,32}',username or ''):return False,'Usuario SOCKS5 inválido. Usa letras, números, punto, guion o guion bajo.','',username
+ if not password:return False,'La contraseña SOCKS5 no puede estar vacía.','',username
+ if not shutil.which('useradd') or not shutil.which('chpasswd'):return False,'No se encontraron herramientas de gestión de usuarios del sistema.','',username
+ prefix=_read_kevintech_config_value('SOCKS5_USER_PREFIX','kt_')
+ actual=username if not prefix or username.startswith(prefix) else prefix+username
+ if not re.fullmatch(r'[A-Za-z0-9._-]{1,32}',actual):return False,'El usuario final SOCKS5 supera los 32 caracteres o no es válido.','',actual
+ if subprocess.run(['id',actual],capture_output=True).returncode==0:return False,'Ese usuario ya existe en el VPS: '+actual,'',actual
+ rc,out=shell('useradd -M -s /usr/sbin/nologin %s 2>/dev/null || useradd -M -s /bin/false %s'%(shlex.quote(actual),shlex.quote(actual)),15)
+ if rc:return False,out or 'No se pudo crear el usuario SOCKS5.','',actual
+ rc,out=shell('printf %s | chpasswd'%(shlex.quote(actual+':'+password)),15)
+ if rc:
+  shell('userdel -f '+shlex.quote(actual),10)
+  return False,out or 'No se pudo establecer la contraseña SOCKS5.','',actual
+ try:
+  users=BASE/'socks5-users'
+  users.parent.mkdir(parents=True,exist_ok=True)
+  rows=users.read_text(errors='ignore').splitlines() if users.exists() else []
+  if actual not in rows:rows.append(actual)
+  users.write_text('\n'.join(rows)+'\n')
+  os.chmod(users,0o600)
+ except Exception as e:
+  shell('userdel -f '+shlex.quote(actual),10)
+  return False,'No se pudo registrar el usuario SOCKS5 en KevinTech: '+str(e),'',actual
+ return True,iso(datetime.now()+timedelta(days=days)),password,actual
 
 def create_wireguard_account(username,days):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de usuario WireGuard inválido.',''
@@ -299,40 +329,70 @@ def create_wireguard_account(username,days):
  except Exception as e:return False,'Error creando peer WireGuard: '+str(e),''
 
 
+
 def create_zivpn_account(username,password,days):
  if not safe_username(username):return False,'Usuario ZiVPN inválido.',''
- if len(password)<4:return False,'La contraseña ZiVPN debe tener al menos 4 caracteres.',''
+ if len(password)<1:return False,'La contraseña ZiVPN no puede estar vacía.',''
  config=Path('/etc/zivpn/config.json')
- if not config.exists():return False,'ZiVPN no está instalado: no existe /etc/zivpn/config.json.',''
+ if not config.is_file():
+  service=Path('/etc/systemd/system/zivpn.service')
+  if service.exists():return False,'Se encontró el servicio ZiVPN, pero falta /etc/zivpn/config.json. La instalación está incompleta; repara ZiVPN desde protocolos/zivpn.sh.',''
+  return False,'ZiVPN no está instalado: el script espera /etc/zivpn/config.json. Instálalo desde el gestor protocolos/zivpn.sh y vuelve a crear la cuenta.',''
  try:
   data=json.loads(config.read_text())
   auth=data.setdefault('auth',{})
-  if auth.get('mode')!='passwords':return False,'La autenticación de ZiVPN no está configurada en modo passwords.',''
   passwords=auth.setdefault('config',[])
+  if not isinstance(passwords,list):return False,'El campo auth.config de ZiVPN no es una lista válida. Revisa /etc/zivpn/config.json.',''
   if password in passwords:return False,'Esa contraseña ya existe en ZiVPN.',''
-  backup=config.with_suffix('.json.kevintech.bak')
-  if not backup.exists():backup.write_bytes(config.read_bytes());os.chmod(backup,0o600)
+  old=config.read_bytes()
   passwords.append(password)
-  tmp=config.with_suffix('.json.tmp');tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False));os.chmod(tmp,0o600);tmp.replace(config)
+  tmp=config.with_suffix('.json.tmp')
+  tmp.write_text(json.dumps(data,indent=2,ensure_ascii=False))
+  os.chmod(tmp,0o600)
+  tmp.replace(config)
   rc,out=shell('systemctl restart zivpn',20)
-  if rc:
-   # Restore the original configuration if the service rejects the update.
-   config.write_bytes(backup.read_bytes())
+  if rc or subprocess.run(['systemctl','is-active','--quiet','zivpn']).returncode!=0:
+   config.write_bytes(old);os.chmod(config,0o600)
    shell('systemctl restart zivpn',15)
-   return False,out or 'No se pudo reiniciar ZiVPN; se restauró la configuración anterior.',''
+   return False,out or 'ZiVPN no inició después de agregar la contraseña; se restauró la configuración anterior.',''
   return True,iso(datetime.now()+timedelta(days=days)),password
- except Exception as e:return False,'Error configurando ZiVPN: '+str(e),''
+ except Exception as e:
+  return False,'Error configurando ZiVPN: '+str(e),''
+
 
 def openvpn_easyrsa_dir():
- candidates=[Path('/etc/openvpn/server/easy-rsa'),Path('/etc/openvpn/easy-rsa'),Path('/usr/share/easy-rsa'),Path('/usr/share/easy-rsa/3')]
+ candidates=[
+  Path('/etc/openvpn/server/easy-rsa'),
+  Path('/etc/openvpn/easy-rsa'),
+  Path('/usr/share/easy-rsa/3'),
+  Path('/usr/share/easy-rsa'),
+  Path('/usr/local/share/easy-rsa/3'),
+  Path('/root/easy-rsa')
+ ]
+ configured=Path(_read_kevintech_config_value('OPENVPN_EASYRSA_DIR','/nonexistent'))
+ if str(configured)!='/nonexistent':candidates.insert(0,configured)
+ # Prioriza el directorio que contiene tanto EasyRSA como la PKI creada por openvpn.sh.
+ seen=set()
  for candidate in candidates:
-  exe=candidate/'easyrsa'
-  if exe.is_file():
-   try:
+  try:
+   candidate=candidate.resolve()
+   if candidate in seen:continue
+   seen.add(candidate)
+   exe=candidate/'easyrsa'
+   if exe.is_file() and (candidate/'pki/ca.crt').is_file():
     if not os.access(exe,os.X_OK):os.chmod(exe,0o700)
-   except OSError:pass
-   return candidate
- return candidates[0]
+    return candidate
+  except OSError:pass
+ # Fallback para instalaciones con la PKI en un subdirectorio no estándar.
+ for root in (Path('/etc/openvpn'),Path('/usr/share/easy-rsa'),Path('/usr/local/share/easy-rsa')):
+  try:
+   for exe in root.glob('**/easyrsa'):
+    candidate=exe.parent
+    if exe.is_file() and (candidate/'pki/ca.crt').is_file():
+     if not os.access(exe,os.X_OK):os.chmod(exe,0o700)
+     return candidate
+  except (OSError,PermissionError):pass
+ return Path('/etc/openvpn/server/easy-rsa')
 
 def _read_kevintech_config_value(key, default=''):
  try:
@@ -437,27 +497,60 @@ def delete_shadowsocks_account(credential):
   return True
  except Exception:return False
 
+
 def create_openvpn_account(username,days):
  if not re.fullmatch(r'[a-z][a-z0-9_-]{2,31}',username or ''):return False,'Nombre de cliente OpenVPN inválido.',''
- root=Path('/etc/openvpn/server');easyrsa=openvpn_easyrsa_dir();server_conf=root/'server.conf';common=root/'client-common.txt';tc_key=root/'tc.key'
- if not server_conf.exists() or not (easyrsa/'easyrsa').is_file():return False,'OpenVPN no está instalado o EasyRSA no aparece en las rutas habituales (/etc/openvpn/server/easy-rsa, /etc/openvpn/easy-rsa o /usr/share/easy-rsa). Ejecuta el instalador de OpenVPN del script y completa la PKI.',''
- if not (easyrsa/'pki/ca.crt').exists() or not tc_key.exists():return False,'La PKI de OpenVPN no está completa (falta CA o tls-crypt).',''
+ root=Path('/etc/openvpn/server')
+ easyrsa=openvpn_easyrsa_dir()
+ server_conf=root/'server.conf'
+ common=root/'client-common.txt'
+ tc_key=root/'tc.key'
+ missing=[]
+ if not server_conf.is_file():missing.append(str(server_conf))
+ if not (easyrsa/'easyrsa').is_file():missing.append(str(easyrsa/'easyrsa'))
+ if missing:
+  return False,'OpenVPN no está completamente instalado por el script. Faltan: '+', '.join(missing)+'. Ejecuta la instalación OpenVPN desde protocolos/openvpn.sh y completa la PKI.',''
+ if not (easyrsa/'pki/ca.crt').is_file():return False,'La PKI de OpenVPN está incompleta: falta '+str(easyrsa/'pki/ca.crt')+'. Vuelve a completar la PKI con protocolos/openvpn.sh.',''
+ if not tc_key.is_file():return False,'Falta la clave tls-crypt del servidor: '+str(tc_key)+'. Repara la instalación desde protocolos/openvpn.sh.',''
  cert=easyrsa/'pki/issued'/f'{username}.crt'
  if cert.exists():return False,'Ya existe un cliente OpenVPN con ese nombre.',''
  try:
   proc=subprocess.run([str(easyrsa/'easyrsa'),'--batch','--days='+str(max(1,min(3650,days))),'build-client-full',username,'nopass'],cwd=str(easyrsa),capture_output=True,text=True,timeout=90)
   if proc.returncode:return False,(proc.stderr or proc.stdout or 'EasyRSA no pudo crear el certificado.').strip()[-700:],''
-  if common.exists():base=common.read_text()
+  if common.is_file():base=common.read_text()
   else:
-   cfgtext=server_conf.read_text(errors='ignore');port=re.search(r'^port\s+(\d+)',cfgtext,re.M);proto=re.search(r'^proto\s+(\S+)',cfgtext,re.M);host=server_domain() or server_ip()
-   base='client\ndev tun\nproto '+(proto.group(1) if proto else 'udp')+'\nremote '+host+' '+(port.group(1) if port else '1194')+'\nresolv-retry infinite\nnobind\npersist-key\npersist-tun\nremote-cert-tls server\nauth SHA256\nignore-unknown-option block-outside-dns\nverb 3\n'
-  certdata=cert.read_text();keydata=(easyrsa/'pki/private'/f'{username}.key').read_text();cadata=(easyrsa/'pki/ca.crt').read_text();tlsdata=tc_key.read_text()
-  if 'auth-user-pass' in base:base=re.sub(r'^auth-user-pass\s*$', '# auth-user-pass not required for certificate clients',base,flags=re.M)
+   cfgtext=server_conf.read_text(errors='ignore')
+   port=re.search(r'^port\s+(\d+)',cfgtext,re.M)
+   proto=re.search(r'^proto\s+(\S+)',cfgtext,re.M)
+   host=server_domain() or server_ip()
+   base='client\ndev tun\nproto '+(proto.group(1) if proto else 'tcp')+'\nremote '+host+' '+(port.group(1) if port else '1194')+'\nresolv-retry infinite\nnobind\npersist-key\npersist-tun\nremote-cert-tls server\nauth SHA256\nignore-unknown-option block-outside-dns\nverb 3\n'
+  certdata=cert.read_text()
+  keydata=(easyrsa/'pki/private'/f'{username}.key').read_text()
+  cadata=(easyrsa/'pki/ca.crt').read_text()
+  tlsdata=tc_key.read_text()
+  if 'auth-user-pass' in base:base=re.sub(r'^auth-user-pass\s*$','# auth-user-pass not required for certificate clients',base,flags=re.M)
   content=base.rstrip()+'\n\n<ca>\n'+cadata.rstrip()+'\n</ca>\n\n<cert>\n'+certdata.rstrip()+'\n</cert>\n\n<key>\n'+keydata.rstrip()+'\n</key>\n\n<tls-crypt>\n'+tlsdata.rstrip()+'\n</tls-crypt>\n'
-  folder=DATA/'openvpn-clients';folder.mkdir(parents=True,exist_ok=True);out=folder/(username+'.ovpn');out.write_text(content);os.chmod(out,0o600)
+  folder=DATA/'openvpn-clients'
+  folder.mkdir(parents=True,exist_ok=True)
+  out=folder/(username+'.ovpn')
+  out.write_text(content)
+  os.chmod(out,0o600)
   return True,iso(datetime.now()+timedelta(days=days)),'openvpn-file$'+str(out)
  except subprocess.TimeoutExpired:return False,'EasyRSA tardó demasiado al crear el cliente.',''
  except Exception as e:return False,'Error creando cliente OpenVPN: '+str(e),''
+
+
+def delete_socks5_account(username):
+ if not safe_username(username):return False
+ result=delete_ssh(username)[0]
+ users=BASE/'socks5-users'
+ try:
+  if users.exists():
+   rows=[x for x in users.read_text(errors='ignore').splitlines() if x.strip()!=username]
+   users.write_text('\\n'.join(rows)+('\\n' if rows else ''))
+   os.chmod(users,0o600)
+ except Exception:pass
+ return result
 
 def delete_zivpn_account(username,password):
  config=Path('/etc/zivpn/config.json')
@@ -1241,7 +1334,9 @@ class Handler(BaseHTTPRequestHandler):
    owner_id=first['id']
   if typ=='shadowsocks' and u['role']!='admin':return self.send(403,body=tpl('message.html',u,'Permiso requerido',MESSAGE='<div class="notice bad">Shadowsocks en el script usa una única clave compartida del servidor. Solo el administrador puede cambiarla o revocarla.</div><a class="btn" href="'+PREFIX+'/dashboard">Volver al panel</a>'))
   if typ=='ssh':ok,msg=create_ssh_account(user,pw,days,limit);credential=pw;expiration=msg
-  elif typ=='socks5':ok,msg,credential=create_socks5_account(user,pw,days);expiration=msg
+  elif typ=='socks5':
+   ok,msg,credential,actual_user=create_socks5_account(user,pw,days);expiration=msg
+   if ok:user=actual_user
   elif typ in ('xray','vmess'):ok,msg,credential=create_v2ray_account(user,days);expiration=msg
   elif typ=='wireguard':ok,msg,credential=create_wireguard_account(user,days);expiration=msg
   elif typ=='zivpn':ok,msg,credential=create_zivpn_account(user,pw,days);expiration=msg
@@ -1296,7 +1391,8 @@ class Handler(BaseHTTPRequestHandler):
   elif a['type']=='openvpn':ok=delete_openvpn_account(a['username'])
   elif a['type']=='btun':ok=delete_btun_account(a['username'])
   elif a['type']=='shadowsocks':ok=delete_shadowsocks_account(cred)
-  elif a['type'] in ('ssh','socks5','hysteria'):ok=delete_ssh(a['username'])[0]
+  elif a['type']=='socks5':ok=delete_socks5_account(a['username'])
+  elif a['type'] in ('ssh','hysteria'):ok=delete_ssh(a['username'])[0]
   else:ok=False
   if ok:c.execute('DELETE FROM accounts WHERE id=?',(aid,));c.commit()
   c.close()
