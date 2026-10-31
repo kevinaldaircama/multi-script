@@ -859,6 +859,63 @@ detectar_protocolos() {
 }
 
 #=========================================================
+# DETECTAR PROTOCOLOS EXTRA
+# Slipstream, VayDNS, Squid, HCR y BTUN
+#=========================================================
+
+detectar_protocolos_extra() {
+
+    SLIPSTREAM_DOMAIN=""
+    VAYDNS_INSTALADO="NO"
+    VAYDNS_DOMAIN=""
+    VAYDNS_KEY=""
+    VAYDNS_PORT=""
+    VAYDNS_BACKEND=""
+    SQUID_PORT=""
+    HCR_PORT=""
+    BTUN_PORT=""
+
+    # SLIPSTREAM: obtener el dominio desde ExecStart del servicio.
+    if systemctl is-active --quiet slipstream 2>/dev/null; then
+        SLIPSTREAM_DOMAIN=$(systemctl cat slipstream 2>/dev/null |
+            grep -oP -- '(?<=-d )[A-Za-z0-9.-]+' | tail -1)
+    fi
+
+    # VAYDNS: el puerto de escucha y backend se leen del servicio real.
+    if systemctl is-active --quiet vaydns.service 2>/dev/null &&
+       [[ -s /etc/vaydns/server.pub ]]; then
+
+        VAYDNS_INSTALADO="SI"
+        VAYDNS_KEY=$(tr -d '\r\n' < /etc/vaydns/server.pub 2>/dev/null)
+        VAYDNS_EXEC=$(systemctl cat vaydns.service 2>/dev/null)
+        VAYDNS_DOMAIN=$(printf '%s\n' "$VAYDNS_EXEC" |
+            grep -oP -- '(?<=-domain )[A-Za-z0-9.-]+' | tail -1)
+        VAYDNS_PORT=$(printf '%s\n' "$VAYDNS_EXEC" |
+            grep -oP -- '(?<=-udp :)[0-9]+' | tail -1)
+        VAYDNS_BACKEND=$(printf '%s\n' "$VAYDNS_EXEC" |
+            grep -oP -- '(?<=-upstream 127\.0\.0\.1:)[0-9]+' | tail -1)
+    fi
+
+    # SQUID: confirmar servicio activo y puerto escuchando.
+    if systemctl is-active --quiet squid 2>/dev/null &&
+       ss -H -ltn 2>/dev/null | awk '{print $4}' | grep -qE ':3128$'; then
+        SQUID_PORT="3128"
+    fi
+
+    # HCR: puerto configurado por el instalador.
+    if systemctl is-active --quiet hcr-server 2>/dev/null; then
+        HCR_PORT=$(grep -E '^HCR_PORT=' "$CONFIG" 2>/dev/null | tail -1 | cut -d= -f2-)
+        [[ -z "$HCR_PORT" ]] && HCR_PORT="8880"
+    fi
+
+    # BTUN: puerto configurado por el instalador.
+    if systemctl is-active --quiet btun 2>/dev/null; then
+        BTUN_PORT=$(grep -E '^BTUN_PORT=' "$CONFIG" 2>/dev/null | tail -1 | cut -d= -f2-)
+        [[ -z "$BTUN_PORT" ]] && BTUN_PORT="7900"
+    fi
+}
+
+#=========================================================
 # MOSTRAR CUENTA
 #=========================================================
 
@@ -866,270 +923,108 @@ mostrar_cuenta() {
 
     clear
 
+    echo -e "${CYAN}🔐 GESTIÓN DE USUARIOS SSH${RESET}"
     echo -e "${YELLOW}══════════ DATOS DEL USUARIO ══════════${RESET}"
+    printf " ${WHITE}Host/IP       : ${CYAN}%s${RESET}\n" "$HOST"
 
-    echo -e " ${WHITE}Usuario      : ${GREEN}$USER${RESET}"
-    echo -e " ${WHITE}Contraseña   : ${GREEN}$PASS${RESET}"
+    if [[ -n "$SLIPSTREAM_DOMAIN" ]]; then
+        printf " ${WHITE}SLIPSTREAM    : ${GREEN}%s${RESET}\n" "$SLIPSTREAM_DOMAIN"
+    fi
 
-    #=====================================================
-    # EXPIRACIÓN
-    #=====================================================
+    printf " ${WHITE}Usuario       : ${GREEN}%s${RESET}\n" "$USER"
+    printf " ${WHITE}Contraseña    : ${GREEN}%s${RESET}\n" "$PASS"
 
     if [[ "$ILIMITADA" == "SI" ]]; then
-
-        echo -e " ${WHITE}Expira       : ${GREEN}Ilimitada ♾${RESET}"
-
+        printf " ${WHITE}Expira        : ${GREEN}Ilimitada ♾${RESET}\n"
     else
-
-        echo -e " ${WHITE}Expira       : ${GREEN}$FECHA_MOSTRAR${RESET} ${GRAY}(${DIAS} días)${RESET}"
-
+        printf " ${WHITE}Expira        : ${GREEN}%s${RESET} ${GRAY}(%s días)${RESET}\n" "$FECHA_MOSTRAR" "$DIAS"
     fi
 
-    echo -e " ${WHITE}Límite IP    : ${GREEN}$LIMITE_MOSTRAR${RESET}"
+    printf " ${WHITE}Límite IP     : ${GREEN}%s${RESET}\n" "$LIMITE_MOSTRAR"
 
-    echo
+    echo -e "${YELLOW}══════════ PROTOCOLOS DISPONIBLES ══════════${RESET}"
 
-    #=====================================================
-    # INFORMACIÓN DEL SERVIDOR
-    #=====================================================
+    [[ -n "$SSH_PORTS" ]] && printf " ${WHITE}SSH           : ${GREEN}%s${RESET}\n" "$SSH_PORTS"
+    [[ -n "$DROPBEAR_PORTS" ]] && printf " ${WHITE}Dropbear      : ${GREEN}%s${RESET}\n" "$DROPBEAR_PORTS"
+    [[ -n "$HAPROXY_PORTS" ]] && printf " ${WHITE}SSL Tunnel    : ${GREEN}%s${RESET}\n" "$HAPROXY_PORTS"
+    [[ -n "$HTTP_PORTS" ]] && printf " ${WHITE}HTTP          : ${GREEN}%s${RESET}\n" "$HTTP_PORTS"
+    [[ -n "$BADVPN_PORTS" ]] && printf " ${WHITE}BadVPN        : ${GREEN}%s${RESET}\n" "$BADVPN_PORTS"
+    [[ "$BHTTP_INSTALADO" == "SI" ]] && printf " ${WHITE}BHTTP         : ${GREEN}8088${RESET}\n"
+    [[ -n "$SQUID_PORT" ]] && printf " ${WHITE}SQUID         : ${GREEN}%s${RESET}\n" "$SQUID_PORT"
+    [[ -n "$HCR_PORT" ]] && printf " ${WHITE}HCR           : ${GREEN}%s${RESET}\n" "$HCR_PORT"
+    [[ -n "$BTUN_PORT" ]] && printf " ${WHITE}BTUN          : ${GREEN}%s${RESET}\n" "$BTUN_PORT"
+    [[ "$OPENVPN_INSTALADO" == "SI" && -n "$OPENVPN_PORTS" ]] && printf " ${WHITE}OpenVPN       : ${GREEN}%s${RESET}\n" "$OPENVPN_PORTS"
+    [[ "$HYSTERIA_INSTALADO" == "SI" && -n "$HYSTERIA_PORT" ]] && printf " ${WHITE}Hysteria      : ${GREEN}%s${RESET}\n" "$HYSTERIA_PORT"
 
-    echo -e "${YELLOW}══════════ INFORMACIÓN DEL SERVIDOR ══════════${RESET}"
-
-    echo -e " ${WHITE}Host/IP      : ${CYAN}$HOST${RESET}"
-
-
-    #=====================================================
-    # SSH
-    #=====================================================
-
-    if [[ -n "$SSH_PORTS" ]]; then
-
-        echo -e " ${WHITE}SSH          : ${GREEN}$SSH_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # DROPBEAR
-    #=====================================================
-
-    if [[ -n "$DROPBEAR_PORTS" ]]; then
-
-        echo -e " ${WHITE}Dropbear     : ${GREEN}$DROPBEAR_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # SSL TUNNEL
-    #=====================================================
-
-    if [[ -n "$HAPROXY_PORTS" ]]; then
-
-        echo -e " ${WHITE}SSL Tunnel   : ${GREEN}$HAPROXY_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # BADVPN
-    #=====================================================
-
-    if [[ -n "$BADVPN_PORTS" ]]; then
-
-        echo -e " ${WHITE}BadVPN       : ${GREEN}$BADVPN_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # OPENVPN
-    #=====================================================
-
-    if [[ "$OPENVPN_INSTALADO" == "SI" &&
-          -n "$OPENVPN_PORTS" ]]; then
-
-        echo -e " ${WHITE}OpenVPN      : ${GREEN}$OPENVPN_PORTS${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # BHTTP
-    #=====================================================
-
-    if [[ "$BHTTP_INSTALADO" == "SI" ]]; then
-
-        echo -e " ${WHITE}BHTTP         : ${GREEN}8088${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # SLOWDNS
-    #=====================================================
-
+    # SlowDNS usa el puerto UDP 5300 en esta distribución.
     if [[ "$SLOWDNS_INSTALADO" == "SI" ]]; then
-
-        echo
-
-        echo -e "${YELLOW}══════════ SLOWDNS (5300) ══════════${RESET}"
-
-        if [[ -n "$SLOWDNS_NS" ]]; then
-
-            echo -e \
-                " ${WHITE}NS          : ${GREEN}${SLOWDNS_NS}${RESET}"
-
-        fi
-
-        if [[ -n "$SLOWDNS_KEY" ]]; then
-
-            echo -e \
-                " ${WHITE}KEY         : ${GREEN}${SLOWDNS_KEY}${RESET}"
-
-        fi
-
+        echo -e "${YELLOW}══════════ SLOWDNS (5300 - 22) ══════════${RESET}"
+        [[ -n "$SLOWDNS_NS" ]] && printf " ${WHITE}NS            : ${GREEN}%s${RESET}\n" "$SLOWDNS_NS"
+        [[ -n "$SLOWDNS_KEY" ]] && printf " ${WHITE}KEY           : ${GREEN}%s${RESET}\n" "$SLOWDNS_KEY"
     fi
 
-
-    #=====================================================
-    # ZIVPN UDP
-    #=====================================================
+    if [[ "$VAYDNS_INSTALADO" == "SI" ]]; then
+        printf "\n%b\n" "${YELLOW}══════════ VAYDNS (${VAYDNS_PORT:-N/D} - ${VAYDNS_BACKEND:-N/D}) ══════════${RESET}"
+        [[ -n "$VAYDNS_DOMAIN" ]] && printf " ${WHITE}NS            : ${GREEN}%s${RESET}\n" "$VAYDNS_DOMAIN"
+        [[ -n "$VAYDNS_KEY" ]] && printf " ${WHITE}KEY           : ${GREEN}%s${RESET}\n" "$VAYDNS_KEY"
+    fi
 
     if [[ "$ZIVPN_INSTALADO" == "SI" ]]; then
-
-        echo
-
         echo -e "${YELLOW}══════════ ZIVPN UDP ══════════${RESET}"
-
-        echo -e \
-            " ${WHITE}Servidor     : ${GREEN}${HOST}:${ZIVPN_PORT:-N/D}${RESET}"
-
-        echo -e \
-            " ${WHITE}Contraseña   : ${GREEN}${PASS}${RESET}"
-
-        echo -e \
-            " ${WHITE}Puerto UDP   : ${GREEN}20000-29999${RESET}"
-
+        printf " ${WHITE}Servidor      : ${GREEN}%s:%s${RESET}\n" "$HOST" "${ZIVPN_PORT:-N/D}"
+        printf " ${WHITE}Contraseña    : ${GREEN}%s${RESET}\n" "$PASS"
+        printf " ${WHITE}Puerto UDP    : ${GREEN}20000-29999${RESET}\n"
     fi
 
+    # Formatos directos: se muestran solo cuando hay un puerto/proceso
+    # correspondiente detectado. Un puerto abierto no garantiza por sí solo
+    # que el cliente remoto tenga una configuración SNI/WS compatible.
+    if [[ "$HAPROXY_PORTS" == *"443"* || "$HTTP_PORTS" == *"80"* || -n "$UDPCUSTOM_PORTS" ]]; then
+        echo -e "${YELLOW}══════════ CONEXIÓN DIRECTA ══════════${RESET}"
 
-    #=====================================================
-    # CONEXIÓN DIRECTA / CUSTOM
-    #=====================================================
-
-    if [[ -n "$HTTP_PORTS" ||
-          -n "$UDPCUSTOM_PORTS" ]]; then
-
-        echo
-
-        echo -e \
-            "${YELLOW}══════════ conexión directa/custom══════════${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # HTTP CUSTOM
-    #=====================================================
-
-    if [[ -n "$HTTP_PORTS" ]]; then
-
-        # Una sola línea con todos los puertos HTTP
-        echo -e \
-            " ${GREEN}${HOST}:${HTTP_PORTS}@${USER}:${PASS}${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # UDP CUSTOM
-    #=====================================================
-
-    if [[ -n "$UDPCUSTOM_PORTS" ]]; then
-
-        # Formato solicitado
-        echo -e \
-            " ${GREEN}udp: ${HOST}::1-65535:${USER}:${PASS}${RESET}"
-
-    fi
-
-
-    #=====================================================
-    # SERVICIO OVPN
-    #=====================================================
-
-    OVPN_FILE=""
-
-    # Buscar configuración OVPN del usuario
-    if [[ -f "/etc/openvpn/client/${USER}.ovpn" ]]; then
-
-        OVPN_FILE="/etc/openvpn/client/${USER}.ovpn"
-
-    elif [[ -f "/etc/openvpn/${USER}.ovpn" ]]; then
-
-        OVPN_FILE="/etc/openvpn/${USER}.ovpn"
-
-    elif [[ -f "/root/${USER}.ovpn" ]]; then
-
-        OVPN_FILE="/root/${USER}.ovpn"
-
-    fi
-
-
-    if [[ "$OPENVPN_INSTALADO" == "SI" ]]; then
-
-        echo
-
-        echo -e \
-            "${YELLOW}══════════ SERVICIO OVPN ══════════${RESET}"
-
-        if [[ -n "$OVPN_FILE" ]]; then
-
-            # URL del archivo OVPN
-            OVPN_URL="${SERVER_DOMAIN:-$HOST}/${USER}.ovpn"
-
-            echo
-
-            echo -e \
-                " ${WHITE}ovpn url: ${GREEN}https://${OVPN_URL}${RESET}"
-
-        else
-
-            echo
-
-            echo -e \
-                " ${WHITE}ovpn url: ${YELLOW}Archivo no generado${RESET}"
-
+        if [[ "$HAPROXY_PORTS" == *"443"* ]]; then
+            printf " ${WHITE}🙍 SSL/TLS(SNI) : ${GREEN}%s:443@%s:%s${RESET}\n" "$HOST" "$USER" "$PASS"
         fi
 
+        if [[ "$HTTP_PORTS" == *"80"* ]]; then
+            printf " ${WHITE}🙍 Proxy(WS)    : ${GREEN}%s:80@%s:%s${RESET}\n" "$HOST" "$USER" "$PASS"
+        fi
+
+        if [[ -n "$UDPCUSTOM_PORTS" ]]; then
+            printf " ${WHITE}🙍 SSH UDP      : ${GREEN}%s:1-65535@%s:%s${RESET}\n" "$IP" "$USER" "$PASS"
+        fi
     fi
 
+    # Ubicación del perfil OVPN, si fue generado.
+    OVPN_FILE=""
+    if [[ -f "/etc/openvpn/client/${USER}.ovpn" ]]; then
+        OVPN_FILE="/etc/openvpn/client/${USER}.ovpn"
+    elif [[ -f "/etc/openvpn/${USER}.ovpn" ]]; then
+        OVPN_FILE="/etc/openvpn/${USER}.ovpn"
+    elif [[ -f "/root/${USER}.ovpn" ]]; then
+        OVPN_FILE="/root/${USER}.ovpn"
+    fi
 
-    #=====================================================
-    # FINAL
-    #=====================================================
+    if [[ "$OPENVPN_INSTALADO" == "SI" ]]; then
+        echo -e "${YELLOW}══════════ SERVICIO OVPN ══════════${RESET}"
+        if [[ -n "$OVPN_FILE" ]]; then
+            OVPN_URL="${SERVER_DOMAIN:-$HOST}/${USER}.ovpn"
+            printf " ${WHITE}Archivo       : ${GREEN}%s${RESET}\n" "$OVPN_FILE"
+            printf " ${WHITE}OVPN URL      : ${GREEN}https://%s${RESET}\n" "$OVPN_URL"
+        else
+            printf " ${WHITE}Archivo       : ${YELLOW}No generado${RESET}\n"
+        fi
+    fi
 
     echo
-
-    echo -e \
-        "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
-
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo
-
-    echo -e \
-        "${YELLOW}          Presione ENTER para continuar...${RESET}"
-
-    read
+    read -rp "$(echo -e "${YELLOW}Presione ENTER para continuar...${RESET}")"
 
     if [[ -f "$BASE/usuarios/menu.sh" ]]; then
-
         exec bash "$BASE/usuarios/menu.sh"
-
     else
-
         break
-
     fi
 }
 
@@ -1438,6 +1333,7 @@ while true; do
     #=====================================================
 
     detectar_protocolos
+    detectar_protocolos_extra
 
     #=====================================================
     # MOSTRAR RESULTADO
