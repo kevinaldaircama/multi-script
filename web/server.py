@@ -1821,7 +1821,23 @@ def delete_ssh(username):
  if limits.exists():limits.write_text('\n'.join(x for x in limits.read_text(errors='ignore').splitlines() if not x.startswith(username+':'))+'\n')
  return rc==0,out or ('Cuenta eliminada.' if rc==0 else 'No se pudo eliminar la cuenta.')
 
+class KevinTechHTTPServer(ThreadingHTTPServer):
+ # A reverse proxy/browser can close a keep-alive socket before sending the
+ # next request line. socketserver normally prints a full traceback for this
+ # expected network event; keep it out of the error log while preserving real
+ # server exceptions.
+ def handle_error(self, request, client_address):
+  import sys, traceback
+  exc_type, exc, tb = sys.exc_info()
+  if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
+   log('HTTP client disconnected before/during request from %s: %s' %
+       (client_address, type(exc).__name__))
+   return
+  log('HTTP server exception from %s: %s' %
+      (client_address, ''.join(traceback.format_exception(exc_type, exc, tb))))
+
+
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=ThreadingHTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=KevinTechHTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
 if __name__=='__main__':main()
