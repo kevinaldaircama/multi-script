@@ -3,7 +3,7 @@ import base64, hashlib, hmac, json, os, re, secrets, sqlite3, subprocess, time, 
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from http import cookies
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, quote
 
@@ -768,22 +768,8 @@ class Handler(BaseHTTPRequestHandler):
   return p
  def do_HEAD(self):self.send(200,'text/html; charset=utf8','')
  def send(self,status=200,ctype='text/html; charset=utf8',body=''):
-  # A browser may leave while the response is being generated. Treat that as
-  # a normal disconnected client, not as an application/server failure.
-  b=body.encode() if isinstance(body,str) else body
-  try:
-   self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(b)));self.send_header('Cache-Control','no-store');self.end_headers()
-   if b:self.wfile.write(b)
-   return True
-  except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError) as e:
-   self.close_connection=True
-   log('HTTP client disconnected while sending response to %s %s: %s'%(self.client_address[0],self.path,type(e).__name__))
-   return False
- def redirect(self,to):
-  try:
-   self.send_response(303);self.send_header('Location',PREFIX+to if to.startswith('/') else to);self.send_header('Content-Length','0');self.end_headers();return True
-  except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError) as e:
-   self.close_connection=True;log('HTTP client disconnected during redirect to %s: %s'%(to,type(e).__name__));return False
+  b=body.encode() if isinstance(body,str) else body;self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(b)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(b)
+ def redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to if to.startswith('/') else to);self.send_header('Content-Length','0');self.end_headers()
  def cookies(self):c=cookies.SimpleCookie();c.load(self.headers.get('Cookie',''));return c
  def session(self):
   c=self.cookies().get('kt_session');
@@ -834,11 +820,7 @@ class Handler(BaseHTTPRequestHandler):
  def val(self,d,k,default=''):
   v=d.get(k,[default]);v=v[0] if isinstance(v,list) else v
   return v.strip() if isinstance(v,str) else default
- def auth_cookie_redirect(self,to):
-  try:
-   self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers();return True
-  except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError) as e:
-   self.close_connection=True;log('HTTP client disconnected during authenticated redirect to %s: %s'%(to,type(e).__name__));return False
+ def auth_cookie_redirect(self,to):self.send_response(303);self.send_header('Location',PREFIX+to);self.send_header('Set-Cookie',self.extra_cookie);self.send_header('Content-Length','0');self.end_headers()
  def do_GET(self):
   p=self.route_path()
   if p=='/health':return self.send(200,'text/plain; charset=utf8','ok\n')
@@ -853,24 +835,16 @@ class Handler(BaseHTTPRequestHandler):
   if p=='/404.html':return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
   if p in routes:
    try:return routes[p]()
-   except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError) as e:
-    self.close_connection=True;log('GET '+p+' client disconnected: '+type(e).__name__);return
    except Exception as e:
-    import traceback
-    log('GET '+p+' application error: '+repr(e)+'\n'+traceback.format_exc())
-    return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
+    log('GET '+p+' error: '+repr(e));return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def do_POST(self):
   p=self.route_path();ctype=self.headers.get('Content-Type','');d=self.read_multipart() if ctype.lower().startswith('multipart/form-data') else self.read_post();u=self.session()
   routes={'/login':lambda:self.login_post(d),'/register':lambda:self.register_post(d),'/forgot-password':lambda:self.forgot_password_post(d),'/reset-password':lambda:self.reset_password_post(d),'/payments/webhook':lambda:self.payment_webhook(),'/profile':lambda:self.profile_post(u,d),'/account/create':lambda:self.account_create(u,d),'/account/delete':lambda:self.account_delete(u,d),'/account/renew':lambda:self.account_renew(u,d),'/admin/settings/ads':lambda:self.admin_settings_post(u,d,'ads'),'/admin/settings/general':lambda:self.admin_settings_post(u,d,'general'),'/admin/settings/quotas':lambda:self.admin_settings_post(u,d,'quotas'),'/admin/accounts/delete':lambda:self.admin_delete_post(u,d),'/plans/settings':lambda:self.plans_settings_post(u,d),'/plans/history/action':lambda:self.plans_history_action(u,d),'/admin/notifications':lambda:self.admin_notifications_post(u,d),'/admin/settings/smtp':lambda:self.smtp_settings_post(u,d),'/plans/settings/payments':lambda:self.plan_payment_settings_post(u,d),'/plans/buy':lambda:self.plans_buy(u,d),'/console':lambda:self.console_post(u,d),'/referrals/redeem':lambda:self.referral_redeem(u,d),'/ad/complete':lambda:self.ad_complete(u,d),'/tools/payloads':lambda:self.payloads_page(u,d),'/tools/speedtest/run':lambda:self.speedtest_run(u),'/tools/run':lambda:self.tool_run(u,d),'/tools/archive-upload':lambda:self.archive_upload(u,d),'/tools/backup/restore':lambda:self.backup_restore(u,d)}
   if p in routes:
    try:return routes[p]()
-   except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError) as e:
-    self.close_connection=True;log('POST '+p+' client disconnected: '+type(e).__name__);return
    except Exception as e:
-    import traceback
-    log('POST '+p+' application error: '+repr(e)+'\n'+traceback.format_exc())
-    return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
+    log('POST '+p+' error: '+repr(e));return self.send(500,body=tpl('message.html',u,'Error interno',MESSAGE='<div class=\"notice bad\">Ocurrió un error interno. Revisa los registros del servidor.</div>'))
   return self.send(404,body=tpl('404.html',u,'Página no encontrada'))
  def tool_page(self,u,slug,title,admin_only=False):
   if not u:return self.redirect('/login')
@@ -1821,23 +1795,7 @@ def delete_ssh(username):
  if limits.exists():limits.write_text('\n'.join(x for x in limits.read_text(errors='ignore').splitlines() if not x.startswith(username+':'))+'\n')
  return rc==0,out or ('Cuenta eliminada.' if rc==0 else 'No se pudo eliminar la cuenta.')
 
-class KevinTechHTTPServer(ThreadingHTTPServer):
- # A reverse proxy/browser can close a keep-alive socket before sending the
- # next request line. socketserver normally prints a full traceback for this
- # expected network event; keep it out of the error log while preserving real
- # server exceptions.
- def handle_error(self, request, client_address):
-  import sys, traceback
-  exc_type, exc, tb = sys.exc_info()
-  if isinstance(exc, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)):
-   log('HTTP client disconnected before/during request from %s: %s' %
-       (client_address, type(exc).__name__))
-   return
-  log('HTTP server exception from %s: %s' %
-      (client_address, ''.join(traceback.format_exception(exc_type, exc, tb))))
-
-
 def main():
  if os.geteuid()!=0:raise SystemExit('KevinTech Web debe ejecutarse como root.')
- ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=KevinTechHTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
+ ensure_admin();log('WEB START %s:%s prefix=%s'%(HOST,PORT,PREFIX));server=HTTPServer((HOST,PORT),Handler);server.daemon_threads=True;server.request_queue_size=128;server.serve_forever(poll_interval=0.5)
 if __name__=='__main__':main()
