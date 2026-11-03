@@ -13,7 +13,7 @@ DEFAULT={
  'access':'private','admins':{},'bans':{},'users':{},
  'quotas':{'public_days':7,'public_devices':1,'admin_days':30,'admin_devices':2},
  'security':{'auto_ban_ssh':False,'violations':{}},
- 'monetization':{'monetag':'','ad_counts':{'create_normal':3,'create_v2ray':2,'ref_renew':1,'renew':5,'expiry_renew':7}},
+ 'monetization':{'monetag':'','ad_counts':{'create_account':3,'ref_renew':1,'renew':5,'expiry_renew':7}},
  'auto_update':{'enabled':False,'last_version':'','notified_version':'','checked_at':0},
  'backup_schedule':{'mode':'once','next_at':0},
  'ad_tokens':{},
@@ -808,12 +808,12 @@ def ad_configurations():
  return items
 
 # Cantidad de anuncios configurable por acción.
-# Valores por defecto: normal=3, V2Ray=2, canje=1, renovar=5, vencimiento=7.
+# Valores por defecto: creación de cualquier protocolo=3, canje=1, renovar=5, vencimiento=7.
 def ad_count_for(action,extra=None):
  d=db();counts=d.get('monetization',{}).get('ad_counts',{})
  kind=(extra or {}).get('kind','')
  key=action
- if action=='create':key='create_v2ray' if kind=='v2ray' else 'create_normal'
+ if action=='create':key='create_account'
  try:return max(1,int(counts.get(key,DEFAULT['monetization']['ad_counts'].get(key,1))))
  except:return 1
 
@@ -1326,12 +1326,11 @@ def cb(c,m,u,i,x,chat_type=None):
  if x=='ads_config':
   counts=d.setdefault('monetization',{}).setdefault('ad_counts',json.loads(json.dumps(DEFAULT['monetization']['ad_counts'])))
   text=(f'⚙️ <b>CONFIGURAR ADS</b>\n\n'
-        f'👤 Crear cuenta normal: <b>{counts.get("create_normal",3)}</b>\n'
-        f'🚀 Crear cuenta V2Ray: <b>{counts.get("create_v2ray",2)}</b>\n'
+        f'➕ Crear cuenta (todos los protocolos): <b>{counts.get("create_account",3)}</b>\n'
         f'🎁 Canjear 7 días: <b>{counts.get("ref_renew",1)}</b>\n'
         f'♻️ Renovar cuenta: <b>{counts.get("renew",5)}</b>\n'
         f'⏳ Aviso de vencimiento → renovar: <b>{counts.get("expiry_renew",7)}</b>')
-  return edit(c,m,text,[[{'text':'👤 Normal','callback_data':'ads_config_select:create_normal'},{'text':'🚀 V2Ray','callback_data':'ads_config_select:create_v2ray'}],[{'text':'🎁 Canje','callback_data':'ads_config_select:ref_renew'}],[{'text':'♻️ Renovar','callback_data':'ads_config_select:renew'},{'text':'⏳ Vencimiento','callback_data':'ads_config_select:expiry_renew'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
+  return edit(c,m,text,[[{'text':'➕ Crear cuenta','callback_data':'ads_config_select:create_account'}],[{'text':'🎁 Canje','callback_data':'ads_config_select:ref_renew'}],[{'text':'♻️ Renovar','callback_data':'ads_config_select:renew'},{'text':'⏳ Vencimiento','callback_data':'ads_config_select:expiry_renew'}],[{'text':'🔙 Monetización','callback_data':'monetization'}]])
  if x.startswith('ads_config_select:'):
   key=x.split(':',1)[1];STATE[c]={'f':'ads_config','s':'value','d':{'key':key}}
   return send(c,f'⚙️ <b>CONFIGURAR ADS</b>\n\nCantidad de anuncios para <code>{e(key)}</code> (1-50):',[[{'text':'❌ Cancelar','callback_data':'cancel'}]])
