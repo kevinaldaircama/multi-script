@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # KevinTech Telegram Bot - panel de usuarios + super admin
-import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime,io,secrets,sqlite3,shutil
+import os,re,json,time,threading,subprocess,urllib.request,urllib.parse,shlex,datetime,io,secrets,sqlite3,shutil,importlib.util,mimetypes
 from pathlib import Path
 
 BASE=Path('/etc/kevintech'); TD=BASE/'telegram'; ENV=TD/'.env'; LOG=TD/'logs'/'bot.log'; OFF=TD/'offset'
@@ -149,7 +149,7 @@ def lang(uid):
 I18N={
  'home':{'es':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Panel principal</b>\n\nAdministra tus cuentas de forma rápida y sencilla desde Telegram.\n\n🔐 Acceso · 👤 Cuentas · 🟢 Conexiones · 🔗 Referidos','en':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Main panel</b>\n\nManage your accounts quickly and easily from Telegram.\n\n🔐 Access · 👤 Accounts · 🟢 Connections · 🔗 Referrals','pt':'🎨 <b>KEVINTECH MULTI SCRIPT</b>\n\n⚙️ <b>Painel principal</b>\n\nGerencie suas contas de forma rápida e simples pelo Telegram.\n\n🔐 Acesso · 👤 Contas · 🟢 Conexões · 🔗 Indicações'},
  'users':{'es':'👤 <b>GESTIÓN DE CUENTAS</b>\n\nCrea y consulta tus cuentas, revisa las conexiones activas, elimina accesos cuando lo necesites y utiliza las opciones disponibles para tu nivel de acceso.','en':'👤 <b>USERS</b>\n\nManage your accounts.','pt':'👤 <b>USUÁRIOS</b>\n\nGerencie suas contas.'},
- 'info':{'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot te permite gestionar tus accesos desde Telegram: crear cuentas normales o V2Ray, consultar tus cuentas, revisar conexiones, renovar, eliminar y usar el sistema de referidos. Las cuotas definidas por el super admin se aplican automáticamente a los usuarios públicos.','en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you create and manage your server access accounts, view your accounts, check connections and manage referrals.','pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite criar e gerenciar suas contas de acesso ao servidor, consultar suas contas, ver conexões e gerenciar indicações.'},
+ 'info':{'es':'ℹ️ <b>INFORMACIÓN</b>\n\nEste bot te permite gestionar tus accesos desde Telegram: crear cuentas SSH, V2Ray, SOCKS5, WireGuard, ZiVPN UDP, OpenVPN, BTUN, Shadowsocks y Hysteria, consultar tus cuentas, revisar conexiones, renovar, eliminar y usar el sistema de referidos. Las cuotas definidas por el super admin se aplican automáticamente a los usuarios públicos.','en':'ℹ️ <b>INFORMATION</b>\n\nThis bot lets you create and manage your server access accounts, view your accounts, check connections and manage referrals.','pt':'ℹ️ <b>INFORMAÇÕES</b>\n\nEste bot permite criar e gerenciar suas contas de acesso ao servidor, consultar suas contas, ver conexões e gerenciar indicações.'},
  'choose_lang':{'es':'🌎 <b>SELECCIONA TU IDIOMA</b>\n\nElige el idioma de la interfaz. Puedes cambiarlo cuando quieras desde el menú de idioma.\n\n🌐 <b>13 idiomas disponibles</b>.','en':'🌎 <b>Select your language</b>\n\nChoose the language you want to use.','pt':'🌎 <b>Selecione seu idioma</b>\n\nEscolha o idioma que deseja usar.'},
  'settings':{'es':'⚙️ <b>CENTRO DEL SUPER ADMIN</b>\n\nControl total del panel: usuarios, administradores, seguridad, cuotas, monetización, respaldos, herramientas y mantenimiento del servidor.','en':'⚙️ <b>SUPER ADMIN SETTINGS</b>\n\nCentral panel controls.','pt':'⚙️ <b>AJUSTES DO SUPER ADMIN</b>\n\nControles centrais do painel.'},
  'language_saved':{'es':'🟢 Idioma guardado.','en':'🟢 Language saved.','pt':'🟢 Idioma salvo.'},
@@ -441,7 +441,13 @@ def users_menu(uid):
  return rows
 USERS=users_menu
 
-CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],[{'text':'🔙 Usuarios','callback_data':'users'}]]
+CREATE_MENU=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}],
+ [{'text':'🔐 SOCKS5','callback_data':'create:socks5'},{'text':'🛡️ WireGuard','callback_data':'create:wireguard'}],
+ [{'text':'🚀 ZiVPN UDP','callback_data':'create:zivpn'},{'text':'🔒 OpenVPN','callback_data':'create:openvpn'}],
+ [{'text':'⚡ BTUN','callback_data':'create:btun'},{'text':'🕶️ Shadowsocks','callback_data':'create:shadowsocks'}],
+ [{'text':'🌐 Hysteria','callback_data':'create:hysteria'}],
+ [{'text':'🔙 Usuarios','callback_data':'users'}]]
+CREATE_PROTOCOLS={'socks5':'SOCKS5','wireguard':'WireGuard','zivpn':'ZiVPN UDP','openvpn':'OpenVPN','btun':'BTUN','shadowsocks':'Shadowsocks','hysteria':'Hysteria'}
 PROTO={'openssh':('OpenSSH','openssh.sh','ssh','22','1','5'),'dropbear':('Dropbear','dropbear.sh','dropbear','90,143,109','1','6'),'v2ray':('V2Ray/Xray','v2ray.sh','xray','443/TCP','1','13'),'checkuser':('CheckUser','checkuser.sh','checkuser','10016,10015,8888','1','8'),'slowdns':('SlowDNS','slowdns.sh','dnstt','5300/UDP','1','7'),'badvpn':('BadVPN','badvpn.sh','badvpn-7300','7300,7200','1','4'),'ssl':('SSL/WebSocket','ssl.sh','haproxy','80,443,8080,10015','1','6'),'udpcustom':('UDP Custom','udpcustom.sh','udp-custom','1-65535/UDP','1','7'),'zivpn':('ZiVPN','zivpn.sh','zivpn','20000-29999/UDP','1','10')}
 PK=[[{'text':v[0],'callback_data':'proto:'+k}] for k,v in PROTO.items()]+[[{'text':'🔙 Inicio','callback_data':'home'}]]
 SVCS={k:v[2] for k,v in PROTO.items()}
@@ -472,7 +478,7 @@ def userexists(u):
         return True
     try:
         d=db()
-        return any(any(str(a).lower()==u.lower() for a in z.get('v2ray_accounts',[])) for z in d.get('users',{}).values())
+        return any(any(str(a).lower()==u.lower() for a in z.get('v2ray_accounts',[])) or any(str(a).lower()==u.lower() for a in z.get('protocol_accounts',{})) for z in d.get('users',{}).values())
     except Exception:
         return False
 
@@ -488,6 +494,10 @@ def account_info(uid,username):
    break
  if is_v2:
   return f'''🚀 <b>INFORMACIÓN V2RAY</b>\n\n• Usuario: <code>{e(username)}</code>\n• Propietario: <code>{e(('@'+owner_user) if owner_user else owner)}</code>\n• Expira: <code>{e(vexp)}</code>\n• Tipo: <b>V2Ray / VMess</b>'''
+ for cid,x in d['users'].items():
+  item=x.get('protocol_accounts',{}).get(username)
+  if item:
+   return f'''📡 <b>INFORMACIÓN {e(CREATE_PROTOCOLS.get(item.get('type'),item.get('type','PROTOCOLO')).upper())}</b>\n\n• Usuario: <code>{e(username)}</code>\n• Propietario: <code>{e(('@'+x.get('username','')) if x.get('username') else x.get('name',cid))}</code>\n• Expira: <code>{e(item.get('expiration','No disponible'))}</code>'''
  if not userexists(username):return '❌ Esa cuenta no existe.'
  exp=subprocess.getoutput(f"chage -l {q(username)} 2>/dev/null | awk -F': ' '/Account expires/{{print $2}}'") or 'No disponible';lim='Ilimitado';p=BASE/'limits'/username
  if p.exists():lim=p.read_text(errors='ignore').strip() or 'Ilimitado'
@@ -609,81 +619,159 @@ def v2ray_account_message(c,d):
  link='vmess://'+base64.b64encode(raw.encode()).decode()
  return f'''🚀 <b>CUENTA V2RAY CREADA</b>\n\n👤 Usuario: <code>{e(username)}</code>\n🆔 UUID: <code>{e(uuid)}</code>\n📅 Expira: <code>{e(exp)}</code>\n🌐 Servidor: <code>{e(host)}</code>\n🔒 Puerto: <code>443</code>\n📡 WS: <code>/vmess</code>\n\n🔗 <b>VMess</b>\n<code>{e(link)}</code>'''
 
+WEB_API_MODULE=None
+
+def web_api_module():
+ global WEB_API_MODULE
+ if WEB_API_MODULE is not None:return WEB_API_MODULE
+ path=BASE/'web'/'server.py'
+ if not path.is_file():raise RuntimeError('No se encuentra web/server.py; no se puede usar el gestor de protocolos de KevinTech.')
+ spec=importlib.util.spec_from_file_location('kevintech_web_account_api',str(path))
+ mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+ WEB_API_MODULE=mod
+ return mod
+
+def group_unauthorized():
+ return ('🔒 <b>Grupo No Autorizado</b>\n\n'
+ '¡Hola! Por tu seguridad y privacidad, no puedo realizar consultas en este grupo.\n\n'
+ '💬 <b>¿Necesitas hacer una consulta?</b>\n'
+ '→ escríbeme en privado y te atenderé con gusto!\n\n'
+ '✨ <b>Comandos disponibles aquí:</b>\n'
+ '• /start - iniciar bot\n'
+ '• /cmds - Ver todos los comandos\n'
+ '• /me - Ver tu perfil\n'
+ '• /referidos - Ver referidos\n'
+ '• /idioma - cambiar idioma')
+
+def protocol_available(kind):
+ checks={
+  'socks5':"systemctl is-active --quiet sockd || systemctl is-active --quiet danted || command -v danted >/dev/null 2>&1",
+  'wireguard':"command -v wg >/dev/null 2>&1 && test -s /etc/wireguard/wg0.conf && systemctl is-active --quiet wg-quick@wg0",
+  'zivpn':"test -s /etc/zivpn/config.json && systemctl is-active --quiet zivpn",
+  'openvpn':"test -s /etc/openvpn/server/server.conf && systemctl is-active --quiet openvpn-server@server",
+  'btun':"test -s /etc/btun/users && systemctl is-active --quiet btun",
+  'shadowsocks':"command -v ss-server >/dev/null 2>&1 && ls /etc/shadowsocks-libev/*.json >/dev/null 2>&1 && systemctl list-units --type=service --state=running --no-legend | grep -q 'shadowsocks-libev-server@'",
+  'hysteria':"test -s /etc/hysteria/config.json && test -x /usr/local/bin/hysteria-auth.sh && systemctl is-active --quiet hysteria1-server",
+ }
+ cmd=checks.get(kind,'')
+ return bool(cmd and sh(cmd,5)[0]==0)
+
+def create_protocol_menu():
+ rows=[[{'text':'👤 Cuenta normal','callback_data':'create:normal'},{'text':'🚀 Cuenta V2Ray','callback_data':'create:v2ray'}]]
+ icons={'socks5':'🔐','wireguard':'🛡️','zivpn':'🚀','openvpn':'🔒','btun':'⚡','shadowsocks':'🕶️','hysteria':'🌐'}
+ available=[k for k in CREATE_PROTOCOLS if protocol_available(k)]
+ for i in range(0,len(available),2):
+  rows.append([{'text':icons[k]+' '+CREATE_PROTOCOLS[k],'callback_data':'create:'+k} for k in available[i:i+2]])
+ rows.append([{'text':'🔙 Usuarios','callback_data':'users'}])
+ return rows
+
+def register_protocol_account(uid,username,kind,expiration,credential=''):
+ d=db();row=d['users'].setdefault(str(uid),{});row.setdefault('accounts',[])
+ if username not in row['accounts']:row['accounts'].append(username)
+ row.setdefault('protocol_accounts',{})[username]={'type':kind,'expiration':expiration,'credential':credential}
+ ref=row.get('referrer')
+ if ref and str(ref) in d['users'] and uid not in d['users'][str(ref)].setdefault('referrals',[]):
+  d['users'][str(ref)]['referrals'].append(uid);save_db(d);notify_new_referral(ref,row)
+ save_db(d)
+
+def send_protocol_file(uid,path,caption):
+ path=Path(path)
+ if not path.is_file():return send(uid,'❌ No se pudo localizar el archivo de configuración generado.')
+ ctype=mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+ return _track_message(uid,api_multipart('sendDocument',{'chat_id':str(uid),'caption':caption,'parse_mode':'HTML'},{'document':(path.name,path.read_bytes(),ctype)}),'document')
+
+def protocol_account_message(kind,username,password,expiration,days,host,ip,result=''):
+ name=CREATE_PROTOCOLS.get(kind,kind).upper()
+ text=(f'🎉 <b>CUENTA {e(name)} CREADA EXITOSAMENTE</b>\n\n'
+       f'🌐 Servidor: <code>{e(host)}</code>\n👤 Usuario: <code>{e(username)}</code>\n'
+       f'🔑 Contraseña: <code>{e(password or "No requiere")}</code>\n📅 Expira: <code>{e(expiration)}</code>\n'
+       f'⏱️ Duración: <code>{int(days)} días</code>\n🌍 IP: <code>{e(ip)}</code>')
+ if kind=='zivpn':text+='\n📡 Puerto UDP: <code>20000-29999</code>'
+ elif kind=='shadowsocks':text+='\n🔌 Puerto: <code>'+e(result.split('$')[1] if result.startswith('ss$') else 'Configurado en el servidor')+'</code>\n⚠️ <i>Este servidor usa una contraseña compartida; crear otra la reemplaza para todos los clientes.</i>'
+ elif kind=='openvpn':text+='\n📎 Se adjunta tu archivo .ovpn de configuración.'
+ elif kind=='wireguard':text+='\n📎 Se adjunta tu archivo .conf de WireGuard.'
+ return text
+
 def account_message(c,d,renew=False):
- u=d['user'];pw=d.get('pass');days=int(d['days']);exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
+ u=d['user'];pw=d.get('pass') or '********';days=int(d['days'])
+ exp=subprocess.getoutput(f"date -d '+{days} days' '+%d/%m/%Y'")
  ip=(subprocess.getoutput('curl -4 -fsS --max-time 4 https://api.ipify.org 2>/dev/null') or (subprocess.getoutput('hostname -I').split() or ['0.0.0.0'])[0]).strip()
  cfg=BASE/'config.conf';domain=''
  if cfg.exists():
-  for l in cfg.read_text(errors='ignore').splitlines():
-   if l.startswith('SERVER_DOMAIN='):domain=l.split('=',1)[1].strip().strip('"').strip("'")
- host=domain or ip
+  for line in cfg.read_text(errors='ignore').splitlines():
+   if line.startswith('SERVER_DOMAIN='):domain=line.split('=',1)[1].strip().strip('\"').strip("'")
+ host=domain or ip;lim=d.get('limit','Ilimitado')
+ limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
  title='♻️ CUENTA RENOVADA EXITOSAMENTE' if renew else '🎉 CUENTA CREADA EXITOSAMENTE'
- lim=d.get('limit','Ilimitado');limtxt='Ilimitado' if str(lim).lower() in ('0','ilimitado','unlimited') else str(lim)
- slow_ns=f'ns-{domain}' if domain else 'Requiere dominio real'
- slow_key=(Path('/etc/slowdns/server.pub').read_text(errors='ignore').strip() if Path('/etc/slowdns/server.pub').exists() else 'No configurado')
- return f'''<b>{title}</b>
-
-━━━━━━━━━━━━━━━━━━━━
-👤 <b>DATOS DEL USUARIO</b>
-━━━━━━━━━━━━━━━━━━━━
-• Usuario: <code>{e(u)}</code>
-• 🔑 Contraseña: <code>{e(pw or '********')}</code>
-• Expira: <code>{e(exp)}</code>
-• Duración: <code>{days} días</code>
-• Límite IP: <code>{e(limtxt)}</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🌐 <b>INFORMACIÓN DEL SERVIDOR</b>
-━━━━━━━━━━━━━━━━━━━━
-• Host/IP: <code>{e(host)}</code>
-• IP: <code>{e(ip)}</code>
-• SSH: <code>22</code>
-• Dropbear: <code>143,90,109</code>
-• SSL Tunnel: <code>8080,443,80</code>
-• BadVPN: <code>7300,7200</code>
-
-━━━━━━━━━━━━━━━━━━━━
-📡 <b>HTTP CUSTOM</b>
-━━━━━━━━━━━━━━━━━━━━
-<code>{e(host)}:443@{e(u)}:{e(pw or '********')}</code>
-<code>{e(host)}:80@{e(u)}:{e(pw or '********')}</code>
-<code>{e(host)}:8080@{e(u)}:{e(pw or '********')}</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🚀 <b>UDP CUSTOM</b>
-━━━━━━━━━━━━━━━━━━━━
-<code>{e(host)}:1-65535@{e(u)}:{e(pw or '********')}</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🟣 <b>HYSTERIA V1</b>
-━━━━━━━━━━━━━━━━━━━━
-• Servidor: <code>{e(host)}:No instalado</code>
-• OBFS: <code>No configurado</code>
-• Credenciales: <code>{e(u)}:{e(pw or '********')}</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🚀 <b>ZIVPN UDP</b>
-━━━━━━━━━━━━━━━━━━━━
-• Servidor: <code>{e(host)}:21992</code>
-• Contraseña: <code>{e(pw or '********')}</code>
-• Puerto UDP: <code>20000-29999</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🐌 <b>SLOWDNS (5300)</b>
-━━━━━━━━━━━━━━━━━━━━
-• NS: <code>{e(slow_ns)}</code>
-• KEY: <code>{e(slow_key)}</code>
-• Puerto: <code>5300</code>
-
-━━━━━━━━━━━━━━━━━━━━
-🌐 <b>BHTTP</b>
-━━━━━━━━━━━━━━━━━━━━
-• Servidor: <code>{e(host)}:8088</code>
-• Backend SSH: <code>22</code>
-
-━━━━━━━━━━━━━━━━━━━━
-💎 <b>KEVINTECH MULTI SCRIPT</b>
-━━━━━━━━━━━━━━━━━━━━'''
+ def active(service):return sh('systemctl is-active --quiet '+q(service),4)[0]==0
+ def port_from(path,pattern,default):
+  try:
+   raw=Path(path).read_text(errors='ignore');m=re.search(pattern,raw,re.M);return m.group(1) if m else str(default)
+  except:return str(default)
+ protocols=[]
+ if Path('/usr/sbin/sshd').exists():protocols.append(('SSH','22'))
+ if Path('/usr/sbin/dropbear').exists():protocols.append(('Dropbear','90,109,143'))
+ if active('stunnel4') or active('haproxy'):protocols.append(('SSL Tunnel','80,443,8080'))
+ if Path('/usr/local/bin/badvpn-udpgw').exists():protocols.append(('BadVPN','7200,7300'))
+ if active('bhttp'):protocols.append(('BHTTP','8088'))
+ if active('squid'):protocols.append(('SQUID','3128'))
+ hcr=port_from(BASE/'config.conf',r'^HCR_PORT=[\"\']?(\d+)', '8880')
+ if active('hcr-server'):protocols.append(('HCR',hcr))
+ if active('btun'):protocols.append(('BTUN','7900'))
+ if Path('/usr/local/bin/udp-custom').exists():protocols.append(('UDP CUSTOM','1-65535/UDP'))
+ try:
+  slip=subprocess.getoutput("systemctl show slipstream.service -p ExecStart --value 2>/dev/null")
+  sm=re.search(r'(?:-d|--domain)\s+([^\s;}]+)',slip)
+  slip_ns=sm.group(1) if Path('/usr/bin/slipstream-server').exists() and active('slipstream') and sm else ''
+  if slip_ns and ':' not in slip_ns:slip_ns+=':443'
+ except:slip_ns=''
+ slow_ns='';slow_key=''
+ try:
+  slow_domain=Path('/etc/slowdns/domain.conf');slow_pub=Path('/etc/slowdns/server.pub')
+  if slow_domain.is_file() and slow_pub.is_file() and (active('slowdns') or active('dnstt') or sh("pgrep -af 'dnstt|slowdns' >/dev/null 2>&1",3)[0]==0):
+   slow_ns=slow_domain.read_text(errors='ignore').strip();slow_key=slow_pub.read_text(errors='ignore').strip()
+ except:pass
+ vay_ns='';vay_key=''
+ try:
+  vay_conf=Path('/etc/kevintech/vaydns.conf');vay_pub=Path('/etc/vaydns/server.pub')
+  if vay_conf.is_file() and vay_pub.is_file() and active('vaydns'):
+   vm=re.search(r'^DOMAIN=(.+)$',vay_conf.read_text(errors='ignore'),re.M)
+   vay_ns=vm.group(1).strip().strip('\"') if vm else '';vay_key=vay_pub.read_text(errors='ignore').strip()
+ except:pass
+ zivpn_port=''
+ try:
+  zcfg=Path('/etc/zivpn/config.json')
+  if zcfg.is_file() and (active('zivpn') or sh("pgrep -af '[z]ivpn' >/dev/null 2>&1",3)[0]==0):
+   zdata=json.loads(zcfg.read_text());zivpn_port=str(zdata.get('listen','')).lstrip(':')
+ except:pass
+ rows='\n'.join(f' {name:<12}: {port}' for name,port in protocols) or ' No se detectaron servicios instalados.'
+ direct=[]
+ if any(x[0]=='SSL Tunnel' for x in protocols):direct.extend([f'🙍 SSL/TLS(SNI) : {host}:443@{u}:{pw}',f'🙍 Proxy(WS)    : {host}:80@{u}:{pw}'])
+ if Path('/usr/local/bin/udp-custom').exists():direct.append(f'🙍 SSH UDP       : {ip}:1-65535@{u}:{pw}')
+ text=f'''<b>{title}</b>
+══════════ DATOS DEL USUARIO ══════════
+Host/IP      : <code>{e(host)}</code>
+'''
+ if slip_ns:text+=f'SLIPSTREAM   : <code>{e(slip_ns)}</code>\n'
+ text+=f'''Usuario      : <code>{e(u)}</code>
+Contraseña   : <code>{e(pw)}</code>
+Expira       : <code>{e(exp)} ({days} días)</code>
+Límite IP    : <code>{e(limtxt)} IPs</code>
+══════════ PROTOCOLOS DISPONIBLES ══════════
+<pre>{e(rows)}</pre>'''
+ if slow_ns and slow_key:text+=f'''\n══════════ SLOWDNS (5300 - 22) ══════════
+ NS          : <code>{e(slow_ns)}</code>
+ KEY         : <code>{e(slow_key)}</code>'''
+ if vay_ns and vay_key:text+=f'''\n══════════ VAYDNS (5300 - 443) ══════════
+ NS          : <code>{e(vay_ns)}</code>
+ KEY         : <code>{e(vay_key)}</code>'''
+ if zivpn_port:text+=f'''\n══════════ ZIVPN UDP ══════════
+ Servidor     : <code>{e(host)}:{e(zivpn_port)}</code>
+ Contraseña   : <code>{e(pw)}</code>
+ Puerto UDP   : <code>20000-29999</code>'''
+ text+='\n══════════ conexión directa ══════════\n'
+ text+='\n'.join('<code>'+e(x)+'</code>' for x in direct) if direct else 'No hay conexiones directas adicionales detectadas.'
+ return text+'\n╚══════════════════════════════════════════════════════════════╝'
 
 def private_chat(c):return CHAT_TYPES.get(c)=='private'
 
@@ -771,7 +859,8 @@ def consume_ad_token(c,token):
 def start_create(c,kind,bypass_ads=False):
  if not bypass_ads and ad_gate(c,'create',{'kind':kind}):return
  STATE[c]={'f':'create','s':'u','d':{'kind':kind}}
- return send(c,'🚀 <b>CREAR CUENTA V2RAY</b>\n\nUsuario:' if kind=='v2ray' else '👤 <b>CREAR CUENTA</b>\n\nUsuario:')
+ label='V2Ray' if kind=='v2ray' else 'Cuenta normal' if kind=='normal' else CREATE_PROTOCOLS.get(kind,kind)
+ return send(c,f'➕ <b>CREAR {e(label.upper())}</b>\n\nUsuario:')
 
 def renew_now(c,username,days=None):
  try:
@@ -914,9 +1003,9 @@ def process_text(c,t,chat_type=None):
  if cmd=='/me':
   return send(c,me_text(uid),[[{'text':'🔙 Inicio','callback_data':'home'}]])
  if cmd in ('/crear','/crearcuenta','/create','/criar','/creer','/erstellen','/crea','/creercompte','/criarconta','/hesapolustur','/zangmi'):
-  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot.')
+  if not private_chat(c):return send(c,group_unauthorized())
   if not allowed(uid):return send(c,'🔒 El bot está en modo privado.')
-  return send(c,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
+  return send(c,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',create_protocol_menu())
  if cmd in ('/renovar','/renew','/renouveler','/erneuern','/rinnova','/renouvelercompte','/kontoerneuern','/yenile','/renewaccount'):
   return start_renew(c)
  if cmd in ('/lista','/cuentas','/list','/liste','/mescomptes','/hesaplarim','/akun'):
@@ -960,14 +1049,22 @@ def process_text(c,t,chat_type=None):
   if f=='account':STATE.pop(c,None);return send(c,account_info(c,u))
   if f=='delete':st['s']='confirm';return send(c,f'⚠️ ¿Seguro que deseas eliminar <code>{e(u)}</code>?',[[{'text':'🗑️ Eliminar','callback_data':'userop:delete'},{'text':'Cancelar','callback_data':'cancel'}]])
   if f=='create':
-   if dat.get('kind')=='v2ray':
+   kind=dat.get('kind','normal')
+   if kind=='v2ray':
     st['s']='days';return send(c,'📅 <b>Fecha de expiración</b> (DD/MM/YYYY):')
+   if kind in ('openvpn','wireguard'):
+    maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev
+    if is_owner(c):st['s']='days';return send(c,'📅 Duración en días:')
+    return cb(c,0,c,0,'do:create')
    st['s']='p';return send(c,'🔑 Contraseña:')
   # Renovación: usa siempre la cuota configurada; no solicita días ni límite.
   maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:renew')
  if f=='create' and step=='p':
+  if len(t)<1:return send(c,'❌ La contraseña no puede estar vacía.')
   dat['pass']=t
-  maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev;return cb(c,0,c,0,'do:create')
+  maxdays,maxdev=quota(c);dat['days']=maxdays;dat['limit']=maxdev
+  if is_owner(c):st['s']='days';return send(c,'📅 Duración en días:')
+  return cb(c,0,c,0,'do:create')
  if f in ('create','renew') and step=='days':
   if f=='create' and dat.get('kind')=='v2ray':
    try:
@@ -1037,13 +1134,15 @@ def cb(c,m,u,i,x,chat_type=None):
   rows.append([{'text':'🔙 Inicio','callback_data':'home'}])
   return edit(c,m,referral_info(u),rows)
  if x=='create':
-  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado. Abre el chat privado del bot.')
+  if not private_chat(c):return send(c,group_unauthorized())
   if not allowed(u):return send(c,'🔒 Acceso privado.')
-  return edit(c,m,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',CREATE_MENU)
- if x in ('create:normal','create:v2ray'):
-  if not private_chat(c):return send(c,'🔒 <b>CREAR CUENTA</b> solo está disponible por privado.')
+  return edit(c,m,'➕ <b>CREAR CUENTA</b>\n\nSelecciona el tipo de cuenta:',create_protocol_menu())
+ if x.startswith('create:'):
+  if not private_chat(c):return send(c,group_unauthorized())
   if not allowed(u):return send(c,'🔒 Acceso privado.')
-  kind='v2ray' if x.endswith('v2ray') else 'normal'
+  kind=x.split(':',1)[1]
+  if kind not in ('normal','v2ray') and kind not in CREATE_PROTOCOLS:return ans(i,'Protocolo no válido.')
+  if kind not in ('normal','v2ray') and not protocol_available(kind):return send(c,'❌ '+e(CREATE_PROTOCOLS[kind])+' no está instalado o su servicio no está activo en este VPS.')
   return start_create(c,kind)
  if x=='renew':
   if not is_owner(u):return ans(i,'Solo el SUPER ADMIN puede renovar manualmente.')
@@ -1096,6 +1195,31 @@ def cb(c,m,u,i,x,chat_type=None):
   if not st:return send(c,'❌ Operación expirada.')
   dat=st['d'];u0=dat['user'];days=int(dat['days']);exp=subprocess.getoutput(f"date -d '+{days} days' +%F")
   if x=='do:create':
+   kind=dat.get('kind','normal')
+   if kind in CREATE_PROTOCOLS:
+    try:
+     apiw=web_api_module();username=dat['user'];password=dat.get('pass','');days=int(dat.get('days',quota(c)[0]))
+     if kind=='socks5':ok,expiration,credential,actual=apiw.create_socks5_account(username,password,days);username=actual
+     elif kind=='wireguard':ok,expiration,credential=apiw.create_wireguard_account(username,days)
+     elif kind=='zivpn':ok,expiration,credential=apiw.create_zivpn_account(username,password,days)
+     elif kind=='openvpn':ok,expiration,credential=apiw.create_openvpn_account(username,days)
+     elif kind=='btun':ok,expiration,credential=apiw.create_btun_account(username,password,days)
+     elif kind=='shadowsocks':ok,expiration,credential=apiw.create_shadowsocks_account(username,password,days)
+     elif kind=='hysteria':ok,expiration,credential=apiw.create_hysteria_account(username,password,days)
+     else:ok=False;expiration='';credential=''
+     if not ok:return send(c,'🔴 <b>No se pudo crear '+e(CREATE_PROTOCOLS[kind])+'</b>\n<pre>'+e(expiration)+'</pre>')
+     register_protocol_account(c,username,kind,expiration,str(credential))
+     add_history(c,'Cuenta creada',username+' ('+CREATE_PROTOCOLS[kind]+')')
+     host=apiw.server_domain() or apiw.server_ip();ip=apiw.server_ip()
+     caption=protocol_account_message(kind,username,password,expiration,days,host,ip,str(credential))
+     if kind=='openvpn' and str(credential).startswith('openvpn-file$'):
+      path=str(credential).split('$',1)[1];send(c,caption);return send_protocol_file(c,path,'📄 Archivo OpenVPN de '+username)
+     if kind=='wireguard':
+      folder=BASE/'telegram'/'generated';folder.mkdir(parents=True,exist_ok=True);path=folder/(username+'.conf');path.write_text(str(credential));os.chmod(path,0o600)
+      send(c,caption);return send_protocol_file(c,path,'📄 Configuración WireGuard de '+username)
+     return send(c,caption)
+    except Exception as ex:
+     log('PROTOCOL CREATE '+kind+' '+repr(ex));return send(c,'🔴 <b>Error al crear '+e(CREATE_PROTOCOLS[kind])+'</b>\n<pre>'+e(ex)+'</pre>')
    if dat.get('kind')=='v2ray':
     rc,o=create_v2ray(dat['user'],dat.get('expiration'))
     if rc==0:
@@ -1140,13 +1264,30 @@ def cb(c,m,u,i,x,chat_type=None):
   st=STATE.pop(c,None)
   if not st:return send(c,'❌ Operación expirada.')
   u0=st['d']['user'];d=db();isv=any(any(str(a).lower()==u0.lower() for a in z.get('v2ray_accounts',[])) for z in d['users'].values())
+  protocol_item=None
+  for owner_row in d['users'].values():
+   if u0 in owner_row.get('protocol_accounts',{}):protocol_item=owner_row['protocol_accounts'][u0];break
   if isv:
-   rc,o=delete_v2ray(u0)
+   rc,o=delete_v2ray(u0);rc=0 if rc==0 else 1
+  elif protocol_item:
+   try:
+    apiw=web_api_module();kind=protocol_item.get('type');cred=str(protocol_item.get('credential',''))
+    if kind=='socks5':ok=apiw.delete_socks5_account(u0)
+    elif kind=='wireguard':ok=apiw.delete_wireguard(u0)
+    elif kind=='zivpn':ok=apiw.delete_zivpn_account(u0,cred)
+    elif kind=='openvpn':ok=apiw.delete_openvpn_account(u0)
+    elif kind=='btun':ok=apiw.delete_btun_account(u0)
+    elif kind=='shadowsocks':ok=apiw.delete_shadowsocks_account(cred)
+    elif kind=='hysteria':ok=apiw.delete_ssh(u0)[0]
+    else:ok=False
+    rc=0 if ok else 1;o='Revocación de '+str(kind)+' completada.' if ok else 'No se pudo revocar la credencial del protocolo.'
+   except Exception as ex:rc=1;o=str(ex)
   else:
    rc,o=sh(f'pkill -u {q(u0)} 2>/dev/null || true; userdel -r -f {q(u0)}',15)
   if rc==0:
    for z in d['users'].values():
-    z['accounts']=[a for a in z.get('accounts',[]) if str(a).lower()!=u0.lower()];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if str(a).lower()!=u0.lower()];
+    z['accounts']=[a for a in z.get('accounts',[]) if str(a).lower()!=u0.lower()];z['v2ray_accounts']=[a for a in z.get('v2ray_accounts',[]) if str(a).lower()!=u0.lower()]
+    z.get('protocol_accounts',{}).pop(u0,None)
     for ak in list(z.get('v2ray_expirations',{})):
      if str(ak).lower()==u0.lower():z['v2ray_expirations'].pop(ak,None)
    save_db(d)
